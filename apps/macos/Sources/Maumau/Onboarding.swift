@@ -113,7 +113,7 @@ struct OnboardingView: View {
         case .unconfigured:
             showOnboardingChat ? [0, 1, 8, 9] : [0, 1, 9]
         case .local:
-            showOnboardingChat ? [0, 1, 3, 5, 8, 9] : [0, 1, 3, 5, 9]
+            showOnboardingChat ? [0, 1, 6, 3, 5, 8, 9] : [0, 1, 6, 3, 5, 9]
         }
     }
 

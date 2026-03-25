@@ -14,6 +14,9 @@ struct GeneralSettings: View {
         localDisplayName: InstanceIdentity.displayName)
     @State private var gatewayStatus: GatewayEnvironmentStatus = .checking
     @State private var remoteStatus: RemoteStatus = .idle
+    @State private var installingCLI = false
+    @State private var cliInstallStatus: String?
+    @State private var cliInstallLocation: String?
     @State private var showRemoteAdvanced = false
     private let isPreview = ProcessInfo.processInfo.isPreview
     private var isNixMode: Bool {
@@ -415,8 +418,41 @@ struct GeneralSettings: View {
                     .foregroundStyle(.red)
             }
 
-            Button("Recheck") { self.refreshGatewayStatus() }
-                .buttonStyle(.bordered)
+            if let cliInstallStatus, !cliInstallStatus.isEmpty {
+                Text(cliInstallStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let cliInstallLocation {
+                Text("CLI installed at \(cliInstallLocation)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 10) {
+                if self.shouldOfferCLIInstall {
+                    Button {
+                        Task { await self.installCLIFromSettings() }
+                    } label: {
+                        ZStack {
+                            Text(self.cliInstallButtonTitle)
+                                .opacity(self.installingCLI ? 0 : 1)
+                            if self.installingCLI {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                        .frame(minWidth: 112)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(self.installingCLI)
+                }
+
+                Button("Recheck") { self.refreshGatewayStatus() }
+                    .buttonStyle(.bordered)
+                    .disabled(self.installingCLI)
+            }
 
             Text("Gateway auto-starts in local mode via launchd (\(gatewayLaunchdLabel)).")
                 .font(.caption)
@@ -434,7 +470,36 @@ struct GeneralSettings: View {
                 GatewayEnvironment.check()
             }.value
             self.gatewayStatus = status
+            self.cliInstallLocation = await MainActor.run { CLIInstaller.installedLocation() }
         }
+    }
+
+    private var shouldOfferCLIInstall: Bool {
+        switch self.gatewayStatus.kind {
+        case .missingNode, .missingGateway, .incompatible:
+            return true
+        case .checking, .ok, .error:
+            return self.cliInstallLocation == nil
+        }
+    }
+
+    private var cliInstallButtonTitle: String {
+        self.cliInstallLocation == nil ? "Install CLI" : "Reinstall CLI"
+    }
+
+    @MainActor
+    private func installCLIFromSettings() async {
+        guard !self.installingCLI else { return }
+        self.installingCLI = true
+        self.cliInstallStatus = nil
+        defer { self.installingCLI = false }
+
+        await CLIInstaller.install { message in
+            self.cliInstallStatus = message
+        }
+
+        self.cliInstallLocation = CLIInstaller.installedLocation()
+        self.refreshGatewayStatus()
     }
 
     private var gatewayStatusColor: Color {
