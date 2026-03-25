@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maumau-config
+  labels:
+    app: maumau
+data:
+  maumau.json: |
+    {
+      "gateway": {
+        "mode": "local",
+        "bind": "loopback",
+        "port": 18789,
+        "auth": {
+          "mode": "token"
+        },
+        "controlUi": {
+          "enabled": true
+        }
+      },
+      "agents": {
+        "defaults": {
+          "workspace": "~/.maumau/workspace"
+        },
+        "list": [
+          {
+            "id": "default",
+            "name": "Maumau Assistant",
+            "workspace": "~/.maumau/workspace"
+          }
+        ]
+      },
+      "cron": { "enabled": false }
+    }
+  AGENTS.md: |
+    # Maumau Assistant
+
+    You are a helpful AI assistant running in Kubernetes.

@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/zai-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau Z.AI provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

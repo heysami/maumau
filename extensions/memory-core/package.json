@@ -1,0 +1,23 @@
+{
+  "name": "@maumau/memory-core",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau core memory search plugin",
+  "type": "module",
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/xiaomi-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau Xiaomi provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

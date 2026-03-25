@@ -1,0 +1,46 @@
+{
+  "name": "@maumau/whatsapp",
+  "version": "2026.3.22",
+  "description": "Maumau WhatsApp channel plugin",
+  "type": "module",
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "jimp": "^1.6.0"
+  },
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "whatsapp",
+      "label": "WhatsApp",
+      "selectionLabel": "WhatsApp (QR link)",
+      "detailLabel": "WhatsApp Web",
+      "docsPath": "/channels/whatsapp",
+      "docsLabel": "whatsapp",
+      "blurb": "works with your own number; recommend a separate phone + eSIM.",
+      "systemImage": "message"
+    },
+    "install": {
+      "npmSpec": "@maumau/whatsapp",
+      "localPath": "extensions/whatsapp",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.22"
+    },
+    "release": {
+      "publishToNpm": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/perplexity-plugin",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau Perplexity plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

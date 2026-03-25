@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/opencode-go-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau OpenCode Go provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

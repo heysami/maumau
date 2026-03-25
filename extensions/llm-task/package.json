@@ -1,0 +1,16 @@
+{
+  "name": "@maumau/llm-task",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau JSON-only LLM task plugin",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "ajv": "^8.18.0"
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

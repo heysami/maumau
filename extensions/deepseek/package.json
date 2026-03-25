@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/deepseek-provider",
+  "version": "2026.3.14",
+  "private": true,
+  "description": "Maumau DeepSeek provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

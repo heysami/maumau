@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/cloudflare-ai-gateway-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau Cloudflare AI Gateway provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

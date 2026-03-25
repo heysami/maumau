@@ -1,0 +1,30 @@
+{
+  "name": "@maumau/synology-chat",
+  "version": "2026.3.22",
+  "description": "Synology Chat channel plugin for Maumau",
+  "type": "module",
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "synology-chat",
+      "label": "Synology Chat",
+      "selectionLabel": "Synology Chat (Webhook)",
+      "docsPath": "/channels/synology-chat",
+      "docsLabel": "synology-chat",
+      "blurb": "Connect your Synology NAS Chat to Maumau with full agent capabilities.",
+      "order": 90
+    },
+    "install": {
+      "npmSpec": "@maumau/synology-chat",
+      "localPath": "extensions/synology-chat",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.22"
+    }
+  }
+}

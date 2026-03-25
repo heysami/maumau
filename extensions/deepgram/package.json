@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/deepgram-provider",
+  "version": "2026.3.14",
+  "private": true,
+  "description": "Maumau Deepgram media-understanding provider",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

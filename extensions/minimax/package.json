@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/minimax-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau MiniMax provider and OAuth plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

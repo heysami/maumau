@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/volcengine-provider",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau Volcengine provider plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

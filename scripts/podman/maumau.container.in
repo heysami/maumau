@@ -1,0 +1,28 @@
+# Maumau gateway — Podman Quadlet (rootless)
+# Installed by scripts/podman/setup.sh into maumau's ~/.config/containers/systemd/
+# {{MAUMAU_HOME}} is replaced at install time.
+
+[Unit]
+Description=Maumau gateway (rootless Podman)
+
+[Container]
+Image=maumau:local
+ContainerName=maumau
+UserNS=keep-id
+# Keep container UID/GID aligned with the invoking user so mounted config is readable.
+User=%U:%G
+Volume={{MAUMAU_HOME}}/.maumau:/home/node/.maumau:Z
+EnvironmentFile={{MAUMAU_HOME}}/.maumau/.env
+Environment=HOME=/home/node
+Environment=TERM=xterm-256color
+PublishPort=18789:18789
+PublishPort=18790:18790
+Pull=never
+Exec=node dist/index.js gateway --bind lan --port 18789
+
+[Service]
+TimeoutStartSec=300
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

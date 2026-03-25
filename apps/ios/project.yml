@@ -1,0 +1,339 @@
+name: Maumau
+options:
+  bundleIdPrefix: ai.maumau
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+
+packages:
+  MaumauKit:
+    path: ../shared/MaumauKit
+  Swabble:
+    path: ../../Swabble
+
+schemes:
+  Maumau:
+    shared: true
+    build:
+      targets:
+        Maumau: all
+    test:
+      targets:
+        - MaumauTests
+        - MaumauLogicTests
+  MaumauLogicTests:
+    shared: true
+    build:
+      targets:
+        MaumauLogicTests: all
+    test:
+      targets:
+        - MaumauLogicTests
+
+targets:
+  Maumau:
+    type: application
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: Sources
+    dependencies:
+      - target: MaumauShareExtension
+        embed: true
+      - target: MaumauActivityWidget
+        embed: true
+      - target: MaumauWatchApp
+      - package: MaumauKit
+      - package: MaumauKit
+        product: MaumauChatUI
+      - package: MaumauKit
+        product: MaumauProtocol
+      - package: Swabble
+        product: SwabbleKit
+      - sdk: AppIntents.framework
+    preBuildScripts:
+      - name: SwiftFormat (lint)
+        basedOnDependencyAnalysis: false
+        inputFileLists:
+          - $(SRCROOT)/SwiftSources.input.xcfilelist
+        script: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v swiftformat >/dev/null 2>&1; then
+            echo "error: swiftformat not found (brew install swiftformat)" >&2
+            exit 1
+          fi
+          swiftformat --lint --config "$SRCROOT/../../.swiftformat" \
+            --filelist "$SRCROOT/SwiftSources.input.xcfilelist"
+      - name: SwiftLint
+        basedOnDependencyAnalysis: false
+        inputFileLists:
+          - $(SRCROOT)/SwiftSources.input.xcfilelist
+        script: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            echo "error: swiftlint not found (brew install swiftlint)" >&2
+            exit 1
+          fi
+          swiftlint lint --config "$SRCROOT/.swiftlint.yml" --use-script-input-file-lists
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_ENTITLEMENTS: Sources/Maumau.entitlements
+        CODE_SIGN_STYLE: "$(MAUMAU_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(MAUMAU_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAUMAU_APP_BUNDLE_ID)"
+        PROVISIONING_PROFILE_SPECIFIER: "$(MAUMAU_APP_PROFILE)"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SUPPORTS_LIVE_ACTIVITIES: YES
+        ENABLE_APPINTENTS_METADATA: NO
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+      configs:
+        Debug:
+          MAUMAU_PUSH_TRANSPORT: direct
+          MAUMAU_PUSH_DISTRIBUTION: local
+          MAUMAU_PUSH_RELAY_BASE_URL: ""
+          MAUMAU_PUSH_APNS_ENVIRONMENT: sandbox
+        Release:
+          MAUMAU_PUSH_TRANSPORT: direct
+          MAUMAU_PUSH_DISTRIBUTION: local
+          MAUMAU_PUSH_RELAY_BASE_URL: ""
+          MAUMAU_PUSH_APNS_ENVIRONMENT: production
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Maumau
+        CFBundleIconName: AppIcon
+        CFBundleURLTypes:
+          - CFBundleURLName: ai.maumau.ios
+            CFBundleURLSchemes:
+              - maumau
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes:
+          - audio
+          - remote-notification
+        BGTaskSchedulerPermittedIdentifiers:
+          - ai.maumau.ios.bgrefresh
+        NSLocalNetworkUsageDescription: Maumau discovers and connects to your Maumau gateway on the local network.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoadsInWebContent: true
+        NSBonjourServices:
+          - _maumau-gw._tcp
+        NSCameraUsageDescription: Maumau can capture photos or short video clips when requested via the gateway.
+        NSLocationWhenInUseUsageDescription: Maumau uses your location when you allow location sharing.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Maumau can share your location in the background when you enable Always.
+        NSMicrophoneUsageDescription: Maumau needs microphone access for voice wake.
+        NSMotionUsageDescription: Maumau may use motion data to support device-aware interactions and automations.
+        NSPhotoLibraryUsageDescription: Maumau needs photo library access when you choose existing photos to share with your assistant.
+        NSSpeechRecognitionUsageDescription: Maumau uses on-device speech recognition for voice wake.
+        NSSupportsLiveActivities: true
+        ITSAppUsesNonExemptEncryption: false
+        MaumauPushTransport: "$(MAUMAU_PUSH_TRANSPORT)"
+        MaumauPushDistribution: "$(MAUMAU_PUSH_DISTRIBUTION)"
+        MaumauPushRelayBaseURL: "$(MAUMAU_PUSH_RELAY_BASE_URL)"
+        MaumauPushAPNsEnvironment: "$(MAUMAU_PUSH_APNS_ENVIRONMENT)"
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+  MaumauShareExtension:
+    type: app-extension
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: ShareExtension
+    dependencies:
+      - package: MaumauKit
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: "$(MAUMAU_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(MAUMAU_DEVELOPMENT_TEAM)"
+        ENABLE_APPINTENTS_METADATA: NO
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAUMAU_SHARE_BUNDLE_ID)"
+        PROVISIONING_PROFILE_SPECIFIER: "$(MAUMAU_SHARE_PROFILE)"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Maumau Share
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).ShareViewController"
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 1
+
+  MaumauActivityWidget:
+    type: app-extension
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: ActivityWidget
+      - path: Sources/LiveActivity/MaumauActivityAttributes.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: ActivityKit.framework
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: "$(MAUMAU_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(MAUMAU_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAUMAU_ACTIVITY_WIDGET_BUNDLE_ID)"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SUPPORTS_LIVE_ACTIVITIES: YES
+    info:
+      path: ActivityWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Maumau Activity
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+        NSSupportsLiveActivities: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  MaumauWatchApp:
+    type: application.watchapp2
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: WatchApp
+    dependencies:
+      - target: MaumauWatchExtension
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_APPINTENTS_METADATA: NO
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAUMAU_WATCH_APP_BUNDLE_ID)"
+    info:
+      path: WatchApp/Info.plist
+      properties:
+        CFBundleDisplayName: Maumau
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+        WKCompanionAppBundleIdentifier: "$(MAUMAU_APP_BUNDLE_ID)"
+        WKWatchKitApp: true
+
+  MaumauWatchExtension:
+    type: watchkit2-extension
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: WatchExtension/Sources
+    dependencies:
+      - sdk: AppIntents.framework
+      - sdk: WatchConnectivity.framework
+      - sdk: UserNotifications.framework
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAUMAU_WATCH_EXTENSION_BUNDLE_ID)"
+    info:
+      path: WatchExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Maumau
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+        NSExtension:
+          NSExtensionAttributes:
+            WKAppBundleIdentifier: "$(MAUMAU_WATCH_APP_BUNDLE_ID)"
+          NSExtensionPointIdentifier: com.apple.watchkit
+
+  MaumauTests:
+    type: bundle.unit-test
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: Tests
+        excludes:
+          - Logic
+    dependencies:
+      - target: Maumau
+      - package: Swabble
+        product: SwabbleKit
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: "$(MAUMAU_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(MAUMAU_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: ai.maumau.ios.tests
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Maumau.app/Maumau"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    info:
+      path: Tests/Info.plist
+      properties:
+        CFBundleDisplayName: MaumauTests
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"
+
+  MaumauLogicTests:
+    type: bundle.unit-test
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: Tests/Logic
+    dependencies:
+      - package: MaumauKit
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: "$(MAUMAU_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(MAUMAU_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: ai.maumau.ios.logic-tests
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+    info:
+      path: Tests/Info.plist
+      properties:
+        CFBundleDisplayName: MaumauLogicTests
+        CFBundleShortVersionString: "$(MAUMAU_MARKETING_VERSION)"
+        CFBundleVersion: "$(MAUMAU_BUILD_VERSION)"

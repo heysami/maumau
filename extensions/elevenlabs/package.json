@@ -1,0 +1,12 @@
+{
+  "name": "@maumau/elevenlabs-speech",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau ElevenLabs speech plugin",
+  "type": "module",
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: maumau
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: MAUMAU_GATEWAY_PORT
+        value: "8080"
+      - key: MAUMAU_STATE_DIR
+        value: /data/.maumau
+      - key: MAUMAU_WORKSPACE_DIR
+        value: /data/workspace
+      - key: MAUMAU_GATEWAY_TOKEN
+        generateValue: true
+    disk:
+      name: maumau-data
+      mountPath: /data
+      sizeGB: 1

@@ -1,0 +1,15 @@
+// Copy to LocalSigning.xcconfig for personal local signing overrides.
+// This file is only an example and should stay committed.
+
+MAUMAU_CODE_SIGN_STYLE = Automatic
+MAUMAU_DEVELOPMENT_TEAM = YOUR_TEAM_ID
+
+MAUMAU_APP_BUNDLE_ID = ai.maumau.client
+MAUMAU_SHARE_BUNDLE_ID = ai.maumau.client.share
+MAUMAU_ACTIVITY_WIDGET_BUNDLE_ID = ai.maumau.client.activitywidget
+MAUMAU_WATCH_APP_BUNDLE_ID = ai.maumau.client.watchkitapp
+MAUMAU_WATCH_EXTENSION_BUNDLE_ID = ai.maumau.client.watchkitapp.extension
+
+// Leave empty with automatic signing.
+MAUMAU_APP_PROFILE =
+MAUMAU_SHARE_PROFILE =

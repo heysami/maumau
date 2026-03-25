@@ -1,0 +1,40 @@
+{
+  "name": "@maumau/line",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau LINE channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "line",
+      "label": "LINE",
+      "selectionLabel": "LINE (Messaging API)",
+      "docsPath": "/channels/line",
+      "docsLabel": "line",
+      "blurb": "LINE Messaging API bot for Japan/Taiwan/Thailand markets.",
+      "order": 75,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "@maumau/line",
+      "localPath": "extensions/line",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.22"
+    }
+  }
+}
