@@ -92,15 +92,15 @@ jobs:
           context: .
           file: ./Dockerfile
           build-args: |
-            OPENCLAW_DOCKER_APT_UPGRADE=0
-          tags: openclaw-dockerfile-smoke:local
+            MAUMAU_DOCKER_APT_UPGRADE=0
+          tags: maumau-dockerfile-smoke:local
           load: true
           push: false
           provenance: false
 
       - name: Run root Dockerfile CLI smoke
         run: |
-          docker run --rm --entrypoint sh openclaw-dockerfile-smoke:local -lc 'which openclaw && openclaw --version'
+          docker run --rm --entrypoint sh maumau-dockerfile-smoke:local -lc 'which maumau && maumau --version'
 
       # This smoke validates that the build-arg path preinstalls the matrix
       # runtime deps declared by the plugin and that matrix discovery stays
@@ -111,18 +111,18 @@ jobs:
           context: .
           file: ./Dockerfile
           build-args: |
-            OPENCLAW_DOCKER_APT_UPGRADE=0
-            OPENCLAW_EXTENSIONS=matrix
-          tags: openclaw-ext-smoke:local
+            MAUMAU_DOCKER_APT_UPGRADE=0
+            MAUMAU_EXTENSIONS=matrix
+          tags: maumau-ext-smoke:local
           load: true
           push: false
           provenance: false
 
       - name: Smoke test Dockerfile with matrix extension build arg
         run: |
-          docker run --rm --entrypoint sh openclaw-ext-smoke:local -lc '
-            which openclaw &&
-            openclaw --version &&
+          docker run --rm --entrypoint sh maumau-ext-smoke:local -lc '
+            which maumau &&
+            maumau --version &&
             node -e "
               const Module = require(\"node:module\");
               const matrixPackage = require(\"/app/extensions/matrix/package.json\");
@@ -137,7 +137,7 @@ jobs:
                 requireFromMatrix.resolve(dep);
               }
               const { spawnSync } = require(\"node:child_process\");
-              const run = spawnSync(\"openclaw\", [\"plugins\", \"list\", \"--json\"], { encoding: \"utf8\" });
+              const run = spawnSync(\"maumau\", [\"plugins\", \"list\", \"--json\"], { encoding: \"utf8\" });
               if (run.status !== 0) {
                 process.stderr.write(run.stderr || run.stdout || \"plugins list failed\\n\");
                 process.exit(run.status ?? 1);
@@ -168,7 +168,7 @@ jobs:
         with:
           context: ./scripts/docker
           file: ./scripts/docker/install-sh-smoke/Dockerfile
-          tags: openclaw-install-smoke:local
+          tags: maumau-install-smoke:local
           load: true
           push: false
           provenance: false
@@ -179,19 +179,19 @@ jobs:
         with:
           context: ./scripts/docker
           file: ./scripts/docker/install-sh-nonroot/Dockerfile
-          tags: openclaw-install-nonroot:local
+          tags: maumau-install-nonroot:local
           load: true
           push: false
           provenance: false
 
       - name: Run installer docker tests
         env:
-          OPENCLAW_INSTALL_URL: https://openclaw.ai/install.sh
-          OPENCLAW_INSTALL_CLI_URL: https://openclaw.ai/install-cli.sh
-          OPENCLAW_NO_ONBOARD: "1"
-          OPENCLAW_INSTALL_SMOKE_SKIP_CLI: "1"
-          OPENCLAW_INSTALL_SMOKE_SKIP_IMAGE_BUILD: "1"
-          OPENCLAW_INSTALL_NONROOT_SKIP_IMAGE_BUILD: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-          OPENCLAW_INSTALL_SMOKE_SKIP_NONROOT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
-          OPENCLAW_INSTALL_SMOKE_SKIP_PREVIOUS: "1"
+          MAUMAU_INSTALL_URL: https://maumau.ai/install.sh
+          MAUMAU_INSTALL_CLI_URL: https://maumau.ai/install-cli.sh
+          MAUMAU_NO_ONBOARD: "1"
+          MAUMAU_INSTALL_SMOKE_SKIP_CLI: "1"
+          MAUMAU_INSTALL_SMOKE_SKIP_IMAGE_BUILD: "1"
+          MAUMAU_INSTALL_NONROOT_SKIP_IMAGE_BUILD: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          MAUMAU_INSTALL_SMOKE_SKIP_NONROOT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          MAUMAU_INSTALL_SMOKE_SKIP_PREVIOUS: "1"
         run: bash scripts/test-install-sh-docker.sh

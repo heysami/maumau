@@ -1,4 +1,4 @@
-name: OpenClaw NPM Release
+name: Maumau NPM Release
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
         type: boolean
 
 concurrency:
-  group: openclaw-npm-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  group: maumau-npm-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -23,7 +23,7 @@ env:
   PNPM_VERSION: "10.23.0"
 
 jobs:
-  preflight_openclaw_npm:
+  preflight_maumau_npm:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,7 +63,7 @@ jobs:
           # Fetch the full main ref so merge-base ancestry checks keep working
           # for older tagged commits that are still contained in main.
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          pnpm release:openclaw:npm:check
+          pnpm release:maumau:npm:check
 
       - name: Ensure version is not already published
         env:
@@ -72,16 +72,16 @@ jobs:
           set -euo pipefail
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
 
-          if npm view "openclaw@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+          if npm view "maumau@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
-              echo "openclaw@${PACKAGE_VERSION} is already published on npm; continuing because preflight_only=true."
+              echo "maumau@${PACKAGE_VERSION} is already published on npm; continuing because preflight_only=true."
               exit 0
             fi
-            echo "openclaw@${PACKAGE_VERSION} is already published on npm."
+            echo "maumau@${PACKAGE_VERSION} is already published on npm."
             exit 1
           fi
 
-          echo "Publishing openclaw@${PACKAGE_VERSION}"
+          echo "Publishing maumau@${PACKAGE_VERSION}"
 
       - name: Check
         run: pnpm check
@@ -108,9 +108,9 @@ jobs:
             exit 1
           fi
 
-  publish_openclaw_npm:
+  publish_maumau_npm:
     # npm trusted publishing + provenance requires a GitHub-hosted runner.
-    needs: [preflight_openclaw_npm, validate_publish_dispatch_ref]
+    needs: [preflight_maumau_npm, validate_publish_dispatch_ref]
     if: ${{ !inputs.preflight_only }}
     runs-on: ubuntu-latest
     environment: npm-release
@@ -153,19 +153,19 @@ jobs:
           # Fetch the full main ref so merge-base ancestry checks keep working
           # for older tagged commits that are still contained in main.
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          pnpm release:openclaw:npm:check
+          pnpm release:maumau:npm:check
 
       - name: Ensure version is not already published
         run: |
           set -euo pipefail
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
 
-          if npm view "openclaw@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
-            echo "openclaw@${PACKAGE_VERSION} is already published on npm."
+          if npm view "maumau@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "maumau@${PACKAGE_VERSION} is already published on npm."
             exit 1
           fi
 
-          echo "Publishing openclaw@${PACKAGE_VERSION}"
+          echo "Publishing maumau@${PACKAGE_VERSION}"
 
       - name: Publish
-        run: bash scripts/openclaw-npm-publish.sh --publish
+        run: bash scripts/maumau-npm-publish.sh --publish

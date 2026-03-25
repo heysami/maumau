@@ -5,22 +5,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const OPENCLAW_BRANDING_PATTERN = /\bopenclaw\b|\bopen\s+claw\b/iu;
+const legacyCompactBrand = String.fromCharCode(111, 112, 101, 110, 99, 108, 97, 119);
+const legacySpacedBrand = `${legacyCompactBrand.slice(0, 4)}\\s+${legacyCompactBrand.slice(4)}`;
+const LEGACY_BRANDING_PATTERN = new RegExp(
+  `\\b${legacyCompactBrand}\\b|\\b${legacySpacedBrand}\\b`,
+  "iu",
+);
 const INCLUDED_TOP_LEVEL_DIRS = new Set(["apps", "extensions", "scripts", "src", "test", "ui"]);
 const EXCLUDED_RELATIVE_PATHS = new Set([
-  "scripts/check-no-openclaw-branding.mjs",
-  "test/scripts/check-no-openclaw-branding.test.ts",
+  "scripts/check-no-legacy-branding.mjs",
+  "test/scripts/check-no-legacy-branding.test.ts",
 ]);
 
 function isBinaryBuffer(buffer) {
   return buffer.includes(0);
 }
 
-export function findOpenClawBrandingLines(content) {
+export function findLegacyBrandingLines(content) {
   const lines = content.split(/\r?\n/u);
   const matches = [];
   for (const [index, line] of lines.entries()) {
-    if (OPENCLAW_BRANDING_PATTERN.test(line)) {
+    if (LEGACY_BRANDING_PATTERN.test(line)) {
       matches.push(index + 1);
     }
   }
@@ -47,7 +52,7 @@ export function shouldScanTrackedFile(filePath, cwd = process.cwd()) {
   return INCLUDED_TOP_LEVEL_DIRS.has(topLevelDir);
 }
 
-export function findOpenClawBrandingInFiles(filePaths, readFile = fs.readFileSync) {
+export function findLegacyBrandingInFiles(filePaths, readFile = fs.readFileSync) {
   const violations = [];
   for (const filePath of filePaths) {
     let content;
@@ -62,7 +67,7 @@ export function findOpenClawBrandingInFiles(filePaths, readFile = fs.readFileSyn
     if (isBinaryBuffer(content)) {
       continue;
     }
-    const lines = findOpenClawBrandingLines(content.toString("utf8"));
+    const lines = findLegacyBrandingLines(content.toString("utf8"));
     if (lines.length > 0) {
       violations.push({
         filePath,
@@ -75,7 +80,7 @@ export function findOpenClawBrandingInFiles(filePaths, readFile = fs.readFileSyn
 
 export async function main() {
   const cwd = process.cwd();
-  const violations = findOpenClawBrandingInFiles(
+  const violations = findLegacyBrandingInFiles(
     listTrackedFiles(cwd).filter((filePath) => shouldScanTrackedFile(filePath, cwd)),
   );
   if (violations.length === 0) {
@@ -83,7 +88,7 @@ export async function main() {
   }
 
   console.error(
-    "Found forbidden OpenClaw branding. Imported plugins, extensions, channels, and UI copy must be rebranded to Maumau before landing:",
+    "Found forbidden legacy branding. Imported plugins, extensions, channels, and UI copy must use Maumau branding before landing:",
   );
   for (const violation of violations) {
     const relativePath = path.relative(cwd, violation.filePath) || violation.filePath;

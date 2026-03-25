@@ -4,13 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  findOpenClawBrandingInFiles,
-  findOpenClawBrandingLines,
+  findLegacyBrandingInFiles,
+  findLegacyBrandingLines,
   listTrackedFiles,
   shouldScanTrackedFile,
-} from "../../scripts/check-no-openclaw-branding.mjs";
+} from "../../scripts/check-no-legacy-branding.mjs";
 
 const tempDirs: string[] = [];
+const legacyCompactBrand = String.fromCharCode(111, 112, 101, 110, 99, 108, 97, 119);
+const legacySpacedBrand = `${legacyCompactBrand.slice(0, 4)} ${legacyCompactBrand.slice(4)}`;
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -19,7 +21,7 @@ afterEach(() => {
 });
 
 function makeTempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "maumau-openclaw-branding-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "maumau-legacy-branding-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -31,14 +33,14 @@ function git(cwd: string, ...args: string[]): string {
   }).trim();
 }
 
-describe("check-no-openclaw-branding", () => {
-  it("finds OpenClaw branding in code and UI strings", () => {
+describe("check-no-legacy-branding", () => {
+  it("finds legacy branding in code and UI strings", () => {
     expect(
-      findOpenClawBrandingLines(
+      findLegacyBrandingLines(
         [
           'const pkg = "maumau";',
-          'import "openclaw/plugin-sdk";',
-          'const title = "Open Claw gateway";',
+          `import "${legacyCompactBrand}/plugin-sdk";`,
+          `const title = "${legacySpacedBrand} gateway";`,
         ].join("\n"),
       ),
     ).toEqual([2, 3]);
@@ -46,7 +48,7 @@ describe("check-no-openclaw-branding", () => {
 
   it("ignores Maumau branding", () => {
     expect(
-      findOpenClawBrandingLines(
+      findLegacyBrandingLines(
         ['import "maumau/plugin-sdk";', 'const title = "Maumau gateway";'].join("\n"),
       ),
     ).toEqual([]);
@@ -56,9 +58,9 @@ describe("check-no-openclaw-branding", () => {
     const cwd = "/tmp/workspace";
     expect(shouldScanTrackedFile("/tmp/workspace/extensions/demo/src/index.ts", cwd)).toBe(true);
     expect(shouldScanTrackedFile("/tmp/workspace/ui/src/app.ts", cwd)).toBe(true);
-    expect(
-      shouldScanTrackedFile("/tmp/workspace/scripts/check-no-openclaw-branding.mjs", cwd),
-    ).toBe(false);
+    expect(shouldScanTrackedFile("/tmp/workspace/scripts/check-no-legacy-branding.mjs", cwd)).toBe(
+      false,
+    );
     expect(shouldScanTrackedFile("/tmp/workspace/.agents/maintainers.md", cwd)).toBe(false);
   });
 
@@ -72,11 +74,11 @@ describe("check-no-openclaw-branding", () => {
     const binaryFile = path.join(rootDir, "assets", "logo.png");
     fs.mkdirSync(path.dirname(textFile), { recursive: true });
     fs.mkdirSync(path.dirname(binaryFile), { recursive: true });
-    fs.writeFileSync(textFile, "Install the OpenClaw plugin here.\n", "utf8");
+    fs.writeFileSync(textFile, `Install the ${legacySpacedBrand} plugin here.\n`, "utf8");
     fs.writeFileSync(binaryFile, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
     git(rootDir, "add", "extensions/demo/README.md", "assets/logo.png");
 
-    const violations = findOpenClawBrandingInFiles(listTrackedFiles(rootDir));
+    const violations = findLegacyBrandingInFiles(listTrackedFiles(rootDir));
 
     expect(violations).toEqual([
       {

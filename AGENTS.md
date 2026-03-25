@@ -10,7 +10,7 @@
 - Tests: colocated `*.test.ts`.
 - Docs: `docs/` (images, queue, Pi config). Built output lives in `dist/`.
 - Nomenclature: use "plugin" / "plugins" in docs, UI, changelogs, and contributor guidance. `extensions/*` remains the internal directory/package path to avoid repo-wide churn from a rename.
-- Rebrand-on-import rule: when copying, importing, or vendoring plugin, extension, channel, connection, or integration code that originated in OpenClaw, rewrite product-facing references to `maumau` / `Maumau` before landing. Do not introduce new `openclaw`, `OpenClaw`, `open claw`, legacy package imports, manifest filenames, state paths, env vars, config keys, or UI labels unless the change is an explicitly approved compatibility shim.
+- Branding-on-import rule: when copying, importing, or vendoring plugin, extension, channel, connection, or integration code from a legacy upstream or earlier branding, rewrite product-facing references to `maumau` / `Maumau` before landing. Do not introduce legacy package imports, manifest filenames, state paths, env vars, config keys, or outdated UI labels unless the change is an explicitly approved compatibility shim.
 - Bundled plugin naming: for repo-owned workspace plugins, keep the canonical plugin id aligned across `maumau.plugin.json:id`, `extensions/<id>` by default, and package names anchored to the same id (`@maumau/<id>` or approved suffix forms like `-provider`, `-plugin`, `-speech`, `-sandbox`, `-media-understanding`). Keep `maumau.install.npmSpec` equal to the package name and `maumau.channel.id` equal to the plugin id when present. Exceptions must be explicit and covered by the repo invariant test.
 - Plugins: live under `extensions/*` (workspace packages). Keep plugin-only deps in the extension `package.json`; do not add them to the root `package.json` unless core uses them.
 - Plugins: install runs `npm install --omit=dev` in plugin dir; runtime deps must live in `dependencies`. Avoid `workspace:*` in `dependencies` (npm install breaks); put `maumau` in `devDependencies` or `peerDependencies` instead (runtime resolves `maumau/plugin-sdk` via jiti alias).
@@ -160,7 +160,7 @@
 ## Local Runtime / Platform Notes
 
 - Vocabulary: "makeup" = "mac app".
-- Rebrand/migration issues or legacy config/service warnings: run `maumau doctor` (see `docs/gateway/doctor.md`).
+- Migration issues or legacy config/service warnings: run `maumau doctor` (see `docs/gateway/doctor.md`).
 - Use `$maumau-parallels-smoke` at `.agents/skills/maumau-parallels-smoke/SKILL.md` for Parallels smoke, rerun, upgrade, debug, and result-interpretation workflows across macOS, Windows, and Linux guests.
 - For the macOS Discord roundtrip deep dive, use the narrower `.agents/skills/parallels-discord-roundtrip/SKILL.md` companion skill.
 - Never edit `node_modules` (global/Homebrew/npm/git installs too). Updates overwrite. Skill notes go in `tools.md` or `AGENTS.md`.

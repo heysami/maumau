@@ -1,54 +1,54 @@
 # Protect the ownership rules themselves.
-/.github/CODEOWNERS @steipete
+/.github/CODEOWNERS @heysami
 
 # WARNING: GitHub CODEOWNERS uses last-match-wins semantics.
-# If you add overlapping rules below the secops block, include @openclaw/secops
-# on those entries too or you can silently remove required secops review.
-# Security-sensitive code, config, and docs require secops review.
-/SECURITY.md @openclaw/secops
-/.github/dependabot.yml @openclaw/secops
-/.github/codeql/ @openclaw/secops
-/.github/workflows/codeql.yml @openclaw/secops
-/src/security/ @openclaw/secops
-/src/secrets/ @openclaw/secops
-/src/config/*secret*.ts @openclaw/secops
-/src/config/**/*secret*.ts @openclaw/secops
-/src/gateway/*auth*.ts @openclaw/secops
-/src/gateway/**/*auth*.ts @openclaw/secops
-/src/gateway/*secret*.ts @openclaw/secops
-/src/gateway/**/*secret*.ts @openclaw/secops
-/src/gateway/security-path*.ts @openclaw/secops
-/src/gateway/resolve-configured-secret-input-string*.ts @openclaw/secops
-/src/gateway/protocol/**/*secret*.ts @openclaw/secops
-/src/gateway/server-methods/secrets*.ts @openclaw/secops
-/src/agents/*auth*.ts @openclaw/secops
-/src/agents/**/*auth*.ts @openclaw/secops
-/src/agents/auth-profiles*.ts @openclaw/secops
-/src/agents/auth-health*.ts @openclaw/secops
-/src/agents/auth-profiles/ @openclaw/secops
-/src/agents/sandbox.ts @openclaw/secops
-/src/agents/sandbox-*.ts @openclaw/secops
-/src/agents/sandbox/ @openclaw/secops
-/src/infra/secret-file*.ts @openclaw/secops
-/src/cron/stagger.ts @openclaw/secops
-/src/cron/service/jobs.ts @openclaw/secops
-/docs/security/ @openclaw/secops
-/docs/gateway/authentication.md @openclaw/secops
-/docs/gateway/sandbox-vs-tool-policy-vs-elevated.md @openclaw/secops
-/docs/gateway/sandboxing.md @openclaw/secops
-/docs/gateway/secrets-plan-contract.md @openclaw/secops
-/docs/gateway/secrets.md @openclaw/secops
-/docs/gateway/security/ @openclaw/secops
-/docs/cli/approvals.md @openclaw/secops
-/docs/cli/sandbox.md @openclaw/secops
-/docs/cli/security.md @openclaw/secops
-/docs/cli/secrets.md @openclaw/secops
-/docs/reference/secretref-credential-surface.md @openclaw/secops
-/docs/reference/secretref-user-supplied-credentials-matrix.json @openclaw/secops
+# If you add overlapping rules below the security block, include @heysami
+# on those entries too or you can silently remove required review.
+# Security-sensitive code, config, and docs require owner review.
+/SECURITY.md @heysami
+/.github/dependabot.yml @heysami
+/.github/codeql/ @heysami
+/.github/workflows/codeql.yml @heysami
+/src/security/ @heysami
+/src/secrets/ @heysami
+/src/config/*secret*.ts @heysami
+/src/config/**/*secret*.ts @heysami
+/src/gateway/*auth*.ts @heysami
+/src/gateway/**/*auth*.ts @heysami
+/src/gateway/*secret*.ts @heysami
+/src/gateway/**/*secret*.ts @heysami
+/src/gateway/security-path*.ts @heysami
+/src/gateway/resolve-configured-secret-input-string*.ts @heysami
+/src/gateway/protocol/**/*secret*.ts @heysami
+/src/gateway/server-methods/secrets*.ts @heysami
+/src/agents/*auth*.ts @heysami
+/src/agents/**/*auth*.ts @heysami
+/src/agents/auth-profiles*.ts @heysami
+/src/agents/auth-health*.ts @heysami
+/src/agents/auth-profiles/ @heysami
+/src/agents/sandbox.ts @heysami
+/src/agents/sandbox-*.ts @heysami
+/src/agents/sandbox/ @heysami
+/src/infra/secret-file*.ts @heysami
+/src/cron/stagger.ts @heysami
+/src/cron/service/jobs.ts @heysami
+/docs/security/ @heysami
+/docs/gateway/authentication.md @heysami
+/docs/gateway/sandbox-vs-tool-policy-vs-elevated.md @heysami
+/docs/gateway/sandboxing.md @heysami
+/docs/gateway/secrets-plan-contract.md @heysami
+/docs/gateway/secrets.md @heysami
+/docs/gateway/security/ @heysami
+/docs/cli/approvals.md @heysami
+/docs/cli/sandbox.md @heysami
+/docs/cli/security.md @heysami
+/docs/cli/secrets.md @heysami
+/docs/reference/secretref-credential-surface.md @heysami
+/docs/reference/secretref-user-supplied-credentials-matrix.json @heysami
 
 # Release workflow and its supporting release-path checks.
-/.github/workflows/openclaw-npm-release.yml @openclaw/openclaw-release-managers
-/docs/reference/RELEASING.md @openclaw/openclaw-release-managers
-/scripts/openclaw-npm-publish.sh @openclaw/openclaw-release-managers
-/scripts/openclaw-npm-release-check.ts @openclaw/openclaw-release-managers
-/scripts/release-check.ts @openclaw/openclaw-release-managers
+/.github/workflows/maumau-npm-release.yml @heysami
+/docs/reference/RELEASING.md @heysami
+/scripts/maumau-npm-publish.sh @heysami
+/scripts/maumau-npm-release-check.ts @heysami
+/scripts/release-check.ts @heysami

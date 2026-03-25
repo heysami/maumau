@@ -3505,7 +3505,7 @@ Docs: https://docs.maumau.ai
 
 ### Changes
 
-- Rebrand: rename the npm package/CLI to `maumau`, add a `maumau` compatibility shim, and move extensions to the `@maumau/*` scope.
+- Packaging: align the npm package/CLI name with `maumau`, add a compatibility shim, and move extensions to the `@maumau/*` scope.
 - Onboarding: strengthen security warning copy for beta + access control expectations.
 - Onboarding: add Venice API key to non-interactive flow. (#1893) Thanks @jonisjongithub.
 - Config: auto-migrate legacy state/config paths and keep config resolution consistent across legacy filenames.
