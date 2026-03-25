@@ -193,9 +193,9 @@ export function collectReleasePackageMetadataErrors(pkg: PackageJson): string[] 
   if (pkg.bin?.maumau !== "maumau.mjs") {
     errors.push(`package.json bin.maumau must be "maumau.mjs"; found "${pkg.bin?.maumau ?? ""}".`);
   }
-  if (pkg.peerDependencies?.["node-llama-cpp"] !== "3.16.2") {
+  if (pkg.peerDependencies?.["node-llama-cpp"] !== "3.18.1") {
     errors.push(
-      `package.json peerDependencies["node-llama-cpp"] must be "3.16.2"; found "${
+      `package.json peerDependencies["node-llama-cpp"] must be "3.18.1"; found "${
         pkg.peerDependencies?.["node-llama-cpp"] ?? ""
       }".`,
     );

@@ -1,20 +1,18 @@
 name: macOS Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to validate for macOS release handoff (for example v2026.3.22 or v2026.3.22-beta.1)
+        description: Release tag to build (for example v2026.3.24 or v2026.3.24-beta.1)
         required: true
         type: string
-      preflight_only:
-        description: Retained for operator compatibility; this public workflow is validation-only
-        required: true
-        default: true
-        type: boolean
 
 concurrency:
-  group: macos-release-${{ inputs.tag }}
+  group: macos-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -23,25 +21,34 @@ env:
   PNPM_VERSION: "10.23.0"
 
 jobs:
-  validate_macos_release_request:
-    runs-on: ubuntu-latest
+  build_and_publish_macos:
+    runs-on: macos-latest
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Validate tag input format
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
+      - name: Resolve release tag
+        id: release
+        shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]{4}\.[1-9][0-9]*\.[1-9][0-9]*((-beta\.[1-9][0-9]*)|(-[1-9][0-9]*))?$ ]]; then
-            echo "Invalid release tag format: ${RELEASE_TAG}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "${TAG}" =~ ^v[0-9]{4}\.[1-9][0-9]*\.[1-9][0-9]*((-beta\.[1-9][0-9]*)|(-[1-9][0-9]*))?$ ]]; then
+            echo "Invalid release tag format: ${TAG}"
             exit 1
           fi
 
-      - name: Checkout selected tag
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Maumau macOS test build ${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release ref
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
           fetch-depth: 0
 
       - name: Setup Node environment
@@ -52,16 +59,36 @@ jobs:
           install-bun: "false"
           use-sticky-disk: "false"
 
-      - name: Ensure matching GitHub release exists
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+      - name: Select Xcode with Swift 6.2 or newer
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=""
+
+          while IFS= read -r app; do
+            sudo xcode-select -s "$app/Contents/Developer"
+            version="$(swift --version | head -n 1)"
+            echo "Checked $app -> $version"
+            if swift --version | grep -Eq 'Apple Swift version 6\.[2-9]'; then
+              found="$app"
+              break
+            fi
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' | sort -Vr)
+
+          if [[ -z "$found" ]]; then
+            echo "No Xcode with Swift 6.2 or newer found on runner."
+            exit 1
+          fi
+
+          echo "Using $found"
+          xcodebuild -version
+          swift --version
 
       - name: Validate release tag and package metadata
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_MAIN_REF: origin/main
+        shell: bash
         run: |
           set -euo pipefail
           RELEASE_SHA=$(git rev-parse HEAD)
@@ -69,17 +96,94 @@ jobs:
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           pnpm release:maumau:npm:check
 
-      - name: Summarize next step
+      - name: Build ad-hoc macOS release artifacts
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          ALLOW_ADHOC_SIGNING: "1"
+          CODESIGN_TIMESTAMP: "off"
+          SKIP_DMG_STYLE: "1"
+          SKIP_NOTARIZE: "1"
+          SKIP_PNPM_INSTALL: "1"
+        shell: bash
+        run: bash scripts/package-mac-dist.sh
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          files=()
+          for pattern in Maumau-*.zip Maumau-*.dmg Maumau-*.dSYM.zip; do
+            for file in $pattern; do
+              if [[ -e "$file" ]]; then
+                files+=("$file")
+              fi
+            done
+          done
+
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            echo "No macOS release files were produced."
+            exit 1
+          fi
+
+          shasum -a 256 "${files[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<'EOF'
+          Maumau macOS test build.
+
+          This build is ad-hoc signed for testing only. It is not notarized, so macOS may block it on first launch.
+
+          Test install:
+          1. Drag `Maumau.app` into `/Applications`.
+          2. Clear the quarantine flag:
+             `xattr -dr com.apple.quarantine "/Applications/Maumau.app"`
+          3. Launch it once with Finder or:
+             `open "/Applications/Maumau.app"`
+
+          Included assets:
+          - `.zip` for direct download / Sparkle-style packaging tests
+          - `.dmg` for drag-to-Applications install tests
+          - `.dSYM.zip` for symbolicated crash debugging when available
+          - `SHA256SUMS.txt` for checksum verification
+          EOF
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release-${{ steps.release.outputs.tag }}
+          path: |
+            dist/Maumau-*.zip
+            dist/Maumau-*.dmg
+            dist/Maumau-*.dSYM.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.release_name }}
+          body_path: release-notes.md
+          prerelease: true
+          fail_on_unmatched_files: false
+          files: |
+            dist/Maumau-*.zip
+            dist/Maumau-*.dmg
+            dist/Maumau-*.dSYM.zip
+            dist/SHA256SUMS.txt
+
+      - name: Summarize release output
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           {
-            echo "## Public macOS validation only"
+            echo "## macOS test release published"
             echo
-            echo "This workflow no longer builds, signs, notarizes, or uploads macOS assets."
-            echo
-            echo "Next step:"
-            echo "- Build and package the macOS app for \`${RELEASE_TAG}\` with the Maumau release tooling."
-            echo "- Upload the packaged \`.zip\`, \`.dmg\`, and \`.dSYM.zip\` files to the matching GitHub release in \`${GITHUB_REPOSITORY}\`."
-            echo "- For stable releases, regenerate \`appcast.xml\` and commit it back to \`main\`."
+            echo "- Release: https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG}"
+            echo "- Quarantine bypass for testers: \`xattr -dr com.apple.quarantine \"/Applications/Maumau.app\"\`"
           } >> "$GITHUB_STEP_SUMMARY"

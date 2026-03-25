@@ -62,3 +62,13 @@ Use for local dev only; keep off for release builds.
 - `CODESIGN_TIMESTAMP=off` (offline debug)
 - `DISABLE_LIBRARY_VALIDATION=1` (dev-only Sparkle workaround)
 - `SKIP_TEAM_ID_CHECK=1` (bypass audit)
+
+## Unsigned test installs
+
+For ad-hoc signed test builds downloaded from GitHub Releases, move `Maumau.app` into
+`/Applications` and clear the quarantine flag before first launch:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Maumau.app"
+open "/Applications/Maumau.app"
+```

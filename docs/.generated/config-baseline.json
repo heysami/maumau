@@ -1450,7 +1450,7 @@
         "advanced"
       ],
       "label": "Embedded Pi",
-      "help": "Embedded Pi runner hardening controls for how workspace-local Pi settings are trusted and applied in OpenClaw sessions.",
+      "help": "Embedded Pi runner hardening controls for how workspace-local Pi settings are trusted and applied in Maumau sessions.",
       "hasChildren": true
     },
     {
@@ -2619,7 +2619,7 @@
         "storage"
       ],
       "label": "Memory Search Index Path",
-      "help": "Sets where the SQLite memory index is stored on disk for each agent. Keep the default `~/.openclaw/memory/{agentId}.sqlite` unless you need custom storage placement or backup policy alignment.",
+      "help": "Sets where the SQLite memory index is stored on disk for each agent. Keep the default `~/.maumau/memory/{agentId}.sqlite` unless you need custom storage placement or backup policy alignment.",
       "hasChildren": false
     },
     {
@@ -3163,7 +3163,7 @@
         "storage"
       ],
       "label": "Sandbox Browser Network",
-      "help": "Docker network for sandbox browser containers (default: openclaw-sandbox-browser). Avoid bridge if you need stricter isolation.",
+      "help": "Docker network for sandbox browser containers (default: maumau-sandbox-browser). Avoid bridge if you need stricter isolation.",
       "hasChildren": false
     },
     {
@@ -5270,7 +5270,7 @@
         "advanced"
       ],
       "label": "Agent Runtime",
-      "help": "Optional runtime descriptor for this agent. Use embedded for default OpenClaw execution or acp for external ACP harness defaults.",
+      "help": "Optional runtime descriptor for this agent. Use embedded for default Maumau execution or acp for external ACP harness defaults.",
       "hasChildren": true
     },
     {
@@ -5298,7 +5298,7 @@
         "advanced"
       ],
       "label": "Agent ACP Harness Agent",
-      "help": "Optional ACP harness agent id to use for this OpenClaw agent (for example codex, claude).",
+      "help": "Optional ACP harness agent id to use for this Maumau agent (for example codex, claude).",
       "hasChildren": false
     },
     {
@@ -5358,7 +5358,7 @@
         "advanced"
       ],
       "label": "Agent Runtime Type",
-      "help": "Runtime type for this agent: \"embedded\" (default OpenClaw runtime) or \"acp\" (ACP harness defaults).",
+      "help": "Runtime type for this agent: \"embedded\" (default Maumau runtime) or \"acp\" (ACP harness defaults).",
       "hasChildren": false
     },
     {
@@ -8153,7 +8153,7 @@
         "storage"
       ],
       "label": "Browser Profile Driver",
-      "help": "Per-profile browser driver mode. Use \"openclaw\" (or legacy \"clawd\") for CDP-based profiles, or use \"existing-session\" for host-local Chrome DevTools MCP attachment.",
+      "help": "Per-profile browser driver mode. Use \"maumau\" (or legacy \"clawd\") for CDP-based profiles, or use \"existing-session\" for host-local Chrome DevTools MCP attachment.",
       "hasChildren": false
     },
     {
@@ -13090,7 +13090,7 @@
         "performance"
       ],
       "label": "Discord EventQueue Listener Timeout (ms)",
-      "help": "Canonical Discord listener timeout control in ms for gateway normalization/enqueue handlers. Default is 120000 in OpenClaw; set per account via channels.discord.accounts.<id>.eventQueue.listenerTimeout.",
+      "help": "Canonical Discord listener timeout control in ms for gateway normalization/enqueue handlers. Default is 120000 in Maumau; set per account via channels.discord.accounts.<id>.eventQueue.listenerTimeout.",
       "hasChildren": false
     },
     {
@@ -31113,7 +31113,7 @@
         "network"
       ],
       "label": "Synology Chat",
-      "help": "Connect your Synology NAS Chat to OpenClaw with full agent capabilities.",
+      "help": "Connect your Synology NAS Chat to Maumau with full agent capabilities.",
       "hasChildren": true
     },
     {
@@ -38884,7 +38884,7 @@
         "advanced"
       ],
       "label": "Allow /mcp",
-      "help": "Allow /mcp chat command to manage OpenClaw MCP server config under mcp.servers (default: false).",
+      "help": "Allow /mcp chat command to manage Maumau MCP server config under mcp.servers (default: false).",
       "hasChildren": false
     },
     {
@@ -39487,7 +39487,7 @@
         "storage"
       ],
       "label": "Cache Trace File Path",
-      "help": "JSONL output path for cache trace logs (default: $OPENCLAW_STATE_DIR/logs/cache-trace.jsonl).",
+      "help": "JSONL output path for cache trace logs (default: $MAUMAU_STATE_DIR/logs/cache-trace.jsonl).",
       "hasChildren": false
     },
     {
@@ -39825,7 +39825,7 @@
         "network"
       ],
       "label": "Wide-area Discovery Domain",
-      "help": "Optional unicast DNS-SD domain for wide-area discovery, such as openclaw.internal. Use this when you intentionally publish gateway discovery beyond local mDNS scopes.",
+      "help": "Optional unicast DNS-SD domain for wide-area discovery, such as maumau.internal. Use this when you intentionally publish gateway discovery beyond local mDNS scopes.",
       "hasChildren": false
     },
     {
@@ -39919,7 +39919,7 @@
         "advanced"
       ],
       "label": "Environment Variable Overrides",
-      "help": "Explicit key/value environment variable overrides merged into runtime process environment for OpenClaw. Use this for deterministic env configuration instead of relying only on shell profile side effects.",
+      "help": "Explicit key/value environment variable overrides merged into runtime process environment for Maumau. Use this for deterministic env configuration instead of relying only on shell profile side effects.",
       "hasChildren": true
     },
     {
@@ -40350,7 +40350,7 @@
         "storage"
       ],
       "label": "Control UI Base Path",
-      "help": "Optional URL prefix where the Control UI is served (e.g. /openclaw).",
+      "help": "Optional URL prefix where the Control UI is served (e.g. /maumau).",
       "hasChildren": false
     },
     {
@@ -40997,7 +40997,7 @@
         "network"
       ],
       "label": "Gateway Node Allowlist (Extra Commands)",
-      "help": "Extra node.invoke commands to allow beyond the gateway defaults (array of command strings). Enabling dangerous commands here is a security-sensitive override and is flagged by `openclaw security audit`.",
+      "help": "Extra node.invoke commands to allow beyond the gateway defaults (array of command strings). Enabling dangerous commands here is a security-sensitive override and is flagged by `maumau security audit`.",
       "hasChildren": true
     },
     {
@@ -41633,7 +41633,7 @@
         "advanced"
       ],
       "label": "Hooks",
-      "help": "Inbound webhook automation surface for mapping external events into wake or agent actions in OpenClaw. Keep this locked down with explicit token/session/agent controls before exposing it beyond trusted networks.",
+      "help": "Inbound webhook automation surface for mapping external events into wake or agent actions in Maumau. Keep this locked down with explicit token/session/agent controls before exposing it beyond trusted networks.",
       "hasChildren": true
     },
     {
@@ -42954,7 +42954,7 @@
         "advanced"
       ],
       "label": "MCP",
-      "help": "Global MCP server definitions managed by OpenClaw. Embedded Pi and other runtime adapters can consume these servers without storing them inside Pi-owned project settings.",
+      "help": "Global MCP server definitions managed by Maumau. Embedded Pi and other runtime adapters can consume these servers without storing them inside Pi-owned project settings.",
       "hasChildren": true
     },
     {
@@ -42968,7 +42968,7 @@
         "advanced"
       ],
       "label": "MCP Servers",
-      "help": "Named MCP server definitions. OpenClaw stores them in its own config and runtime adapters decide which transports are supported at execution time.",
+      "help": "Named MCP server definitions. Maumau stores them in its own config and runtime adapters decide which transports are supported at execution time.",
       "hasChildren": true
     },
     {
@@ -43141,7 +43141,7 @@
         "storage"
       ],
       "label": "Memory Backend",
-      "help": "Selects the global memory engine: \"builtin\" uses OpenClaw memory internals, while \"qmd\" uses the QMD sidecar pipeline. Keep \"builtin\" unless you intentionally operate QMD.",
+      "help": "Selects the global memory engine: \"builtin\" uses Maumau memory internals, while \"qmd\" uses the QMD sidecar pipeline. Keep \"builtin\" unless you intentionally operate QMD.",
       "hasChildren": false
     },
     {
@@ -45002,7 +45002,7 @@
         "advanced"
       ],
       "label": "Metadata",
-      "help": "Metadata fields automatically maintained by OpenClaw to record write/version history for this config file. Keep these values system-managed and avoid manual edits unless debugging migration history.",
+      "help": "Metadata fields automatically maintained by Maumau to record write/version history for this config file. Keep these values system-managed and avoid manual edits unless debugging migration history.",
       "hasChildren": true
     },
     {
@@ -45030,7 +45030,7 @@
         "media"
       ],
       "label": "Config Last Touched Version",
-      "help": "Auto-set when OpenClaw writes the config.",
+      "help": "Auto-set when Maumau writes the config.",
       "hasChildren": false
     },
     {
@@ -45383,7 +45383,7 @@
         "models"
       ],
       "label": "Model Provider Inject num_ctx (OpenAI Compat)",
-      "help": "Controls whether OpenClaw injects `options.num_ctx` for Ollama providers configured with the OpenAI-compatible adapter (`openai-completions`). Default is true. Set false only if your proxy/upstream rejects unknown `options` payload fields.",
+      "help": "Controls whether Maumau injects `options.num_ctx` for Ollama providers configured with the OpenAI-compatible adapter (`openai-completions`). Default is true. Set false only if your proxy/upstream rejects unknown `options` payload fields.",
       "hasChildren": false
     },
     {
@@ -45781,7 +45781,7 @@
         "storage"
       ],
       "label": "Node Browser Proxy Allowed Profiles",
-      "help": "Optional allowlist of browser profile names exposed through node proxy routing. Leave empty to preserve the default full profile surface, including profile create/delete routes. When set, OpenClaw enforces least-privilege profile access and blocks persistent profile create/delete through the proxy.",
+      "help": "Optional allowlist of browser profile names exposed through node proxy routing. Leave empty to preserve the default full profile surface, including profile create/delete routes. When set, Maumau enforces least-privilege profile access and blocks persistent profile create/delete through the proxy.",
       "hasChildren": true
     },
     {
@@ -46218,7 +46218,7 @@
         "advanced"
       ],
       "label": "Queue Owner TTL Seconds",
-      "help": "Idle queue-owner TTL for acpx prompt turns. Keep this short in OpenClaw to avoid delayed completion after each turn.",
+      "help": "Idle queue-owner TTL for acpx prompt turns. Keep this short in Maumau to avoid delayed completion after each turn.",
       "hasChildren": false
     },
     {
@@ -46353,8 +46353,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/amazon-bedrock-provider",
-      "help": "OpenClaw Amazon Bedrock provider plugin (plugin: amazon-bedrock)",
+      "label": "@maumau/amazon-bedrock-provider",
+      "help": "Maumau Amazon Bedrock provider plugin (plugin: amazon-bedrock)",
       "hasChildren": true
     },
     {
@@ -46367,7 +46367,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/amazon-bedrock-provider Config",
+      "label": "@maumau/amazon-bedrock-provider Config",
       "help": "Plugin-defined config payload for amazon-bedrock.",
       "hasChildren": false
     },
@@ -46381,7 +46381,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/amazon-bedrock-provider",
+      "label": "Enable @maumau/amazon-bedrock-provider",
       "hasChildren": false
     },
     {
@@ -46474,8 +46474,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/anthropic-provider",
-      "help": "OpenClaw Anthropic provider plugin (plugin: anthropic)",
+      "label": "@maumau/anthropic-provider",
+      "help": "Maumau Anthropic provider plugin (plugin: anthropic)",
       "hasChildren": true
     },
     {
@@ -46488,7 +46488,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/anthropic-provider Config",
+      "label": "@maumau/anthropic-provider Config",
       "help": "Plugin-defined config payload for anthropic.",
       "hasChildren": false
     },
@@ -46502,7 +46502,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/anthropic-provider",
+      "label": "Enable @maumau/anthropic-provider",
       "hasChildren": false
     },
     {
@@ -46595,8 +46595,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/bluebubbles",
-      "help": "OpenClaw BlueBubbles channel plugin (plugin: bluebubbles)",
+      "label": "@maumau/bluebubbles",
+      "help": "Maumau BlueBubbles channel plugin (plugin: bluebubbles)",
       "hasChildren": true
     },
     {
@@ -46609,7 +46609,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/bluebubbles Config",
+      "label": "@maumau/bluebubbles Config",
       "help": "Plugin-defined config payload for bluebubbles.",
       "hasChildren": false
     },
@@ -46623,7 +46623,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/bluebubbles",
+      "label": "Enable @maumau/bluebubbles",
       "hasChildren": false
     },
     {
@@ -46716,8 +46716,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/brave-plugin",
-      "help": "OpenClaw Brave plugin (plugin: brave)",
+      "label": "@maumau/brave-plugin",
+      "help": "Maumau Brave plugin (plugin: brave)",
       "hasChildren": true
     },
     {
@@ -46730,7 +46730,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/brave-plugin Config",
+      "label": "@maumau/brave-plugin Config",
       "help": "Plugin-defined config payload for brave.",
       "hasChildren": true
     },
@@ -46790,7 +46790,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/brave-plugin",
+      "label": "Enable @maumau/brave-plugin",
       "hasChildren": false
     },
     {
@@ -46883,8 +46883,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/byteplus-provider",
-      "help": "OpenClaw BytePlus provider plugin (plugin: byteplus)",
+      "label": "@maumau/byteplus-provider",
+      "help": "Maumau BytePlus provider plugin (plugin: byteplus)",
       "hasChildren": true
     },
     {
@@ -46897,7 +46897,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/byteplus-provider Config",
+      "label": "@maumau/byteplus-provider Config",
       "help": "Plugin-defined config payload for byteplus.",
       "hasChildren": false
     },
@@ -46911,7 +46911,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/byteplus-provider",
+      "label": "Enable @maumau/byteplus-provider",
       "hasChildren": false
     },
     {
@@ -47004,8 +47004,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/chutes-provider",
-      "help": "OpenClaw Chutes.ai provider plugin (plugin: chutes)",
+      "label": "@maumau/chutes-provider",
+      "help": "Maumau Chutes.ai provider plugin (plugin: chutes)",
       "hasChildren": true
     },
     {
@@ -47018,7 +47018,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/chutes-provider Config",
+      "label": "@maumau/chutes-provider Config",
       "help": "Plugin-defined config payload for chutes.",
       "hasChildren": false
     },
@@ -47032,7 +47032,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/chutes-provider",
+      "label": "Enable @maumau/chutes-provider",
       "hasChildren": false
     },
     {
@@ -47125,8 +47125,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/cloudflare-ai-gateway-provider",
-      "help": "OpenClaw Cloudflare AI Gateway provider plugin (plugin: cloudflare-ai-gateway)",
+      "label": "@maumau/cloudflare-ai-gateway-provider",
+      "help": "Maumau Cloudflare AI Gateway provider plugin (plugin: cloudflare-ai-gateway)",
       "hasChildren": true
     },
     {
@@ -47139,7 +47139,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/cloudflare-ai-gateway-provider Config",
+      "label": "@maumau/cloudflare-ai-gateway-provider Config",
       "help": "Plugin-defined config payload for cloudflare-ai-gateway.",
       "hasChildren": false
     },
@@ -47153,7 +47153,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/cloudflare-ai-gateway-provider",
+      "label": "Enable @maumau/cloudflare-ai-gateway-provider",
       "hasChildren": false
     },
     {
@@ -47246,8 +47246,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/copilot-proxy",
-      "help": "OpenClaw Copilot Proxy provider plugin (plugin: copilot-proxy)",
+      "label": "@maumau/copilot-proxy",
+      "help": "Maumau Copilot Proxy provider plugin (plugin: copilot-proxy)",
       "hasChildren": true
     },
     {
@@ -47260,7 +47260,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/copilot-proxy Config",
+      "label": "@maumau/copilot-proxy Config",
       "help": "Plugin-defined config payload for copilot-proxy.",
       "hasChildren": false
     },
@@ -47274,7 +47274,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/copilot-proxy",
+      "label": "Enable @maumau/copilot-proxy",
       "hasChildren": false
     },
     {
@@ -47367,8 +47367,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/deepgram-provider",
-      "help": "OpenClaw Deepgram media-understanding provider (plugin: deepgram)",
+      "label": "@maumau/deepgram-provider",
+      "help": "Maumau Deepgram media-understanding provider (plugin: deepgram)",
       "hasChildren": true
     },
     {
@@ -47381,7 +47381,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/deepgram-provider Config",
+      "label": "@maumau/deepgram-provider Config",
       "help": "Plugin-defined config payload for deepgram.",
       "hasChildren": false
     },
@@ -47395,7 +47395,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/deepgram-provider",
+      "label": "Enable @maumau/deepgram-provider",
       "hasChildren": false
     },
     {
@@ -47488,8 +47488,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/deepseek-provider",
-      "help": "OpenClaw DeepSeek provider plugin (plugin: deepseek)",
+      "label": "@maumau/deepseek-provider",
+      "help": "Maumau DeepSeek provider plugin (plugin: deepseek)",
       "hasChildren": true
     },
     {
@@ -47502,7 +47502,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/deepseek-provider Config",
+      "label": "@maumau/deepseek-provider Config",
       "help": "Plugin-defined config payload for deepseek.",
       "hasChildren": false
     },
@@ -47516,7 +47516,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/deepseek-provider",
+      "label": "Enable @maumau/deepseek-provider",
       "hasChildren": false
     },
     {
@@ -47744,8 +47744,8 @@
       "tags": [
         "observability"
       ],
-      "label": "@openclaw/diagnostics-otel",
-      "help": "OpenClaw diagnostics OpenTelemetry exporter (plugin: diagnostics-otel)",
+      "label": "@maumau/diagnostics-otel",
+      "help": "Maumau diagnostics OpenTelemetry exporter (plugin: diagnostics-otel)",
       "hasChildren": true
     },
     {
@@ -47758,7 +47758,7 @@
       "tags": [
         "observability"
       ],
-      "label": "@openclaw/diagnostics-otel Config",
+      "label": "@maumau/diagnostics-otel Config",
       "help": "Plugin-defined config payload for diagnostics-otel.",
       "hasChildren": false
     },
@@ -47772,7 +47772,7 @@
       "tags": [
         "observability"
       ],
-      "label": "Enable @openclaw/diagnostics-otel",
+      "label": "Enable @maumau/diagnostics-otel",
       "hasChildren": false
     },
     {
@@ -48323,8 +48323,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/discord",
-      "help": "OpenClaw Discord channel plugin (plugin: discord)",
+      "label": "@maumau/discord",
+      "help": "Maumau Discord channel plugin (plugin: discord)",
       "hasChildren": true
     },
     {
@@ -48337,7 +48337,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/discord Config",
+      "label": "@maumau/discord Config",
       "help": "Plugin-defined config payload for discord.",
       "hasChildren": false
     },
@@ -48351,7 +48351,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/discord",
+      "label": "Enable @maumau/discord",
       "hasChildren": false
     },
     {
@@ -48444,8 +48444,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/duckduckgo-plugin",
-      "help": "OpenClaw DuckDuckGo plugin (plugin: duckduckgo)",
+      "label": "@maumau/duckduckgo-plugin",
+      "help": "Maumau DuckDuckGo plugin (plugin: duckduckgo)",
       "hasChildren": true
     },
     {
@@ -48458,7 +48458,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/duckduckgo-plugin Config",
+      "label": "@maumau/duckduckgo-plugin Config",
       "help": "Plugin-defined config payload for duckduckgo.",
       "hasChildren": true
     },
@@ -48515,7 +48515,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/duckduckgo-plugin",
+      "label": "Enable @maumau/duckduckgo-plugin",
       "hasChildren": false
     },
     {
@@ -48608,8 +48608,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/elevenlabs-speech",
-      "help": "OpenClaw ElevenLabs speech plugin (plugin: elevenlabs)",
+      "label": "@maumau/elevenlabs-speech",
+      "help": "Maumau ElevenLabs speech plugin (plugin: elevenlabs)",
       "hasChildren": true
     },
     {
@@ -48622,7 +48622,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/elevenlabs-speech Config",
+      "label": "@maumau/elevenlabs-speech Config",
       "help": "Plugin-defined config payload for elevenlabs.",
       "hasChildren": false
     },
@@ -48636,7 +48636,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/elevenlabs-speech",
+      "label": "Enable @maumau/elevenlabs-speech",
       "hasChildren": false
     },
     {
@@ -48729,8 +48729,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/exa-plugin",
-      "help": "OpenClaw Exa plugin (plugin: exa)",
+      "label": "@maumau/exa-plugin",
+      "help": "Maumau Exa plugin (plugin: exa)",
       "hasChildren": true
     },
     {
@@ -48743,7 +48743,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/exa-plugin Config",
+      "label": "@maumau/exa-plugin Config",
       "help": "Plugin-defined config payload for exa.",
       "hasChildren": true
     },
@@ -48785,7 +48785,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/exa-plugin",
+      "label": "Enable @maumau/exa-plugin",
       "hasChildren": false
     },
     {
@@ -48878,8 +48878,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/fal-provider",
-      "help": "OpenClaw fal provider plugin (plugin: fal)",
+      "label": "@maumau/fal-provider",
+      "help": "Maumau fal provider plugin (plugin: fal)",
       "hasChildren": true
     },
     {
@@ -48892,7 +48892,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/fal-provider Config",
+      "label": "@maumau/fal-provider Config",
       "help": "Plugin-defined config payload for fal.",
       "hasChildren": false
     },
@@ -48906,7 +48906,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/fal-provider",
+      "label": "Enable @maumau/fal-provider",
       "hasChildren": false
     },
     {
@@ -48999,8 +48999,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/feishu",
-      "help": "OpenClaw Feishu/Lark channel plugin (community maintained by @m1heng) (plugin: feishu)",
+      "label": "@maumau/feishu",
+      "help": "Maumau Feishu/Lark channel plugin (community maintained by @m1heng) (plugin: feishu)",
       "hasChildren": true
     },
     {
@@ -49013,7 +49013,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/feishu Config",
+      "label": "@maumau/feishu Config",
       "help": "Plugin-defined config payload for feishu.",
       "hasChildren": false
     },
@@ -49027,7 +49027,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/feishu",
+      "label": "Enable @maumau/feishu",
       "hasChildren": false
     },
     {
@@ -49120,8 +49120,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/firecrawl-plugin",
-      "help": "OpenClaw Firecrawl plugin (plugin: firecrawl)",
+      "label": "@maumau/firecrawl-plugin",
+      "help": "Maumau Firecrawl plugin (plugin: firecrawl)",
       "hasChildren": true
     },
     {
@@ -49134,7 +49134,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/firecrawl-plugin Config",
+      "label": "@maumau/firecrawl-plugin Config",
       "help": "Plugin-defined config payload for firecrawl.",
       "hasChildren": true
     },
@@ -49190,7 +49190,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/firecrawl-plugin",
+      "label": "Enable @maumau/firecrawl-plugin",
       "hasChildren": false
     },
     {
@@ -49283,8 +49283,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/github-copilot-provider",
-      "help": "OpenClaw GitHub Copilot provider plugin (plugin: github-copilot)",
+      "label": "@maumau/github-copilot-provider",
+      "help": "Maumau GitHub Copilot provider plugin (plugin: github-copilot)",
       "hasChildren": true
     },
     {
@@ -49297,7 +49297,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/github-copilot-provider Config",
+      "label": "@maumau/github-copilot-provider Config",
       "help": "Plugin-defined config payload for github-copilot.",
       "hasChildren": false
     },
@@ -49311,7 +49311,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/github-copilot-provider",
+      "label": "Enable @maumau/github-copilot-provider",
       "hasChildren": false
     },
     {
@@ -49404,8 +49404,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/google-plugin",
-      "help": "OpenClaw Google plugin (plugin: google)",
+      "label": "@maumau/google-plugin",
+      "help": "Maumau Google plugin (plugin: google)",
       "hasChildren": true
     },
     {
@@ -49418,7 +49418,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/google-plugin Config",
+      "label": "@maumau/google-plugin Config",
       "help": "Plugin-defined config payload for google.",
       "hasChildren": true
     },
@@ -49474,7 +49474,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/google-plugin",
+      "label": "Enable @maumau/google-plugin",
       "hasChildren": false
     },
     {
@@ -49567,8 +49567,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/googlechat",
-      "help": "OpenClaw Google Chat channel plugin (plugin: googlechat)",
+      "label": "@maumau/googlechat",
+      "help": "Maumau Google Chat channel plugin (plugin: googlechat)",
       "hasChildren": true
     },
     {
@@ -49581,7 +49581,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/googlechat Config",
+      "label": "@maumau/googlechat Config",
       "help": "Plugin-defined config payload for googlechat.",
       "hasChildren": false
     },
@@ -49595,7 +49595,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/googlechat",
+      "label": "Enable @maumau/googlechat",
       "hasChildren": false
     },
     {
@@ -49688,8 +49688,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/groq-provider",
-      "help": "OpenClaw Groq media-understanding provider (plugin: groq)",
+      "label": "@maumau/groq-provider",
+      "help": "Maumau Groq media-understanding provider (plugin: groq)",
       "hasChildren": true
     },
     {
@@ -49702,7 +49702,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/groq-provider Config",
+      "label": "@maumau/groq-provider Config",
       "help": "Plugin-defined config payload for groq.",
       "hasChildren": false
     },
@@ -49716,7 +49716,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/groq-provider",
+      "label": "Enable @maumau/groq-provider",
       "hasChildren": false
     },
     {
@@ -49809,8 +49809,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/huggingface-provider",
-      "help": "OpenClaw Hugging Face provider plugin (plugin: huggingface)",
+      "label": "@maumau/huggingface-provider",
+      "help": "Maumau Hugging Face provider plugin (plugin: huggingface)",
       "hasChildren": true
     },
     {
@@ -49823,7 +49823,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/huggingface-provider Config",
+      "label": "@maumau/huggingface-provider Config",
       "help": "Plugin-defined config payload for huggingface.",
       "hasChildren": false
     },
@@ -49837,7 +49837,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/huggingface-provider",
+      "label": "Enable @maumau/huggingface-provider",
       "hasChildren": false
     },
     {
@@ -49930,8 +49930,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/imessage",
-      "help": "OpenClaw iMessage channel plugin (plugin: imessage)",
+      "label": "@maumau/imessage",
+      "help": "Maumau iMessage channel plugin (plugin: imessage)",
       "hasChildren": true
     },
     {
@@ -49944,7 +49944,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/imessage Config",
+      "label": "@maumau/imessage Config",
       "help": "Plugin-defined config payload for imessage.",
       "hasChildren": false
     },
@@ -49958,7 +49958,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/imessage",
+      "label": "Enable @maumau/imessage",
       "hasChildren": false
     },
     {
@@ -50051,8 +50051,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/irc",
-      "help": "OpenClaw IRC channel plugin (plugin: irc)",
+      "label": "@maumau/irc",
+      "help": "Maumau IRC channel plugin (plugin: irc)",
       "hasChildren": true
     },
     {
@@ -50065,7 +50065,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/irc Config",
+      "label": "@maumau/irc Config",
       "help": "Plugin-defined config payload for irc.",
       "hasChildren": false
     },
@@ -50079,7 +50079,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/irc",
+      "label": "Enable @maumau/irc",
       "hasChildren": false
     },
     {
@@ -50172,8 +50172,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/kilocode-provider",
-      "help": "OpenClaw Kilo Gateway provider plugin (plugin: kilocode)",
+      "label": "@maumau/kilocode-provider",
+      "help": "Maumau Kilo Gateway provider plugin (plugin: kilocode)",
       "hasChildren": true
     },
     {
@@ -50186,7 +50186,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/kilocode-provider Config",
+      "label": "@maumau/kilocode-provider Config",
       "help": "Plugin-defined config payload for kilocode.",
       "hasChildren": false
     },
@@ -50200,7 +50200,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/kilocode-provider",
+      "label": "Enable @maumau/kilocode-provider",
       "hasChildren": false
     },
     {
@@ -50293,8 +50293,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/kimi-provider",
-      "help": "OpenClaw Kimi provider plugin (plugin: kimi)",
+      "label": "@maumau/kimi-provider",
+      "help": "Maumau Kimi provider plugin (plugin: kimi)",
       "hasChildren": true
     },
     {
@@ -50307,7 +50307,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/kimi-provider Config",
+      "label": "@maumau/kimi-provider Config",
       "help": "Plugin-defined config payload for kimi.",
       "hasChildren": false
     },
@@ -50321,7 +50321,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/kimi-provider",
+      "label": "Enable @maumau/kimi-provider",
       "hasChildren": false
     },
     {
@@ -50414,8 +50414,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/line",
-      "help": "OpenClaw LINE channel plugin (plugin: line)",
+      "label": "@maumau/line",
+      "help": "Maumau LINE channel plugin (plugin: line)",
       "hasChildren": true
     },
     {
@@ -50428,7 +50428,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/line Config",
+      "label": "@maumau/line Config",
       "help": "Plugin-defined config payload for line.",
       "hasChildren": false
     },
@@ -50442,7 +50442,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/line",
+      "label": "Enable @maumau/line",
       "hasChildren": false
     },
     {
@@ -50847,8 +50847,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/matrix",
-      "help": "OpenClaw Matrix channel plugin (plugin: matrix)",
+      "label": "@maumau/matrix",
+      "help": "Maumau Matrix channel plugin (plugin: matrix)",
       "hasChildren": true
     },
     {
@@ -50861,7 +50861,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/matrix Config",
+      "label": "@maumau/matrix Config",
       "help": "Plugin-defined config payload for matrix.",
       "hasChildren": false
     },
@@ -50875,7 +50875,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/matrix",
+      "label": "Enable @maumau/matrix",
       "hasChildren": false
     },
     {
@@ -50968,8 +50968,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/mattermost",
-      "help": "OpenClaw Mattermost channel plugin (plugin: mattermost)",
+      "label": "@maumau/mattermost",
+      "help": "Maumau Mattermost channel plugin (plugin: mattermost)",
       "hasChildren": true
     },
     {
@@ -50982,7 +50982,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/mattermost Config",
+      "label": "@maumau/mattermost Config",
       "help": "Plugin-defined config payload for mattermost.",
       "hasChildren": false
     },
@@ -50996,7 +50996,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/mattermost",
+      "label": "Enable @maumau/mattermost",
       "hasChildren": false
     },
     {
@@ -51089,8 +51089,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/memory-core",
-      "help": "OpenClaw core memory search plugin (plugin: memory-core)",
+      "label": "@maumau/memory-core",
+      "help": "Maumau core memory search plugin (plugin: memory-core)",
       "hasChildren": true
     },
     {
@@ -51103,7 +51103,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/memory-core Config",
+      "label": "@maumau/memory-core Config",
       "help": "Plugin-defined config payload for memory-core.",
       "hasChildren": false
     },
@@ -51117,7 +51117,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/memory-core",
+      "label": "Enable @maumau/memory-core",
       "hasChildren": false
     },
     {
@@ -51210,8 +51210,8 @@
       "tags": [
         "storage"
       ],
-      "label": "@openclaw/memory-lancedb",
-      "help": "OpenClaw LanceDB-backed long-term memory plugin with auto-recall/capture (plugin: memory-lancedb)",
+      "label": "@maumau/memory-lancedb",
+      "help": "Maumau LanceDB-backed long-term memory plugin with auto-recall/capture (plugin: memory-lancedb)",
       "hasChildren": true
     },
     {
@@ -51224,7 +51224,7 @@
       "tags": [
         "storage"
       ],
-      "label": "@openclaw/memory-lancedb Config",
+      "label": "@maumau/memory-lancedb Config",
       "help": "Plugin-defined config payload for memory-lancedb.",
       "hasChildren": true
     },
@@ -51367,7 +51367,7 @@
       "tags": [
         "storage"
       ],
-      "label": "Enable @openclaw/memory-lancedb",
+      "label": "Enable @maumau/memory-lancedb",
       "hasChildren": false
     },
     {
@@ -51460,8 +51460,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/microsoft-speech",
-      "help": "OpenClaw Microsoft speech plugin (plugin: microsoft)",
+      "label": "@maumau/microsoft-speech",
+      "help": "Maumau Microsoft speech plugin (plugin: microsoft)",
       "hasChildren": true
     },
     {
@@ -51474,7 +51474,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/microsoft-speech Config",
+      "label": "@maumau/microsoft-speech Config",
       "help": "Plugin-defined config payload for microsoft.",
       "hasChildren": false
     },
@@ -51488,7 +51488,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/microsoft-speech",
+      "label": "Enable @maumau/microsoft-speech",
       "hasChildren": false
     },
     {
@@ -51581,8 +51581,8 @@
       "tags": [
         "performance"
       ],
-      "label": "@openclaw/minimax-provider",
-      "help": "OpenClaw MiniMax provider and OAuth plugin (plugin: minimax)",
+      "label": "@maumau/minimax-provider",
+      "help": "Maumau MiniMax provider and OAuth plugin (plugin: minimax)",
       "hasChildren": true
     },
     {
@@ -51595,7 +51595,7 @@
       "tags": [
         "performance"
       ],
-      "label": "@openclaw/minimax-provider Config",
+      "label": "@maumau/minimax-provider Config",
       "help": "Plugin-defined config payload for minimax.",
       "hasChildren": false
     },
@@ -51609,7 +51609,7 @@
       "tags": [
         "performance"
       ],
-      "label": "Enable @openclaw/minimax-provider",
+      "label": "Enable @maumau/minimax-provider",
       "hasChildren": false
     },
     {
@@ -51702,8 +51702,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/mistral-provider",
-      "help": "OpenClaw Mistral provider plugin (plugin: mistral)",
+      "label": "@maumau/mistral-provider",
+      "help": "Maumau Mistral provider plugin (plugin: mistral)",
       "hasChildren": true
     },
     {
@@ -51716,7 +51716,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/mistral-provider Config",
+      "label": "@maumau/mistral-provider Config",
       "help": "Plugin-defined config payload for mistral.",
       "hasChildren": false
     },
@@ -51730,7 +51730,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/mistral-provider",
+      "label": "Enable @maumau/mistral-provider",
       "hasChildren": false
     },
     {
@@ -51823,8 +51823,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/modelstudio-provider",
-      "help": "OpenClaw Model Studio provider plugin (plugin: modelstudio)",
+      "label": "@maumau/modelstudio-provider",
+      "help": "Maumau Model Studio provider plugin (plugin: modelstudio)",
       "hasChildren": true
     },
     {
@@ -51837,7 +51837,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/modelstudio-provider Config",
+      "label": "@maumau/modelstudio-provider Config",
       "help": "Plugin-defined config payload for modelstudio.",
       "hasChildren": false
     },
@@ -51851,7 +51851,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/modelstudio-provider",
+      "label": "Enable @maumau/modelstudio-provider",
       "hasChildren": false
     },
     {
@@ -51944,8 +51944,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/moonshot-provider",
-      "help": "OpenClaw Moonshot provider plugin (plugin: moonshot)",
+      "label": "@maumau/moonshot-provider",
+      "help": "Maumau Moonshot provider plugin (plugin: moonshot)",
       "hasChildren": true
     },
     {
@@ -51958,7 +51958,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/moonshot-provider Config",
+      "label": "@maumau/moonshot-provider Config",
       "help": "Plugin-defined config payload for moonshot.",
       "hasChildren": true
     },
@@ -52028,7 +52028,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/moonshot-provider",
+      "label": "Enable @maumau/moonshot-provider",
       "hasChildren": false
     },
     {
@@ -52121,8 +52121,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/msteams",
-      "help": "OpenClaw Microsoft Teams channel plugin (plugin: msteams)",
+      "label": "@maumau/msteams",
+      "help": "Maumau Microsoft Teams channel plugin (plugin: msteams)",
       "hasChildren": true
     },
     {
@@ -52135,7 +52135,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/msteams Config",
+      "label": "@maumau/msteams Config",
       "help": "Plugin-defined config payload for msteams.",
       "hasChildren": false
     },
@@ -52149,7 +52149,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/msteams",
+      "label": "Enable @maumau/msteams",
       "hasChildren": false
     },
     {
@@ -52242,8 +52242,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nextcloud-talk",
-      "help": "OpenClaw Nextcloud Talk channel plugin (plugin: nextcloud-talk)",
+      "label": "@maumau/nextcloud-talk",
+      "help": "Maumau Nextcloud Talk channel plugin (plugin: nextcloud-talk)",
       "hasChildren": true
     },
     {
@@ -52256,7 +52256,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nextcloud-talk Config",
+      "label": "@maumau/nextcloud-talk Config",
       "help": "Plugin-defined config payload for nextcloud-talk.",
       "hasChildren": false
     },
@@ -52270,7 +52270,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/nextcloud-talk",
+      "label": "Enable @maumau/nextcloud-talk",
       "hasChildren": false
     },
     {
@@ -52363,8 +52363,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nostr",
-      "help": "OpenClaw Nostr channel plugin for NIP-04 encrypted DMs (plugin: nostr)",
+      "label": "@maumau/nostr",
+      "help": "Maumau Nostr channel plugin for NIP-04 encrypted DMs (plugin: nostr)",
       "hasChildren": true
     },
     {
@@ -52377,7 +52377,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nostr Config",
+      "label": "@maumau/nostr Config",
       "help": "Plugin-defined config payload for nostr.",
       "hasChildren": false
     },
@@ -52391,7 +52391,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/nostr",
+      "label": "Enable @maumau/nostr",
       "hasChildren": false
     },
     {
@@ -52484,8 +52484,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nvidia-provider",
-      "help": "OpenClaw NVIDIA provider plugin (plugin: nvidia)",
+      "label": "@maumau/nvidia-provider",
+      "help": "Maumau NVIDIA provider plugin (plugin: nvidia)",
       "hasChildren": true
     },
     {
@@ -52498,7 +52498,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/nvidia-provider Config",
+      "label": "@maumau/nvidia-provider Config",
       "help": "Plugin-defined config payload for nvidia.",
       "hasChildren": false
     },
@@ -52512,7 +52512,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/nvidia-provider",
+      "label": "Enable @maumau/nvidia-provider",
       "hasChildren": false
     },
     {
@@ -52605,8 +52605,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/ollama-provider",
-      "help": "OpenClaw Ollama provider plugin (plugin: ollama)",
+      "label": "@maumau/ollama-provider",
+      "help": "Maumau Ollama provider plugin (plugin: ollama)",
       "hasChildren": true
     },
     {
@@ -52619,7 +52619,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/ollama-provider Config",
+      "label": "@maumau/ollama-provider Config",
       "help": "Plugin-defined config payload for ollama.",
       "hasChildren": false
     },
@@ -52633,7 +52633,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/ollama-provider",
+      "label": "Enable @maumau/ollama-provider",
       "hasChildren": false
     },
     {
@@ -52847,8 +52847,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/openai-provider",
-      "help": "OpenClaw OpenAI provider plugins (plugin: openai)",
+      "label": "@maumau/openai-provider",
+      "help": "Maumau OpenAI provider plugins (plugin: openai)",
       "hasChildren": true
     },
     {
@@ -52861,7 +52861,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/openai-provider Config",
+      "label": "@maumau/openai-provider Config",
       "help": "Plugin-defined config payload for openai.",
       "hasChildren": false
     },
@@ -52875,7 +52875,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/openai-provider",
+      "label": "Enable @maumau/openai-provider",
       "hasChildren": false
     },
     {
@@ -52968,8 +52968,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/opencode-provider",
-      "help": "OpenClaw OpenCode Zen provider plugin (plugin: opencode)",
+      "label": "@maumau/opencode-provider",
+      "help": "Maumau OpenCode Zen provider plugin (plugin: opencode)",
       "hasChildren": true
     },
     {
@@ -52982,8 +52982,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/opencode-go-provider",
-      "help": "OpenClaw OpenCode Go provider plugin (plugin: opencode-go)",
+      "label": "@maumau/opencode-go-provider",
+      "help": "Maumau OpenCode Go provider plugin (plugin: opencode-go)",
       "hasChildren": true
     },
     {
@@ -52996,7 +52996,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/opencode-go-provider Config",
+      "label": "@maumau/opencode-go-provider Config",
       "help": "Plugin-defined config payload for opencode-go.",
       "hasChildren": false
     },
@@ -53010,7 +53010,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/opencode-go-provider",
+      "label": "Enable @maumau/opencode-go-provider",
       "hasChildren": false
     },
     {
@@ -53103,7 +53103,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/opencode-provider Config",
+      "label": "@maumau/opencode-provider Config",
       "help": "Plugin-defined config payload for opencode.",
       "hasChildren": false
     },
@@ -53117,7 +53117,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/opencode-provider",
+      "label": "Enable @maumau/opencode-provider",
       "hasChildren": false
     },
     {
@@ -53210,8 +53210,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/openrouter-provider",
-      "help": "OpenClaw OpenRouter provider plugin (plugin: openrouter)",
+      "label": "@maumau/openrouter-provider",
+      "help": "Maumau OpenRouter provider plugin (plugin: openrouter)",
       "hasChildren": true
     },
     {
@@ -53224,7 +53224,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/openrouter-provider Config",
+      "label": "@maumau/openrouter-provider Config",
       "help": "Plugin-defined config payload for openrouter.",
       "hasChildren": false
     },
@@ -53238,7 +53238,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/openrouter-provider",
+      "label": "Enable @maumau/openrouter-provider",
       "hasChildren": false
     },
     {
@@ -53388,7 +53388,7 @@
         "advanced"
       ],
       "label": "Sandbox Source",
-      "help": "OpenShell sandbox source for first-time create. Defaults to openclaw.",
+      "help": "OpenShell sandbox source for first-time create. Defaults to maumau.",
       "hasChildren": false
     },
     {
@@ -53619,8 +53619,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/perplexity-plugin",
-      "help": "OpenClaw Perplexity plugin (plugin: perplexity)",
+      "label": "@maumau/perplexity-plugin",
+      "help": "Maumau Perplexity plugin (plugin: perplexity)",
       "hasChildren": true
     },
     {
@@ -53633,7 +53633,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/perplexity-plugin Config",
+      "label": "@maumau/perplexity-plugin Config",
       "help": "Plugin-defined config payload for perplexity.",
       "hasChildren": true
     },
@@ -53703,7 +53703,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/perplexity-plugin",
+      "label": "Enable @maumau/perplexity-plugin",
       "hasChildren": false
     },
     {
@@ -53917,8 +53917,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/qianfan-provider",
-      "help": "OpenClaw Qianfan provider plugin (plugin: qianfan)",
+      "label": "@maumau/qianfan-provider",
+      "help": "Maumau Qianfan provider plugin (plugin: qianfan)",
       "hasChildren": true
     },
     {
@@ -53931,7 +53931,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/qianfan-provider Config",
+      "label": "@maumau/qianfan-provider Config",
       "help": "Plugin-defined config payload for qianfan.",
       "hasChildren": false
     },
@@ -53945,7 +53945,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/qianfan-provider",
+      "label": "Enable @maumau/qianfan-provider",
       "hasChildren": false
     },
     {
@@ -54159,8 +54159,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/sglang-provider",
-      "help": "OpenClaw SGLang provider plugin (plugin: sglang)",
+      "label": "@maumau/sglang-provider",
+      "help": "Maumau SGLang provider plugin (plugin: sglang)",
       "hasChildren": true
     },
     {
@@ -54173,7 +54173,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/sglang-provider Config",
+      "label": "@maumau/sglang-provider Config",
       "help": "Plugin-defined config payload for sglang.",
       "hasChildren": false
     },
@@ -54187,7 +54187,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/sglang-provider",
+      "label": "Enable @maumau/sglang-provider",
       "hasChildren": false
     },
     {
@@ -54280,8 +54280,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/signal",
-      "help": "OpenClaw Signal channel plugin (plugin: signal)",
+      "label": "@maumau/signal",
+      "help": "Maumau Signal channel plugin (plugin: signal)",
       "hasChildren": true
     },
     {
@@ -54294,7 +54294,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/signal Config",
+      "label": "@maumau/signal Config",
       "help": "Plugin-defined config payload for signal.",
       "hasChildren": false
     },
@@ -54308,7 +54308,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/signal",
+      "label": "Enable @maumau/signal",
       "hasChildren": false
     },
     {
@@ -54401,8 +54401,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/slack",
-      "help": "OpenClaw Slack channel plugin (plugin: slack)",
+      "label": "@maumau/slack",
+      "help": "Maumau Slack channel plugin (plugin: slack)",
       "hasChildren": true
     },
     {
@@ -54415,7 +54415,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/slack Config",
+      "label": "@maumau/slack Config",
       "help": "Plugin-defined config payload for slack.",
       "hasChildren": false
     },
@@ -54429,7 +54429,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/slack",
+      "label": "Enable @maumau/slack",
       "hasChildren": false
     },
     {
@@ -54522,8 +54522,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/synology-chat",
-      "help": "Synology Chat channel plugin for OpenClaw (plugin: synology-chat)",
+      "label": "@maumau/synology-chat",
+      "help": "Synology Chat channel plugin for Maumau (plugin: synology-chat)",
       "hasChildren": true
     },
     {
@@ -54536,7 +54536,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/synology-chat Config",
+      "label": "@maumau/synology-chat Config",
       "help": "Plugin-defined config payload for synology-chat.",
       "hasChildren": false
     },
@@ -54550,7 +54550,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/synology-chat",
+      "label": "Enable @maumau/synology-chat",
       "hasChildren": false
     },
     {
@@ -54643,8 +54643,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/synthetic-provider",
-      "help": "OpenClaw Synthetic provider plugin (plugin: synthetic)",
+      "label": "@maumau/synthetic-provider",
+      "help": "Maumau Synthetic provider plugin (plugin: synthetic)",
       "hasChildren": true
     },
     {
@@ -54657,7 +54657,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/synthetic-provider Config",
+      "label": "@maumau/synthetic-provider Config",
       "help": "Plugin-defined config payload for synthetic.",
       "hasChildren": false
     },
@@ -54671,7 +54671,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/synthetic-provider",
+      "label": "Enable @maumau/synthetic-provider",
       "hasChildren": false
     },
     {
@@ -54885,8 +54885,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/tavily-plugin",
-      "help": "OpenClaw Tavily plugin (plugin: tavily)",
+      "label": "@maumau/tavily-plugin",
+      "help": "Maumau Tavily plugin (plugin: tavily)",
       "hasChildren": true
     },
     {
@@ -54899,7 +54899,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/tavily-plugin Config",
+      "label": "@maumau/tavily-plugin Config",
       "help": "Plugin-defined config payload for tavily.",
       "hasChildren": true
     },
@@ -54955,7 +54955,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/tavily-plugin",
+      "label": "Enable @maumau/tavily-plugin",
       "hasChildren": false
     },
     {
@@ -55048,8 +55048,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/telegram",
-      "help": "OpenClaw Telegram channel plugin (plugin: telegram)",
+      "label": "@maumau/telegram",
+      "help": "Maumau Telegram channel plugin (plugin: telegram)",
       "hasChildren": true
     },
     {
@@ -55062,7 +55062,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/telegram Config",
+      "label": "@maumau/telegram Config",
       "help": "Plugin-defined config payload for telegram.",
       "hasChildren": false
     },
@@ -55076,7 +55076,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/telegram",
+      "label": "Enable @maumau/telegram",
       "hasChildren": false
     },
     {
@@ -55328,8 +55328,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/tlon",
-      "help": "OpenClaw Tlon/Urbit channel plugin (plugin: tlon)",
+      "label": "@maumau/tlon",
+      "help": "Maumau Tlon/Urbit channel plugin (plugin: tlon)",
       "hasChildren": true
     },
     {
@@ -55342,7 +55342,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/tlon Config",
+      "label": "@maumau/tlon Config",
       "help": "Plugin-defined config payload for tlon.",
       "hasChildren": false
     },
@@ -55356,7 +55356,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/tlon",
+      "label": "Enable @maumau/tlon",
       "hasChildren": false
     },
     {
@@ -55449,8 +55449,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/together-provider",
-      "help": "OpenClaw Together provider plugin (plugin: together)",
+      "label": "@maumau/together-provider",
+      "help": "Maumau Together provider plugin (plugin: together)",
       "hasChildren": true
     },
     {
@@ -55463,7 +55463,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/together-provider Config",
+      "label": "@maumau/together-provider Config",
       "help": "Plugin-defined config payload for together.",
       "hasChildren": false
     },
@@ -55477,7 +55477,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/together-provider",
+      "label": "Enable @maumau/together-provider",
       "hasChildren": false
     },
     {
@@ -55570,8 +55570,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/twitch",
-      "help": "OpenClaw Twitch channel plugin (plugin: twitch)",
+      "label": "@maumau/twitch",
+      "help": "Maumau Twitch channel plugin (plugin: twitch)",
       "hasChildren": true
     },
     {
@@ -55584,7 +55584,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/twitch Config",
+      "label": "@maumau/twitch Config",
       "help": "Plugin-defined config payload for twitch.",
       "hasChildren": false
     },
@@ -55598,7 +55598,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/twitch",
+      "label": "Enable @maumau/twitch",
       "hasChildren": false
     },
     {
@@ -55691,8 +55691,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/venice-provider",
-      "help": "OpenClaw Venice provider plugin (plugin: venice)",
+      "label": "@maumau/venice-provider",
+      "help": "Maumau Venice provider plugin (plugin: venice)",
       "hasChildren": true
     },
     {
@@ -55705,7 +55705,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/venice-provider Config",
+      "label": "@maumau/venice-provider Config",
       "help": "Plugin-defined config payload for venice.",
       "hasChildren": false
     },
@@ -55719,7 +55719,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/venice-provider",
+      "label": "Enable @maumau/venice-provider",
       "hasChildren": false
     },
     {
@@ -55812,8 +55812,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/vercel-ai-gateway-provider",
-      "help": "OpenClaw Vercel AI Gateway provider plugin (plugin: vercel-ai-gateway)",
+      "label": "@maumau/vercel-ai-gateway-provider",
+      "help": "Maumau Vercel AI Gateway provider plugin (plugin: vercel-ai-gateway)",
       "hasChildren": true
     },
     {
@@ -55826,7 +55826,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/vercel-ai-gateway-provider Config",
+      "label": "@maumau/vercel-ai-gateway-provider Config",
       "help": "Plugin-defined config payload for vercel-ai-gateway.",
       "hasChildren": false
     },
@@ -55840,7 +55840,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/vercel-ai-gateway-provider",
+      "label": "Enable @maumau/vercel-ai-gateway-provider",
       "hasChildren": false
     },
     {
@@ -55933,8 +55933,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/vllm-provider",
-      "help": "OpenClaw vLLM provider plugin (plugin: vllm)",
+      "label": "@maumau/vllm-provider",
+      "help": "Maumau vLLM provider plugin (plugin: vllm)",
       "hasChildren": true
     },
     {
@@ -55947,7 +55947,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/vllm-provider Config",
+      "label": "@maumau/vllm-provider Config",
       "help": "Plugin-defined config payload for vllm.",
       "hasChildren": false
     },
@@ -55961,7 +55961,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/vllm-provider",
+      "label": "Enable @maumau/vllm-provider",
       "hasChildren": false
     },
     {
@@ -56054,8 +56054,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/voice-call",
-      "help": "OpenClaw voice-call plugin (plugin: voice-call)",
+      "label": "@maumau/voice-call",
+      "help": "Maumau voice-call plugin (plugin: voice-call)",
       "hasChildren": true
     },
     {
@@ -56068,7 +56068,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/voice-call Config",
+      "label": "@maumau/voice-call Config",
       "help": "Plugin-defined config payload for voice-call.",
       "hasChildren": true
     },
@@ -57438,7 +57438,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/voice-call",
+      "label": "Enable @maumau/voice-call",
       "hasChildren": false
     },
     {
@@ -57531,8 +57531,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/volcengine-provider",
-      "help": "OpenClaw Volcengine provider plugin (plugin: volcengine)",
+      "label": "@maumau/volcengine-provider",
+      "help": "Maumau Volcengine provider plugin (plugin: volcengine)",
       "hasChildren": true
     },
     {
@@ -57545,7 +57545,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/volcengine-provider Config",
+      "label": "@maumau/volcengine-provider Config",
       "help": "Plugin-defined config payload for volcengine.",
       "hasChildren": false
     },
@@ -57559,7 +57559,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/volcengine-provider",
+      "label": "Enable @maumau/volcengine-provider",
       "hasChildren": false
     },
     {
@@ -57652,8 +57652,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/whatsapp",
-      "help": "OpenClaw WhatsApp channel plugin (plugin: whatsapp)",
+      "label": "@maumau/whatsapp",
+      "help": "Maumau WhatsApp channel plugin (plugin: whatsapp)",
       "hasChildren": true
     },
     {
@@ -57666,7 +57666,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/whatsapp Config",
+      "label": "@maumau/whatsapp Config",
       "help": "Plugin-defined config payload for whatsapp.",
       "hasChildren": false
     },
@@ -57680,7 +57680,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/whatsapp",
+      "label": "Enable @maumau/whatsapp",
       "hasChildren": false
     },
     {
@@ -57773,8 +57773,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/xai-plugin",
-      "help": "OpenClaw xAI plugin (plugin: xai)",
+      "label": "@maumau/xai-plugin",
+      "help": "Maumau xAI plugin (plugin: xai)",
       "hasChildren": true
     },
     {
@@ -57787,7 +57787,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/xai-plugin Config",
+      "label": "@maumau/xai-plugin Config",
       "help": "Plugin-defined config payload for xai.",
       "hasChildren": true
     },
@@ -57857,7 +57857,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/xai-plugin",
+      "label": "Enable @maumau/xai-plugin",
       "hasChildren": false
     },
     {
@@ -57950,8 +57950,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/xiaomi-provider",
-      "help": "OpenClaw Xiaomi provider plugin (plugin: xiaomi)",
+      "label": "@maumau/xiaomi-provider",
+      "help": "Maumau Xiaomi provider plugin (plugin: xiaomi)",
       "hasChildren": true
     },
     {
@@ -57964,7 +57964,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/xiaomi-provider Config",
+      "label": "@maumau/xiaomi-provider Config",
       "help": "Plugin-defined config payload for xiaomi.",
       "hasChildren": false
     },
@@ -57978,7 +57978,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/xiaomi-provider",
+      "label": "Enable @maumau/xiaomi-provider",
       "hasChildren": false
     },
     {
@@ -58071,8 +58071,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zai-provider",
-      "help": "OpenClaw Z.AI provider plugin (plugin: zai)",
+      "label": "@maumau/zai-provider",
+      "help": "Maumau Z.AI provider plugin (plugin: zai)",
       "hasChildren": true
     },
     {
@@ -58085,7 +58085,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zai-provider Config",
+      "label": "@maumau/zai-provider Config",
       "help": "Plugin-defined config payload for zai.",
       "hasChildren": false
     },
@@ -58099,7 +58099,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/zai-provider",
+      "label": "Enable @maumau/zai-provider",
       "hasChildren": false
     },
     {
@@ -58192,8 +58192,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zalo",
-      "help": "OpenClaw Zalo channel plugin (plugin: zalo)",
+      "label": "@maumau/zalo",
+      "help": "Maumau Zalo channel plugin (plugin: zalo)",
       "hasChildren": true
     },
     {
@@ -58206,7 +58206,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zalo Config",
+      "label": "@maumau/zalo Config",
       "help": "Plugin-defined config payload for zalo.",
       "hasChildren": false
     },
@@ -58220,7 +58220,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/zalo",
+      "label": "Enable @maumau/zalo",
       "hasChildren": false
     },
     {
@@ -58313,8 +58313,8 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zalouser",
-      "help": "OpenClaw Zalo Personal Account plugin via native zca-js integration (plugin: zalouser)",
+      "label": "@maumau/zalouser",
+      "help": "Maumau Zalo Personal Account plugin via native zca-js integration (plugin: zalouser)",
       "hasChildren": true
     },
     {
@@ -58327,7 +58327,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "@openclaw/zalouser Config",
+      "label": "@maumau/zalouser Config",
       "help": "Plugin-defined config payload for zalouser.",
       "hasChildren": false
     },
@@ -58341,7 +58341,7 @@
       "tags": [
         "advanced"
       ],
-      "label": "Enable @openclaw/zalouser",
+      "label": "Enable @maumau/zalouser",
       "hasChildren": false
     },
     {
@@ -58435,7 +58435,7 @@
         "advanced"
       ],
       "label": "Plugin Install Records",
-      "help": "CLI-managed install metadata (used by `openclaw plugins update` to locate install sources).",
+      "help": "CLI-managed install metadata (used by `maumau plugins update` to locate install sources).",
       "hasChildren": true
     },
     {
@@ -58513,7 +58513,7 @@
         "storage"
       ],
       "label": "Plugin Install Path",
-      "help": "Resolved install directory (usually ~/.openclaw/extensions/<id>).",
+      "help": "Resolved install directory (usually ~/.maumau/extensions/<id>).",
       "hasChildren": false
     },
     {
@@ -59379,7 +59379,7 @@
         "storage"
       ],
       "label": "Session Parent Fork Max Tokens",
-      "help": "Maximum parent-session token count allowed for thread/session inheritance forking. If the parent exceeds this, OpenClaw starts a fresh thread session instead of forking; set 0 to disable this protection.",
+      "help": "Maximum parent-session token count allowed for thread/session inheritance forking. If the parent exceeds this, Maumau starts a fresh thread session instead of forking; set 0 to disable this protection.",
       "hasChildren": false
     },
     {
@@ -65338,7 +65338,7 @@
         "advanced"
       ],
       "label": "Updates",
-      "help": "Update-channel and startup-check behavior for keeping OpenClaw runtime versions current. Use conservative channels in production and more experimental channels only in controlled environments.",
+      "help": "Update-channel and startup-check behavior for keeping Maumau runtime versions current. Use conservative channels in production and more experimental channels only in controlled environments.",
       "hasChildren": true
     },
     {
@@ -65642,7 +65642,7 @@
         "advanced"
       ],
       "label": "Wizard Last Run Version",
-      "help": "OpenClaw version recorded at the time of the most recent wizard run on this config. Use this when diagnosing behavior differences across version-to-version setup changes.",
+      "help": "Maumau version recorded at the time of the most recent wizard run on this config. Use this when diagnosing behavior differences across version-to-version setup changes.",
       "hasChildren": false
     }
   ]
