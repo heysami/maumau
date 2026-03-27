@@ -81,6 +81,7 @@ public struct GatewayConnectOptions: Sendable {
     public var clientId: String
     public var clientMode: String
     public var clientDisplayName: String?
+    public var deviceIdentityNamespace: String?
     // When false, the connection omits the signed device identity payload and cannot use
     // device-scoped auth (role/scope upgrades will require pairing). Keep this true for
     // role/scoped sessions such as operator UI clients.
@@ -95,6 +96,7 @@ public struct GatewayConnectOptions: Sendable {
         clientId: String,
         clientMode: String,
         clientDisplayName: String?,
+        deviceIdentityNamespace: String? = nil,
         includeDeviceIdentity: Bool = true)
     {
         self.role = role
@@ -105,6 +107,7 @@ public struct GatewayConnectOptions: Sendable {
         self.clientId = clientId
         self.clientMode = clientMode
         self.clientDisplayName = clientDisplayName
+        self.deviceIdentityNamespace = deviceIdentityNamespace
         self.includeDeviceIdentity = includeDeviceIdentity
     }
 }
@@ -385,6 +388,7 @@ public actor GatewayChannelActor {
         let clientMode = options.clientMode
         let role = options.role
         let scopes = options.scopes
+        let identityNamespace = options.deviceIdentityNamespace
 
         let reqId = UUID().uuidString
         var client: [String: ProtoAnyCodable] = [
@@ -417,10 +421,13 @@ public actor GatewayChannelActor {
             params["permissions"] = ProtoAnyCodable(options.permissions)
         }
         let includeDeviceIdentity = options.includeDeviceIdentity
-        let identity = includeDeviceIdentity ? DeviceIdentityStore.loadOrCreate() : nil
+        let identity = includeDeviceIdentity
+            ? DeviceIdentityStore.loadOrCreate(namespace: identityNamespace)
+            : nil
         let selectedAuth = self.selectConnectAuth(
             role: role,
             includeDeviceIdentity: includeDeviceIdentity,
+            identityNamespace: identityNamespace,
             deviceId: identity?.deviceId)
         if selectedAuth.authDeviceToken != nil && self.pendingDeviceTokenRetry {
             self.pendingDeviceTokenRetry = false
@@ -489,7 +496,10 @@ public actor GatewayChannelActor {
                 self.shouldClearStoredDeviceTokenAfterRetry(error)
             {
                 // Retry failed with an explicit device-token mismatch; clear stale local token.
-                DeviceAuthStore.clearToken(deviceId: identity.deviceId, role: role)
+                DeviceAuthStore.clearToken(
+                    deviceId: identity.deviceId,
+                    role: role,
+                    namespace: identityNamespace)
             }
             throw error
         }
@@ -498,6 +508,7 @@ public actor GatewayChannelActor {
     private func selectConnectAuth(
         role: String,
         includeDeviceIdentity: Bool,
+        identityNamespace: String?,
         deviceId: String?
     ) -> SelectedConnectAuth {
         let explicitToken = self.token?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
@@ -506,7 +517,10 @@ public actor GatewayChannelActor {
         let explicitPassword = self.password?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let storedToken =
             (includeDeviceIdentity && deviceId != nil)
-                ? DeviceAuthStore.loadToken(deviceId: deviceId!, role: role)?.token
+                ? DeviceAuthStore.loadToken(
+                    deviceId: deviceId!,
+                    role: role,
+                    namespace: identityNamespace)?.token
                 : nil
         let shouldUseDeviceRetryToken =
             includeDeviceIdentity && self.pendingDeviceTokenRetry &&
@@ -582,7 +596,8 @@ public actor GatewayChannelActor {
                     deviceId: identity.deviceId,
                     role: authRole,
                     token: deviceToken,
-                    scopes: scopes)
+                    scopes: scopes,
+                    namespace: self.connectOptions?.deviceIdentityNamespace)
             }
         }
         self.lastTick = Date()

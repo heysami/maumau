@@ -124,7 +124,7 @@ describe("web monitor inbox", () => {
     const config = {
       channels: {
         whatsapp: {
-          // Self-chat heuristic: allowFrom includes selfE164 (+123).
+          selfChatMode: true,
           allowFrom: ["+123"],
         },
       },

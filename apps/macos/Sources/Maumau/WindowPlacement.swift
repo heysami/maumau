@@ -74,11 +74,21 @@ enum WindowPlacement {
         let isVisibleSomewhere = targetScreens.contains { screen in
             frame.intersects(screen.visibleFrame.insetBy(dx: 12, dy: 12))
         }
+        let currentScreen = window.screen ?? NSScreen.main ?? targetScreens.first
+        let visibleFrame = currentScreen?.visibleFrame ?? .zero
+        let exceedsVisibleBounds =
+            visibleFrame != .zero &&
+            (frame.width > visibleFrame.width || frame.height > visibleFrame.height)
 
-        if isVisibleSomewhere { return }
+        if isVisibleSomewhere && !exceedsVisibleBounds { return }
 
-        let screen = NSScreen.main ?? targetScreens.first
-        let next = fallback?(screen) ?? self.centeredFrame(size: defaultSize, on: screen)
+        let screen = currentScreen
+        let next: NSRect
+        if exceedsVisibleBounds {
+            next = self.centeredFrame(size: frame.size, on: screen)
+        } else {
+            next = fallback?(screen) ?? self.centeredFrame(size: defaultSize, on: screen)
+        }
         window.setFrame(next, display: false)
     }
 }

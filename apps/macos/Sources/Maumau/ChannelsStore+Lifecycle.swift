@@ -89,6 +89,14 @@ extension ChannelsStore {
             self.whatsappLoginConnected = result.connected
             if result.connected {
                 self.whatsappLoginQrDataUrl = nil
+                let saved = await self.saveQuickSetupUpdates(
+                    channelId: "whatsapp",
+                    [],
+                    successMessage: "WhatsApp linked. Direct messages are open so it replies right away.")
+                if saved {
+                    self.whatsappLoginMessage =
+                        "WhatsApp linked. Direct messages are open so it replies right away."
+                }
             }
         } catch {
             self.whatsappLoginMessage = error.localizedDescription

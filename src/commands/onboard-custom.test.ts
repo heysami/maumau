@@ -182,12 +182,25 @@ describe("promptCustomApiConfig", () => {
   it("detects openai compatibility when unknown", async () => {
     const prompter = createTestPrompter({
       text: ["https://example.com/v1", "test-key", "detected-model", "custom", "alias"],
-      select: ["plaintext", "unknown"],
+      select: ["plaintext", "unknown", "openai"],
     });
-    stubFetchSequence([{ ok: true }]);
+    stubFetchSequence([{ ok: true }, { ok: false, status: 404 }]);
     const result = await runPromptCustomApi(prompter);
 
-    expectOpenAiCompatResult({ prompter, textCalls: 5, selectCalls: 2, result });
+    expectOpenAiCompatResult({ prompter, textCalls: 5, selectCalls: 3, result });
+  });
+
+  it("lets the user pick anthropic when both compatibility probes succeed", async () => {
+    const prompter = createTestPrompter({
+      text: ["https://example.com/v1", "test-key", "claude-sonnet-4-6", "custom", "alias"],
+      select: ["plaintext", "unknown", "anthropic"],
+    });
+    stubFetchSequence([{ ok: true }, { ok: true }]);
+
+    const result = await runPromptCustomApi(prompter);
+
+    expect(result.config.models?.providers?.custom?.api).toBe("anthropic-messages");
+    expect(prompter.select).toHaveBeenCalledTimes(3);
   });
 
   it("uses expanded max_tokens for openai verification probes", async () => {
@@ -266,7 +279,7 @@ describe("promptCustomApiConfig", () => {
   it("uses expanded max_tokens for anthropic verification probes", async () => {
     const prompter = createTestPrompter({
       text: ["https://example.com", "test-key", "detected-model", "custom", "alias"],
-      select: ["plaintext", "unknown"],
+      select: ["plaintext", "unknown", "anthropic"],
     });
     const fetchMock = stubFetchSequence([{ ok: false, status: 404 }, { ok: true }]);
 
@@ -289,9 +302,14 @@ describe("promptCustomApiConfig", () => {
         "custom",
         "",
       ],
-      select: ["plaintext", "unknown", "baseUrl", "plaintext"],
+      select: ["plaintext", "unknown", "baseUrl", "plaintext", "openai"],
     });
-    stubFetchSequence([{ ok: false, status: 404 }, { ok: false, status: 404 }, { ok: true }]);
+    stubFetchSequence([
+      { ok: false, status: 404 },
+      { ok: false, status: 404 },
+      { ok: true },
+      { ok: false, status: 404 },
+    ]);
     await runPromptCustomApi(prompter);
 
     expect(prompter.note).toHaveBeenCalledWith(

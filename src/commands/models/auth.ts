@@ -23,7 +23,11 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
 import type { MaumauConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
-import { applyAuthProfileConfig } from "../../plugins/provider-auth-helpers.js";
+import {
+  applyAuthProfileConfig,
+  buildApiKeyCredential,
+  buildTokenCredential,
+} from "../../plugins/provider-auth-helpers.js";
 import { resolvePluginProviders } from "../../plugins/providers.runtime.js";
 import type {
   ProviderAuthMethod,
@@ -211,6 +215,32 @@ async function pickProviderTokenMethod(params: {
     .then((id) => tokenMethods.find((method) => method.id === String(id)) ?? null);
 }
 
+function normalizeReturnedProfileCredential(
+  credential: AuthProfileCredential,
+): AuthProfileCredential {
+  if (credential.type === "api_key") {
+    return {
+      ...buildApiKeyCredential(
+        credential.provider,
+        credential.keyRef ?? credential.key ?? "",
+        credential.metadata,
+      ),
+      ...(credential.email ? { email: credential.email } : {}),
+    };
+  }
+  if (credential.type === "token") {
+    return buildTokenCredential(
+      credential.provider,
+      credential.tokenRef ?? credential.token ?? "",
+      {
+        ...(credential.expires ? { expires: credential.expires } : {}),
+        ...(credential.email ? { email: credential.email } : {}),
+      },
+    );
+  }
+  return credential;
+}
+
 async function persistProviderAuthResult(params: {
   result: ProviderAuthResult;
   agentDir: string;
@@ -219,9 +249,10 @@ async function persistProviderAuthResult(params: {
   setDefault?: boolean;
 }) {
   for (const profile of params.result.profiles) {
+    const credential = normalizeReturnedProfileCredential(profile.credential);
     upsertAuthProfile({
       profileId: profile.profileId,
-      credential: profile.credential,
+      credential,
       agentDir: params.agentDir,
     });
   }
@@ -380,12 +411,7 @@ export async function modelsAuthPasteTokenCommand(
 
   upsertAuthProfile({
     profileId,
-    credential: {
-      type: "token",
-      provider,
-      token,
-      ...(expires ? { expires } : {}),
-    },
+    credential: buildTokenCredential(provider, token, expires ? { expires } : {}),
     agentDir,
   });
 

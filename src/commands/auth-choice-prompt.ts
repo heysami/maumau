@@ -13,9 +13,25 @@ export async function promptAuthChoiceGrouped(params: {
   config?: MaumauConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  includeRuntimeFallbackProviders?: boolean;
 }): Promise<AuthChoice> {
-  const { groups, skipOption } = buildAuthChoiceGroups(params);
-  const availableGroups = groups.filter((group) => group.options.length > 0);
+  const resolveCatalog = (
+    includeRuntimeFallbackProviders = params.includeRuntimeFallbackProviders,
+  ) =>
+    buildAuthChoiceGroups({
+      ...params,
+      includeRuntimeFallbackProviders,
+    });
+
+  let { groups, skipOption } = resolveCatalog();
+  let availableGroups = groups.filter((group) => group.options.length > 0);
+
+  // Embedded onboarding only needs the manifest-backed provider catalog to render the
+  // first step. If that catalog is unexpectedly empty, retry once with the full runtime.
+  if (availableGroups.length === 0 && params.includeRuntimeFallbackProviders === false) {
+    ({ groups, skipOption } = resolveCatalog(true));
+    availableGroups = groups.filter((group) => group.options.length > 0);
+  }
 
   while (true) {
     const providerOptions = [
@@ -28,7 +44,7 @@ export async function promptAuthChoiceGrouped(params: {
     ];
 
     const providerSelection = (await params.prompter.select({
-      message: "Model/auth provider",
+      message: "AI service",
       options: providerOptions,
     })) as string;
 
@@ -51,7 +67,7 @@ export async function promptAuthChoiceGrouped(params: {
     }
 
     const methodSelection = await params.prompter.select({
-      message: `${group.label} auth method`,
+      message: `How do you want to connect ${group.label}?`,
       options: [...group.options, { value: BACK_VALUE, label: "Back" }],
     });
 

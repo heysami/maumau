@@ -4,6 +4,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/swift-toolchain.sh"
+configure_maumau_swift
 APP_BUNDLE="${MAUMAU_APP_BUNDLE:-}"
 APP_PROCESS_PATTERN="Maumau.app/Contents/MacOS/Maumau"
 DEBUG_PROCESS_PATTERN="${ROOT_DIR}/apps/macos/.build/debug/Maumau"
@@ -25,8 +27,46 @@ ATTACH_ONLY=1
 log()  { printf '%s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+current_macos_sdk_major() {
+  local version
+  version="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)"
+  version="${version%%.*}"
+  if [[ "$version" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$version"
+  fi
+}
+
+maybe_disable_peekaboo_bridge() {
+  if [[ -n "${MAUMAU_DISABLE_PEEKABOO_BRIDGE:-}" ]]; then
+    return 0
+  fi
+
+  local sdk_major
+  sdk_major="$(current_macos_sdk_major)"
+  if [[ "$sdk_major" =~ ^[0-9]+$ ]] && (( sdk_major >= 26 )); then
+    export MAUMAU_DISABLE_PEEKABOO_BRIDGE=1
+    log "==> macOS SDK ${sdk_major} detected; disabling Peekaboo bridge for this build"
+  fi
+}
+
+maybe_configure_swift_build_jobs() {
+  if [[ -n "${SWIFT_BUILD_JOBS:-}" ]]; then
+    return 0
+  fi
+
+  local sdk_major
+  sdk_major="$(current_macos_sdk_major)"
+  if [[ "$sdk_major" =~ ^[0-9]+$ ]] && (( sdk_major >= 26 )); then
+    export SWIFT_BUILD_JOBS=1
+    log "==> macOS SDK ${sdk_major} detected; forcing serial Swift builds to avoid toolchain crashes"
+  fi
+}
+
 # Ensure local node binaries (rolldown, pnpm) are discoverable for the steps below.
 export PATH="${ROOT_DIR}/node_modules/.bin:${PATH}"
+log "==> Using Swift toolchain: ${MAUMAU_SWIFT_BIN}"
+maybe_disable_peekaboo_bridge
+maybe_configure_swift_build_jobs
 
 run_step() {
   local label="$1"; shift
@@ -158,7 +198,7 @@ run_step "bundle canvas a2ui" bash -lc "cd '${ROOT_DIR}' && pnpm canvas:a2ui:bun
 
 # 2) Rebuild into the same path the packager consumes (.build).
 run_step "clean build cache" bash -lc "cd '${ROOT_DIR}/apps/macos' && rm -rf .build .build-swift .swiftpm 2>/dev/null || true"
-run_step "swift build" bash -lc "cd '${ROOT_DIR}/apps/macos' && swift build -q --product Maumau"
+run_step "swift build" bash -lc "cd '${ROOT_DIR}/apps/macos' && '${MAUMAU_SWIFT_BIN}' build -q --product Maumau ${SWIFT_BUILD_JOBS:+--jobs ${SWIFT_BUILD_JOBS}}"
 
 if [ "$AUTO_DETECT_SIGNING" -eq 1 ]; then
   if check_signing_keys; then

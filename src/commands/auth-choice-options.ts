@@ -88,6 +88,7 @@ export function buildAuthChoiceOptions(params: {
   config?: MaumauConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  includeRuntimeFallbackProviders?: boolean;
 }): AuthChoiceOption[] {
   void params.store;
   const optionByValue = new Map<AuthChoice, AuthChoiceOption>();
@@ -101,13 +102,16 @@ export function buildAuthChoiceOptions(params: {
   })) {
     optionByValue.set(option.value, option);
   }
-  for (const option of resolveRuntimeFallbackProviderChoiceOptions({
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env: params.env,
-  })) {
-    if (!optionByValue.has(option.value)) {
-      optionByValue.set(option.value, option);
+
+  if (params.includeRuntimeFallbackProviders !== false) {
+    for (const option of resolveRuntimeFallbackProviderChoiceOptions({
+      config: params.config,
+      workspaceDir: params.workspaceDir,
+      env: params.env,
+    })) {
+      if (!optionByValue.has(option.value)) {
+        optionByValue.set(option.value, option);
+      }
     }
   }
 
@@ -128,6 +132,7 @@ export function buildAuthChoiceGroups(params: {
   config?: MaumauConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  includeRuntimeFallbackProviders?: boolean;
 }): {
   groups: AuthChoiceGroup[];
   skipOption?: AuthChoiceOption;

@@ -66,14 +66,14 @@ export async function checkInboundAccessControl(params: {
     accountId: account.accountId,
     dmPolicy,
   });
-  // Without user config, default to self-only DM access so the owner can talk to themselves.
+  const isSelfChat = account.selfChatMode ?? isSelfChatMode(params.selfE164, configuredAllowFrom);
+  // Same-phone routing is legacy/explicit. Without self-chat mode, personal-account self DMs stay blocked.
   const defaultAllowFrom =
-    configuredAllowFrom.length === 0 && params.selfE164 ? [params.selfE164] : [];
+    configuredAllowFrom.length === 0 && isSelfChat && params.selfE164 ? [params.selfE164] : [];
   const dmAllowFrom = configuredAllowFrom.length > 0 ? configuredAllowFrom : defaultAllowFrom;
   const groupAllowFrom =
     account.groupAllowFrom ?? (configuredAllowFrom.length > 0 ? configuredAllowFrom : undefined);
   const isSamePhone = params.from === params.selfE164;
-  const isSelfChat = account.selfChatMode ?? isSelfChatMode(params.selfE164, configuredAllowFrom);
   const pairingGraceMs =
     typeof params.pairingGraceMs === "number" && params.pairingGraceMs > 0
       ? params.pairingGraceMs
@@ -120,7 +120,7 @@ export async function checkInboundAccessControl(params: {
           .map((entry) => normalizeE164(String(entry)))
           .filter((entry): entry is string => Boolean(entry)),
       );
-      if (!params.group && isSamePhone) {
+      if (!params.group && isSamePhone && isSelfChat) {
         return true;
       }
       return params.group

@@ -2,6 +2,8 @@ import MaumauProtocol
 import SwiftUI
 
 extension ChannelsSettings {
+    private static let onboardingPreferredChannelIDs = ChannelsStore.inlineOnboardingChannelIDs
+
     private func channelStatus<T: Decodable>(
         _ id: String,
         as type: T.Type) -> T?
@@ -331,8 +333,7 @@ extension ChannelsSettings {
     }
 
     var orderedChannels: [ChannelItem] {
-        let fallback = ["whatsapp", "telegram", "discord", "googlechat", "slack", "signal", "imessage"]
-        let order = self.store.snapshot?.channelOrder ?? fallback
+        let order = self.store.orderedChannelIds()
         let channels = order.enumerated().map { index, id in
             ChannelItem(
                 id: id,
@@ -347,6 +348,23 @@ extension ChannelsSettings {
             if lhsEnabled != rhsEnabled { return lhsEnabled && !rhsEnabled }
             return lhs.sortOrder < rhs.sortOrder
         }
+    }
+
+    var onboardingOrderedChannels: [ChannelItem] {
+        var itemsById = Dictionary(uniqueKeysWithValues: self.orderedChannels.map { ($0.id, $0) })
+        var nextSortOrder = (self.orderedChannels.map(\.sortOrder).max() ?? -1) + 1
+
+        for id in Self.onboardingPreferredChannelIDs where itemsById[id] == nil {
+            itemsById[id] = ChannelItem(
+                id: id,
+                title: self.resolveChannelTitle(id),
+                detailTitle: self.resolveChannelDetailTitle(id),
+                systemImage: self.resolveChannelSystemImage(id),
+                sortOrder: nextSortOrder)
+            nextSortOrder += 1
+        }
+
+        return Self.onboardingPreferredChannelIDs.compactMap { itemsById[$0] }
     }
 
     var enabledChannels: [ChannelItem] {

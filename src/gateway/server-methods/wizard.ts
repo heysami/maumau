@@ -13,11 +13,54 @@ import { formatForLog } from "../ws-log.js";
 import type { GatewayRequestContext, GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
+const EMBEDDED_WIZARD_START_STEP_TIMEOUT_MS = 750;
+
 function readWizardStatus(session: WizardSession) {
   return {
     status: session.getStatus(),
     error: session.getError(),
   };
+}
+
+function buildWizardWarmupStep() {
+  return {
+    done: false,
+    status: "running" as const,
+    step: {
+      id: `wizard-start-warmup:${randomUUID()}`,
+      type: "progress" as const,
+      title: "Preparing setup",
+      message: "Maumau is getting the first setup step ready…",
+      executor: "client" as const,
+    },
+  };
+}
+
+async function readWizardStartResult(params: {
+  session: WizardSession;
+  preferWarmupStep: boolean;
+}) {
+  if (!params.preferWarmupStep) {
+    return await params.session.next();
+  }
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      params.session.next(),
+      new Promise<ReturnType<typeof buildWizardWarmupStep>>((resolve) => {
+        timeoutHandle = setTimeout(
+          () => resolve(buildWizardWarmupStep()),
+          EMBEDDED_WIZARD_START_STEP_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    return result;
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 function findWizardSessionOrRespond(params: {
@@ -40,19 +83,43 @@ export const wizardHandlers: GatewayRequestHandlers = {
     }
     const running = context.findRunningWizard();
     if (running) {
-      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "wizard already running"));
-      return;
+      if (params.fresh === true) {
+        running.session.cancel();
+        context.purgeWizardSession(running.id);
+      } else {
+        // Reattach callers to the existing wizard so clients can recover after
+        // losing local session state without forcing the operator to restart setup.
+        const result = await readWizardStartResult({
+          session: running.session,
+          preferWarmupStep: params.embedded === true,
+        });
+        if (result.done) {
+          context.purgeWizardSession(running.id);
+        }
+        respond(true, { sessionId: running.id, ...result }, undefined);
+        return;
+      }
     }
     const sessionId = randomUUID();
     const opts = {
       mode: params.mode,
+      flow: params.flow,
       workspace: typeof params.workspace === "string" ? params.workspace : undefined,
+      acceptRisk: params.acceptRisk === true,
+      skipChannels: params.skipChannels === true,
+      skipSkills: params.skipSkills === true,
+      skipSearch: params.skipSearch === true,
+      skipUi: params.skipUi === true,
+      embedded: params.embedded === true,
     };
     const session = new WizardSession((prompter) =>
       context.wizardRunner(opts, defaultRuntime, prompter),
     );
     context.wizardSessions.set(sessionId, session);
-    const result = await session.next();
+    const result = await readWizardStartResult({
+      session,
+      preferWarmupStep: params.embedded === true,
+    });
     if (result.done) {
       context.purgeWizardSession(sessionId);
     }

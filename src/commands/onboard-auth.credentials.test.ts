@@ -10,6 +10,7 @@ import {
 import {
   createAuthTestLifecycle,
   readAuthProfilesForAgent,
+  readStateDirDotEnv,
   setupAuthTestEnv,
 } from "./test-wizard-helpers.js";
 
@@ -58,6 +59,7 @@ describe("onboard auth credentials secret refs", () => {
     profileId: string;
     apply: (agentDir: string) => Promise<void>;
     expected: AuthProfileEntry;
+    expectedEnvLine?: string;
     absent?: Array<keyof AuthProfileEntry>;
   }) {
     await withAuthEnv(params.prefix, async (env) => {
@@ -70,10 +72,13 @@ describe("onboard auth credentials secret refs", () => {
       for (const key of params.absent ?? []) {
         expect(profile?.[key]).toBeUndefined();
       }
+      if (params.expectedEnvLine) {
+        expect(await readStateDirDotEnv(env.stateDir)).toContain(params.expectedEnvLine);
+      }
     });
   }
 
-  it("keeps env-backed moonshot key as plaintext by default", async () => {
+  it("stores env-backed moonshot key in the state-dir .env by default", async () => {
     await expectStoredAuthKey({
       prefix: "maumau-onboard-auth-credentials-",
       envVar: "MOONSHOT_API_KEY",
@@ -83,9 +88,10 @@ describe("onboard auth credentials secret refs", () => {
         await setMoonshotApiKey("sk-moonshot-env");
       },
       expected: {
-        key: "sk-moonshot-env",
+        keyRef: { source: "env", provider: "default", id: "MOONSHOT_API_KEY" },
       },
-      absent: ["keyRef"],
+      expectedEnvLine: "MOONSHOT_API_KEY=sk-moonshot-env",
+      absent: ["key"],
     });
   });
 
@@ -101,6 +107,7 @@ describe("onboard auth credentials secret refs", () => {
       expected: {
         keyRef: { source: "env", provider: "default", id: "MOONSHOT_API_KEY" },
       },
+      expectedEnvLine: "MOONSHOT_API_KEY=sk-moonshot-env",
       absent: ["key"],
     });
   });
@@ -119,7 +126,7 @@ describe("onboard auth credentials secret refs", () => {
     });
   });
 
-  it("keeps plaintext moonshot key when no env ref applies", async () => {
+  it("stores pasted moonshot key in the state-dir .env by default", async () => {
     await expectStoredAuthKey({
       prefix: "maumau-onboard-auth-credentials-plaintext-",
       envVar: "MOONSHOT_API_KEY",
@@ -129,9 +136,10 @@ describe("onboard auth credentials secret refs", () => {
         await setMoonshotApiKey("sk-moonshot-plaintext");
       },
       expected: {
-        key: "sk-moonshot-plaintext",
+        keyRef: { source: "env", provider: "default", id: "MOONSHOT_API_KEY" },
       },
-      absent: ["keyRef"],
+      expectedEnvLine: "MOONSHOT_API_KEY=sk-moonshot-plaintext",
+      absent: ["key"],
     });
   });
 
@@ -154,7 +162,7 @@ describe("onboard auth credentials secret refs", () => {
     expect(parsed.profiles?.["cloudflare-ai-gateway:default"]?.key).toBeUndefined();
   });
 
-  it("keeps env-backed openai key as plaintext by default", async () => {
+  it("stores env-backed openai key in the state-dir .env by default", async () => {
     await expectStoredAuthKey({
       prefix: "maumau-onboard-auth-credentials-openai-",
       envVar: "OPENAI_API_KEY",
@@ -164,9 +172,10 @@ describe("onboard auth credentials secret refs", () => {
         await setOpenaiApiKey("sk-openai-env");
       },
       expected: {
-        key: "sk-openai-env",
+        keyRef: { source: "env", provider: "default", id: "OPENAI_API_KEY" },
       },
-      absent: ["keyRef"],
+      expectedEnvLine: "OPENAI_API_KEY=sk-openai-env",
+      absent: ["key"],
     });
   });
 
@@ -182,6 +191,7 @@ describe("onboard auth credentials secret refs", () => {
       expected: {
         keyRef: { source: "env", provider: "default", id: "OPENAI_API_KEY" },
       },
+      expectedEnvLine: "OPENAI_API_KEY=sk-openai-env",
       absent: ["key"],
     });
   });

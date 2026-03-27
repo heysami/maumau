@@ -47,6 +47,10 @@ type FinalizeOnboardingOptions = {
   runtime: RuntimeEnv;
 };
 
+function canOfferSetupTuiHatch() {
+  return Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+}
+
 export async function finalizeSetupWizard(
   options: FinalizeOnboardingOptions,
 ): Promise<{ launchedTui: boolean }> {
@@ -66,6 +70,12 @@ export async function finalizeSetupWizard(
       );
     }
   };
+
+  // Embedded app onboarding owns gateway readiness and the post-setup UX,
+  // so skip the CLI-specific service/runtime and follow-up prompts here.
+  if (opts.embedded) {
+    return { launchedTui: false };
+  }
 
   const systemdAvailable =
     process.platform === "linux" ? await isSystemdUserServiceAvailable() : true;
@@ -341,6 +351,7 @@ export async function finalizeSetupWizard(
   let seededInBackground = false;
   let hatchChoice: "tui" | "web" | "later" | null = null;
   let launchedTui = false;
+  const canLaunchTui = canOfferSetupTuiHatch();
 
   if (!opts.skipUi && gatewayProbe.ok) {
     if (hasBootstrap) {
@@ -371,24 +382,35 @@ export async function finalizeSetupWizard(
     hatchChoice = await prompter.select({
       message: "How do you want to hatch your bot?",
       options: [
-        { value: "tui", label: "Hatch in TUI (recommended)" },
+        ...(canLaunchTui ? [{ value: "tui" as const, label: "Hatch in TUI (recommended)" }] : []),
         { value: "web", label: "Open the Web UI" },
         { value: "later", label: "Do this later" },
       ],
-      initialValue: "tui",
+      initialValue: canLaunchTui ? "tui" : "web",
     });
 
     if (hatchChoice === "tui") {
-      restoreTerminalState("pre-setup tui", { resumeStdinIfPaused: true });
-      await runTui({
-        url: links.wsUrl,
-        token: settings.authMode === "token" ? settings.gatewayToken : undefined,
-        password: settings.authMode === "password" ? resolvedGatewayPassword : "",
-        // Safety: setup TUI should not auto-deliver to lastProvider/lastTo.
-        deliver: false,
-        message: hasBootstrap ? "Wake up, my friend!" : undefined,
-      });
-      launchedTui = true;
+      if (!canLaunchTui) {
+        await prompter.note(
+          [
+            "TUI hatch needs an interactive terminal.",
+            `Run manually later: ${formatCliCommand("maumau tui")}`,
+            `Or open the dashboard: ${formatCliCommand("maumau dashboard --no-open")}`,
+          ].join("\n"),
+          "TUI unavailable",
+        );
+      } else {
+        restoreTerminalState("pre-setup tui", { resumeStdinIfPaused: true });
+        await runTui({
+          url: links.wsUrl,
+          token: settings.authMode === "token" ? settings.gatewayToken : undefined,
+          password: settings.authMode === "password" ? resolvedGatewayPassword : "",
+          // Safety: setup TUI should not auto-deliver to lastProvider/lastTo.
+          deliver: false,
+          message: hasBootstrap ? "Wake up, my friend!" : undefined,
+        });
+        launchedTui = true;
+      }
     } else if (hatchChoice === "web") {
       const browserSupport = await detectBrowserOpenSupport();
       if (browserSupport.ok) {

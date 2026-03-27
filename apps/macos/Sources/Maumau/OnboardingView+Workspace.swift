@@ -1,32 +1,18 @@
 import Foundation
 
 extension OnboardingView {
-    func loadWorkspaceDefaults() async {
-        guard self.workspacePath.isEmpty else { return }
+    func loadWorkspaceDefaults(force: Bool = false) async {
+        guard force || self.workspacePath.isEmpty else { return }
         let configured = await self.loadAgentWorkspace()
         let url = AgentWorkspace.resolveWorkspaceURL(from: configured)
         self.workspacePath = AgentWorkspace.displayPath(for: url)
         self.refreshBootstrapStatus()
     }
 
-    func ensureDefaultWorkspace() async {
-        guard self.state.connectionMode == .local else { return }
-        let configured = await self.loadAgentWorkspace()
-        let url = AgentWorkspace.resolveWorkspaceURL(from: configured)
-        let safety = AgentWorkspace.bootstrapSafety(for: url)
-        if let reason = safety.unsafeReason {
-            self.workspaceStatus = "Workspace not touched: \(reason)"
-        } else {
-            do {
-                _ = try AgentWorkspace.bootstrap(workspaceURL: url)
-                if (configured ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    await self.saveAgentWorkspace(AgentWorkspace.displayPath(for: url))
-                }
-            } catch {
-                self.workspaceStatus = "Failed to create workspace: \(error.localizedDescription)"
-            }
-        }
-        self.refreshBootstrapStatus()
+    var localWorkspaceSafetyMessage: String? {
+        guard self.state.connectionMode == .local else { return nil }
+        let url = AgentWorkspace.resolveWorkspaceURL(from: self.workspacePath)
+        return AgentWorkspace.bootstrapSafety(for: url).unsafeReason
     }
 
     func refreshBootstrapStatus() {
@@ -38,10 +24,11 @@ extension OnboardingView {
     }
 
     var workspaceBootstrapCommand: String {
+        let target = self.workspaceShellPathExpression()
         let template = AgentWorkspace.defaultTemplate().trimmingCharacters(in: .whitespacesAndNewlines)
         return """
-        mkdir -p ~/.maumau/workspace
-        cat > ~/.maumau/workspace/AGENTS.md <<'EOF'
+        mkdir -p \(target)
+        cat > \(target)/AGENTS.md <<'EOF'
         \(template)
         EOF
         """
@@ -61,6 +48,7 @@ extension OnboardingView {
             _ = try AgentWorkspace.bootstrap(workspaceURL: url)
             self.workspacePath = AgentWorkspace.displayPath(for: url)
             self.workspaceStatus = "Workspace ready at \(self.workspacePath)"
+            _ = await self.saveAgentWorkspace(self.workspacePath)
             self.refreshBootstrapStatus()
         } catch {
             self.workspaceStatus = "Failed to create workspace: \(error.localizedDescription)"
@@ -93,5 +81,22 @@ extension OnboardingView {
             let errorMessage = "Failed to save config: \(error.localizedDescription)"
             return (false, errorMessage)
         }
+    }
+
+    private func workspaceShellPathExpression() -> String {
+        let trimmed = self.workspacePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = trimmed.isEmpty ? "~/.maumau/workspace" : trimmed
+        if path == "~" {
+            return "$HOME"
+        }
+        if path.hasPrefix("~/") {
+            let suffix = String(path.dropFirst(2))
+            return suffix.isEmpty ? "$HOME" : "$HOME/" + self.shellEscape(suffix)
+        }
+        return self.shellEscape(path)
+    }
+
+    private func shellEscape(_ raw: String) -> String {
+        "'" + raw.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

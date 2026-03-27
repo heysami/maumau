@@ -21,9 +21,13 @@ struct SessionsSettings: View {
         VStack(alignment: .leading, spacing: 14) {
             self.header
             self.content
-            Spacer()
+                .frame(
+                    minHeight: 220,
+                    idealHeight: 460,
+                    maxHeight: 460,
+                    alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 12)
         .task {
             guard !self.hasLoaded else { return }
@@ -73,8 +77,10 @@ struct SessionsSettings: View {
                 }
                 // The view already applies horizontal padding; keep the list aligned with the text above.
                 .padding(.horizontal, -12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func sessionRow(_ row: SessionRow) -> some View {

@@ -39,6 +39,7 @@ export function createGatewayReloadHandlers(params: {
   broadcast: (event: string, payload: unknown, opts?: { dropIfSlow?: boolean }) => void;
   getState: () => GatewayHotReloadState;
   setState: (state: GatewayHotReloadState) => void;
+  getRunningWizardCount?: () => number;
   startChannel: (name: ChannelKind) => Promise<void>;
   stopChannel: (name: ChannelKind) => Promise<void>;
   logHooks: {
@@ -181,11 +182,13 @@ export function createGatewayReloadHandlers(params: {
       const queueSize = getTotalQueueSize();
       const pendingReplies = getTotalPendingReplies();
       const embeddedRuns = getActiveEmbeddedRunCount();
+      const runningWizards = Math.max(0, Math.floor(params.getRunningWizardCount?.() ?? 0));
       return {
         queueSize,
         pendingReplies,
         embeddedRuns,
-        totalActive: queueSize + pendingReplies + embeddedRuns,
+        runningWizards,
+        totalActive: queueSize + pendingReplies + embeddedRuns + runningWizards,
       };
     };
     const formatActiveDetails = (counts: ReturnType<typeof getActiveCounts>) => {
@@ -198,6 +201,9 @@ export function createGatewayReloadHandlers(params: {
       }
       if (counts.embeddedRuns > 0) {
         details.push(`${counts.embeddedRuns} embedded run(s)`);
+      }
+      if (counts.runningWizards > 0) {
+        details.push(`${counts.runningWizards} setup wizard session(s)`);
       }
       return details;
     };

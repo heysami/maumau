@@ -2,6 +2,81 @@ import Foundation
 import MaumauProtocol
 
 extension ChannelsStore {
+    static let inlineOnboardingChannelIDs = [
+        "whatsapp",
+        "telegram",
+        "discord",
+        "imessage",
+        "slack",
+        "line",
+    ]
+    static let settingsVisibleChannelIDs = inlineOnboardingChannelIDs + [
+        "googlechat",
+        "signal",
+    ]
+    private static var seamlessQuickSetupChannels: Set<String> {
+        Set(ChannelsStore.inlineOnboardingChannelIDs)
+    }
+
+    func mergedQuickSetupUpdates(
+        channelId: String? = nil,
+        _ updates: [(path: ConfigPath, value: Any?)]
+    ) -> [(path: ConfigPath, value: Any?)] {
+        guard let channelId else { return updates }
+        guard Self.seamlessQuickSetupChannels.contains(channelId) else { return updates }
+        guard !updates.isEmpty || channelId == "whatsapp" else { return updates }
+
+        let dmPolicyPath: ConfigPath = [.key("channels"), .key(channelId), .key("dmPolicy")]
+        let allowFromPath: ConfigPath = [.key("channels"), .key(channelId), .key("allowFrom")]
+        let updatesDmPolicy = updates.contains(where: { $0.path == dmPolicyPath })
+        let updatesAllowFrom = updates.contains(where: { $0.path == allowFromPath })
+        let existingDmPolicy = self.configValue(at: dmPolicyPath)
+        let existingAllowFrom = self.configValue(at: allowFromPath)
+
+        guard !updatesDmPolicy, !updatesAllowFrom else { return updates }
+        guard existingDmPolicy == nil, existingAllowFrom == nil else { return updates }
+
+        return updates + [
+            (dmPolicyPath, "open"),
+            (allowFromPath, ["*"]),
+        ]
+    }
+
+    private func enableBundledChannelPluginForQuickSetup(_ channelId: String) -> String? {
+        let trimmedChannelID = channelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedChannelID.isEmpty else { return nil }
+
+        let pluginsEnabledPath: ConfigPath = [.key("plugins"), .key("enabled")]
+        if let pluginsEnabled = self.configValue(at: pluginsEnabledPath) as? Bool, !pluginsEnabled {
+            return "plugins disabled"
+        }
+
+        let denyPath: ConfigPath = [.key("plugins"), .key("deny")]
+        let deniedPluginIDs = (self.configValue(at: denyPath) as? [Any])?
+            .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty } ?? []
+        if deniedPluginIDs.contains(trimmedChannelID) {
+            return "blocked by denylist"
+        }
+
+        self.updateConfigValue(
+            path: [.key("plugins"), .key("entries"), .key(trimmedChannelID), .key("enabled")],
+            value: true)
+
+        let allowPath: ConfigPath = [.key("plugins"), .key("allow")]
+        if let allowValues = self.configValue(at: allowPath) as? [Any] {
+            var allowlist = allowValues.compactMap {
+                ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }.filter { !$0.isEmpty }
+            if !allowlist.contains(trimmedChannelID) {
+                allowlist.append(trimmedChannelID)
+                self.updateConfigValue(path: allowPath, value: allowlist)
+            }
+        }
+
+        return nil
+    }
+
     func loadConfigSchema() async {
         guard !self.configSchemaLoading else { return }
         self.configSchemaLoading = true
@@ -79,6 +154,7 @@ extension ChannelsStore {
         do {
             try await ConfigStore.save(self.configDraft)
             await self.loadConfig()
+            await self.refresh(probe: true)
         } catch {
             self.configStatus = error.localizedDescription
         }
@@ -86,6 +162,37 @@ extension ChannelsStore {
 
     func reloadConfigDraft() async {
         await self.loadConfig()
+    }
+
+    @discardableResult
+    func saveQuickSetupUpdates(
+        channelId: String? = nil,
+        _ updates: [(path: ConfigPath, value: Any?)],
+        successMessage: String) async -> Bool
+    {
+        if !self.configLoaded {
+            await self.loadConfig()
+        }
+
+        if let channelId,
+           let enableFailure = self.enableBundledChannelPluginForQuickSetup(channelId)
+        {
+            self.configStatus = "Cannot enable \(channelId): \(enableFailure)."
+            return false
+        }
+
+        for update in self.mergedQuickSetupUpdates(channelId: channelId, updates) {
+            self.updateConfigValue(path: update.path, value: update.value)
+        }
+
+        await self.saveConfigDraft()
+
+        if !self.configDirty, self.configStatus == nil {
+            self.configStatus = successMessage
+            return true
+        }
+
+        return false
     }
 }
 

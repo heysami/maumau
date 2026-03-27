@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../../config/config.js";
 import type { ProviderPlugin } from "../../plugins/types.js";
@@ -128,12 +131,16 @@ describe("modelsAuthLoginCommand", () => {
   let currentConfig: MaumauConfig;
   let lastUpdatedConfig: MaumauConfig | null;
   let runProviderAuth: ReturnType<typeof vi.fn>;
+  let tempStateDir: string;
+  const originalStateDir = process.env.MAUMAU_STATE_DIR;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     restoreStdin = withInteractiveStdin();
     currentConfig = {};
     lastUpdatedConfig = null;
+    tempStateDir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-models-auth-"));
+    process.env.MAUMAU_STATE_DIR = tempStateDir;
     mocks.clackCancel.mockReset();
     mocks.clackConfirm.mockReset();
     mocks.clackIsCancel.mockImplementation(
@@ -185,9 +192,15 @@ describe("modelsAuthLoginCommand", () => {
     mocks.clearAuthProfileCooldown.mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreStdin?.();
     restoreStdin = null;
+    await fs.rm(tempStateDir, { recursive: true, force: true });
+    if (originalStateDir === undefined) {
+      delete process.env.MAUMAU_STATE_DIR;
+    } else {
+      process.env.MAUMAU_STATE_DIR = originalStateDir;
+    }
   });
 
   it("runs plugin-owned openai-codex login", async () => {
@@ -324,10 +337,17 @@ describe("modelsAuthLoginCommand", () => {
       credential: {
         type: "token",
         provider: "openai",
-        token: "tok-fresh",
+        tokenRef: {
+          source: "env",
+          provider: "default",
+          id: "OPENAI_API_KEY",
+        },
       },
       agentDir: "/tmp/maumau/agents/main",
     });
+    await expect(fs.readFile(path.join(tempStateDir, ".env"), "utf8")).resolves.toContain(
+      "OPENAI_API_KEY=tok-fresh",
+    );
   });
 
   it("runs token auth for any token-capable provider plugin", async () => {
@@ -367,9 +387,16 @@ describe("modelsAuthLoginCommand", () => {
       credential: {
         type: "token",
         provider: "moonshot",
-        token: "moonshot-token",
+        tokenRef: {
+          source: "env",
+          provider: "default",
+          id: "MOONSHOT_API_KEY",
+        },
       },
       agentDir: "/tmp/maumau/agents/main",
     });
+    await expect(fs.readFile(path.join(tempStateDir, ".env"), "utf8")).resolves.toContain(
+      "MOONSHOT_API_KEY=moonshot-token",
+    );
   });
 });

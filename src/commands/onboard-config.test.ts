@@ -3,6 +3,7 @@ import type { MaumauConfig } from "../config/config.js";
 import {
   applyLocalSetupWorkspaceConfig,
   ONBOARDING_DEFAULT_DM_SCOPE,
+  ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS,
   ONBOARDING_DEFAULT_TOOLS_PROFILE,
 } from "./onboard-config.js";
 
@@ -19,6 +20,7 @@ describe("applyLocalSetupWorkspaceConfig", () => {
     expect(result.gateway?.mode).toBe("local");
     expect(result.agents?.defaults?.workspace).toBe("/tmp/workspace");
     expect(result.tools?.profile).toBe(ONBOARDING_DEFAULT_TOOLS_PROFILE);
+    expect(result.tools?.alsoAllow).toEqual([...ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS]);
   });
 
   it("preserves existing dmScope when already configured", () => {
@@ -52,5 +54,33 @@ describe("applyLocalSetupWorkspaceConfig", () => {
     const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace");
 
     expect(result.tools?.profile).toBe("full");
+  });
+
+  it("merges onboarding plugin tool defaults into existing alsoAllow entries", () => {
+    const baseConfig: MaumauConfig = {
+      tools: {
+        alsoAllow: ["web_search"],
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace");
+
+    expect(result.tools?.alsoAllow).toEqual([
+      "web_search",
+      ...ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS,
+    ]);
+  });
+
+  it("does not add alsoAllow when the config already uses an explicit tools.allow list", () => {
+    const baseConfig: MaumauConfig = {
+      tools: {
+        allow: ["read", "write"],
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace");
+
+    expect(result.tools?.allow).toEqual(["read", "write"]);
+    expect(result.tools?.alsoAllow).toBeUndefined();
   });
 });

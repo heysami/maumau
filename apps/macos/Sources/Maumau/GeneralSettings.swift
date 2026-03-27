@@ -17,6 +17,7 @@ struct GeneralSettings: View {
     @State private var installingCLI = false
     @State private var cliInstallStatus: String?
     @State private var cliInstallLocation: String?
+    @State private var didAutoInstallCLIForLocalMode = false
     @State private var showRemoteAdvanced = false
     private let isPreview = ProcessInfo.processInfo.isPreview
     private var isNixMode: Bool {
@@ -65,10 +66,12 @@ struct GeneralSettings: View {
                         subtitle: "Allow the agent to capture a photo or short video via the built-in camera.",
                         binding: self.$cameraEnabled)
 
-                    SettingsToggleRow(
-                        title: "Enable Peekaboo Bridge",
-                        subtitle: "Allow signed tools (e.g. `peekaboo`) to drive UI automation via PeekabooBridge.",
-                        binding: self.$state.peekabooBridgeEnabled)
+                    if PeekabooBridgeHostCoordinator.isAvailable {
+                        SettingsToggleRow(
+                            title: "Enable Peekaboo Bridge",
+                            subtitle: "Allow signed tools (e.g. `peekaboo`) to drive UI automation via PeekabooBridge.",
+                            binding: self.$state.peekabooBridgeEnabled)
+                    }
 
                     SettingsToggleRow(
                         title: "Enable debug tools",
@@ -88,6 +91,13 @@ struct GeneralSettings: View {
             .padding(.bottom, 16)
         }
         .onAppear {
+            guard !self.isPreview else { return }
+            self.refreshGatewayStatus()
+        }
+        .onChange(of: self.state.connectionMode) { _, newValue in
+            if newValue != .local {
+                self.didAutoInstallCLIForLocalMode = false
+            }
             guard !self.isPreview else { return }
             self.refreshGatewayStatus()
         }
@@ -465,12 +475,20 @@ struct GeneralSettings: View {
     }
 
     private func refreshGatewayStatus() {
-        Task {
+        Task { @MainActor in
             let status = await Task.detached(priority: .utility) {
                 GatewayEnvironment.check()
             }.value
             self.gatewayStatus = status
-            self.cliInstallLocation = await MainActor.run { CLIInstaller.installedLocation() }
+            self.cliInstallLocation = CLIInstaller.installedLocation()
+            if self.state.connectionMode == .local {
+                await self.healthStore.refresh(onDemand: true)
+                if self.healthStore.lastError == nil {
+                    // Clear stale attach/start failures once the gateway responds again.
+                    self.gatewayManager.clearLastFailure()
+                }
+            }
+            self.maybeAutoInstallCLIForLocalMode()
         }
     }
 
@@ -485,6 +503,35 @@ struct GeneralSettings: View {
 
     private var cliInstallButtonTitle: String {
         self.cliInstallLocation == nil ? "Install CLI" : "Reinstall CLI"
+    }
+
+    private static func shouldAutoInstallCLIForLocalMode(
+        connectionMode: AppState.ConnectionMode,
+        isNixMode: Bool,
+        cliInstallLocation: String?,
+        installingCLI: Bool,
+        didAutoInstallCLI: Bool) -> Bool
+    {
+        connectionMode == .local &&
+            !isNixMode &&
+            cliInstallLocation == nil &&
+            !installingCLI &&
+            !didAutoInstallCLI
+    }
+
+    private func maybeAutoInstallCLIForLocalMode() {
+        guard Self.shouldAutoInstallCLIForLocalMode(
+            connectionMode: self.state.connectionMode,
+            isNixMode: self.isNixMode,
+            cliInstallLocation: self.cliInstallLocation,
+            installingCLI: self.installingCLI,
+            didAutoInstallCLI: self.didAutoInstallCLIForLocalMode)
+        else {
+            return
+        }
+
+        self.didAutoInstallCLIForLocalMode = true
+        Task { await self.installCLIFromSettings() }
     }
 
     @MainActor
@@ -607,6 +654,11 @@ extension GeneralSettings {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            Text("Checks that the Gateway responds and that your linked channel still looks signed in.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             if let detail = self.healthStore.detailLine {
                 Text(detail)
                     .font(.caption)
@@ -615,7 +667,7 @@ extension GeneralSettings {
             }
 
             HStack(spacing: 10) {
-                Button("Retry now") {
+                Button("Check now") {
                     Task { await HealthStore.shared.refresh(onDemand: true) }
                 }
                 .disabled(self.healthStore.isRefreshing)

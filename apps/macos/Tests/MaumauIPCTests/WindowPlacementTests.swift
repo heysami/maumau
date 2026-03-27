@@ -81,4 +81,29 @@ struct WindowPlacementTests {
 
         #expect(window.frame == original)
     }
+
+    @Test
+    func `ensure on screen clamps oversized visible window to the screen`() {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        #expect(screen != nil)
+        guard let screen else { return }
+
+        let visible = screen.visibleFrame
+        let window = NSWindow(
+            contentRect: NSRect(
+                x: visible.minX,
+                y: visible.minY,
+                width: visible.width + 120,
+                height: visible.height + 140),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false)
+
+        WindowPlacement.ensureOnScreen(
+            window: window,
+            defaultSize: NSSize(width: 824, height: 790))
+
+        #expect(window.frame.width <= visible.width)
+        #expect(window.frame.height <= visible.height)
+    }
 }

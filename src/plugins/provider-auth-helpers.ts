@@ -6,6 +6,7 @@ import { upsertAuthProfile } from "../agents/auth-profiles/profiles.js";
 import { normalizeProviderIdForAuth } from "../agents/provider-id.js";
 import type { MaumauConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
+import { upsertStateDirDotEnvVarSync } from "../config/state-dir-dotenv.js";
 import {
   coerceSecretRef,
   DEFAULT_SECRET_PROVIDER_ALIAS,
@@ -21,6 +22,10 @@ const ENV_REF_PATTERN = /^\$\{([A-Z][A-Z0-9_]*)\}$/;
 const resolveAuthAgentDir = (agentDir?: string) => agentDir ?? resolveMaumauAgentDir();
 
 export type ApiKeyStorageOptions = {
+  secretInputMode?: SecretInputMode;
+};
+
+export type TokenStorageOptions = {
   secretInputMode?: SecretInputMode;
 };
 
@@ -40,35 +45,78 @@ function parseEnvSecretRef(value: string): SecretRef | null {
   return buildEnvSecretRef(match[1]);
 }
 
-function resolveProviderDefaultEnvSecretRef(provider: string): SecretRef {
-  const envVars = getProviderEnvVars(provider);
-  const envVar = envVars?.find((candidate) => candidate.trim().length > 0);
-  if (!envVar) {
-    throw new Error(
-      `Provider "${provider}" does not have a default env var mapping for secret-input-mode=ref.`,
-    );
+function resolveManagedSecretEnvVarName(
+  provider: string,
+  kind: "api_key" | "token",
+  fallbackPrefix = "MAUMAU",
+): string {
+  const preferred = getProviderEnvVars(provider).find((candidate) => candidate.trim().length > 0);
+  if (preferred) {
+    return preferred;
   }
+  const normalizedProvider = provider
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  const suffix = kind === "api_key" ? "API_KEY" : "TOKEN";
+  return [fallbackPrefix, normalizedProvider || "PROVIDER", suffix].join("_");
+}
+
+function persistEnvRefValueIfPresent(ref: SecretRef): void {
+  if (ref.source !== "env") {
+    return;
+  }
+  const value = normalizeSecretInput(process.env[ref.id]);
+  if (!value) {
+    return;
+  }
+  upsertStateDirDotEnvVarSync({ key: ref.id, value });
+}
+
+function persistManagedSecretRef(
+  provider: string,
+  value: string,
+  kind: "api_key" | "token",
+): SecretRef {
+  const envVar = resolveManagedSecretEnvVarName(provider, kind);
+  upsertStateDirDotEnvVarSync({ key: envVar, value });
   return buildEnvSecretRef(envVar);
+}
+
+function resolveManagedSecretRef(
+  provider: string,
+  value: string,
+  kind: "api_key" | "token",
+): SecretRef {
+  const matchedEnvVar = getProviderEnvVars(provider).find((envVar) => {
+    const envValue = normalizeSecretInput(process.env[envVar]);
+    return envValue === value;
+  });
+  if (matchedEnvVar) {
+    upsertStateDirDotEnvVarSync({ key: matchedEnvVar, value });
+    return buildEnvSecretRef(matchedEnvVar);
+  }
+  return persistManagedSecretRef(provider, value, kind);
 }
 
 function resolveApiKeySecretInput(
   provider: string,
   input: SecretInput,
-  options?: ApiKeyStorageOptions,
+  _options?: ApiKeyStorageOptions,
 ): SecretInput {
   const coercedRef = coerceSecretRef(input);
   if (coercedRef) {
+    persistEnvRefValueIfPresent(coercedRef);
     return coercedRef;
   }
   const normalized = normalizeSecretInput(input);
   const inlineEnvRef = parseEnvSecretRef(normalized);
   if (inlineEnvRef) {
+    persistEnvRefValueIfPresent(inlineEnvRef);
     return inlineEnvRef;
   }
-  if (options?.secretInputMode === "ref") {
-    return resolveProviderDefaultEnvSecretRef(provider);
-  }
-  return normalized;
+  return resolveManagedSecretRef(provider, normalized, "api_key");
 }
 
 export function buildApiKeyCredential(
@@ -97,6 +145,56 @@ export function buildApiKeyCredential(
     provider,
     keyRef: secretInput,
     ...(metadata ? { metadata } : {}),
+  };
+}
+
+function resolveTokenSecretInput(
+  provider: string,
+  input: SecretInput,
+  _options?: TokenStorageOptions,
+): SecretInput {
+  const coercedRef = coerceSecretRef(input);
+  if (coercedRef) {
+    persistEnvRefValueIfPresent(coercedRef);
+    return coercedRef;
+  }
+  const normalized = normalizeSecretInput(input);
+  const inlineEnvRef = parseEnvSecretRef(normalized);
+  if (inlineEnvRef) {
+    persistEnvRefValueIfPresent(inlineEnvRef);
+    return inlineEnvRef;
+  }
+  return resolveManagedSecretRef(provider, normalized, "token");
+}
+
+export function buildTokenCredential(
+  provider: string,
+  input: SecretInput,
+  options?: TokenStorageOptions & { expires?: number; email?: string },
+): {
+  type: "token";
+  provider: string;
+  token?: string;
+  tokenRef?: SecretRef;
+  expires?: number;
+  email?: string;
+} {
+  const secretInput = resolveTokenSecretInput(provider, input, options);
+  if (typeof secretInput === "string") {
+    return {
+      type: "token",
+      provider,
+      token: secretInput,
+      ...(options?.expires ? { expires: options.expires } : {}),
+      ...(options?.email ? { email: options.email } : {}),
+    };
+  }
+  return {
+    type: "token",
+    provider,
+    tokenRef: secretInput,
+    ...(options?.expires ? { expires: options.expires } : {}),
+    ...(options?.email ? { email: options.email } : {}),
   };
 }
 

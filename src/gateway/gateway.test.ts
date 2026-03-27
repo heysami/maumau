@@ -181,11 +181,33 @@ describe("gateway e2e", () => {
 
       const wizardToken = nextGatewayId("wiz-token");
       const port = await getFreeGatewayPort();
+      let receivedWizardOpts:
+        | {
+            mode?: string;
+            flow?: string;
+            acceptRisk?: boolean;
+            skipChannels?: boolean;
+            skipSkills?: boolean;
+            skipSearch?: boolean;
+            skipUi?: boolean;
+            embedded?: boolean;
+          }
+        | undefined;
       const server = await startGatewayServer(port, {
         bind: "loopback",
         auth: { mode: "token", token: wizardToken },
         controlUiEnabled: false,
-        wizardRunner: async (_opts, _runtime, prompter) => {
+        wizardRunner: async (opts, _runtime, prompter) => {
+          receivedWizardOpts = {
+            mode: opts.mode,
+            flow: opts.flow,
+            acceptRisk: opts.acceptRisk,
+            skipChannels: opts.skipChannels,
+            skipSkills: opts.skipSkills,
+            skipSearch: opts.skipSearch,
+            skipUi: opts.skipUi,
+            embedded: opts.embedded,
+          };
           await prompter.intro("Wizard E2E");
           await prompter.note("write token");
           const token = await prompter.text({ message: "token" });
@@ -212,11 +234,67 @@ describe("gateway e2e", () => {
             type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
           };
           error?: string;
-        }>("wizard.start", { mode: "local" });
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+          fresh: true,
+        });
         const sessionId = start.sessionId;
         expect(typeof sessionId).toBe("string");
+        const restarted = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+          };
+          error?: string;
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+          fresh: true,
+        });
+        expect(restarted.sessionId).not.toBe(sessionId);
+        expect(typeof restarted.sessionId).toBe("string");
+        expect(restarted.step?.id).toBeDefined();
 
-        let next = start;
+        const resumed = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+          };
+          error?: string;
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+        });
+        expect(resumed.sessionId).toBe(restarted.sessionId);
+        expect(resumed.step?.id).toBe(restarted.step?.id);
+
+        const activeSessionId = restarted.sessionId;
+        let next = resumed;
         let didSendToken = false;
         while (!next.done) {
           const step = next.step;
@@ -228,13 +306,23 @@ describe("gateway e2e", () => {
             didSendToken = true;
           }
           next = await client.request("wizard.next", {
-            sessionId,
+            sessionId: activeSessionId,
             answer: { stepId: step.id, value },
           });
         }
 
         expect(didSendToken).toBe(true);
         expect(next.status).toBe("done");
+        expect(receivedWizardOpts).toEqual({
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+        });
 
         const parsed = JSON.parse(await fs.readFile(resolveConfigPath(), "utf8"));
         const token = (parsed as Record<string, unknown>)?.gateway as
@@ -265,6 +353,155 @@ describe("gateway e2e", () => {
         expect(resToken.ok).toBe(true);
       } finally {
         await server2.close({ reason: "wizard auth verify" });
+        await fs.rm(tempHome, { recursive: true, force: true });
+        envSnapshot.restore();
+      }
+    },
+  );
+
+  it(
+    "returns a warmup progress step while embedded wizard startup is still preparing the first prompt",
+    { timeout: GATEWAY_E2E_TIMEOUT_MS },
+    async () => {
+      const envSnapshot = captureEnv([
+        "HOME",
+        "MAUMAU_STATE_DIR",
+        "MAUMAU_CONFIG_PATH",
+        "MAUMAU_GATEWAY_TOKEN",
+        "MAUMAU_SKIP_CHANNELS",
+        "MAUMAU_SKIP_GMAIL_WATCHER",
+        "MAUMAU_SKIP_CRON",
+        "MAUMAU_SKIP_CANVAS_HOST",
+        "MAUMAU_SKIP_BROWSER_CONTROL_SERVER",
+      ]);
+
+      process.env.MAUMAU_SKIP_CHANNELS = "1";
+      process.env.MAUMAU_SKIP_GMAIL_WATCHER = "1";
+      process.env.MAUMAU_SKIP_CRON = "1";
+      process.env.MAUMAU_SKIP_CANVAS_HOST = "1";
+      process.env.MAUMAU_SKIP_BROWSER_CONTROL_SERVER = "1";
+      delete process.env.MAUMAU_GATEWAY_TOKEN;
+
+      const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-wizard-warmup-home-"));
+      process.env.HOME = tempHome;
+      delete process.env.MAUMAU_STATE_DIR;
+      delete process.env.MAUMAU_CONFIG_PATH;
+
+      const wizardToken = nextGatewayId("wiz-warmup-token");
+      const port = await getFreeGatewayPort();
+      const server = await startGatewayServer(port, {
+        bind: "loopback",
+        auth: { mode: "token", token: wizardToken },
+        controlUiEnabled: false,
+        wizardRunner: async (_opts, _runtime, prompter) => {
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+          await prompter.note("Ready");
+        },
+      });
+
+      const client = await connectGatewayClient({
+        url: `ws://127.0.0.1:${port}`,
+        token: wizardToken,
+        clientDisplayName: "vitest-wizard-warmup",
+      });
+
+      try {
+        const startedAt = Date.now();
+        const start = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+            title?: string;
+            message?: string;
+          };
+          error?: string;
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+          fresh: true,
+        });
+        const elapsedMs = Date.now() - startedAt;
+        const sessionId = start.sessionId;
+
+        expect(typeof sessionId).toBe("string");
+        expect(elapsedMs).toBeLessThan(1_400);
+        expect(start.done).toBe(false);
+        expect(start.status).toBe("running");
+        expect(start.step?.type).toBe("progress");
+        expect(start.step?.title).toBe("Preparing setup");
+
+        const resumedAt = Date.now();
+        const resumed = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+            title?: string;
+            message?: string;
+          };
+          error?: string;
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+        });
+        const resumedElapsedMs = Date.now() - resumedAt;
+
+        expect(resumed.sessionId).toBe(sessionId);
+        expect(resumedElapsedMs).toBeLessThan(1_400);
+        expect(["note", "progress"]).toContain(resumed.step?.type);
+
+        const next = await client.request<{
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+            message?: string;
+          };
+          error?: string;
+        }>("wizard.next", {
+          sessionId,
+        });
+
+        expect(next.done).toBe(false);
+        expect(next.step?.type).toBe("note");
+        expect(next.step?.message).toBe("Ready");
+
+        if (!next.step) {
+          throw new Error("wizard missing ready step");
+        }
+
+        const done = await client.request<{
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          error?: string;
+        }>("wizard.next", {
+          sessionId,
+          answer: { stepId: next.step.id, value: null },
+        });
+
+        expect(done.done).toBe(true);
+        expect(done.status).toBe("done");
+      } finally {
+        await disconnectGatewayClient(client);
+        await server.close({ reason: "wizard warmup e2e complete" });
         await fs.rm(tempHome, { recursive: true, force: true });
         envSnapshot.restore();
       }

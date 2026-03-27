@@ -71,7 +71,6 @@ import {
 } from "../secrets/runtime.js";
 import { onSessionLifecycleEvent } from "../sessions/session-lifecycle-events.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
-import { runSetupWizard } from "../wizard/setup.js";
 import { createAuthRateLimiter, type AuthRateLimiter } from "./auth-rate-limit.js";
 import { startChannelHealthMonitor } from "./channel-health-monitor.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
@@ -175,6 +174,13 @@ const logWsControl = log.child("ws");
 const logSecrets = log.child("secrets");
 const gatewayRuntime = runtimeForLogger(log);
 const canvasRuntime = runtimeForLogger(logCanvas);
+
+type RunSetupWizard = typeof import("../wizard/setup.runtime.js").runSetupWizard;
+
+const runSetupWizardRuntime: RunSetupWizard = async (...args) => {
+  const runtime = await import("../wizard/setup.runtime.js");
+  return runtime.runSetupWizard(...args);
+};
 
 type AuthRateLimitConfig = Parameters<typeof createAuthRateLimiter>[0];
 
@@ -514,9 +520,6 @@ export async function startGatewayServer(
     startDiagnosticHeartbeat();
   }
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(cfgAtStart) });
-  setPreRestartDeferralCheck(
-    () => getTotalQueueSize() + getTotalPendingReplies() + getActiveEmbeddedRunCount(),
-  );
   // Unconditional startup migration: seed gateway.controlUi.allowedOrigins for existing
   // non-loopback installs that upgraded to v2026.2.26+ without required origins.
   cfgAtStart = await maybeSeedControlUiAllowedOriginsAtStartup({
@@ -654,8 +657,15 @@ export async function startGatewayServer(
       : { kind: "missing" };
   }
 
-  const wizardRunner = opts.wizardRunner ?? runSetupWizard;
+  const wizardRunner = opts.wizardRunner ?? runSetupWizardRuntime;
   const { wizardSessions, findRunningWizard, purgeWizardSession } = createWizardSessionTracker();
+  setPreRestartDeferralCheck(
+    () =>
+      getTotalQueueSize() +
+      getTotalPendingReplies() +
+      getActiveEmbeddedRunCount() +
+      (findRunningWizard() ? 1 : 0),
+  );
 
   const deps = createDefaultDeps();
   let canvasHostServer: CanvasHostServer | null = null;
@@ -1243,6 +1253,7 @@ export async function startGatewayServer(
             browserControl = nextState.browserControl;
             channelHealthMonitor = nextState.channelHealthMonitor;
           },
+          getRunningWizardCount: () => (findRunningWizard() ? 1 : 0),
           startChannel,
           stopChannel,
           logHooks,

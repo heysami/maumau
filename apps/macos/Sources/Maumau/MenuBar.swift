@@ -19,7 +19,6 @@ struct MaumauApp: App {
     @State private var statusItem: NSStatusItem?
     @State private var isMenuPresented = false
     @State private var isPanelVisible = false
-    @State private var tailscaleService = TailscaleService.shared
 
     @MainActor
     private func updateStatusHighlight() {
@@ -80,11 +79,9 @@ struct MaumauApp: App {
 
         Settings {
             SettingsRootView(state: self.state, updater: self.delegate.updaterController)
-                .frame(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight, alignment: .topLeading)
-                .environment(self.tailscaleService)
         }
-        .defaultSize(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight)
-        .windowResizability(.contentSize)
+        .defaultSize(width: SettingsTab.windowWidth, height: SettingsWindowSizing.defaultContentHeight())
+        .windowResizability(.contentMinSize)
         .onChange(of: self.isMenuPresented) { _, _ in
             self.updateStatusHighlight()
             self.updateHoverHUDSuppression()
@@ -246,6 +243,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let webChatAutoLogger = Logger(subsystem: "ai.maumau", category: "Chat")
     let updaterController: UpdaterProviding = makeUpdaterController()
 
+    static func shouldApplyInitialConnectionMode(mode: AppState.ConnectionMode, onboardingSeen: Bool) -> Bool {
+        // Fresh onboarding defaults to local immediately after the window appears.
+        // Skip the stale `.unconfigured` launch apply so it cannot race in later and
+        // tear down a gateway startup that onboarding already kicked off.
+        !(mode == .unconfigured && !onboardingSeen)
+    }
+
     func application(_: NSApplication, open urls: [URL]) {
         Task { @MainActor in
             for url in urls {
@@ -262,7 +266,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.state = AppStateStore.shared
         AppActivationPolicy.apply(showDockIcon: self.state?.showDockIcon ?? false)
-        if let state {
+        if let state,
+           Self.shouldApplyInitialConnectionMode(mode: state.connectionMode, onboardingSeen: state.onboardingSeen)
+        {
             Task { await ConnectionModeCoordinator.shared.apply(mode: state.connectionMode, paused: state.isPaused) }
         }
         TerminationSignalWatcher.shared.start()

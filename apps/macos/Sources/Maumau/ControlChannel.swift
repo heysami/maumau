@@ -56,6 +56,17 @@ final class ControlChannel {
         case degraded(String)
     }
 
+    static func shouldRefreshHealthAfterRecovery(
+        from oldState: ConnectionState,
+        to newState: ConnectionState,
+        currentHealthError: String?) -> Bool
+    {
+        guard case .connected = newState else { return false }
+        guard oldState != .connected else { return false }
+        guard let currentHealthError, !currentHealthError.isEmpty else { return false }
+        return true
+    }
+
     private(set) var state: ConnectionState = .disconnected {
         didSet {
             CanvasManager.shared.refreshDebugStatus()
@@ -72,6 +83,15 @@ final class ControlChannel {
                 let detail = message.isEmpty ? "degraded" : "degraded: \(message)"
                 self.logger.info("control channel state -> \(detail, privacy: .public)")
                 self.scheduleRecovery(reason: message)
+            }
+            if Self.shouldRefreshHealthAfterRecovery(
+                from: oldValue,
+                to: self.state,
+                currentHealthError: HealthStore.shared.lastError)
+            {
+                // A startup/config race can leave the health row showing the first failure
+                // even after the control socket is back. Re-probe once on recovery.
+                Task { await HealthStore.shared.refresh(onDemand: true) }
             }
         }
     }
@@ -103,8 +123,7 @@ final class ControlChannel {
                 _ = (target, identity)
                 let idSet = !identity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 self.logger.info(
-                    "control channel configure mode=remote " +
-                        "target=\(target, privacy: .public) identitySet=\(idSet, privacy: .public)")
+                    "control channel configure mode=remote target=\(target, privacy: .public) identitySet=\(idSet, privacy: .public)")
                 self.state = .connecting
                 _ = try await GatewayEndpointStore.shared.ensureRemoteControlTunnel()
                 await self.refreshEndpoint(reason: "configure")
@@ -135,15 +154,21 @@ final class ControlChannel {
         self.authSourceLabel = nil
     }
 
-    func health(timeout: TimeInterval? = nil) async throws -> Data {
+    func health(timeout: TimeInterval? = nil, probe: Bool = false) async throws -> Data {
         do {
             let start = Date()
-            var params: [String: AnyHashable]?
+            var params: [String: AnyHashable] = [:]
             if let timeout {
-                params = ["timeout": AnyHashable(Int(timeout * 1000))]
+                params["timeout"] = AnyHashable(Int(timeout * 1000))
+            }
+            if probe {
+                params["probe"] = AnyHashable(true)
             }
             let timeoutMs = (timeout ?? 15) * 1000
-            let payload = try await self.request(method: "health", params: params, timeoutMs: timeoutMs)
+            let payload = try await self.request(
+                method: "health",
+                params: params.isEmpty ? nil : params,
+                timeoutMs: timeoutMs)
             let ms = Date().timeIntervalSince(start) * 1000
             self.lastPingMs = ms
             self.state = .connected
@@ -274,9 +299,7 @@ final class ControlChannel {
             let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
             let reasonText = trimmedReason.isEmpty ? "unknown" : trimmedReason
             self.logger.info(
-                "control channel recovery starting " +
-                    "mode=\(String(describing: mode), privacy: .public) " +
-                    "reason=\(reasonText, privacy: .public)")
+                "control channel recovery starting mode=\(String(describing: mode), privacy: .public) reason=\(reasonText, privacy: .public)")
             if mode == .local {
                 GatewayProcessManager.shared.setActive(true)
             }

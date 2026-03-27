@@ -307,6 +307,11 @@ type VerificationResult = {
   error?: unknown;
 };
 
+type CompatibilityProbeResults = {
+  openai: VerificationResult;
+  anthropic: VerificationResult;
+};
+
 function normalizeOptionalProviderApiKey(value: unknown): SecretInput | undefined {
   if (isSecretRef(value)) {
     return value;
@@ -424,6 +429,51 @@ async function requestAnthropicVerification(params: {
       messages: [{ role: "user", content: "Hi" }],
       stream: false,
     },
+  });
+}
+
+function describeDetectionHint(probe: VerificationResult): string {
+  if (probe.ok) {
+    return "Detected automatically";
+  }
+  if (probe.status !== undefined) {
+    return `Probe failed with status ${probe.status}`;
+  }
+  if (probe.error) {
+    return `Probe failed: ${formatVerificationError(probe.error)}`;
+  }
+  return "Not detected";
+}
+
+async function promptDetectedCompatibility(params: {
+  prompter: WizardPrompter;
+  results: CompatibilityProbeResults;
+}): Promise<CustomApiCompatibility> {
+  const openaiDetected = params.results.openai.ok;
+  const anthropicDetected = params.results.anthropic.ok;
+  let message = "Use which endpoint compatibility?";
+  if (openaiDetected && anthropicDetected) {
+    message = "This endpoint responded to both compatibility probes. Which should Maumau use?";
+  } else if (openaiDetected) {
+    message = "OpenAI compatibility was detected. Keep that, or switch to Anthropic?";
+  } else if (anthropicDetected) {
+    message = "Anthropic compatibility was detected. Keep that, or switch to OpenAI?";
+  }
+  return await params.prompter.select({
+    message,
+    initialValue: openaiDetected ? "openai" : "anthropic",
+    options: [
+      {
+        value: "openai",
+        label: "OpenAI-compatible",
+        hint: describeDetectionHint(params.results.openai),
+      },
+      {
+        value: "anthropic",
+        label: "Anthropic-compatible",
+        hint: describeDetectionHint(params.results.anthropic),
+      },
+    ],
   });
 }
 
@@ -805,37 +855,44 @@ export async function promptCustomApiConfig(params: {
         apiKey: resolvedApiKey,
         modelId,
       });
-      if (openaiProbe.ok) {
-        probeSpinner.stop("Detected OpenAI-compatible endpoint.");
-        compatibility = "openai";
-        verifiedFromProbe = true;
-      } else {
-        const anthropicProbe = await requestAnthropicVerification({
-          baseUrl,
-          apiKey: resolvedApiKey,
-          modelId,
-        });
-        if (anthropicProbe.ok) {
-          probeSpinner.stop("Detected Anthropic-compatible endpoint.");
-          compatibility = "anthropic";
-          verifiedFromProbe = true;
-        } else {
-          probeSpinner.stop("Could not detect endpoint type.");
-          await prompter.note(
-            "This endpoint did not respond to OpenAI or Anthropic style requests.",
-            "Endpoint detection",
-          );
-          const retryChoice = await promptCustomApiRetryChoice(prompter);
-          ({ baseUrl, apiKey, resolvedApiKey, modelId } = await applyCustomApiRetryChoice({
-            prompter,
-            config,
-            secretInputMode: params.secretInputMode,
-            retryChoice,
-            current: { baseUrl, apiKey, resolvedApiKey, modelId },
-          }));
-          continue;
-        }
+      const anthropicProbe = await requestAnthropicVerification({
+        baseUrl,
+        apiKey: resolvedApiKey,
+        modelId,
+      });
+      const probeResults: CompatibilityProbeResults = {
+        openai: openaiProbe,
+        anthropic: anthropicProbe,
+      };
+      if (!openaiProbe.ok && !anthropicProbe.ok) {
+        probeSpinner.stop("Could not detect endpoint type.");
+        await prompter.note(
+          "This endpoint did not respond to OpenAI or Anthropic style requests.",
+          "Endpoint detection",
+        );
+        const retryChoice = await promptCustomApiRetryChoice(prompter);
+        ({ baseUrl, apiKey, resolvedApiKey, modelId } = await applyCustomApiRetryChoice({
+          prompter,
+          config,
+          secretInputMode: params.secretInputMode,
+          retryChoice,
+          current: { baseUrl, apiKey, resolvedApiKey, modelId },
+        }));
+        continue;
       }
+      if (openaiProbe.ok && anthropicProbe.ok) {
+        probeSpinner.stop("Detected both OpenAI-compatible and Anthropic-compatible modes.");
+      } else if (openaiProbe.ok) {
+        probeSpinner.stop("Detected OpenAI-compatible endpoint.");
+      } else {
+        probeSpinner.stop("Detected Anthropic-compatible endpoint.");
+      }
+      compatibility = await promptDetectedCompatibility({
+        prompter,
+        results: probeResults,
+      });
+      verifiedFromProbe =
+        compatibility === "openai" ? probeResults.openai.ok : probeResults.anthropic.ok;
     }
 
     if (verifiedFromProbe) {

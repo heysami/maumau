@@ -148,6 +148,16 @@ describe("registerOnboardCommand", () => {
       }),
       runtime,
     );
+
+    await runCli(["onboard", "--reset", "--reset-scope", "clean"]);
+    expect(setupWizardCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        reset: true,
+        resetScope: "clean",
+      }),
+      runtime,
+    );
   });
 
   it("parses --mistral-api-key and forwards mistralApiKey", async () => {

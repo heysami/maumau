@@ -1,7 +1,10 @@
 import type { ApiKeyCredential } from "../../../agents/auth-profiles/types.js";
 import type { MaumauConfig } from "../../../config/config.js";
 import type { SecretInput } from "../../../config/types.secrets.js";
-import { applyAuthProfileConfig } from "../../../plugins/provider-auth-helpers.js";
+import {
+  applyAuthProfileConfig,
+  buildApiKeyCredential,
+} from "../../../plugins/provider-auth-helpers.js";
 import { setCloudflareAiGatewayConfig } from "../../../plugins/provider-auth-storage.js";
 import type { RuntimeEnv } from "../../../runtime.js";
 import { resolveDefaultSecretProviderAlias } from "../../../secrets/ref-contract.js";
@@ -84,38 +87,19 @@ export async function applyNonInteractiveAuthChoice(params: {
     email?: string;
     metadata?: Record<string, string>;
   }): ApiKeyCredential | null => {
-    const storeSecretRef = requestedSecretInputMode === "ref" && params.resolved.source === "env"; // pragma: allowlist secret
-    if (storeSecretRef) {
-      if (!params.resolved.envVarName) {
-        runtime.error(
-          [
-            `--secret-input-mode ref requires an explicit environment variable for provider "${params.provider}".`,
-            "Set the provider API key env var and retry, or use --secret-input-mode plaintext.",
-          ].join("\n"),
-        );
-        runtime.exit(1);
-        return null;
-      }
-      return {
-        type: "api_key",
-        provider: params.provider,
-        keyRef: {
-          source: "env",
-          provider: resolveDefaultSecretProviderAlias(baseConfig, "env", {
-            preferFirstProviderForSource: true,
-          }),
-          id: params.resolved.envVarName,
-        },
-        ...(params.email ? { email: params.email } : {}),
-        ...(params.metadata ? { metadata: params.metadata } : {}),
-      };
-    }
+    const storedInput: SecretInput =
+      params.resolved.source === "env" && params.resolved.envVarName
+        ? {
+            source: "env",
+            provider: resolveDefaultSecretProviderAlias(baseConfig, "env", {
+              preferFirstProviderForSource: true,
+            }),
+            id: params.resolved.envVarName,
+          }
+        : params.resolved.key;
     return {
-      type: "api_key",
-      provider: params.provider,
-      key: params.resolved.key,
+      ...buildApiKeyCredential(params.provider, storedInput, params.metadata, apiKeyStorageOptions),
       ...(params.email ? { email: params.email } : {}),
-      ...(params.metadata ? { metadata: params.metadata } : {}),
     };
   };
   const maybeSetResolvedApiKey = async (

@@ -96,6 +96,7 @@ export type AgentsListResult = SchemaType<"AgentsListResult">;
 export type ModelChoice = SchemaType<"ModelChoice">;
 export type ModelsListParams = SchemaType<"ModelsListParams">;
 export type ModelsListResult = SchemaType<"ModelsListResult">;
+export type PluginsStatusParams = SchemaType<"PluginsStatusParams">;
 export type SkillsStatusParams = SchemaType<"SkillsStatusParams">;
 export type ToolsCatalogParams = SchemaType<"ToolsCatalogParams">;
 export type ToolCatalogProfile = SchemaType<"ToolCatalogProfile">;

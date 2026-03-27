@@ -51,7 +51,7 @@ class WizardSessionPrompter implements WizardPrompter {
     await this.prompt({
       type: "note",
       title,
-      message: "",
+      message: "Continue when you're ready.",
       executor: "client",
     });
   }
@@ -145,10 +145,29 @@ class WizardSessionPrompter implements WizardPrompter {
     return Boolean(res);
   }
 
-  progress(_label: string): WizardProgress {
+  progress(label: string): WizardProgress {
+    const stepId = randomUUID();
+    let stopped = false;
     return {
-      update: (_message) => {},
-      stop: (_message) => {},
+      update: (message) => {
+        if (stopped || this.session.getStatus() !== "running") {
+          return;
+        }
+        this.session.pushStep({
+          id: stepId,
+          type: "progress",
+          title: label,
+          message,
+          executor: "client",
+        });
+      },
+      stop: (_message) => {
+        if (stopped) {
+          return;
+        }
+        stopped = true;
+        this.session.clearStep(stepId);
+      },
     };
   }
 
@@ -164,6 +183,7 @@ export class WizardSession {
   private currentStep: WizardStep | null = null;
   private stepDeferred: Deferred<WizardStep | null> | null = null;
   private answerDeferred = new Map<string, Deferred<unknown>>();
+  private lastAnsweredStepId: string | null = null;
   private status: WizardSessionStatus = "running";
   private error: string | undefined;
 
@@ -192,9 +212,15 @@ export class WizardSession {
   async answer(stepId: string, value: unknown): Promise<void> {
     const deferred = this.answerDeferred.get(stepId);
     if (!deferred) {
+      // Some clients can race and submit the same answer twice near step handoff.
+      // Treat exact duplicates as idempotent so the wizard can continue.
+      if (this.lastAnsweredStepId === stepId) {
+        return;
+      }
       throw new Error("wizard: no pending step");
     }
     this.answerDeferred.delete(stepId);
+    this.lastAnsweredStepId = stepId;
     this.currentStep = null;
     deferred.resolve(value);
   }
@@ -218,6 +244,13 @@ export class WizardSession {
     this.resolveStep(step);
   }
 
+  clearStep(stepId: string) {
+    if (this.currentStep?.id !== stepId) {
+      return;
+    }
+    this.currentStep = null;
+  }
+
   private async run(prompter: WizardPrompter) {
     try {
       await this.runner(prompter);
@@ -231,6 +264,7 @@ export class WizardSession {
         this.error = String(err);
       }
     } finally {
+      this.currentStep = null;
       this.resolveStep(null);
     }
   }

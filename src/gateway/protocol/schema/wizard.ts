@@ -11,7 +11,15 @@ const WizardRunStatusSchema = Type.Union([
 export const WizardStartParamsSchema = Type.Object(
   {
     mode: Type.Optional(Type.Union([Type.Literal("local"), Type.Literal("remote")])),
+    flow: Type.Optional(Type.Union([Type.Literal("quickstart"), Type.Literal("advanced")])),
     workspace: Type.Optional(Type.String()),
+    acceptRisk: Type.Optional(Type.Boolean()),
+    skipChannels: Type.Optional(Type.Boolean()),
+    skipSkills: Type.Optional(Type.Boolean()),
+    skipSearch: Type.Optional(Type.Boolean()),
+    skipUi: Type.Optional(Type.Boolean()),
+    embedded: Type.Optional(Type.Boolean()),
+    fresh: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );

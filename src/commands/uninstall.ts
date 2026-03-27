@@ -1,13 +1,17 @@
 import path from "node:path";
 import { cancel, confirm, isCancel, multiselect } from "@clack/prompts";
 import { formatCliCommand } from "../cli/command-format.js";
-import { isNixMode } from "../config/config.js";
-import { resolveGatewayService } from "../daemon/service.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { stylePromptHint, stylePromptMessage, stylePromptTitle } from "../terminal/prompt-style.js";
 import { resolveHomeDir } from "../utils.js";
 import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
-import { removePath, removeStateAndLinkedPaths, removeWorkspaceDirs } from "./cleanup-utils.js";
+import {
+  removeMacAppStateArtifacts,
+  removePath,
+  removeStateAndLinkedPaths,
+  removeWorkspaceDirs,
+} from "./cleanup-utils.js";
+import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 
 type UninstallScope = "service" | "state" | "workspace" | "app";
 
@@ -50,37 +54,6 @@ function buildScopeSelection(opts: UninstallOptions): {
     scopes.add("app");
   }
   return { scopes, hadExplicit };
-}
-
-async function stopAndUninstallService(runtime: RuntimeEnv): Promise<boolean> {
-  if (isNixMode) {
-    runtime.error("Nix mode detected; service uninstall is disabled.");
-    return false;
-  }
-  const service = resolveGatewayService();
-  let loaded = false;
-  try {
-    loaded = await service.isLoaded({ env: process.env });
-  } catch (err) {
-    runtime.error(`Gateway service check failed: ${String(err)}`);
-    return false;
-  }
-  if (!loaded) {
-    runtime.log(`Gateway service ${service.notLoadedText}.`);
-    return true;
-  }
-  try {
-    await service.stop({ env: process.env, stdout: process.stdout });
-  } catch (err) {
-    runtime.error(`Gateway stop failed: ${String(err)}`);
-  }
-  try {
-    await service.uninstall({ env: process.env, stdout: process.stdout });
-    return true;
-  } catch (err) {
-    runtime.error(`Gateway uninstall failed: ${String(err)}`);
-    return false;
-  }
 }
 
 async function removeMacApp(runtime: RuntimeEnv, dryRun?: boolean) {
@@ -165,11 +138,7 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
   }
 
   if (scopes.has("service")) {
-    if (dryRun) {
-      runtime.log("[dry-run] remove gateway service");
-    } else {
-      await stopAndUninstallService(runtime);
-    }
+    await uninstallGatewayServiceIfPresent(runtime, { dryRun });
   }
 
   if (scopes.has("state")) {
@@ -178,6 +147,7 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
       runtime,
       { dryRun },
     );
+    await removeMacAppStateArtifacts(runtime, { dryRun });
   }
 
   if (scopes.has("workspace")) {
@@ -188,7 +158,10 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
     await removeMacApp(runtime, dryRun);
   }
 
-  runtime.log("CLI still installed. Remove via npm/pnpm if desired.");
+  if (scopes.has("state")) {
+    runtime.log("Removing local state also removes any app-managed CLI under ~/.maumau/bin.");
+  }
+  runtime.log("If you installed Maumau globally via npm/pnpm, that CLI may still remain.");
 
   if (scopes.has("state") && !scopes.has("workspace")) {
     const home = resolveHomeDir();

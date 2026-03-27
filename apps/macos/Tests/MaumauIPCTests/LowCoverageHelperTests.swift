@@ -171,6 +171,11 @@ struct LowCoverageHelperTests {
             command: "node",
             fullCommand: "node /path/to/gateway-daemon",
             port: 18789, mode: .local) == true)
+
+        #expect(PortGuardian._testIsExpected(
+            command: "node",
+            fullCommand: "maumau-gateway",
+            port: 18789, mode: .local) == true)
     }
 
     @Test func `port guardian remote mode report accepts any listener`() {
@@ -284,5 +289,7 @@ struct LowCoverageHelperTests {
         let url = try #require(URL(string: "http://192.168.1.2"))
         #expect(CanvasWindowController._testIsLocalNetworkCanvasURL(url))
         #expect(CanvasWindowController._testParseIPv4("not-an-ip") == nil)
+        #expect(CanvasManager.canAutoNavigateToA2UI("http://127.0.0.1:18789/__maumau__/cap/token/__maumau__/a2ui/?platform=macos"))
+        #expect(!CanvasManager.canAutoNavigateToA2UI("http://127.0.0.1:18789/__maumau__/a2ui/?platform=macos"))
     }
 }

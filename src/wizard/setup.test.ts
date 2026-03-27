@@ -88,6 +88,7 @@ const isSystemdUserServiceAvailable = vi.hoisted(() => vi.fn(async () => true));
 const ensureControlUiAssetsBuilt = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const runTui = vi.hoisted(() => vi.fn(async (_options: unknown) => {}));
 const setupWizardShellCompletion = vi.hoisted(() => vi.fn(async () => {}));
+const ensureSetupDefaultModelSelected = vi.hoisted(() => vi.fn(async (args) => args.config));
 const probeGatewayReachable = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const buildPluginCompatibilityNotices = vi.hoisted(() =>
   vi.fn((): PluginCompatibilityNotice[] => []),
@@ -208,6 +209,10 @@ vi.mock("./setup.completion.js", () => ({
   setupWizardShellCompletion,
 }));
 
+vi.mock("./setup.default-model.js", () => ({
+  ensureSetupDefaultModelSelected,
+}));
+
 function createRuntime(opts?: { throwsOnExit?: boolean }): RuntimeEnv {
   if (opts?.throwsOnExit) {
     return {
@@ -289,16 +294,20 @@ describe("runSetupWizard", () => {
   });
 
   it("skips prompts and setup steps when flags are set", async () => {
+    ensureSetupDefaultModelSelected.mockClear();
+    const intro = vi.fn(async () => {});
+    const note = vi.fn(async () => {});
     const select = vi.fn(
       async (_params: WizardSelectParams<unknown>) => "quickstart",
     ) as unknown as WizardPrompter["select"];
     const multiselect: WizardPrompter["multiselect"] = vi.fn(async () => []);
-    const prompter = buildWizardPrompter({ select, multiselect });
+    const prompter = buildWizardPrompter({ intro, note, select, multiselect });
     const runtime = createRuntime({ throwsOnExit: true });
 
     await runSetupWizard(
       {
         acceptRisk: true,
+        embedded: true,
         flow: "quickstart",
         authChoice: "skip",
         installDaemon: false,
@@ -315,8 +324,201 @@ describe("runSetupWizard", () => {
     expect(select).not.toHaveBeenCalled();
     expect(setupChannels).not.toHaveBeenCalled();
     expect(setupSkills).not.toHaveBeenCalled();
+    expect(setupInternalHooks).not.toHaveBeenCalled();
     expect(healthCommand).not.toHaveBeenCalled();
     expect(runTui).not.toHaveBeenCalled();
+    expect(ensureSetupDefaultModelSelected).toHaveBeenCalled();
+    expect(intro).not.toHaveBeenCalled();
+    expect(prompter.note).not.toHaveBeenCalledWith("Skipping channel setup.", "Channels");
+    expect(prompter.note).not.toHaveBeenCalledWith("Skipping skills setup.", "Skills");
+    expect(prompter.note).not.toHaveBeenCalledWith("Skipping search setup.", "Search");
+    expect(prompter.note).not.toHaveBeenCalledWith(
+      expect.stringContaining("Gateway port:"),
+      "QuickStart",
+    );
+  });
+
+  it("treats embedded local gateway bootstrap config as fresh setup", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: JSON.stringify({
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      }),
+      parsed: {},
+      resolved: {
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      },
+      valid: true,
+      config: {
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const note = vi.fn(async () => {});
+    const select = vi.fn(
+      async (_params: WizardSelectParams<unknown>) => "keep",
+    ) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ note, select });
+    const runtime = createRuntime({ throwsOnExit: true });
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(note).not.toHaveBeenCalledWith("summary", "Existing config detected");
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("ignores loader-injected defaults when checking embedded bootstrap config", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: JSON.stringify({
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      }),
+      parsed: {},
+      resolved: {
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      },
+      valid: true,
+      config: {
+        meta: {
+          lastTouchedVersion: "2026.3.24",
+        },
+        commands: {
+          native: "auto",
+          restart: true,
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+        agents: {
+          defaults: {
+            maxConcurrent: 4,
+            subagents: {
+              maxConcurrent: 8,
+            },
+          },
+        },
+        messages: {
+          ackReactionScope: "group-mentions",
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const note = vi.fn(async () => {});
+    const select = vi.fn(
+      async (_params: WizardSelectParams<unknown>) => "keep",
+    ) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ note, select });
+    const runtime = createRuntime({ throwsOnExit: true });
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(note).not.toHaveBeenCalledWith("summary", "Existing config detected");
+    expect(select).not.toHaveBeenCalled();
   });
 
   async function runTuiHatchTest(params: {
@@ -437,6 +639,292 @@ describe("runSetupWizard", () => {
     );
   });
 
+  it("uses the manifest-backed provider catalog for embedded onboarding", async () => {
+    promptAuthChoiceGrouped.mockClear();
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(promptAuthChoiceGrouped).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeRuntimeFallbackProviders: false,
+      }),
+    );
+  });
+
+  it("skips the extra model prompt when auth already set a default model", async () => {
+    promptAuthChoiceGrouped.mockClear();
+    promptDefaultModel.mockClear();
+    promptAuthChoiceGrouped.mockResolvedValueOnce("openai-api-key");
+    applyAuthChoice.mockResolvedValueOnce({
+      config: {
+        agents: {
+          defaults: {
+            model: "openai/gpt-5.4",
+          },
+        },
+      },
+    });
+
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(promptAuthChoiceGrouped).toHaveBeenCalled();
+    expect(promptDefaultModel).not.toHaveBeenCalled();
+  });
+
+  it("does not prompt for a model when auth is skipped", async () => {
+    promptAuthChoiceGrouped.mockClear();
+    promptDefaultModel.mockClear();
+    promptAuthChoiceGrouped.mockResolvedValueOnce("skip");
+
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(promptAuthChoiceGrouped).toHaveBeenCalled();
+    expect(promptDefaultModel).not.toHaveBeenCalled();
+  });
+
+  it("keeps existing config without re-prompting provider, model, gateway, or channels", async () => {
+    promptAuthChoiceGrouped.mockClear();
+    promptDefaultModel.mockClear();
+    configureGatewayForSetup.mockClear();
+    setupChannels.mockClear();
+    setupSkills.mockClear();
+    setupInternalHooks.mockClear();
+    finalizeSetupWizard.mockClear();
+    ensureSetupDefaultModelSelected.mockClear();
+
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: "{}",
+      parsed: {},
+      resolved: {},
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/existing-workspace",
+            model: "gpt-5.4",
+          },
+        },
+        gateway: {
+          mode: "local",
+          port: 18789,
+          bind: "loopback",
+          auth: {
+            mode: "token",
+            token: "saved-token",
+          },
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
+      if (String(opts.message).includes("existing setup on this Mac")) {
+        return "keep";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        installDaemon: false,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(promptAuthChoiceGrouped).not.toHaveBeenCalled();
+    expect(promptDefaultModel).not.toHaveBeenCalled();
+    expect(ensureSetupDefaultModelSelected).not.toHaveBeenCalled();
+    expect(configureGatewayForSetup).not.toHaveBeenCalled();
+    expect(setupChannels).not.toHaveBeenCalled();
+    expect(setupSkills).not.toHaveBeenCalled();
+    expect(setupInternalHooks).not.toHaveBeenCalled();
+    expect(finalizeSetupWizard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/existing-workspace",
+        nextConfig: expect.objectContaining({
+          agents: expect.objectContaining({
+            defaults: expect.objectContaining({
+              workspace: "/tmp/existing-workspace",
+              model: "gpt-5.4",
+            }),
+          }),
+          gateway: expect.objectContaining({
+            auth: expect.objectContaining({
+              mode: "token",
+              token: "saved-token",
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("repairs a missing default model even when keeping existing settings", async () => {
+    promptAuthChoiceGrouped.mockClear();
+    promptDefaultModel.mockClear();
+    configureGatewayForSetup.mockClear();
+    setupChannels.mockClear();
+    setupSkills.mockClear();
+    setupInternalHooks.mockClear();
+    finalizeSetupWizard.mockClear();
+    writeConfigFile.mockClear();
+    logConfigUpdated.mockClear();
+    ensureSetupDefaultModelSelected.mockClear();
+    ensureSetupDefaultModelSelected.mockImplementationOnce(async (args) => ({
+      ...args.config,
+      agents: {
+        ...args.config.agents,
+        defaults: {
+          ...args.config.agents?.defaults,
+          workspace: "/tmp/existing-workspace",
+          model: "openai-codex/gpt-5.4",
+        },
+      },
+    }));
+
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: "{}",
+      parsed: {},
+      resolved: {},
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/existing-workspace",
+          },
+        },
+        gateway: {
+          mode: "local",
+          port: 18789,
+          bind: "loopback",
+          auth: {
+            mode: "token",
+            token: "saved-token",
+          },
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
+      if (String(opts.message).includes("existing setup on this Mac")) {
+        return "keep";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        installDaemon: false,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(ensureSetupDefaultModelSelected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          agents: expect.objectContaining({
+            defaults: expect.objectContaining({
+              workspace: "/tmp/existing-workspace",
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agents: expect.objectContaining({
+          defaults: expect.objectContaining({
+            model: "openai-codex/gpt-5.4",
+          }),
+        }),
+      }),
+    );
+    expect(logConfigUpdated).toHaveBeenCalled();
+    expect(promptAuthChoiceGrouped).not.toHaveBeenCalled();
+    expect(promptDefaultModel).not.toHaveBeenCalled();
+    expect(finalizeSetupWizard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nextConfig: expect.objectContaining({
+          agents: expect.objectContaining({
+            defaults: expect.objectContaining({
+              model: "openai-codex/gpt-5.4",
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("shows plugin compatibility notices for an existing valid config", async () => {
     buildPluginCompatibilityNotices.mockReturnValue([
       {
@@ -464,7 +952,7 @@ describe("runSetupWizard", () => {
 
     const note: WizardPrompter["note"] = vi.fn(async () => {});
     const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
-      if (opts.message === "Config handling") {
+      if (String(opts.message).includes("existing setup on this Mac")) {
         return "keep";
       }
       return "quickstart";
@@ -526,7 +1014,7 @@ describe("runSetupWizard", () => {
       legacyIssues: [],
     });
     const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
-      if (opts.message === "Config handling") {
+      if (String(opts.message).includes("existing setup on this Mac")) {
         return "keep";
       }
       return "quickstart";

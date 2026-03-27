@@ -9,11 +9,13 @@ import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
 import {
   listAgentSessionDirs,
   removePath,
+  removeMacAppStateArtifacts,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
 } from "./cleanup-utils.js";
+import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 
-export type ResetScope = "config" | "config+creds+sessions" | "full";
+export type ResetScope = "config" | "config+creds+sessions" | "full" | "clean";
 
 export type ResetOptions = {
   scope?: ResetScope;
@@ -81,6 +83,11 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
           label: "Full reset",
           hint: "state dir + workspace",
         },
+        {
+          value: "clean",
+          label: "Clean reset",
+          hint: "gateway service + managed CLI + state + workspace",
+        },
       ],
       initialValue: "config+creds+sessions",
     });
@@ -92,8 +99,10 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
     scope = selection;
   }
 
-  if (!["config", "config+creds+sessions", "full"].includes(scope)) {
-    runtime.error('Invalid --scope. Expected "config", "config+creds+sessions", or "full".');
+  if (!["config", "config+creds+sessions", "full", "clean"].includes(scope)) {
+    runtime.error(
+      'Invalid --scope. Expected "config", "config+creds+sessions", "full", or "clean".',
+    );
     runtime.exit(1);
     return;
   }
@@ -115,10 +124,12 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
 
   if (scope !== "config") {
     logBackupRecommendation(runtime);
-    if (dryRun) {
-      runtime.log("[dry-run] stop gateway service");
-    } else {
-      await stopGatewayIfRunning(runtime);
+    if (scope !== "clean") {
+      if (dryRun) {
+        runtime.log("[dry-run] stop gateway service");
+      } else {
+        await stopGatewayIfRunning(runtime);
+      }
     }
   }
 
@@ -134,6 +145,7 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
     for (const dir of sessionDirs) {
       await removePath(dir, runtime, { dryRun, label: dir });
     }
+    await removeMacAppStateArtifacts(runtime, { dryRun });
     runtime.log(`Next: ${formatCliCommand("maumau onboard --install-daemon")}`);
     return;
   }
@@ -145,6 +157,20 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
       { dryRun },
     );
     await removeWorkspaceDirs(workspaceDirs, runtime, { dryRun });
+    await removeMacAppStateArtifacts(runtime, { dryRun });
+    runtime.log(`Next: ${formatCliCommand("maumau onboard --install-daemon")}`);
+    return;
+  }
+
+  if (scope === "clean") {
+    await uninstallGatewayServiceIfPresent(runtime, { dryRun });
+    await removeStateAndLinkedPaths(
+      { stateDir, configPath, oauthDir, configInsideState, oauthInsideState },
+      runtime,
+      { dryRun },
+    );
+    await removeWorkspaceDirs(workspaceDirs, runtime, { dryRun });
+    await removeMacAppStateArtifacts(runtime, { dryRun });
     runtime.log(`Next: ${formatCliCommand("maumau onboard --install-daemon")}`);
     return;
   }

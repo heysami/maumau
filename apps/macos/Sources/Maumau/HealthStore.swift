@@ -119,7 +119,7 @@ final class HealthStore {
         let previousError = self.lastError
 
         do {
-            let data = try await ControlChannel.shared.health(timeout: 15)
+            let data = try await ControlChannel.shared.health(timeout: 15, probe: onDemand)
             if let decoded = decodeHealthSnapshot(from: data) {
                 self.snapshot = decoded
                 self.lastSuccess = Date()
@@ -194,19 +194,46 @@ final class HealthStore {
         return nil
     }
 
+    private func resolveConfiguredChannel(
+        _ snap: HealthSnapshot,
+        excluding id: String? = nil) -> (id: String, summary: HealthSnapshot.ChannelSummary)?
+    {
+        let order = snap.channelOrder ?? Array(snap.channels.keys)
+        for channelId in order {
+            if channelId == id { continue }
+            guard let summary = snap.channels[channelId] else { continue }
+            if summary.configured == true {
+                return (id: channelId, summary: summary)
+            }
+        }
+        return nil
+    }
+
+    private func channelLabel(_ channelId: String, in snap: HealthSnapshot) -> String {
+        snap.channelLabels?[channelId] ?? channelId.capitalized
+    }
+
     var state: HealthState {
         if let error = self.lastError, !error.isEmpty {
             return .degraded(error)
         }
         guard let snap = self.snapshot else { return .unknown }
-        guard let link = self.resolveLinkChannel(snap) else { return .unknown }
-        if link.summary.linked != true {
-            // Linking is optional if any other channel is healthy; don't paint the whole app red.
-            let fallback = self.resolveFallbackChannel(snap, excluding: link.id)
-            return fallback != nil ? .degraded("Not linked") : .linkingNeeded
+        if let link = self.resolveLinkChannel(snap) {
+            if link.summary.linked != true {
+                // Linking is optional if any other channel is healthy; don't paint the whole app red.
+                let fallback = self.resolveFallbackChannel(snap, excluding: link.id)
+                return fallback != nil ? .degraded("Not linked") : .linkingNeeded
+            }
+            // A channel can be "linked" but still unhealthy (failed probe / cannot connect).
+            if let probe = link.summary.probe, probe.ok == false {
+                return .degraded(Self.describeProbeFailure(probe))
+            }
+            return .ok
         }
-        // A channel can be "linked" but still unhealthy (failed probe / cannot connect).
-        if let probe = link.summary.probe, probe.ok == false {
+
+        // Some channels report probe/configured health without a "linked" field.
+        guard let configured = self.resolveConfiguredChannel(snap) else { return .unknown }
+        if let probe = configured.summary.probe, probe.ok == false {
             return .degraded(Self.describeProbeFailure(probe))
         }
         return .ok
@@ -216,22 +243,35 @@ final class HealthStore {
         if self.isRefreshing { return "Health check running…" }
         if let error = self.lastError { return "Health check failed: \(error)" }
         guard let snap = self.snapshot else { return "Health check pending" }
-        guard let link = self.resolveLinkChannel(snap) else { return "Health check pending" }
-        if link.summary.linked != true {
-            if let fallback = self.resolveFallbackChannel(snap, excluding: link.id) {
-                let fallbackLabel = snap.channelLabels?[fallback.id] ?? fallback.id.capitalized
-                let fallbackState = (fallback.summary.probe?.ok ?? true) ? "ok" : "degraded"
-                return "\(fallbackLabel) \(fallbackState) · Not linked — run maumau login"
+        if let link = self.resolveLinkChannel(snap) {
+            if link.summary.linked != true {
+                if let fallback = self.resolveFallbackChannel(snap, excluding: link.id) {
+                    let fallbackLabel = self.channelLabel(fallback.id, in: snap)
+                    let fallbackState = (fallback.summary.probe?.ok ?? true) ? "ok" : "degraded"
+                    return "\(fallbackLabel) \(fallbackState) · Not linked — run maumau login"
+                }
+                return "Not linked — run maumau login"
             }
-            return "Not linked — run maumau login"
+            let auth = link.summary.authAgeMs.map { msToAge($0) } ?? "unknown"
+            if let probe = link.summary.probe, probe.ok == false {
+                let status = probe.status.map(String.init) ?? "?"
+                let suffix = probe.status == nil ? "probe degraded" : "probe degraded · status \(status)"
+                return "linked · auth \(auth) · \(suffix)"
+            }
+            return "linked · auth \(auth)"
         }
-        let auth = link.summary.authAgeMs.map { msToAge($0) } ?? "unknown"
-        if let probe = link.summary.probe, probe.ok == false {
+
+        guard let configured = self.resolveConfiguredChannel(snap) else { return "Health check pending" }
+        let label = self.channelLabel(configured.id, in: snap)
+        if let probe = configured.summary.probe, probe.ok == false {
             let status = probe.status.map(String.init) ?? "?"
             let suffix = probe.status == nil ? "probe degraded" : "probe degraded · status \(status)"
-            return "linked · auth \(auth) · \(suffix)"
+            return "\(label) \(suffix)"
         }
-        return "linked · auth \(auth)"
+        if configured.summary.probe != nil {
+            return "\(label) ok"
+        }
+        return "\(label) configured"
     }
 
     /// Short, human-friendly detail for the last failure, used in the UI.
@@ -256,6 +296,12 @@ final class HealthStore {
             return "Not linked — run maumau login"
         }
         if let link = self.resolveLinkChannel(snap), let probe = link.summary.probe, probe.ok == false {
+            return Self.describeProbeFailure(probe)
+        }
+        if let configured = self.resolveConfiguredChannel(snap),
+           let probe = configured.summary.probe,
+           probe.ok == false
+        {
             return Self.describeProbeFailure(probe)
         }
         if let fallback, !fallback.isEmpty {

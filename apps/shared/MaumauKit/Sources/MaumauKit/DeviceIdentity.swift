@@ -39,8 +39,8 @@ enum DeviceIdentityPaths {
 public enum DeviceIdentityStore {
     private static let fileName = "device.json"
 
-    public static func loadOrCreate() -> DeviceIdentity {
-        let url = self.fileURL()
+    public static func loadOrCreate(namespace: String? = nil) -> DeviceIdentity {
+        let url = self.fileURL(namespace: namespace)
         if let data = try? Data(contentsOf: url),
            let decoded = try? JSONDecoder().decode(DeviceIdentity.self, from: data),
            !decoded.deviceId.isEmpty,
@@ -49,7 +49,7 @@ public enum DeviceIdentityStore {
             return decoded
         }
         let identity = self.generate()
-        self.save(identity)
+        self.save(identity, namespace: namespace)
         return identity
     }
 
@@ -90,8 +90,8 @@ public enum DeviceIdentityStore {
         return self.base64UrlEncode(data)
     }
 
-    private static func save(_ identity: DeviceIdentity) {
-        let url = self.fileURL()
+    private static func save(_ identity: DeviceIdentity, namespace: String?) {
+        let url = self.fileURL(namespace: namespace)
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
@@ -103,10 +103,30 @@ public enum DeviceIdentityStore {
         }
     }
 
-    private static func fileURL() -> URL {
+    private static func fileURL(namespace: String?) -> URL {
         let base = DeviceIdentityPaths.stateDirURL()
         return base
             .appendingPathComponent("identity", isDirectory: true)
-            .appendingPathComponent(fileName, isDirectory: false)
+            .appendingPathComponent(self.identityFileName(namespace: namespace), isDirectory: false)
+    }
+
+    private static func identityFileName(namespace: String?) -> String {
+        guard let namespace = self.sanitize(namespace), !namespace.isEmpty else {
+            return self.fileName
+        }
+        return "device-\(namespace).json"
+    }
+
+    private static func sanitize(_ namespace: String?) -> String? {
+        guard let namespace else { return nil }
+        let trimmed = namespace.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let sanitized = trimmed.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) || scalar == "-" || scalar == "_" {
+                return Character(scalar)
+            }
+            return "-"
+        }
+        return String(sanitized)
     }
 }

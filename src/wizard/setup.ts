@@ -12,6 +12,7 @@ import {
   resolveGatewayPort,
   writeConfigFile,
 } from "../config/config.js";
+import { resolveAgentModelPrimaryValue } from "../config/model-input.js";
 import { normalizeSecretInputString } from "../config/types.secrets.js";
 import {
   buildPluginCompatibilityNotices,
@@ -22,7 +23,11 @@ import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
 import { WizardCancelledError, type WizardPrompter } from "./prompts.js";
 import { resolveSetupSecretInputString } from "./setup.secret-input.js";
-import type { QuickstartGatewayDefaults, WizardFlow } from "./setup.types.js";
+import type {
+  GatewayWizardSettings,
+  QuickstartGatewayDefaults,
+  WizardFlow,
+} from "./setup.types.js";
 
 async function requireRiskAcknowledgement(params: {
   opts: OnboardOptions;
@@ -74,6 +79,122 @@ async function requireRiskAcknowledgement(params: {
   }
 }
 
+function resolveSavedGatewayBind(config: MaumauConfig): GatewayWizardSettings["bind"] {
+  const bindRaw = config.gateway?.bind;
+  return bindRaw === "loopback" ||
+    bindRaw === "lan" ||
+    bindRaw === "auto" ||
+    bindRaw === "custom" ||
+    bindRaw === "tailnet"
+    ? bindRaw
+    : "loopback";
+}
+
+function resolveSavedGatewayAuthMode(config: MaumauConfig): GatewayAuthChoice {
+  if (config.gateway?.auth?.mode === "token" || config.gateway?.auth?.mode === "password") {
+    return config.gateway.auth.mode;
+  }
+  if (config.gateway?.auth?.password) {
+    return "password";
+  }
+  return "token";
+}
+
+function resolveSavedTailscaleMode(config: MaumauConfig): GatewayWizardSettings["tailscaleMode"] {
+  const tailscaleRaw = config.gateway?.tailscale?.mode;
+  return tailscaleRaw === "off" || tailscaleRaw === "serve" || tailscaleRaw === "funnel"
+    ? tailscaleRaw
+    : "off";
+}
+
+function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
+  opts: OnboardOptions,
+  config: MaumauConfig,
+): boolean {
+  if (!opts.embedded || opts.mode === "remote") {
+    return false;
+  }
+
+  const rootKeys = Object.keys(config).filter((key) => key !== "commands" && key !== "meta");
+  if (rootKeys.length !== 1 || rootKeys[0] !== "gateway") {
+    return false;
+  }
+
+  const gateway = config.gateway;
+  if (!gateway || gateway.mode !== "local") {
+    return false;
+  }
+
+  const gatewayKeys = Object.keys(gateway);
+  if (gatewayKeys.some((key) => key !== "mode" && key !== "auth")) {
+    return false;
+  }
+
+  const auth = gateway.auth;
+  if (!auth) {
+    return false;
+  }
+
+  const authKeys = Object.keys(auth);
+  if (authKeys.some((key) => key !== "mode" && key !== "token" && key !== "password")) {
+    return false;
+  }
+
+  const mode = auth.mode;
+  const hasToken = typeof auth.token === "string" && auth.token.trim().length > 0;
+  const hasPassword = typeof auth.password === "string" && auth.password.trim().length > 0;
+
+  if (mode === "token") {
+    return hasToken && !hasPassword;
+  }
+  if (mode === "password") {
+    return hasPassword && !hasToken;
+  }
+
+  return hasToken !== hasPassword;
+}
+
+async function resolveRetainedGatewaySettings(params: {
+  config: MaumauConfig;
+  prompter: WizardPrompter;
+}): Promise<GatewayWizardSettings> {
+  const { config, prompter } = params;
+  const bind = resolveSavedGatewayBind(config);
+  const authMode = resolveSavedGatewayAuthMode(config);
+  let gatewayToken: string | undefined;
+
+  if (authMode === "token") {
+    try {
+      gatewayToken = normalizeSecretInputString(
+        (await resolveSetupSecretInputString({
+          config,
+          value: config.gateway?.auth?.token,
+          path: "gateway.auth.token",
+          env: process.env,
+        })) ?? process.env.MAUMAU_GATEWAY_TOKEN,
+      );
+    } catch (error) {
+      await prompter.note(
+        [
+          "Could not resolve gateway.auth.token SecretRef for the saved setup.",
+          error instanceof Error ? error.message : String(error),
+        ].join("\n"),
+        "Gateway auth",
+      );
+    }
+  }
+
+  return {
+    port: resolveGatewayPort(config),
+    bind,
+    customBindHost: bind === "custom" ? config.gateway?.customBindHost : undefined,
+    authMode,
+    gatewayToken,
+    tailscaleMode: resolveSavedTailscaleMode(config),
+    tailscaleResetOnExit: config.gateway?.tailscale?.resetOnExit ?? false,
+  };
+}
+
 export async function runSetupWizard(
   opts: OnboardOptions,
   runtime: RuntimeEnv = defaultRuntime,
@@ -81,7 +202,9 @@ export async function runSetupWizard(
 ) {
   const onboardHelpers = await import("../commands/onboard-helpers.js");
   onboardHelpers.printWizardHeader(runtime);
-  await prompter.intro("Maumau setup");
+  if (!opts.embedded) {
+    await prompter.intro("Maumau setup");
+  }
   await requireRiskAcknowledgement({ opts, prompter });
 
   const snapshot = await readConfigFileSnapshot();
@@ -105,6 +228,11 @@ export async function runSetupWizard(
     runtime.exit(1);
     return;
   }
+
+  const treatBootstrapOnlyEmbeddedConfigAsFresh =
+    snapshot.valid &&
+    snapshot.exists &&
+    shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(opts, snapshot.resolved);
 
   const compatibilityNotices = snapshot.valid
     ? buildPluginCompatibilityNotices({ config: baseConfig })
@@ -163,42 +291,77 @@ export async function runSetupWizard(
     flow = "advanced";
   }
 
-  if (snapshot.exists) {
+  let existingConfigAction: "keep" | "modify" | "reset" | undefined;
+  if (snapshot.exists && !treatBootstrapOnlyEmbeddedConfigAsFresh) {
     await prompter.note(
       onboardHelpers.summarizeExistingConfig(baseConfig),
       "Existing config detected",
     );
 
-    const action = await prompter.select({
-      message: "Config handling",
+    const action = await prompter.select<"keep" | "modify" | "reset">({
+      message:
+        "Maumau found existing setup on this Mac. What should setup do with your current settings?",
       options: [
-        { value: "keep", label: "Use existing values" },
-        { value: "modify", label: "Update values" },
-        { value: "reset", label: "Reset" },
+        {
+          value: "keep",
+          label: "Keep my current settings",
+          hint: "Use your saved gateway, model, provider, and channel settings as-is.",
+        },
+        {
+          value: "modify",
+          label: "Review and update settings",
+          hint: "Start from your current setup, then change anything you want in the next steps.",
+        },
+        {
+          value: "reset",
+          label: "Start fresh",
+          hint: "Clear saved setup before continuing. You can choose how much to erase next.",
+        },
       ],
     });
+    existingConfigAction = action;
 
     if (action === "reset") {
       const workspaceDefault =
         baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE;
       const resetScope = (await prompter.select({
-        message: "Reset scope",
+        message: "How much of the existing Maumau setup should be erased?",
         options: [
-          { value: "config", label: "Config only" },
+          {
+            value: "config",
+            label: "Settings only",
+            hint: "Remove saved config, but keep API keys, channel logins, chat sessions, and workspace files.",
+          },
           {
             value: "config+creds+sessions",
-            label: "Config + creds + sessions",
+            label: "Settings, logins, and chat sessions",
+            hint: "Remove config, saved credentials, and session history, but keep workspace files.",
           },
           {
             value: "full",
-            label: "Full reset (config + creds + sessions + workspace)",
+            label: "Everything, including workspace files",
+            hint: "Remove config, saved credentials, sessions, and the workspace used by the agent.",
+          },
+          {
+            value: "clean",
+            label: "Clean local reset",
+            hint: "Remove the local gateway service, app-managed CLI, saved setup, chats, and workspace files on this Mac.",
           },
         ],
       })) as ResetScope;
       await onboardHelpers.handleReset(resetScope, resolveUserPath(workspaceDefault), runtime);
       baseConfig = {};
     }
+    if (action === "keep") {
+      if (!opts.embedded) {
+        await prompter.note(
+          "Keeping your saved setup. Setup will skip re-entering providers, models, gateway settings, channels, skills, and automations.",
+          "Existing config",
+        );
+      }
+    }
   }
+  const shouldKeepExistingConfig = existingConfigAction === "keep";
 
   const quickstartGateway: QuickstartGatewayDefaults = (() => {
     const hasExisting =
@@ -251,7 +414,7 @@ export async function runSetupWizard(
     };
   })();
 
-  if (flow === "quickstart") {
+  if (flow === "quickstart" && !opts.embedded) {
     const formatBind = (value: "loopback" | "lan" | "auto" | "custom" | "tailnet") => {
       if (value === "loopback") {
         return "Loopback (127.0.0.1)";
@@ -407,173 +570,228 @@ export async function runSetupWizard(
         })) as OnboardMode));
 
   if (mode === "remote") {
-    const { promptRemoteGatewayConfig } = await import("../commands/onboard-remote.js");
     const { logConfigUpdated } = await import("../config/logging.js");
-    let nextConfig = await promptRemoteGatewayConfig(baseConfig, prompter, {
-      secretInputMode: opts.secretInputMode,
-    });
+    let nextConfig = baseConfig;
+    if (!shouldKeepExistingConfig) {
+      const { promptRemoteGatewayConfig } = await import("../commands/onboard-remote.js");
+      nextConfig = await promptRemoteGatewayConfig(baseConfig, prompter, {
+        secretInputMode: opts.secretInputMode,
+      });
+    }
     nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
     await writeConfigFile(nextConfig);
     logConfigUpdated(runtime);
-    await prompter.outro("Remote gateway configured.");
+    await prompter.outro(
+      shouldKeepExistingConfig
+        ? "Kept your existing remote gateway settings."
+        : "Remote gateway configured.",
+    );
     return;
   }
 
+  const defaultWorkspace =
+    baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE;
   const workspaceInput =
     opts.workspace ??
-    (flow === "quickstart"
-      ? (baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE)
+    (flow === "quickstart" || shouldKeepExistingConfig
+      ? defaultWorkspace
       : await prompter.text({
           message: "Workspace directory",
-          initialValue: baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE,
+          initialValue: defaultWorkspace,
         }));
 
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
   const { applyLocalSetupWorkspaceConfig } = await import("../commands/onboard-config.js");
   let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir);
+  let settings: GatewayWizardSettings;
+  const { logConfigUpdated } = await import("../config/logging.js");
 
-  const { ensureAuthProfileStore } = await import("../agents/auth-profiles.runtime.js");
-  const { promptAuthChoiceGrouped } = await import("../commands/auth-choice-prompt.js");
-  const { promptCustomApiConfig } = await import("../commands/onboard-custom.js");
-  const { applyAuthChoice, resolvePreferredProviderForAuthChoice, warnIfModelConfigLooksOff } =
-    await import("../commands/auth-choice.js");
-  const { applyPrimaryModel, promptDefaultModel } = await import("../commands/model-picker.js");
-
-  const authStore = ensureAuthProfileStore(undefined, {
-    allowKeychainPrompt: false,
-  });
-  const authChoiceFromPrompt = opts.authChoice === undefined;
-  const authChoice =
-    opts.authChoice ??
-    (await promptAuthChoiceGrouped({
-      prompter,
-      store: authStore,
-      includeSkip: true,
-      config: nextConfig,
-      workspaceDir,
-    }));
-
-  if (authChoice === "custom-api-key") {
-    const customResult = await promptCustomApiConfig({
-      prompter,
-      runtime,
-      config: nextConfig,
-      secretInputMode: opts.secretInputMode,
-    });
-    nextConfig = customResult.config;
-  } else {
-    const authResult = await applyAuthChoice({
-      authChoice,
-      config: nextConfig,
-      prompter,
-      runtime,
-      setDefaultModel: true,
-      opts: {
-        tokenProvider: opts.tokenProvider,
-        token: opts.authChoice === "apiKey" && opts.token ? opts.token : undefined,
-      },
-    });
-    nextConfig = authResult.config;
-
-    if (authResult.agentModelOverride) {
-      nextConfig = applyPrimaryModel(nextConfig, authResult.agentModelOverride);
+  async function repairRetainedDefaultModelIfNeeded(config: MaumauConfig): Promise<MaumauConfig> {
+    if (resolveAgentModelPrimaryValue(config.agents?.defaults?.model)) {
+      return config;
     }
+
+    const { ensureSetupDefaultModelSelected } = await import("./setup.default-model.js");
+    const repaired = await ensureSetupDefaultModelSelected({
+      config,
+      prompter,
+      runtime,
+      workspaceDir,
+    });
+
+    if (resolveAgentModelPrimaryValue(repaired.agents?.defaults?.model)) {
+      await writeConfigFile(repaired);
+      logConfigUpdated(runtime);
+    }
+
+    return repaired;
   }
 
-  const shouldPromptModelSelection =
-    authChoice !== "custom-api-key" && (authChoiceFromPrompt || authChoice === "ollama");
-  if (shouldPromptModelSelection) {
-    const modelSelection = await promptDefaultModel({
+  if (shouldKeepExistingConfig) {
+    settings = await resolveRetainedGatewaySettings({
       config: nextConfig,
       prompter,
-      // For ollama, don't allow "keep current" since we may need to download the selected model
-      allowKeep: authChoice !== "ollama",
-      ignoreAllowlist: true,
-      includeProviderPluginSetups: true,
-      preferredProvider: await resolvePreferredProviderForAuthChoice({
-        choice: authChoice,
+    });
+    nextConfig = await repairRetainedDefaultModelIfNeeded(nextConfig);
+  } else {
+    const { ensureAuthProfileStore } = await import("../agents/auth-profiles.runtime.js");
+    const { promptAuthChoiceGrouped } = await import("../commands/auth-choice-prompt.js");
+    const { promptCustomApiConfig } = await import("../commands/onboard-custom.js");
+    const { applyAuthChoice, resolvePreferredProviderForAuthChoice, warnIfModelConfigLooksOff } =
+      await import("../commands/auth-choice.js");
+    const { applyPrimaryModel, promptDefaultModel } = await import("../commands/model-picker.js");
+    const { ensureSetupDefaultModelSelected } = await import("./setup.default-model.js");
+
+    const authStore = ensureAuthProfileStore(undefined, {
+      allowKeychainPrompt: false,
+    });
+    const authChoiceFromPrompt = opts.authChoice === undefined;
+    const authChoice =
+      opts.authChoice ??
+      (await promptAuthChoiceGrouped({
+        prompter,
+        store: authStore,
+        includeSkip: true,
+        includeRuntimeFallbackProviders: !opts.embedded,
         config: nextConfig,
         workspaceDir,
-      }),
+      }));
+
+    if (authChoice === "custom-api-key") {
+      const customResult = await promptCustomApiConfig({
+        prompter,
+        runtime,
+        config: nextConfig,
+        secretInputMode: opts.secretInputMode,
+      });
+      nextConfig = customResult.config;
+    } else {
+      const authResult = await applyAuthChoice({
+        authChoice,
+        config: nextConfig,
+        prompter,
+        runtime,
+        setDefaultModel: true,
+        opts: {
+          tokenProvider: opts.tokenProvider,
+          token: opts.authChoice === "apiKey" && opts.token ? opts.token : undefined,
+        },
+      });
+      nextConfig = authResult.config;
+
+      if (authResult.agentModelOverride) {
+        nextConfig = applyPrimaryModel(nextConfig, authResult.agentModelOverride);
+      }
+    }
+
+    const hasConfiguredDefaultModelAfterAuth = Boolean(
+      resolveAgentModelPrimaryValue(nextConfig.agents?.defaults?.model),
+    );
+    const shouldPromptModelSelection =
+      authChoice === "ollama" ||
+      (authChoice !== "custom-api-key" &&
+        authChoice !== "skip" &&
+        authChoiceFromPrompt &&
+        !hasConfiguredDefaultModelAfterAuth);
+    if (shouldPromptModelSelection) {
+      const modelSelection = await promptDefaultModel({
+        config: nextConfig,
+        prompter,
+        // For ollama, don't allow "keep current" since we may need to download the selected model
+        allowKeep: authChoice !== "ollama",
+        ignoreAllowlist: true,
+        includeProviderPluginSetups: true,
+        preferredProvider: await resolvePreferredProviderForAuthChoice({
+          choice: authChoice,
+          config: nextConfig,
+          workspaceDir,
+        }),
+        workspaceDir,
+        runtime,
+      });
+      if (modelSelection.config) {
+        nextConfig = modelSelection.config;
+      }
+      if (modelSelection.model) {
+        nextConfig = applyPrimaryModel(nextConfig, modelSelection.model);
+      }
+    }
+
+    nextConfig = await ensureSetupDefaultModelSelected({
+      config: nextConfig,
+      prompter,
+      runtime,
       workspaceDir,
+    });
+
+    await warnIfModelConfigLooksOff(nextConfig, prompter);
+
+    const { configureGatewayForSetup } = await import("./setup.gateway-config.js");
+    const gateway = await configureGatewayForSetup({
+      flow,
+      baseConfig,
+      nextConfig,
+      localPort,
+      quickstartGateway,
+      secretInputMode: opts.secretInputMode,
+      prompter,
       runtime,
     });
-    if (modelSelection.config) {
-      nextConfig = modelSelection.config;
+    nextConfig = gateway.nextConfig;
+    settings = gateway.settings;
+
+    if (!(opts.skipChannels ?? opts.skipProviders)) {
+      const { listChannelPlugins } = await import("../channels/plugins/index.js");
+      const { setupChannels } = await import("../commands/onboard-channels.js");
+      const quickstartAllowFromChannels =
+        flow === "quickstart"
+          ? listChannelPlugins()
+              .filter((plugin) => plugin.meta.quickstartAllowFrom)
+              .map((plugin) => plugin.id)
+          : [];
+      nextConfig = await setupChannels(nextConfig, runtime, prompter, {
+        allowSignalInstall: true,
+        forceAllowFromChannels: quickstartAllowFromChannels,
+        skipDmPolicyPrompt: flow === "quickstart",
+        skipConfirm: flow === "quickstart",
+        quickstartDefaults: flow === "quickstart",
+        secretInputMode: opts.secretInputMode,
+      });
     }
-    if (modelSelection.model) {
-      nextConfig = applyPrimaryModel(nextConfig, modelSelection.model);
-    }
+
+    await writeConfigFile(nextConfig);
+    logConfigUpdated(runtime);
   }
 
-  await warnIfModelConfigLooksOff(nextConfig, prompter);
-
-  const { configureGatewayForSetup } = await import("./setup.gateway-config.js");
-  const gateway = await configureGatewayForSetup({
-    flow,
-    baseConfig,
-    nextConfig,
-    localPort,
-    quickstartGateway,
-    secretInputMode: opts.secretInputMode,
-    prompter,
-    runtime,
-  });
-  nextConfig = gateway.nextConfig;
-  const settings = gateway.settings;
-
-  if (opts.skipChannels ?? opts.skipProviders) {
-    await prompter.note("Skipping channel setup.", "Channels");
-  } else {
-    const { listChannelPlugins } = await import("../channels/plugins/index.js");
-    const { setupChannels } = await import("../commands/onboard-channels.js");
-    const quickstartAllowFromChannels =
-      flow === "quickstart"
-        ? listChannelPlugins()
-            .filter((plugin) => plugin.meta.quickstartAllowFrom)
-            .map((plugin) => plugin.id)
-        : [];
-    nextConfig = await setupChannels(nextConfig, runtime, prompter, {
-      allowSignalInstall: true,
-      forceAllowFromChannels: quickstartAllowFromChannels,
-      skipDmPolicyPrompt: flow === "quickstart",
-      skipConfirm: flow === "quickstart",
-      quickstartDefaults: flow === "quickstart",
-      secretInputMode: opts.secretInputMode,
-    });
-  }
-
-  await writeConfigFile(nextConfig);
-  const { logConfigUpdated } = await import("../config/logging.js");
-  logConfigUpdated(runtime);
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
 
-  if (opts.skipSearch) {
-    await prompter.note("Skipping search setup.", "Search");
-  } else {
-    const { setupSearch } = await import("../commands/onboard-search.js");
-    nextConfig = await setupSearch(nextConfig, runtime, prompter, {
-      quickstartDefaults: flow === "quickstart",
-      secretInputMode: opts.secretInputMode,
-    });
-  }
+  if (!shouldKeepExistingConfig) {
+    if (!opts.skipSearch) {
+      const { setupSearch } = await import("../commands/onboard-search.js");
+      nextConfig = await setupSearch(nextConfig, runtime, prompter, {
+        quickstartDefaults: flow === "quickstart",
+        secretInputMode: opts.secretInputMode,
+      });
+    }
 
-  if (opts.skipSkills) {
-    await prompter.note("Skipping skills setup.", "Skills");
-  } else {
-    const { setupSkills } = await import("../commands/onboard-skills.js");
-    nextConfig = await setupSkills(nextConfig, workspaceDir, runtime, prompter);
-  }
+    if (!opts.skipSkills) {
+      const { setupSkills } = await import("../commands/onboard-skills.js");
+      nextConfig = await setupSkills(nextConfig, workspaceDir, runtime, prompter);
+    }
 
-  // Setup hooks (session memory on /new)
-  const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
-  nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);
+    if (!opts.embedded) {
+      // Setup hooks (session memory on /new)
+      const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
+      nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);
+    }
+  }
 
   nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
+  logConfigUpdated(runtime);
 
   const { finalizeSetupWizard } = await import("./setup.finalize.js");
   const { launchedTui } = await finalizeSetupWizard({

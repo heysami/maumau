@@ -5,6 +5,13 @@ import Observation
 @Observable
 final class GatewayProcessManager {
     static let shared = GatewayProcessManager()
+    // Clean-reset startup stacks "install LaunchAgent" + "launch gateway" on first use.
+    // The gateway can also accept a socket before its first health requests are responsive,
+    // so first-run startup needs a wider budget than warm reconnects.
+    static let localGatewayStartupTimeout: TimeInterval = 60
+    private static let launchAgentWarmupTimeout: TimeInterval = 15
+    private static let attachExistingHealthTimeoutMs: Double = 10_000
+    private static let readinessHealthTimeoutMs: Double = 5_000
 
     enum Status: Equatable {
         case stopped
@@ -57,6 +64,13 @@ final class GatewayProcessManager {
         #endif
     }
 
+    static func shouldDeferLaunchAgentAutoEnable(status: Status) -> Bool {
+        if case .starting = status {
+            return true
+        }
+        return false
+    }
+
     func setActive(_ active: Bool) {
         // Remote mode should never spawn a local gateway; treat as stopped.
         if CommandResolver.connectionModeIsRemote() {
@@ -79,6 +93,10 @@ final class GatewayProcessManager {
 
     func ensureLaunchAgentEnabledIfNeeded() async {
         guard !CommandResolver.connectionModeIsRemote() else { return }
+        if Self.shouldDeferLaunchAgentAutoEnable(status: self.status) {
+            self.logger.debug("gateway launchd auto-enable deferred while startup is already in progress")
+            return
+        }
         if GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() {
             self.appendLog("[gateway] launchd auto-enable skipped (attach-only)\n")
             self.logger.info("gateway launchd auto-enable skipped (disable marker set)")
@@ -197,7 +215,9 @@ final class GatewayProcessManager {
         let hasListener = instance != nil
 
         let attemptAttach = {
-            try await self.connection.requestRaw(method: .health, timeoutMs: 2000)
+            try await self.connection.requestRawWithoutRecovery(
+                method: .health,
+                timeoutMs: Self.attachExistingHealthTimeoutMs)
         }
 
         for attempt in 0..<(hasListener ? 3 : 1) {
@@ -220,6 +240,16 @@ final class GatewayProcessManager {
                 }
 
                 if hasListener {
+                    if Self.shouldTreatExistingListenerAttachFailureAsWarmup(error) {
+                        self.existingGatewayDetails = instanceText
+                        self.clearLastFailure()
+                        self.status = .starting
+                        self.appendLog(
+                            "[gateway] existing listener on port \(port) is still warming up; continuing readiness wait\n")
+                        self.logger.notice(
+                            "gateway existing listener still warming up: \(error.localizedDescription, privacy: .public)")
+                        return true
+                    }
                     let reason = self.describeAttachFailure(error, port: port, instance: instance)
                     self.existingGatewayDetails = instanceText
                     self.status = .failed(reason)
@@ -297,6 +327,25 @@ final class GatewayProcessManager {
         return lower.contains("unauthorized") || lower.contains("auth")
     }
 
+    static func shouldTreatExistingListenerAttachFailureAsWarmup(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .cannotConnectToHost, .networkConnectionLost, .resourceUnavailable:
+                return true
+            default:
+                break
+            }
+        }
+        let ns = error as NSError
+        if ns.domain == "Gateway", ns.code == 5 {
+            return true
+        }
+        let lower = ns.localizedDescription.lowercased()
+        return lower.contains("timed out") ||
+            lower.contains("could not connect to the server") ||
+            lower.contains("connection refused")
+    }
+
     private func enableLaunchdGateway() async {
         self.existingGatewayDetails = nil
         let resolution = await Task.detached(priority: .utility) {
@@ -306,6 +355,7 @@ final class GatewayProcessManager {
         guard resolution.command != nil else {
             await MainActor.run {
                 self.status = .failed(resolution.status.message)
+                self.lastFailureReason = resolution.status.message
             }
             self.logger.error("gateway command resolve failed: \(resolution.status.message)")
             return
@@ -333,27 +383,38 @@ final class GatewayProcessManager {
         }
 
         // Best-effort: wait for the gateway to accept connections.
-        let deadline = Date().addingTimeInterval(6)
+        let deadline = Date().addingTimeInterval(Self.launchAgentWarmupTimeout)
         while Date() < deadline {
             if !self.desiredActive { return }
             do {
-                _ = try await self.connection.requestRaw(method: .health, timeoutMs: 1500)
-                let instance = await PortGuardian.shared.describe(port: port)
-                let details = instance.map { "pid \($0.pid)" }
-                self.clearLastFailure()
-                self.status = .running(details: details)
-                self.logger.info("gateway started details=\(details ?? "ok")")
-                self.refreshControlChannelIfNeeded(reason: "gateway started")
-                self.refreshLog()
+                _ = try await self.connection.requestRawWithoutRecovery(
+                    method: .health,
+                    timeoutMs: Self.readinessHealthTimeoutMs)
+                await self.markGatewayReady(reason: "gateway started")
                 return
             } catch {
                 try? await Task.sleep(nanoseconds: 400_000_000)
             }
         }
 
-        self.status = .failed("Gateway did not start in time")
-        self.lastFailureReason = "launchd start timeout"
-        self.logger.warning("gateway start timed out")
+        self.appendLog("[gateway] launchd job is still warming up; continuing readiness wait\n")
+        self.logger.notice("gateway startup still warming up after initial launchd grace window")
+    }
+
+    private func markGatewayReady(reason: String) async {
+        self.clearLastFailure()
+        let port = GatewayEnvironment.gatewayPort()
+        let instance = await PortGuardian.shared.describe(port: port)
+        let details = instance.map { "pid \($0.pid)" }
+        switch self.status {
+        case .attachedExisting, .running:
+            break
+        case .starting, .stopped, .failed:
+            self.status = .running(details: details)
+        }
+        self.logger.info("\(reason, privacy: .public) details=\(details ?? "ok", privacy: .public)")
+        self.refreshControlChannelIfNeeded(reason: reason)
+        self.refreshLog()
     }
 
     private func appendLog(_ chunk: String) {
@@ -375,13 +436,15 @@ final class GatewayProcessManager {
         Task { await ControlChannel.shared.configure() }
     }
 
-    func waitForGatewayReady(timeout: TimeInterval = 6) async -> Bool {
+    func waitForGatewayReady(timeout: TimeInterval = GatewayProcessManager.localGatewayStartupTimeout) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if !self.desiredActive { return false }
             do {
-                _ = try await self.connection.requestRaw(method: .health, timeoutMs: 1500)
-                self.clearLastFailure()
+                _ = try await self.connection.requestRawWithoutRecovery(
+                    method: .health,
+                    timeoutMs: Self.readinessHealthTimeoutMs)
+                await self.markGatewayReady(reason: "gateway became ready")
                 return true
             } catch {
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -419,6 +482,10 @@ final class GatewayProcessManager {
 extension GatewayProcessManager {
     func setTestingConnection(_ connection: GatewayConnection?) {
         self.testingConnection = connection
+    }
+
+    func setTestingStatus(_ status: Status) {
+        self.status = status
     }
 
     func setTestingDesiredActive(_ active: Bool) {

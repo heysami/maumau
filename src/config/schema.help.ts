@@ -1515,7 +1515,7 @@ export const FIELD_HELP: Record<string, string> = {
   "messages.inbound.debounceMs":
     "Debounce window (ms) for batching rapid inbound messages from the same sender (0 to disable).",
   "channels.telegram.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.telegram.allowFrom=["*"].',
+    'Choose who can start a direct chat with this Telegram bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.telegram.allowFrom=["*"].',
   "channels.telegram.streaming":
     'Unified Telegram stream preview mode: "off" | "partial" | "block" | "progress" (default: "partial"). "progress" maps to "partial" on Telegram. Legacy boolean/streamMode keys are auto-mapped.',
   "channels.discord.streaming":
@@ -1559,20 +1559,21 @@ export const FIELD_HELP: Record<string, string> = {
   "channels.telegram.threadBindings.spawnAcpSessions":
     "Allow ACP spawns with thread=true to auto-bind Telegram current conversations when supported.",
   "channels.whatsapp.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.whatsapp.allowFrom=["*"].',
-  "channels.whatsapp.selfChatMode": "Same-phone setup (bot uses your personal WhatsApp number).",
+    'Choose who can start a direct chat with this WhatsApp agent. "pairing" lets people request access once, "allowlist" only allows listed phone numbers, and "open" allows anyone and requires channels.whatsapp.allowFrom=["*"].',
+  "channels.whatsapp.selfChatMode":
+    "Legacy same-account mode. Turn this on only if the agent is linked to your own personal WhatsApp account and you intentionally want self-chat behavior.",
   "channels.whatsapp.debounceMs":
     "Debounce window (ms) for batching rapid consecutive messages from the same sender (0 to disable).",
   "channels.signal.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
+    'Choose who can start a direct chat with this Signal identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.signal.allowFrom=["*"].',
   "channels.imessage.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.imessage.allowFrom=["*"].',
+    'Choose who can start a direct chat with this iMessage identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.imessage.allowFrom=["*"].',
   "channels.bluebubbles.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.bluebubbles.allowFrom=["*"].',
+    'Choose who can start a direct chat with this BlueBubbles identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.bluebubbles.allowFrom=["*"].',
   "channels.discord.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.discord.allowFrom=["*"].',
+    'Choose who can start a direct chat with this Discord bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.discord.allowFrom=["*"].',
   "channels.discord.dm.policy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.discord.allowFrom=["*"] (legacy: channels.discord.dm.allowFrom).',
+    'Choose who can start a direct chat with this Discord bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.discord.allowFrom=["*"] (legacy: channels.discord.dm.allowFrom).',
   "channels.discord.retry.attempts":
     "Max retry attempts for outbound Discord API calls (default: 3).",
   "channels.discord.retry.minDelayMs": "Minimum retry delay in ms for Discord outbound calls.",
@@ -1633,7 +1634,7 @@ export const FIELD_HELP: Record<string, string> = {
     "Discord presence activity type (0=Playing,1=Streaming,2=Listening,3=Watching,4=Custom,5=Competing).",
   "channels.discord.activityUrl": "Discord presence streaming URL (required for activityType=1).",
   "channels.slack.dm.policy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.slack.allowFrom=["*"] (legacy: channels.slack.dm.allowFrom).',
+    'Choose who can start a direct chat with this Slack app. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.slack.allowFrom=["*"] (legacy: channels.slack.dm.allowFrom).',
   "channels.slack.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.slack.allowFrom=["*"].',
+    'Choose who can start a direct chat with this Slack app. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.slack.allowFrom=["*"].',
 };

@@ -1516,6 +1516,7 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
           },
         },
       },
+      enabledByDefault: true,
       name: "LLM Task",
       description: "Generic JSON-only LLM tool for structured tasks callable from workflows.",
     },
@@ -1540,6 +1541,7 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         additionalProperties: false,
         properties: {},
       },
+      enabledByDefault: true,
       name: "Lobster",
       description: "Typed workflow tool with resumable approvals.",
     },
@@ -2113,6 +2115,93 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         properties: {},
       },
       channels: ["msteams"],
+    },
+  },
+  {
+    dirName: "nemoclaw",
+    idHint: "nemoclaw",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/nemoclaw",
+    packageVersion: "2026.3.25",
+    packageDescription: "Maumau NeMo Guardrails bridge plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "nemoclaw",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          baseUrl: {
+            type: "string",
+          },
+          timeoutMs: {
+            type: "integer",
+            minimum: 1,
+          },
+          failClosed: {
+            type: "boolean",
+          },
+          promptGuards: {
+            type: "boolean",
+          },
+          toolGuards: {
+            type: "boolean",
+          },
+          outputGuards: {
+            type: "boolean",
+          },
+          authToken: {
+            type: "string",
+          },
+          promptPath: {
+            type: "string",
+          },
+          toolPath: {
+            type: "string",
+          },
+          outputPath: {
+            type: "string",
+          },
+        },
+      },
+      enabledByDefault: true,
+      name: "Maumau Guardrails",
+      description: "NeMo Guardrails bridge for Maumau prompt, tool, and output policy checks.",
+      uiHints: {
+        baseUrl: {
+          label: "Guardrails URL",
+          help: "Base URL for the local Maumau guardrails or NeMo Guardrails sidecar.",
+          placeholder: "http://127.0.0.1:8000",
+        },
+        authToken: {
+          label: "Auth Token",
+          help: "Optional bearer token sent to the guardrails sidecar.",
+          sensitive: true,
+          advanced: true,
+        },
+        failClosed: {
+          label: "Fail Closed",
+          help: "Block sends and tool calls when the sidecar is unavailable.",
+          advanced: true,
+        },
+        promptGuards: {
+          label: "Prompt Guards",
+          help: "Run prompt policy checks before the model prompt is finalized.",
+        },
+        toolGuards: {
+          label: "Tool Guards",
+          help: "Run policy checks before tool execution.",
+        },
+        outputGuards: {
+          label: "Output Guards",
+          help: "Run policy checks before outbound messages are sent.",
+        },
+      },
     },
   },
   {

@@ -110,9 +110,7 @@ describe("web monitor inbox", () => {
     await listener.close();
   });
 
-  it("allows same-phone messages even if not in allowFrom", async () => {
-    // Same-phone mode: when from === selfJid, should always be allowed
-    // This allows users to message themselves even with restrictive allowFrom
+  it("blocks same-phone messages when self-chat mode is not enabled", async () => {
     mockLoadConfig.mockReturnValue(createAllowListConfig(["+111"]));
 
     const { onMessage, listener, sock } = await openInboxMonitor();
@@ -126,12 +124,11 @@ describe("web monitor inbox", () => {
     });
 
     sock.ev.emit("messages.upsert", upsert);
-    await waitForMessageCalls(onMessage, 1);
+    await settleInboundWork();
 
-    // Should allow self-messages even if not in allowFrom
-    expect(onMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ body: "self message", from: "+123" }),
-    );
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(upsertPairingRequestMock).not.toHaveBeenCalled();
+    expect(sock.sendMessage).not.toHaveBeenCalled();
 
     await listener.close();
   });
@@ -175,7 +172,7 @@ describe("web monitor inbox", () => {
     expect(onMessage).not.toHaveBeenCalled();
     expect(sock.sendMessage).toHaveBeenCalledTimes(1);
 
-    // Message from self should be allowed
+    // Message from the linked number stays blocked unless self-chat mode is explicit
     const upsertSelf = buildNotifyMessageUpsert({
       id: "no-config-2",
       remoteJid: "123@s.whatsapp.net",
@@ -184,16 +181,41 @@ describe("web monitor inbox", () => {
     });
 
     sock.ev.emit("messages.upsert", upsertSelf);
+    await settleInboundWork();
+
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(sock.sendMessage).toHaveBeenCalledTimes(1);
+
+    await listener.close();
+  });
+
+  it("allows same-phone messages when self-chat mode is enabled", async () => {
+    mockLoadConfig.mockReturnValue({
+      channels: {
+        whatsapp: {
+          dmPolicy: "pairing",
+          selfChatMode: true,
+        },
+      },
+      messages: DEFAULT_MESSAGES_CFG,
+    });
+
+    const { onMessage, listener, sock } = await openInboxMonitor();
+
+    const upsert = buildNotifyMessageUpsert({
+      id: "self-enabled-1",
+      remoteJid: "123@s.whatsapp.net",
+      text: "self message",
+      timestamp: nowSeconds(60_000),
+    });
+
+    sock.ev.emit("messages.upsert", upsert);
     await waitForMessageCalls(onMessage, 1);
 
-    expect(onMessage).toHaveBeenCalledTimes(1);
     expect(onMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: "self ping",
-        from: "+123",
-        to: "+123",
-      }),
+      expect.objectContaining({ body: "self message", from: "+123" }),
     );
+    expect(sock.sendMessage).not.toHaveBeenCalled();
 
     await listener.close();
   });

@@ -2,9 +2,17 @@ import { ensureAuthProfileStore, listProfilesForProvider } from "../agents/auth-
 import { hasUsableCustomProviderApiKey, resolveEnvApiKey } from "../agents/model-auth.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import { resolveDefaultModelForAgent } from "../agents/model-selection.js";
+import { normalizeProviderIdForAuth } from "../agents/provider-id.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { buildProviderAuthRecoveryHint } from "./provider-auth-guidance.js";
+
+function hasConfiguredAuthProfile(config: MaumauConfig, provider: string): boolean {
+  const normalizedProvider = normalizeProviderIdForAuth(provider);
+  return Object.values(config.auth?.profiles ?? {}).some(
+    (profile) => normalizeProviderIdForAuth(profile.provider) === normalizedProvider,
+  );
+}
 
 export async function warnIfModelConfigLooksOff(
   config: MaumauConfig,
@@ -32,7 +40,9 @@ export async function warnIfModelConfigLooksOff(
   }
 
   const store = ensureAuthProfileStore(options?.agentDir);
-  const hasProfile = listProfilesForProvider(store, ref.provider).length > 0;
+  const hasProfile =
+    listProfilesForProvider(store, ref.provider).length > 0 ||
+    hasConfiguredAuthProfile(config, ref.provider);
   const envKey = resolveEnvApiKey(ref.provider);
   const hasCustomKey = hasUsableCustomProviderApiKey(config, ref.provider);
   if (!hasProfile && !envKey && !hasCustomKey) {

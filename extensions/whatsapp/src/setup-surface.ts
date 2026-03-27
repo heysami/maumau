@@ -60,20 +60,21 @@ async function detectWhatsAppLinked(cfg: MaumauConfig, accountId: string): Promi
   return await pathExists(credsPath);
 }
 
-async function promptWhatsAppOwnerAllowFrom(params: {
+async function promptWhatsAppStarterAllowFrom(params: {
   existingAllowFrom: string[];
   prompter: Parameters<NonNullable<ChannelSetupWizard["finalize"]>>[0]["prompter"];
 }): Promise<{ normalized: string; allowFrom: string[] }> {
   const { prompter, existingAllowFrom } = params;
+  const initialValue = existingAllowFrom.find((item) => item !== "*");
 
   await prompter.note(
-    "We need the sender/owner number so Maumau can allowlist you.",
-    "WhatsApp number",
+    "Add the phone number that should be able to message this WhatsApp agent first.",
+    "First approved number",
   );
   const entry = await prompter.text({
-    message: "Your personal WhatsApp number (the phone you will message from)",
+    message: "Your WhatsApp number (the phone you will message the agent from)",
     placeholder: "+15555550123",
-    initialValue: existingAllowFrom[0],
+    initialValue,
     validate: (value) => {
       const raw = String(value ?? "").trim();
       if (!raw) {
@@ -89,7 +90,7 @@ async function promptWhatsAppOwnerAllowFrom(params: {
 
   const normalized = normalizeE164(String(entry).trim());
   if (!normalized) {
-    throw new Error("Invalid WhatsApp owner number (expected E.164 after validation).");
+    throw new Error("Invalid WhatsApp sender number (expected E.164 after validation).");
   }
   const allowFrom = normalizeAllowFromEntries(
     [...existingAllowFrom.filter((item) => item !== "*"), normalized],
@@ -98,18 +99,18 @@ async function promptWhatsAppOwnerAllowFrom(params: {
   return { normalized, allowFrom };
 }
 
-async function applyWhatsAppOwnerAllowlist(params: {
+async function applyWhatsAppStarterAllowlist(params: {
   cfg: MaumauConfig;
   existingAllowFrom: string[];
   messageLines: string[];
   prompter: Parameters<NonNullable<ChannelSetupWizard["finalize"]>>[0]["prompter"];
   title: string;
 }): Promise<MaumauConfig> {
-  const { normalized, allowFrom } = await promptWhatsAppOwnerAllowFrom({
+  const { normalized, allowFrom } = await promptWhatsAppStarterAllowFrom({
     prompter: params.prompter,
     existingAllowFrom: params.existingAllowFrom,
   });
-  let next = setWhatsAppSelfChatMode(params.cfg, true);
+  let next = setWhatsAppSelfChatMode(params.cfg, false);
   next = setWhatsAppDmPolicy(next, "allowlist");
   next = setWhatsAppAllowFrom(next, allowFrom);
   await params.prompter.note(
@@ -119,7 +120,10 @@ async function applyWhatsAppOwnerAllowlist(params: {
   return next;
 }
 
-function parseWhatsAppAllowFromEntries(raw: string): { entries: string[]; invalidEntry?: string } {
+function parseWhatsAppAllowFromEntries(
+  raw: string,
+  options?: { allowWildcard?: boolean },
+): { entries: string[]; invalidEntry?: string } {
   const parts = splitSetupEntries(raw);
   if (parts.length === 0) {
     return { entries: [] };
@@ -127,6 +131,9 @@ function parseWhatsAppAllowFromEntries(raw: string): { entries: string[]; invali
   const entries: string[] = [];
   for (const part of parts) {
     if (part === "*") {
+      if (!options?.allowWildcard) {
+        return { entries: [], invalidEntry: part };
+      }
       entries.push("*");
       continue;
     }
@@ -139,6 +146,39 @@ function parseWhatsAppAllowFromEntries(raw: string): { entries: string[]; invali
   return { entries: normalizeAllowFromEntries(entries, normalizeE164) };
 }
 
+async function promptWhatsAppApprovedNumbers(params: {
+  cfg: MaumauConfig;
+  existingAllowFrom: string[];
+  message: string;
+  prompter: Parameters<NonNullable<ChannelSetupWizard["finalize"]>>[0]["prompter"];
+}): Promise<MaumauConfig> {
+  const allowRaw = await params.prompter.text({
+    message: params.message,
+    placeholder: "+15555550123, +447700900123",
+    initialValue: params.existingAllowFrom.filter((entry) => entry !== "*").join(", "),
+    validate: (value) => {
+      const raw = String(value ?? "").trim();
+      if (!raw) {
+        return "Required";
+      }
+      const parsed = parseWhatsAppAllowFromEntries(raw);
+      if (parsed.entries.length === 0 && !parsed.invalidEntry) {
+        return "Required";
+      }
+      if (parsed.invalidEntry === "*") {
+        return 'Choose "Anyone who knows the number" instead of entering "*".';
+      }
+      if (parsed.invalidEntry) {
+        return `Invalid number: ${parsed.invalidEntry}`;
+      }
+      return undefined;
+    },
+  });
+
+  const parsed = parseWhatsAppAllowFromEntries(String(allowRaw));
+  return setWhatsAppAllowFrom(params.cfg, parsed.entries);
+}
+
 async function promptWhatsAppDmAccess(params: {
   cfg: MaumauConfig;
   forceAllowFrom: boolean;
@@ -149,57 +189,38 @@ async function promptWhatsAppDmAccess(params: {
   const existingLabel = existingAllowFrom.length > 0 ? existingAllowFrom.join(", ") : "unset";
 
   if (params.forceAllowFrom) {
-    return await applyWhatsAppOwnerAllowlist({
+    return await applyWhatsAppStarterAllowlist({
       cfg: params.cfg,
       prompter: params.prompter,
       existingAllowFrom,
-      title: "WhatsApp allowlist",
-      messageLines: ["Allowlist mode enabled."],
+      title: "Who can message this agent first?",
+      messageLines: [
+        "Direct chats are limited to the number you entered until you change these settings.",
+      ],
     });
   }
 
   await params.prompter.note(
     [
-      "WhatsApp direct chats are gated by `channels.whatsapp.dmPolicy` + `channels.whatsapp.allowFrom`.",
-      "- pairing (default): unknown senders get a pairing code; owner approves",
-      "- allowlist: unknown senders are blocked",
-      '- open: public inbound DMs (requires allowFrom to include "*")',
-      "- disabled: ignore WhatsApp DMs",
+      "This WhatsApp connection becomes a separate Maumau identity in WhatsApp.",
+      "Maumau cannot create a WhatsApp number or bot account for you.",
+      "You link an existing WhatsApp number or linked device, and that linked account becomes the agent identity.",
+      "People message that WhatsApp account from their own phones, and the agent replies there.",
+      "Recommended: use a dedicated number or linked device for the agent instead of self-chat on your personal account.",
       "",
-      `Current: dmPolicy=${existingPolicy}, allowFrom=${existingLabel}`,
+      `Current access: ${existingPolicy}; approved numbers: ${existingLabel}`,
       `Docs: ${formatDocsLink("/whatsapp", "whatsapp")}`,
     ].join("\n"),
-    "WhatsApp DM access",
+    "How WhatsApp chat works",
   );
 
-  const phoneMode = await params.prompter.select({
-    message: "WhatsApp phone setup",
-    options: [
-      { value: "personal", label: "This is my personal phone number" },
-      { value: "separate", label: "Separate phone just for Maumau" },
-    ],
-  });
-
-  if (phoneMode === "personal") {
-    return await applyWhatsAppOwnerAllowlist({
-      cfg: params.cfg,
-      prompter: params.prompter,
-      existingAllowFrom,
-      title: "WhatsApp personal phone",
-      messageLines: [
-        "Personal phone mode enabled.",
-        "- dmPolicy set to allowlist (pairing skipped)",
-      ],
-    });
-  }
-
   const policy = (await params.prompter.select({
-    message: "WhatsApp DM policy",
+    message: "Who should be able to start a direct chat with this WhatsApp agent?",
     options: [
-      { value: "pairing", label: "Pairing (recommended)" },
-      { value: "allowlist", label: "Allowlist only (block unknown senders)" },
-      { value: "open", label: "Open (public inbound DMs)" },
-      { value: "disabled", label: "Disabled (ignore WhatsApp DMs)" },
+      { value: "pairing", label: "People I approve one time (recommended)" },
+      { value: "allowlist", label: "Only phone numbers I list" },
+      { value: "open", label: "Anyone who knows the number" },
+      { value: "disabled", label: "Nobody for now" },
     ],
   })) as DmPolicy;
 
@@ -214,23 +235,42 @@ async function promptWhatsAppDmAccess(params: {
     return next;
   }
 
+  if (policy === "allowlist" && existingAllowFrom.length === 0) {
+    return await promptWhatsAppApprovedNumbers({
+      cfg: next,
+      existingAllowFrom,
+      message: "Phone numbers allowed to message this agent (comma-separated, E.164)",
+      prompter: params.prompter,
+    });
+  }
+
   const allowOptions =
-    existingAllowFrom.length > 0
-      ? ([
-          { value: "keep", label: "Keep current allowFrom" },
-          {
-            value: "unset",
-            label: "Unset allowFrom (use pairing approvals only)",
-          },
-          { value: "list", label: "Set allowFrom to specific numbers" },
-        ] as const)
-      : ([
-          { value: "unset", label: "Unset allowFrom (default)" },
-          { value: "list", label: "Set allowFrom to specific numbers" },
-        ] as const);
+    policy === "allowlist"
+      ? existingAllowFrom.length > 0
+        ? ([
+            { value: "keep", label: "Keep the current approved numbers" },
+            { value: "list", label: "Replace the approved numbers" },
+          ] as const)
+        : ([{ value: "list", label: "Add approved phone numbers" }] as const)
+      : existingAllowFrom.length > 0
+        ? ([
+            { value: "keep", label: "Keep the current pre-approved numbers" },
+            {
+              value: "unset",
+              label: "Start with approval requests only",
+            },
+            { value: "list", label: "Pre-approve specific phone numbers" },
+          ] as const)
+        : ([
+            { value: "unset", label: "Start with approval requests only" },
+            { value: "list", label: "Pre-approve specific phone numbers" },
+          ] as const);
 
   const mode = await params.prompter.select({
-    message: "WhatsApp allowFrom (optional pre-allowlist)",
+    message:
+      policy === "allowlist"
+        ? "How should Maumau handle the approved phone numbers?"
+        : "Do you want to pre-approve any phone numbers now?",
     options: allowOptions.map((opt) => ({
       value: opt.value,
       label: opt.label,
@@ -243,28 +283,12 @@ async function promptWhatsAppDmAccess(params: {
   if (mode === "unset") {
     return setWhatsAppAllowFrom(next, undefined);
   }
-
-  const allowRaw = await params.prompter.text({
-    message: "Allowed sender numbers (comma-separated, E.164)",
-    placeholder: "+15555550123, +447700900123",
-    validate: (value) => {
-      const raw = String(value ?? "").trim();
-      if (!raw) {
-        return "Required";
-      }
-      const parsed = parseWhatsAppAllowFromEntries(raw);
-      if (parsed.entries.length === 0 && !parsed.invalidEntry) {
-        return "Required";
-      }
-      if (parsed.invalidEntry) {
-        return `Invalid number: ${parsed.invalidEntry}`;
-      }
-      return undefined;
-    },
+  return await promptWhatsAppApprovedNumbers({
+    cfg: next,
+    existingAllowFrom,
+    message: "Phone numbers allowed to message this agent (comma-separated, E.164)",
+    prompter: params.prompter,
   });
-
-  const parsed = parseWhatsAppAllowFromEntries(String(allowRaw));
-  return setWhatsAppAllowFrom(next, parsed.entries);
 }
 
 export const whatsappSetupWizard: ChannelSetupWizard = {

@@ -320,8 +320,11 @@ final class AppState {
         self.canvasEnabled = UserDefaults.standard.object(forKey: canvasEnabledKey) as? Bool ?? true
         let execDefaults = ExecApprovalsStore.resolveDefaults()
         self.execApprovalMode = ExecApprovalQuickMode.from(security: execDefaults.security, ask: execDefaults.ask)
-        self.peekabooBridgeEnabled = UserDefaults.standard
+        let storedPeekabooBridgeEnabled = UserDefaults.standard
             .object(forKey: peekabooBridgeEnabledKey) as? Bool ?? true
+        self.peekabooBridgeEnabled = PeekabooBridgeHostCoordinator.isAvailable
+            ? storedPeekabooBridgeEnabled
+            : false
         if !self.isPreview {
             Task.detached(priority: .utility) { [weak self] in
                 let current = await LaunchAgentManager.status()

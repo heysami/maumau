@@ -48,6 +48,11 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_PROMPT_PATH = "/v1/guardrails/prompt";
 const DEFAULT_TOOL_PATH = "/v1/guardrails/tool";
 const DEFAULT_OUTPUT_PATH = "/v1/guardrails/output";
+const GUARDRAIL_ENV_VARS = [
+  "NEMOCLAW_BASE_URL",
+  "NEMO_GUARDRAILS_BASE_URL",
+  "NEMO_GUARDRAILS_URL",
+] as const;
 
 function failure(path: ParseIssue["path"], message: string): ParseFailure {
   return {
@@ -168,7 +173,7 @@ export const nemoclawPluginConfigSchema: MaumauPluginConfigSchema = {
   uiHints: {
     baseUrl: {
       label: "Guardrails URL",
-      help: "Base URL for the local NemoClaw or NeMo Guardrails sidecar.",
+      help: "Base URL for the local Maumau guardrails or NeMo Guardrails sidecar.",
       placeholder: "http://127.0.0.1:8000",
     },
     authToken: {
@@ -218,27 +223,38 @@ function normalizePath(value: string | undefined, fallback: string): string {
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
+function resolveConfiguredBaseUrl(config: NemoClawPluginConfig): string | undefined {
+  if (config.baseUrl?.trim()) {
+    return config.baseUrl.trim();
+  }
+  for (const envVar of GUARDRAIL_ENV_VARS) {
+    const candidate = process.env[envVar]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 export function resolveNemoClawPluginConfig(raw: unknown): ResolvedNemoClawPluginConfig {
   const parsed = nemoclawPluginConfigSchema.safeParse?.(raw);
   const config =
     parsed && parsed.success && parsed.data && typeof parsed.data === "object"
       ? (parsed.data as NemoClawPluginConfig)
       : {};
-  const baseUrl = (
-    config.baseUrl ??
-    process.env.NEMOCLAW_BASE_URL ??
-    process.env.NEMO_GUARDRAILS_BASE_URL ??
-    process.env.NEMO_GUARDRAILS_URL ??
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
+  const configuredBaseUrl = resolveConfiguredBaseUrl(config);
+  const baseUrl = (configuredBaseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  // Keep the plugin dormant by default so default enablement does not require
+  // a running guardrails sidecar on every fresh install.
+  const guardsEnabledByDefault = Boolean(configuredBaseUrl);
 
   return {
     baseUrl,
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     failClosed: config.failClosed ?? false,
-    promptGuards: config.promptGuards ?? true,
-    toolGuards: config.toolGuards ?? true,
-    outputGuards: config.outputGuards ?? true,
+    promptGuards: config.promptGuards ?? guardsEnabledByDefault,
+    toolGuards: config.toolGuards ?? guardsEnabledByDefault,
+    outputGuards: config.outputGuards ?? guardsEnabledByDefault,
     ...(config.authToken ? { authToken: config.authToken } : {}),
     promptPath: normalizePath(config.promptPath, DEFAULT_PROMPT_PATH),
     toolPath: normalizePath(config.toolPath, DEFAULT_TOOL_PATH),

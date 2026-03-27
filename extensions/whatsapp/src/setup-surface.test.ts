@@ -69,7 +69,7 @@ async function runConfigureWithHarness(params: {
   });
 }
 
-function createSeparatePhoneHarness(params: { selectValues: string[]; textValues?: string[] }) {
+function createWhatsAppSetupHarness(params: { selectValues: string[]; textValues?: string[] }) {
   return createQueuedWizardPrompter({
     confirmValues: [false],
     selectValues: params.selectValues,
@@ -77,9 +77,9 @@ function createSeparatePhoneHarness(params: { selectValues: string[]; textValues
   });
 }
 
-async function runSeparatePhoneFlow(params: { selectValues: string[]; textValues?: string[] }) {
+async function runSetupFlow(params: { selectValues: string[]; textValues?: string[] }) {
   pathExistsMock.mockResolvedValue(true);
-  const harness = createSeparatePhoneHarness({
+  const harness = createWhatsAppSetupHarness({
     selectValues: params.selectValues,
     textValues: params.textValues,
   });
@@ -117,19 +117,19 @@ describe("whatsapp setup wizard", () => {
 
     expect(result.accountId).toBe(DEFAULT_ACCOUNT_ID);
     expect(loginWebMock).not.toHaveBeenCalled();
-    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(true);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
     expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
     expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15555550123"]);
     expect(harness.text).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "Your personal WhatsApp number (the phone you will message from)",
+        message: "Your WhatsApp number (the phone you will message the agent from)",
       }),
     );
   });
 
-  it("supports disabled DM policy for separate-phone setup", async () => {
-    const { harness, result } = await runSeparatePhoneFlow({
-      selectValues: ["separate", "disabled"],
+  it("supports disabled DM policy for dedicated-agent setup", async () => {
+    const { harness, result } = await runSetupFlow({
+      selectValues: ["disabled"],
     });
 
     expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
@@ -138,38 +138,38 @@ describe("whatsapp setup wizard", () => {
     expect(harness.text).not.toHaveBeenCalled();
   });
 
-  it("normalizes allowFrom entries when list mode is selected", async () => {
-    const { result } = await runSeparatePhoneFlow({
-      selectValues: ["separate", "allowlist", "list"],
-      textValues: ["+1 (555) 555-0123, +15555550123, *"],
+  it("normalizes approved numbers when allowlist mode is selected", async () => {
+    const { result } = await runSetupFlow({
+      selectValues: ["allowlist"],
+      textValues: ["+1 (555) 555-0123, +15555550123"],
     });
 
     expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
     expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
-    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15555550123", "*"]);
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15555550123"]);
   });
 
-  it("enables allowlist self-chat mode for personal-phone setup", async () => {
+  it("explains WhatsApp as a separate agent identity during setup", async () => {
     pathExistsMock.mockResolvedValue(true);
     const harness = createQueuedWizardPrompter({
       confirmValues: [false],
-      selectValues: ["personal"],
-      textValues: ["+1 (555) 111-2222"],
+      selectValues: ["disabled"],
     });
 
-    const result = await runConfigureWithHarness({
+    await runConfigureWithHarness({
       harness,
     });
 
-    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(true);
-    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
-    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15551112222"]);
+    expect(harness.note).toHaveBeenCalledWith(
+      expect.stringContaining("cannot create a WhatsApp number"),
+      "How WhatsApp chat works",
+    );
   });
 
   it("forces wildcard allowFrom for open policy without allowFrom follow-up prompts", async () => {
     pathExistsMock.mockResolvedValue(true);
-    const harness = createSeparatePhoneHarness({
-      selectValues: ["separate", "open"],
+    const harness = createWhatsAppSetupHarness({
+      selectValues: ["open"],
     });
 
     const result = await runConfigureWithHarness({
@@ -186,7 +186,7 @@ describe("whatsapp setup wizard", () => {
     expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
     expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("open");
     expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["*", "+15555550123"]);
-    expect(harness.select).toHaveBeenCalledTimes(2);
+    expect(harness.select).toHaveBeenCalledTimes(1);
     expect(harness.text).not.toHaveBeenCalled();
   });
 
@@ -194,7 +194,7 @@ describe("whatsapp setup wizard", () => {
     pathExistsMock.mockResolvedValue(false);
     const harness = createQueuedWizardPrompter({
       confirmValues: [true],
-      selectValues: ["separate", "disabled"],
+      selectValues: ["disabled"],
     });
     const runtime = createRuntime();
 
@@ -208,8 +208,8 @@ describe("whatsapp setup wizard", () => {
 
   it("skips relink note when already linked and relink is declined", async () => {
     pathExistsMock.mockResolvedValue(true);
-    const harness = createSeparatePhoneHarness({
-      selectValues: ["separate", "disabled"],
+    const harness = createWhatsAppSetupHarness({
+      selectValues: ["disabled"],
     });
 
     await runConfigureWithHarness({
@@ -225,8 +225,8 @@ describe("whatsapp setup wizard", () => {
 
   it("shows follow-up login command note when not linked and linking is skipped", async () => {
     pathExistsMock.mockResolvedValue(false);
-    const harness = createSeparatePhoneHarness({
-      selectValues: ["separate", "disabled"],
+    const harness = createWhatsAppSetupHarness({
+      selectValues: ["disabled"],
     });
 
     await runConfigureWithHarness({

@@ -1,6 +1,7 @@
 import { exec } from "node:child_process";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import { listChannelPlugins } from "../../channels/plugins/index.js";
+import { listChannelSetupPlugins } from "../../channels/plugins/setup-registry.js";
 import {
   createConfigIO,
   loadConfig,
@@ -57,6 +58,18 @@ import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
 const MAX_CONFIG_ISSUES_IN_ERROR_MESSAGE = 3;
+
+function listSchemaChannelPlugins() {
+  const seen = new Set<string>();
+  return [...listChannelPlugins(), ...listChannelSetupPlugins()].filter((plugin) => {
+    const id = String(plugin.id).trim();
+    if (!id || seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
 
 function requireConfigBaseHash(
   params: unknown,
@@ -262,6 +275,9 @@ function loadSchemaWithPlugins(): ConfigSchemaResponse {
   // Note: We can't easily cache this, as there are no callback that can invalidate
   // our cache. However, both loadConfig() and loadMaumauPlugins() already cache
   // their results, and buildConfigSchema() is just a cheap transformation.
+  // Fresh setup can expose setup-surface channels before the runtime plugin loads.
+  // Keep config.schema aligned with the Channels UI so those cards still have editors.
+  const channels = listSchemaChannelPlugins();
   return buildConfigSchema({
     plugins: pluginRegistry.plugins.map((plugin) => ({
       id: plugin.id,
@@ -270,7 +286,7 @@ function loadSchemaWithPlugins(): ConfigSchemaResponse {
       configUiHints: plugin.configUiHints,
       configSchema: plugin.configJsonSchema,
     })),
-    channels: listChannelPlugins().map((entry) => ({
+    channels: channels.map((entry) => ({
       id: entry.id,
       label: entry.meta.label,
       description: entry.meta.blurb,

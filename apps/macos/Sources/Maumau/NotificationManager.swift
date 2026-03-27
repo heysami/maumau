@@ -7,6 +7,10 @@ import UserNotifications
 struct NotificationManager {
     private let logger = Logger(subsystem: "ai.maumau", category: "notifications")
 
+    nonisolated static var isAvailableInCurrentProcess: Bool {
+        ProcessInfo.processInfo.isAppBundle
+    }
+
     private static let hasTimeSensitiveEntitlement: Bool = {
         guard let task = SecTaskCreateFromSelf(nil) else { return false }
         let key = "com.apple.developer.usernotifications.time-sensitive" as CFString
@@ -15,6 +19,10 @@ struct NotificationManager {
     }()
 
     func send(title: String, body: String, sound: String?, priority: NotificationPriority? = nil) async -> Bool {
+        guard Self.isAvailableInCurrentProcess else {
+            self.logger.debug("notification center unavailable outside app bundle")
+            return false
+        }
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings()
         if status.authorizationStatus == .notDetermined {

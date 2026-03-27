@@ -5,7 +5,13 @@ import {
   isGatewayDaemonRuntime,
 } from "../../commands/daemon-runtime.js";
 import { resolveGatewayInstallToken } from "../../commands/gateway-install-token.js";
-import { readBestEffortConfig, resolveGatewayPort } from "../../config/config.js";
+import {
+  loadConfig,
+  readConfigFileSnapshot,
+  resolveGatewayPort,
+  writeConfigFile,
+  type MaumauConfig,
+} from "../../config/config.js";
 import { resolveGatewayService } from "../../daemon/service.js";
 import { isNonFatalSystemdInstallProbeError } from "../../daemon/systemd.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -31,13 +37,42 @@ function mergeInstallInvocationEnv(params: {
   };
 }
 
+async function loadDaemonInstallConfig(): Promise<MaumauConfig> {
+  const snapshot = await readConfigFileSnapshot();
+  const cfg = snapshot.valid ? loadConfig() : snapshot.config;
+  if (cfg.gateway?.mode) {
+    return cfg;
+  }
+  if (snapshot.exists && !snapshot.valid) {
+    return cfg;
+  }
+
+  // `maumau gateway install` provisions a local supervised gateway. Fresh installs
+  // need that default persisted before the stricter `gateway run` startup gate kicks in.
+  await writeConfigFile({
+    ...snapshot.config,
+    gateway: {
+      ...snapshot.config.gateway,
+      mode: "local",
+    },
+  });
+
+  return {
+    ...cfg,
+    gateway: {
+      ...cfg.gateway,
+      mode: "local",
+    },
+  };
+}
+
 export async function runDaemonInstall(opts: DaemonInstallOptions) {
   const { json, stdout, warnings, emit, fail } = createDaemonInstallActionContext(opts.json);
   if (failIfNixDaemonInstallMode(fail)) {
     return;
   }
 
-  const cfg = await readBestEffortConfig();
+  const cfg = await loadDaemonInstallConfig();
   const portOverride = parsePort(opts.port);
   if (opts.port !== undefined && portOverride === null) {
     fail("Invalid port");

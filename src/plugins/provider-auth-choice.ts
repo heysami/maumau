@@ -5,6 +5,7 @@ import {
   resolveAgentWorkspaceDir,
 } from "../agents/agent-scope.js";
 import { upsertAuthProfile } from "../agents/auth-profiles.js";
+import type { AuthProfileCredential } from "../agents/auth-profiles/types.js";
 import { resolveDefaultAgentWorkspaceDir } from "../agents/workspace.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -16,7 +17,11 @@ import {
   pickAuthMethod,
   resolveProviderMatch,
 } from "./provider-auth-choice-helpers.js";
-import { applyAuthProfileConfig } from "./provider-auth-helpers.js";
+import {
+  applyAuthProfileConfig,
+  buildApiKeyCredential,
+  buildTokenCredential,
+} from "./provider-auth-helpers.js";
 import { createVpsAwareOAuthHandlers } from "./provider-oauth-flow.js";
 import { isRemoteEnvironment, openUrl } from "./setup-browser.js";
 import type { ProviderAuthMethod, ProviderAuthOptionBag } from "./types.js";
@@ -81,6 +86,32 @@ async function loadPluginProviderRuntime() {
   return import("./provider-auth-choice.runtime.js");
 }
 
+function normalizeReturnedProfileCredential(
+  credential: AuthProfileCredential,
+): AuthProfileCredential {
+  if (credential.type === "api_key") {
+    return {
+      ...buildApiKeyCredential(
+        credential.provider,
+        credential.keyRef ?? credential.key ?? "",
+        credential.metadata,
+      ),
+      ...(credential.email ? { email: credential.email } : {}),
+    };
+  }
+  if (credential.type === "token") {
+    return buildTokenCredential(
+      credential.provider,
+      credential.tokenRef ?? credential.token ?? "",
+      {
+        ...(credential.expires ? { expires: credential.expires } : {}),
+        ...(credential.email ? { email: credential.email } : {}),
+      },
+    );
+  }
+  return credential;
+}
+
 export async function runProviderPluginAuthMethod(params: {
   config: MaumauConfig;
   runtime: RuntimeEnv;
@@ -130,19 +161,18 @@ export async function runProviderPluginAuthMethod(params: {
   }
 
   for (const profile of result.profiles) {
+    const credential = normalizeReturnedProfileCredential(profile.credential);
     upsertAuthProfile({
       profileId: profile.profileId,
-      credential: profile.credential,
+      credential,
       agentDir,
     });
 
     nextConfig = applyAuthProfileConfig(nextConfig, {
       profileId: profile.profileId,
-      provider: profile.credential.provider,
-      mode: profile.credential.type === "token" ? "token" : profile.credential.type,
-      ...("email" in profile.credential && profile.credential.email
-        ? { email: profile.credential.email }
-        : {}),
+      provider: credential.provider,
+      mode: credential.type === "token" ? "token" : credential.type,
+      ...("email" in credential && credential.email ? { email: credential.email } : {}),
     });
   }
 

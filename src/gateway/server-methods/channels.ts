@@ -6,8 +6,10 @@ import {
   listChannelPlugins,
   normalizeChannelId,
 } from "../../channels/plugins/index.js";
+import { listChannelSetupPlugins } from "../../channels/plugins/setup-registry.js";
 import { buildChannelAccountSnapshot } from "../../channels/plugins/status.js";
 import type { ChannelAccountSnapshot, ChannelPlugin } from "../../channels/plugins/types.js";
+import { CHAT_CHANNEL_ORDER, type ChatChannelId } from "../../channels/registry.js";
 import type { MaumauConfig } from "../../config/config.js";
 import { loadConfig, readConfigFileSnapshot } from "../../config/config.js";
 import { getChannelActivity } from "../../infra/channel-activity.js";
@@ -29,6 +31,29 @@ type ChannelLogoutPayload = {
   cleared: boolean;
   [key: string]: unknown;
 };
+
+function listVisibleChannelPlugins(): ChannelPlugin[] {
+  const seen = new Set<string>();
+  return [...listChannelPlugins(), ...listChannelSetupPlugins()]
+    .filter((plugin) => {
+      const id = String(plugin.id).trim();
+      if (!id || seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    })
+    .toSorted((a, b) => {
+      const indexA = CHAT_CHANNEL_ORDER.indexOf(a.id as ChatChannelId);
+      const indexB = CHAT_CHANNEL_ORDER.indexOf(b.id as ChatChannelId);
+      const orderA = a.meta.order ?? (indexA === -1 ? 999 : indexA);
+      const orderB = b.meta.order ?? (indexB === -1 ? 999 : indexB);
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.id.localeCompare(b.id);
+    });
+}
 
 export async function logoutChannelAccount(params: {
   channelId: ChannelId;
@@ -84,7 +109,7 @@ export const channelsHandlers: GatewayRequestHandlers = {
     const timeoutMs = typeof timeoutMsRaw === "number" ? Math.max(1000, timeoutMsRaw) : 10_000;
     const cfg = loadConfig();
     const runtime = context.getRuntimeSnapshot();
-    const plugins = listChannelPlugins();
+    const plugins = listVisibleChannelPlugins();
     const pluginMap = new Map<ChannelId, ChannelPlugin>(
       plugins.map((plugin) => [plugin.id, plugin]),
     );

@@ -1,6 +1,6 @@
 {
   "name": "maumau",
-  "version": "2026.3.24",
+  "version": "2026.3.27",
   "description": "Multi-channel AI gateway with extensible messaging integrations",
   "keywords": [],
   "homepage": "https://github.com/maumau/maumau#readme",
@@ -593,7 +593,7 @@
     "audit:seams": "node scripts/audit-seams.mjs",
     "build": "pnpm canvas:a2ui:bundle && node scripts/tsdown-build.mjs && node scripts/runtime-postbuild.mjs && node scripts/build-stamp.mjs && pnpm build:plugin-sdk:dts && node --import tsx scripts/write-plugin-sdk-entry-dts.ts && node --import tsx scripts/canvas-a2ui-copy.ts && node --import tsx scripts/copy-hook-metadata.ts && node --import tsx scripts/copy-export-html-templates.ts && node --import tsx scripts/write-build-info.ts && node --import tsx scripts/write-cli-startup-metadata.ts && node --import tsx scripts/write-cli-compat.ts",
     "build:docker": "node scripts/tsdown-build.mjs && node scripts/runtime-postbuild.mjs && node scripts/build-stamp.mjs && node --import tsx scripts/canvas-a2ui-copy.ts && node --import tsx scripts/copy-hook-metadata.ts && node --import tsx scripts/copy-export-html-templates.ts && node --import tsx scripts/write-build-info.ts && node --import tsx scripts/write-cli-startup-metadata.ts && node --import tsx scripts/write-cli-compat.ts",
-    "build:plugin-sdk:dts": "tsc -p tsconfig.plugin-sdk.dts.json",
+    "build:plugin-sdk:dts": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.plugin-sdk.dts.json",
     "build:strict-smoke": "pnpm canvas:a2ui:bundle && node scripts/tsdown-build.mjs && node scripts/runtime-postbuild.mjs && node scripts/build-stamp.mjs && pnpm build:plugin-sdk:dts",
     "canvas:a2ui:bundle": "bash scripts/bundle-a2ui.sh",
     "check": "pnpm check:no-conflict-markers && pnpm check:no-legacy-branding && pnpm check:host-env-policy:swift && pnpm check:base-config-schema && pnpm check:bundled-plugin-metadata && pnpm check:bundled-provider-auth-env-vars && pnpm format:check && pnpm tsgo && pnpm plugin-sdk:check-exports && pnpm lint && pnpm lint:tmp:no-random-messaging && pnpm lint:tmp:channel-agnostic-boundaries && pnpm lint:tmp:no-raw-channel-fetch && pnpm lint:agent:ingress-owner && pnpm lint:plugins:no-register-http-handler && pnpm lint:plugins:no-monolithic-plugin-sdk-entry-imports && pnpm lint:plugins:no-extension-src-imports && pnpm lint:plugins:no-extension-test-core-imports && pnpm lint:plugins:no-extension-imports && pnpm lint:plugins:plugin-sdk-subpaths-exported && pnpm lint:extensions:no-src-outside-plugin-sdk && pnpm lint:extensions:no-plugin-sdk-internal && pnpm lint:extensions:no-relative-outside-package && pnpm lint:web-search-provider-boundaries && pnpm lint:webhook:no-low-level-body-read && pnpm lint:auth:no-pairing-store-group && pnpm lint:auth:pairing-account-scope",

@@ -43,12 +43,14 @@ export const CORE_CLI_COMMAND_DESCRIPTORS = [
   },
   {
     name: "reset",
-    description: "Reset local config/state (keeps the CLI installed)",
+    description:
+      "Reset local config/state (`--scope clean` also removes the local gateway service and app-managed CLI)",
     hasSubcommands: false,
   },
   {
     name: "uninstall",
-    description: "Uninstall the gateway service + local data (CLI remains)",
+    description:
+      "Uninstall the gateway service + local data (app-managed CLI is removed with local state)",
     hasSubcommands: false,
   },
   {

@@ -49,7 +49,7 @@ enum ExecApprovalQuickMode: String, CaseIterable, Identifiable {
     var ask: ExecAsk {
         switch self {
         case .deny: .off
-        case .ask: .onMiss
+        case .ask: .always
         case .allow: .off
         }
     }
@@ -222,8 +222,9 @@ struct ExecApprovalsResolvedDefaults {
 enum ExecApprovalsStore {
     private static let logger = Logger(subsystem: "ai.maumau", category: "exec-approvals")
     private static let defaultAgentId = "main"
-    private static let defaultSecurity: ExecSecurity = .deny
-    private static let defaultAsk: ExecAsk = .onMiss
+    // Default to explicit approval on every command instead of leaving system.run fully disabled.
+    private static let defaultSecurity: ExecSecurity = .allowlist
+    private static let defaultAsk: ExecAsk = .always
     private static let defaultAskFallback: ExecSecurity = .deny
     private static let defaultAutoAllowSkills = false
     private static let secureStateDirPermissions = 0o700

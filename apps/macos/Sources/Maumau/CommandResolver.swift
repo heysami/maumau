@@ -53,12 +53,27 @@ enum CommandResolver {
         {
             return url
         }
+        if let bundled = self.bundledProjectRoot() {
+            return bundled
+        }
         let fallback = FileManager().homeDirectoryForCurrentUser
             .appendingPathComponent("Projects/maumau")
         if FileManager().fileExists(atPath: fallback.path) {
             return fallback
         }
         return FileManager().homeDirectoryForCurrentUser
+    }
+
+    static func bundledProjectRoot(
+        bundleURL: URL = Bundle.main.bundleURL,
+        fileManager: FileManager = .default) -> URL?
+    {
+        let candidate = bundleURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        guard fileManager.fileExists(atPath: candidate.path) else { return nil }
+        guard self.gatewayEntrypoint(in: candidate) != nil else { return nil }
+        return candidate
     }
 
     static func setProjectRoot(_ path: String) {
@@ -85,10 +100,10 @@ enum CommandResolver {
             "/usr/bin",
             "/bin",
         ]
-        #if DEBUG
-        // Dev-only convenience. Avoid project-local PATH hijacking in release builds.
-        extras.insert(projectRoot.appendingPathComponent("node_modules/.bin").path, at: 0)
-        #endif
+        if self.prefersProjectLocalExecutables(projectRoot: projectRoot) {
+            // Prefer the bundled checkout when the app is running from a local repo build.
+            extras.insert(projectRoot.appendingPathComponent("node_modules/.bin").path, at: 0)
+        }
         let maumauPaths = self.maumauManagedPaths(home: home)
         if !maumauPaths.isEmpty {
             extras.insert(contentsOf: maumauPaths, at: 1)
@@ -198,12 +213,25 @@ enum CommandResolver {
     }
 
     static func projectMaumauExecutable(projectRoot: URL? = nil) -> String? {
-        #if DEBUG
         let root = projectRoot ?? self.projectRoot()
+        guard self.prefersProjectLocalExecutables(projectRoot: root) else { return nil }
         let candidate = root.appendingPathComponent("node_modules/.bin").appendingPathComponent(self.helperName).path
         return FileManager().isExecutableFile(atPath: candidate) ? candidate : nil
+    }
+
+    static func prefersProjectLocalExecutables(
+        projectRoot: URL,
+        bundleURL: URL = Bundle.main.bundleURL,
+        fileManager: FileManager = .default) -> Bool
+    {
+        #if DEBUG
+        return true
         #else
-        return nil
+        guard let bundledRoot = self.bundledProjectRoot(bundleURL: bundleURL, fileManager: fileManager) else {
+            return false
+        }
+        return bundledRoot.resolvingSymlinksInPath().standardizedFileURL ==
+            projectRoot.resolvingSymlinksInPath().standardizedFileURL
         #endif
     }
 

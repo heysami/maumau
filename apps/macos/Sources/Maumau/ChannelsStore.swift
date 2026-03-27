@@ -284,10 +284,32 @@ final class ChannelsStore {
     }
 
     func orderedChannelIds() -> [String] {
-        if let meta = self.snapshot?.channelMeta, !meta.isEmpty {
-            return meta.map(\.id)
+        var ordered: [String] = []
+        var seen = Set<String>()
+
+        func append(_ ids: [String]) {
+            for id in ids {
+                let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+                seen.insert(trimmed)
+                ordered.append(trimmed)
+            }
         }
-        return self.snapshot?.channelOrder ?? []
+
+        if let meta = self.snapshot?.channelMeta, !meta.isEmpty {
+            append(meta.map(\.id))
+        } else {
+            append(self.snapshot?.channelOrder ?? [])
+        }
+
+        append(Self.settingsVisibleChannelIDs)
+
+        if let snapshot {
+            append(snapshot.channels.keys.sorted())
+            append(snapshot.channelAccounts.keys.sorted())
+        }
+
+        return ordered
     }
 
     init(isPreview: Bool = ProcessInfo.processInfo.isPreview) {

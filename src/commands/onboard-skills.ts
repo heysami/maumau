@@ -7,6 +7,13 @@ import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { detectBinary, resolveNodeManagerOptions } from "./onboard-helpers.js";
 
+const DEFAULT_FIRST_RUN_SKILLS = new Set([
+  "nano-pdf",
+  "openai-whisper",
+  "skill-creator",
+  "summarize",
+]);
+
 function summarizeInstallFailure(message: string): string | undefined {
   const cleaned = message.replace(/^Install failed(?:\s*\([^)]*\))?\s*:?\s*/i, "").trim();
   if (!cleaned) {
@@ -28,6 +35,37 @@ function formatSkillHint(skill: {
   }
   const maxLen = 90;
   return combined.length > maxLen ? `${combined.slice(0, maxLen - 1)}…` : combined;
+}
+
+function formatOptionalSkillQuestion(skill: {
+  name: string;
+  description?: string;
+  primaryEnv: string;
+}): string {
+  const desc = skill.description?.trim();
+  if (!desc) {
+    return `Set up optional skill "${skill.name}" now? This extra integration is not required. It needs ${skill.primaryEnv}.`;
+  }
+  return `Set up optional skill "${skill.name}" now? ${desc} This extra integration is not required. It needs ${skill.primaryEnv}.`;
+}
+
+function formatOptionalSkillKeyPrompt(skill: {
+  name: string;
+  description?: string;
+  primaryEnv: string;
+}): string {
+  const desc = skill.description?.trim();
+  if (!desc) {
+    return `Enter ${skill.primaryEnv} for optional skill "${skill.name}"`;
+  }
+  return `Enter ${skill.primaryEnv} for optional skill "${skill.name}" (${desc})`;
+}
+
+function defaultSkillInstallSelections(skills: Array<{ name: string }>): string[] {
+  return skills
+    .map((skill) => skill.name)
+    .filter((name) => DEFAULT_FIRST_RUN_SKILLS.has(name))
+    .toSorted((left, right) => left.localeCompare(right));
 }
 
 function upsertSkillEntry(
@@ -65,6 +103,7 @@ export async function setupSkills(
 
   await prompter.note(
     [
+      "Optional skills are extra tools and integrations. Maumau works without them.",
       `Eligible: ${eligible.length}`,
       `Missing requirements: ${missing.length}`,
       `Unsupported on this OS: ${unsupportedOs.length}`,
@@ -88,6 +127,7 @@ export async function setupSkills(
   if (installable.length > 0) {
     const toInstall = await prompter.multiselect({
       message: "Install missing skill dependencies",
+      initialValues: defaultSkillInstallSelections(installable),
       options: [
         {
           value: "__skip__",
@@ -203,7 +243,11 @@ export async function setupSkills(
       continue;
     }
     const wantsKey = await prompter.confirm({
-      message: `Set ${skill.primaryEnv} for ${skill.name}?`,
+      message: formatOptionalSkillQuestion({
+        name: skill.name,
+        description: skill.description,
+        primaryEnv: skill.primaryEnv,
+      }),
       initialValue: false,
     });
     if (!wantsKey) {
@@ -211,7 +255,11 @@ export async function setupSkills(
     }
     const apiKey = String(
       await prompter.text({
-        message: `Enter ${skill.primaryEnv}`,
+        message: formatOptionalSkillKeyPrompt({
+          name: skill.name,
+          description: skill.description,
+          primaryEnv: skill.primaryEnv,
+        }),
         validate: (value) => (value?.trim() ? undefined : "Required"),
       }),
     );

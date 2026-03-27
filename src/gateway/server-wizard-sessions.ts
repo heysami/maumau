@@ -1,12 +1,17 @@
 import type { WizardSession } from "../wizard/session.js";
 
+export type RunningWizardEntry = {
+  id: string;
+  session: WizardSession;
+};
+
 export function createWizardSessionTracker() {
   const wizardSessions = new Map<string, WizardSession>();
 
-  const findRunningWizard = (): string | null => {
+  const findRunningWizard = (): RunningWizardEntry | null => {
     for (const [id, session] of wizardSessions) {
       if (session.getStatus() === "running") {
-        return id;
+        return { id, session };
       }
     }
     return null;

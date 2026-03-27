@@ -1,6 +1,6 @@
 export const IRC_FIELD_LABELS: Record<string, string> = {
   "channels.irc": "IRC",
-  "channels.irc.dmPolicy": "IRC DM Policy",
+  "channels.irc.dmPolicy": "Who Can Start a Direct Chat",
   "channels.irc.nickserv.enabled": "IRC NickServ Enabled",
   "channels.irc.nickserv.service": "IRC NickServ Service",
   "channels.irc.nickserv.password": "IRC NickServ Password",
@@ -13,7 +13,7 @@ export const IRC_FIELD_HELP: Record<string, string> = {
   "channels.irc.configWrites":
     "Allow IRC to write config in response to channel events/commands (default: true).",
   "channels.irc.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires channels.irc.allowFrom=["*"].',
+    'Choose who can start a direct chat with this IRC identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.irc.allowFrom=["*"].',
   "channels.irc.nickserv.enabled":
     "Enable NickServ identify/register after connect (defaults to enabled when password is configured).",
   "channels.irc.nickserv.service": "NickServ service nick (default: NickServ).",

@@ -49,7 +49,7 @@ export async function writeGatewayScript(
     [
       "@echo off",
       `set "MAUMAU_GATEWAY_PORT=${port}"`,
-      `"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\steipete\\AppData\\Roaming\\npm\\node_modules\\maumau\\dist\\index.js" gateway --port ${port}`,
+      `"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\steipete\\AppData\\Roaming\\npm\\node_modules\\maumau\\dist\\index.js" gateway run --port ${port}`,
       "",
     ].join("\r\n"),
     "utf8",

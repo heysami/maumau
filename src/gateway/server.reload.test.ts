@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
+import { __testing as restartTesting } from "../infra/restart.js";
 import { drainSystemEvents } from "../infra/system-events.js";
 import {
   connectOk,
@@ -118,7 +119,7 @@ const hoisted = vi.hoisted(() => {
 
   const reloaderStop = vi.fn(async () => {});
   let onHotReload: ((plan: unknown, nextConfig: unknown) => Promise<void>) | null = null;
-  let onRestart: ((plan: unknown, nextConfig: unknown) => void) | null = null;
+  let onRestart: ((plan: unknown, nextConfig: unknown) => void | Promise<void>) | null = null;
 
   const startGatewayConfigReloader = vi.fn(
     (opts: { onHotReload: typeof onHotReload; onRestart: typeof onRestart }) => {
@@ -182,6 +183,7 @@ describe("gateway hot reload", () => {
   let prevGeminiApiKey: string | undefined;
 
   beforeEach(() => {
+    restartTesting.resetSigusr1State();
     prevSkipChannels = process.env.MAUMAU_SKIP_CHANNELS;
     prevSkipGmail = process.env.MAUMAU_SKIP_GMAIL_WATCHER;
     prevSkipProviders = process.env.MAUMAU_SKIP_PROVIDERS;
@@ -193,6 +195,7 @@ describe("gateway hot reload", () => {
   });
 
   afterEach(() => {
+    restartTesting.resetSigusr1State();
     if (prevSkipChannels === undefined) {
       delete process.env.MAUMAU_SKIP_CHANNELS;
     } else {
@@ -555,6 +558,99 @@ describe("gateway hot reload", () => {
 
       expect(signalSpy).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("defers a config-triggered restart until the active setup wizard finishes", async () => {
+    const { server, ws } = await startServerWithClient(undefined, {
+      wizardRunner: async (_opts, _runtime, prompter) => {
+        await prompter.note(
+          "Gateway setup is still applying local service changes.",
+          "Gateway service runtime",
+        );
+      },
+    });
+    const signalSpy = vi.fn();
+    process.on("SIGUSR1", signalSpy);
+    try {
+      await connectOk(ws);
+
+      const start = await rpcReq<{
+        sessionId: string;
+        done: boolean;
+        status: "running" | "done" | "cancelled" | "error";
+        step?: { id: string; type: "note" | "progress" };
+      }>(ws, "wizard.start", {
+        mode: "local",
+        flow: "quickstart",
+        acceptRisk: true,
+        skipChannels: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipUi: true,
+        embedded: true,
+        fresh: true,
+      });
+      expect(start.ok).toBe(true);
+      expect(start.payload?.status).toBe("running");
+      expect(start.payload?.step?.type).toBe("note");
+
+      const onRestart = hoisted.getOnRestart();
+      expect(onRestart).toBeTypeOf("function");
+      if (!onRestart) {
+        throw new Error("expected onRestart hook");
+      }
+
+      await onRestart(
+        {
+          changedPaths: ["gateway.port"],
+          restartGateway: true,
+          restartReasons: ["gateway.port"],
+          hotReasons: [],
+          reloadHooks: false,
+          restartGmailWatcher: false,
+          restartBrowserControl: false,
+          restartCron: false,
+          restartHeartbeat: false,
+          restartChannels: new Set(),
+          noopPaths: [],
+        },
+        {
+          gateway: {
+            reload: {
+              deferralTimeoutMs: 1_000,
+            },
+          },
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(signalSpy).not.toHaveBeenCalled();
+
+      const finish = await rpcReq<{
+        done: boolean;
+        status: "running" | "done" | "cancelled" | "error";
+      }>(ws, "wizard.next", {
+        sessionId: start.payload?.sessionId,
+        answer: {
+          stepId: start.payload?.step?.id,
+          value: null,
+        },
+      });
+      expect(finish.ok).toBe(true);
+      expect(finish.payload?.done).toBe(true);
+      expect(finish.payload?.status).toBe("done");
+
+      await vi.waitFor(
+        () => {
+          expect(signalSpy).toHaveBeenCalledTimes(1);
+        },
+        { timeout: 1_500, interval: 25 },
+      );
+    } finally {
+      process.removeListener("SIGUSR1", signalSpy);
+      ws.close();
+      await server.close();
+    }
   });
 
   it("fails startup when required secret refs are unresolved", async () => {

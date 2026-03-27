@@ -33,6 +33,8 @@ function getOptions(includeSkip = false) {
 
 describe("buildAuthChoiceOptions", () => {
   beforeEach(() => {
+    resolveManifestProviderAuthChoices.mockReset();
+    resolveProviderWizardOptions.mockReset();
     resolveManifestProviderAuthChoices.mockReturnValue([]);
     resolveProviderWizardOptions.mockReturnValue([]);
   });
@@ -353,6 +355,39 @@ describe("buildAuthChoiceOptions", () => {
 
     expect(ollamaGroup).toBeDefined();
     expect(ollamaGroup?.options.some((opt) => opt.value === "ollama")).toBe(true);
+  });
+
+  it("can skip runtime fallback providers when the manifest catalog is sufficient", () => {
+    resolveManifestProviderAuthChoices.mockReturnValue([
+      {
+        pluginId: "openai",
+        providerId: "openai",
+        methodId: "api-key",
+        choiceId: "openai-api-key",
+        choiceLabel: "OpenAI API key",
+        groupId: "openai",
+        groupLabel: "OpenAI",
+      },
+    ]);
+    resolveProviderWizardOptions.mockReturnValue([
+      {
+        value: "ollama",
+        label: "Ollama",
+        hint: "Cloud and local open models",
+        groupId: "ollama",
+        groupLabel: "Ollama",
+      },
+    ]);
+
+    const options = buildAuthChoiceOptions({
+      store: EMPTY_STORE,
+      includeSkip: false,
+      includeRuntimeFallbackProviders: false,
+    });
+
+    expect(resolveProviderWizardOptions).not.toHaveBeenCalled();
+    expect(options.some((option) => option.value === "openai-api-key")).toBe(true);
+    expect(options.some((option) => option.value === "ollama")).toBe(false);
   });
 
   it("hides image-generation-only providers from the interactive auth picker", () => {

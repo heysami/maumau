@@ -17,6 +17,7 @@ import {
   type NonInteractiveRuntime,
 } from "./onboard-non-interactive.test-helpers.js";
 import { OPENAI_DEFAULT_MODEL } from "./openai-model-default.js";
+import { readStateDirDotEnv } from "./test-wizard-helpers.js";
 
 type OnboardEnv = {
   configPath: string;
@@ -384,6 +385,7 @@ async function readCustomLocalProviderApiKeyInput(
 async function expectApiKeyProfile(params: {
   profileId: string;
   provider: string;
+  envVar: string;
   key: string;
   metadata?: Record<string, string>;
 }): Promise<void> {
@@ -392,11 +394,19 @@ async function expectApiKeyProfile(params: {
   expect(profile?.type).toBe("api_key");
   if (profile?.type === "api_key") {
     expect(profile.provider).toBe(params.provider);
-    expect(profile.key).toBe(params.key);
+    expect(profile.key).toBeUndefined();
+    expect(profile.keyRef).toEqual({
+      source: "env",
+      provider: "default",
+      id: params.envVar,
+    });
     if (params.metadata) {
       expect(profile.metadata).toEqual(params.metadata);
     }
   }
+  expect(await readStateDirDotEnv(process.env.MAUMAU_STATE_DIR ?? "")).toContain(
+    `${params.envVar}=${params.key}`,
+  );
 }
 
 async function loadProviderAuthOnboardModules(): Promise<void> {
@@ -445,6 +455,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "minimax:global",
         provider: "minimax",
+        envVar: "MINIMAX_API_KEY",
         key: "sk-minimax-test",
       });
     });
@@ -464,6 +475,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "minimax:cn",
         provider: "minimax",
+        envVar: "MINIMAX_API_KEY",
         key: "sk-minimax-test",
       });
     });
@@ -489,6 +501,7 @@ describe("onboard (non-interactive): provider auth", () => {
           await expectApiKeyProfile({
             profileId: "zai:default",
             provider: "zai",
+            envVar: "ZAI_API_KEY",
             key: "zai-test-key",
           });
         }),
@@ -545,7 +558,12 @@ describe("onboard (non-interactive): provider auth", () => {
       expect(cfg.auth?.profiles?.["xai:default"]?.provider).toBe("xai");
       expect(cfg.auth?.profiles?.["xai:default"]?.mode).toBe("api_key");
       expect(cfg.agents?.defaults?.model?.primary).toBe("xai/grok-4");
-      await expectApiKeyProfile({ profileId: "xai:default", provider: "xai", key: "xai-test-key" });
+      await expectApiKeyProfile({
+        profileId: "xai:default",
+        provider: "xai",
+        envVar: "XAI_API_KEY",
+        key: "xai-test-key",
+      });
     });
   });
 
@@ -561,6 +579,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "mistral:default",
         provider: "mistral",
+        envVar: "MISTRAL_API_KEY",
         key: "mistral-test-key",
       });
     });
@@ -602,6 +621,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "vercel-ai-gateway:default",
         provider: "vercel-ai-gateway",
+        envVar: "AI_GATEWAY_API_KEY",
         key: "gateway-test-key",
       });
     });
@@ -629,8 +649,16 @@ describe("onboard (non-interactive): provider auth", () => {
       expect(profile?.type).toBe("token");
       if (profile?.type === "token") {
         expect(profile.provider).toBe("anthropic");
-        expect(profile.token).toBe(cleanToken);
+        expect(profile.token).toBeUndefined();
+        expect(profile.tokenRef).toEqual({
+          source: "env",
+          provider: "default",
+          id: "ANTHROPIC_API_KEY",
+        });
       }
+      expect(await readStateDirDotEnv(String(process.env.MAUMAU_STATE_DIR))).toContain(
+        `ANTHROPIC_API_KEY=${cleanToken}`,
+      );
     });
   });
 
@@ -787,6 +815,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "vllm:default",
         provider: "vllm",
+        envVar: "VLLM_API_KEY",
         key: "vllm-test-key",
       });
     });
@@ -817,6 +846,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "sglang:default",
         provider: "sglang",
+        envVar: "SGLANG_API_KEY",
         key: "sglang-test-key",
       });
     });
@@ -835,6 +865,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "litellm:default",
         provider: "litellm",
+        envVar: "LITELLM_API_KEY",
         key: "litellm-test-key",
       });
     });
@@ -873,6 +904,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "cloudflare-ai-gateway:default",
         provider: "cloudflare-ai-gateway",
+        envVar: "CLOUDFLARE_AI_GATEWAY_API_KEY",
         key: "cf-gateway-test-key",
         metadata: { accountId: "cf-account-id", gatewayId: "cf-gateway-id" },
       });
@@ -891,6 +923,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "together:default",
         provider: "together",
+        envVar: "TOGETHER_API_KEY",
         key: "together-test-key",
       });
     });
@@ -908,6 +941,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "qianfan:default",
         provider: "qianfan",
+        envVar: "QIANFAN_API_KEY",
         key: "qianfan-test-key",
       });
     });
@@ -928,6 +962,7 @@ describe("onboard (non-interactive): provider auth", () => {
       await expectApiKeyProfile({
         profileId: "modelstudio:default",
         provider: "modelstudio",
+        envVar: "MODELSTUDIO_API_KEY",
         key: "modelstudio-test-key",
       });
     });

@@ -59,13 +59,18 @@ export function registerMaintenanceCommands(program: Command) {
 
   program
     .command("reset")
-    .description("Reset local config/state (keeps the CLI installed)")
+    .description(
+      "Reset local config/state (`--scope clean` also removes the local gateway service and app-managed CLI)",
+    )
     .addHelpText(
       "after",
       () =>
         `\n${theme.muted("Docs:")} ${formatDocsLink("/cli/reset", "docs.maumau.ai/cli/reset")}\n`,
     )
-    .option("--scope <scope>", "config|config+creds+sessions|full (default: interactive prompt)")
+    .option(
+      "--scope <scope>",
+      "config|config+creds+sessions|full|clean (default: interactive prompt)",
+    )
     .option("--yes", "Skip confirmation prompts", false)
     .option("--non-interactive", "Disable prompts (requires --scope + --yes)", false)
     .option("--dry-run", "Print actions without removing files", false)
@@ -82,7 +87,9 @@ export function registerMaintenanceCommands(program: Command) {
 
   program
     .command("uninstall")
-    .description("Uninstall the gateway service + local data (CLI remains)")
+    .description(
+      "Uninstall the gateway service + local data (app-managed CLI is removed with local state)",
+    )
     .addHelpText(
       "after",
       () =>

@@ -149,7 +149,7 @@ describe("runDaemonRestart health checks", () => {
     loadConfig.mockReset();
 
     service.readCommand.mockResolvedValue({
-      programArguments: ["maumau", "gateway", "--port", "18789"],
+      programArguments: ["maumau", "gateway", "run", "--port", "18789"],
       environment: {},
     });
     service.restart.mockResolvedValue({ outcome: "completed" });

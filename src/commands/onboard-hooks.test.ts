@@ -102,6 +102,19 @@ describe("onboard-hooks", () => {
       ),
       createMockHook(
         {
+          name: "boot-md",
+          description: "Run BOOT.md on gateway startup",
+          filePath: "/mock/workspace/hooks/boot-md/HOOK.md",
+          baseDir: "/mock/workspace/hooks/boot-md",
+          handlerPath: "/mock/workspace/hooks/boot-md/handler.js",
+          hookKey: "boot-md",
+          emoji: "🚀",
+          events: ["gateway:startup"],
+        },
+        eligible,
+      ),
+      createMockHook(
+        {
           name: "command-logger",
           description: "Log all command events to a centralized audit file",
           filePath: "/mock/workspace/hooks/command-logger/HOOK.md",
@@ -145,18 +158,18 @@ describe("onboard-hooks", () => {
       });
       expect(prompter.note).toHaveBeenCalledTimes(2);
       expect(prompter.multiselect).toHaveBeenCalledWith({
-        message: "Enable hooks?",
+        message: "Choose optional automations",
         options: [
           { value: "__skip__", label: "Skip for now" },
           {
             value: "session-memory",
-            label: "💾 session-memory",
-            hint: "Save session context to memory when /new or /reset command is issued",
+            label: "💾 Save chat context for later",
+            hint: "When you start fresh with /new or /reset, save the recent session so your agent can remember it later.",
           },
           {
             value: "command-logger",
-            label: "📝 command-logger",
-            hint: "Log all command events to a centralized audit file",
+            label: "📝 Keep a local activity log",
+            hint: "Save command activity to a local log file for debugging and audits.",
           },
         ],
       });
@@ -180,8 +193,8 @@ describe("onboard-hooks", () => {
       expect(result).toEqual(cfg);
       expect(prompter.multiselect).not.toHaveBeenCalled();
       expect(prompter.note).toHaveBeenCalledWith(
-        "No eligible hooks found. You can configure hooks later in your config.",
-        "No Hooks Available",
+        "No beginner-friendly automations are available right now. You can enable advanced ones later.",
+        "No Optional Automations",
       );
     });
 
@@ -228,13 +241,25 @@ describe("onboard-hooks", () => {
       const noteCalls = (prompter.note as ReturnType<typeof vi.fn>).mock.calls;
       expect(noteCalls).toHaveLength(2);
 
-      // First note should explain what hooks are
-      expect(noteCalls[0][0]).toContain("Hooks let you automate actions");
-      expect(noteCalls[0][0]).toContain("automate actions");
+      // First note should explain that these are optional and beginner-friendly.
+      expect(noteCalls[0][0]).toContain("These are optional automations.");
+      expect(noteCalls[0][0]).toContain("Maumau works without them.");
+      expect(noteCalls[0][0]).toContain("Advanced automation options can be enabled later.");
 
       // Second note should confirm configuration
-      expect(noteCalls[1][0]).toContain("Enabled 1 hook: session-memory");
+      expect(noteCalls[1][0]).toContain("Enabled 1 automation: Save chat context for later");
       expect(noteCalls[1][0]).toMatch(/(?:maumau|maumau)( --profile isolated)? hooks list/);
+    });
+
+    it("should hide advanced hooks from onboarding", async () => {
+      const { prompter } = await runSetupInternalHooks({
+        selected: ["__skip__"],
+      });
+
+      const multiselectArgs = (prompter.multiselect as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+      expect(multiselectArgs.options).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ value: "boot-md" })]),
+      );
     });
   });
 });

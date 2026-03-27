@@ -6,8 +6,13 @@ extension CronSettings {
             self.header
             self.schedulerBanner
             self.content
-            Spacer(minLength: 0)
+                .frame(
+                    minHeight: 260,
+                    idealHeight: 500,
+                    maxHeight: 500,
+                    alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             self.store.start()
             self.channelsStore.start()
@@ -48,10 +53,6 @@ extension CronSettings {
                 Text(job.displayName)
             }
         }
-        .onChange(of: self.store.selectedJobId) { _, newValue in
-                guard let newValue else { return }
-                Task { await self.store.refreshRuns(jobId: newValue) }
-            }
     }
 
     var schedulerBanner: some View {
@@ -133,7 +134,7 @@ extension CronSettings {
                         .foregroundStyle(.secondary)
                 }
 
-                List(selection: self.$store.selectedJobId) {
+                List(selection: self.selectedJobIdBinding) {
                     ForEach(self.store.jobs) { job in
                         self.jobRow(job)
                             .tag(job.id)
@@ -141,14 +142,17 @@ extension CronSettings {
                     }
                 }
                 .listStyle(.inset)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(width: 250)
+            .frame(width: 250, alignment: .topLeading)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
 
             Divider()
 
             self.detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -163,6 +167,7 @@ extension CronSettings {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 2)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Select a job to inspect details and run history.")

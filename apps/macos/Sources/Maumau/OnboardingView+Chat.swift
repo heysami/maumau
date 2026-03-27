@@ -16,9 +16,9 @@ extension OnboardingView {
             let kickoff =
                 "Hi! I just installed Maumau and you’re my brand‑new agent. " +
                 "Please start the first‑run ritual from BOOTSTRAP.md, ask one question at a time, " +
-                "and before we talk about WhatsApp/Telegram, visit soul.md with me to craft SOUL.md: " +
+                "and before we talk about channels, visit SOUL.md with me to craft it: " +
                 "ask what matters to me and how you should be. Then guide me through choosing " +
-                "how we should talk (web‑only, WhatsApp, or Telegram)."
+                "how we should talk for now, and remind me that WhatsApp or Telegram can be linked later in Settings → Channels."
             self.onboardingChatModel.input = kickoff
             self.onboardingChatModel.send()
         }

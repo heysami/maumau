@@ -139,6 +139,20 @@ describe("setupWizardCommand", () => {
     expect(mocks.handleReset).toHaveBeenCalledWith("full", expect.any(String), runtime);
   });
 
+  it("accepts explicit --reset-scope clean", async () => {
+    const runtime = makeRuntime();
+
+    await setupWizardCommand(
+      {
+        reset: true,
+        resetScope: "clean",
+      },
+      runtime,
+    );
+
+    expect(mocks.handleReset).toHaveBeenCalledWith("clean", expect.any(String), runtime);
+  });
+
   it("fails fast for invalid --reset-scope", async () => {
     const runtime = makeRuntime();
 
@@ -151,7 +165,7 @@ describe("setupWizardCommand", () => {
     );
 
     expect(runtime.error).toHaveBeenCalledWith(
-      'Invalid --reset-scope. Use "config", "config+creds+sessions", or "full".',
+      'Invalid --reset-scope. Use "config", "config+creds+sessions", "full", or "clean".',
     );
     expect(runtime.exit).toHaveBeenCalledWith(1);
     expect(mocks.handleReset).not.toHaveBeenCalled();

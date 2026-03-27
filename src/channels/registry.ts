@@ -57,7 +57,8 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChannelMeta> = {
     detailLabel: "WhatsApp Web",
     docsPath: "/channels/whatsapp",
     docsLabel: "whatsapp",
-    blurb: "works with your own number; recommend a separate phone + eSIM.",
+    blurb:
+      "best with a dedicated agent number or linked device that people message from their normal account.",
     systemImage: "message",
   },
   discord: {

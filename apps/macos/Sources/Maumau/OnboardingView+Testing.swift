@@ -41,9 +41,12 @@ extension OnboardingView {
         _ = view.welcomePage()
         _ = view.connectionPage()
         _ = view.wizardPage()
+        _ = view.channelsSetupPage()
+        _ = view.privateAccessPage()
         _ = view.permissionsPage()
         _ = view.cliPage()
         _ = view.workspacePage()
+        _ = view.skillsSetupPage()
         _ = view.onboardingChatPage()
         _ = view.readyPage()
 
@@ -62,7 +65,7 @@ extension OnboardingView {
         view.handleNext()
         view.handleBack()
 
-        _ = view.onboardingPage { Text("Test") }
+        _ = view.onboardingPage(pageID: 0) { Text("Test") }
         _ = view.onboardingCard { Text("Card") }
         _ = view.featureRow(title: "Feature", subtitle: "Subtitle", systemImage: "sparkles")
         _ = view.featureActionRow(

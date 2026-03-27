@@ -5,8 +5,12 @@ set -euo pipefail
 # Outputs to dist/Maumau.app
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/swift-toolchain.sh"
+configure_maumau_swift
 APP_ROOT="$ROOT_DIR/dist/Maumau.app"
-BUILD_ROOT="$ROOT_DIR/apps/macos/.build"
+# Keep packaging on its own SwiftPM build root so stale local `.build` artifacts
+# from a different toolchain cannot poison the bundled app build.
+BUILD_ROOT="${MAUMAU_MAC_PACKAGE_BUILD_ROOT:-$ROOT_DIR/apps/macos/.build-package}"
 PRODUCT="Maumau"
 BUNDLE_ID="${BUNDLE_ID:-ai.maumau.mac.debug}"
 PKG_VERSION="$(cd "$ROOT_DIR" && node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")"
@@ -37,11 +41,98 @@ if [[ "$BUNDLE_ID" == *.debug ]]; then
   AUTO_CHECKS=false
 fi
 
+current_macos_sdk_major() {
+  local version
+  version="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)"
+  version="${version%%.*}"
+  if [[ "$version" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$version"
+  fi
+}
+
+run_with_node_heap() {
+  local heap_mb="$1"
+  shift
+  local node_options="${NODE_OPTIONS:-}"
+  if [[ "$node_options" != *"--max-old-space-size="* ]]; then
+    node_options="${node_options:+${node_options} }--max-old-space-size=${heap_mb}"
+  fi
+  NODE_OPTIONS="$node_options" "$@"
+}
+
+workspace_deps_ready() {
+  [[ -d "$ROOT_DIR/node_modules/.pnpm" ]] || return 1
+  [[ -f "$ROOT_DIR/node_modules/typescript/bin/tsc" ]] || return 1
+  [[ -e "$ROOT_DIR/node_modules/.bin/tsdown" ]] || return 1
+}
+
+has_codesigning_identity() {
+  security find-identity -p codesigning -v 2>/dev/null | grep -Eq '"'
+}
+
+maybe_disable_peekaboo_bridge() {
+  if [[ -n "${MAUMAU_DISABLE_PEEKABOO_BRIDGE:-}" ]]; then
+    return 0
+  fi
+
+  local sdk_major
+  sdk_major="$(current_macos_sdk_major)"
+  if [[ "$sdk_major" =~ ^[0-9]+$ ]] && (( sdk_major >= 26 )); then
+    export MAUMAU_DISABLE_PEEKABOO_BRIDGE=1
+    echo "🪄 macOS SDK ${sdk_major} detected; disabling Peekaboo bridge for this build"
+  fi
+}
+
+maybe_configure_swift_build_jobs() {
+  if [[ -n "${SWIFT_BUILD_JOBS:-}" ]]; then
+    return 0
+  fi
+
+  local sdk_major
+  sdk_major="$(current_macos_sdk_major)"
+  if [[ "$sdk_major" =~ ^[0-9]+$ ]] && (( sdk_major >= 26 )); then
+    export SWIFT_BUILD_JOBS=1
+    echo "🪄 macOS SDK ${sdk_major} detected; forcing serial Swift builds to avoid toolchain crashes"
+  fi
+}
+
+maybe_use_default_swiftpm_layout() {
+  if [[ -n "${USE_DEFAULT_SWIFTPM_LAYOUT:-}" ]]; then
+    return 0
+  fi
+
+  local sdk_major
+  sdk_major="$(current_macos_sdk_major)"
+  if [[ "$sdk_major" =~ ^[0-9]+$ ]] && (( sdk_major >= 26 )) && [[ "${#BUILD_ARCHS[@]}" -eq 1 ]]; then
+    export USE_DEFAULT_SWIFTPM_LAYOUT=1
+    echo "🪄 macOS SDK ${sdk_major} detected; using default SwiftPM build layout for app packaging"
+  fi
+}
+
+maybe_enable_adhoc_signing_for_debug() {
+  if [[ -n "${SIGN_IDENTITY:-}" || -n "${ALLOW_ADHOC_SIGNING:-}" ]]; then
+    return 0
+  fi
+
+  if [[ "$BUNDLE_ID" == *.debug ]] && ! has_codesigning_identity; then
+    export ALLOW_ADHOC_SIGNING=1
+    echo "🪄 No signing identity found for debug bundle; falling back to ad-hoc signing"
+  fi
+}
+
 sparkle_canonical_build_from_version() {
   node --import tsx "$ROOT_DIR/scripts/sparkle-build.ts" canonical-build "$1"
 }
 
+swiftpm_target_triple() {
+  echo "$1-apple-macosx"
+}
+
 build_path_for_arch() {
+  if [[ "${USE_DEFAULT_SWIFTPM_LAYOUT:-}" == "1" ]]; then
+    echo "$BUILD_ROOT/$(swiftpm_target_triple "$1")"
+    return 0
+  fi
   echo "$BUILD_ROOT/$1"
 }
 
@@ -114,12 +205,33 @@ merge_framework_machos() {
   done < <(find "$primary" -type f -print0)
 }
 
+ensure_binary_rpath() {
+  local binary="$1"
+  local rpath="$2"
+  if /usr/bin/otool -l "$binary" | /usr/bin/grep -Fq "$rpath"; then
+    return 0
+  fi
+  /usr/bin/install_name_tool -add_rpath "$rpath" "$binary"
+}
+
 if [[ "${SKIP_PNPM_INSTALL:-0}" != "1" ]]; then
-  echo "📦 Ensuring deps (pnpm install)"
-  (cd "$ROOT_DIR" && pnpm install --no-frozen-lockfile --config.node-linker=hoisted)
+  if [[ "${FORCE_PNPM_INSTALL:-0}" == "1" ]] || ! workspace_deps_ready; then
+    echo "📦 Ensuring deps (pnpm install)"
+    (cd "$ROOT_DIR" && run_with_node_heap 4096 pnpm install --no-frozen-lockfile --config.node-linker=hoisted)
+  else
+    echo "📦 Reusing existing deps (set FORCE_PNPM_INSTALL=1 to reinstall)"
+  fi
 else
   echo "📦 Skipping pnpm install (SKIP_PNPM_INSTALL=1)"
 fi
+
+echo "🧰 Using Swift toolchain: $MAUMAU_SWIFT_BIN"
+
+maybe_disable_peekaboo_bridge
+maybe_configure_swift_build_jobs
+maybe_use_default_swiftpm_layout
+maybe_enable_adhoc_signing_for_debug
+ensure_maumau_swift_build_cache "$BUILD_ROOT" "$ROOT_DIR/apps/macos/.swiftpm"
 
 if [[ -z "${APP_BUILD:-}" ]]; then
   APP_BUILD="$GIT_BUILD_NUMBER"
@@ -156,12 +268,29 @@ fi
 cd "$ROOT_DIR/apps/macos"
 
 echo "🔨 Building $PRODUCT ($BUILD_CONFIG) [${BUILD_ARCHS[*]}]"
-for arch in "${BUILD_ARCHS[@]}"; do
-  BUILD_PATH="$(build_path_for_arch "$arch")"
-  swift build -c "$BUILD_CONFIG" --product "$PRODUCT" --build-path "$BUILD_PATH" --arch "$arch" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
-done
+if [[ "${SKIP_SWIFT_BUILD:-0}" == "1" ]]; then
+  echo "🔨 Reusing existing Swift build products (SKIP_SWIFT_BUILD=1)"
+else
+  for arch in "${BUILD_ARCHS[@]}"; do
+    if [[ "${USE_DEFAULT_SWIFTPM_LAYOUT:-}" == "1" ]]; then
+      SWIFT_BUILD_ARGS=(-c "$BUILD_CONFIG" --product "$PRODUCT" --scratch-path "$BUILD_ROOT")
+    else
+      BUILD_PATH="$(build_path_for_arch "$arch")"
+      SWIFT_BUILD_ARGS=(-c "$BUILD_CONFIG" --product "$PRODUCT" --build-path "$BUILD_PATH" --arch "$arch")
+    fi
+    if [[ -n "${SWIFT_BUILD_JOBS:-}" ]]; then
+      SWIFT_BUILD_ARGS+=(--jobs "$SWIFT_BUILD_JOBS")
+    fi
+    SWIFT_BUILD_ARGS+=(-Xlinker -rpath -Xlinker @executable_path/../Frameworks)
+    "$MAUMAU_SWIFT_BIN" build "${SWIFT_BUILD_ARGS[@]}"
+  done
+fi
 
 BIN_PRIMARY="$(bin_for_arch "$PRIMARY_ARCH")"
+if [[ ! -f "$BIN_PRIMARY" ]]; then
+  echo "ERROR: Expected Swift build product missing at $BIN_PRIMARY" >&2
+  exit 1
+fi
 echo "pkg: binary $BIN_PRIMARY" >&2
 echo "🧹 Cleaning old app bundle"
 rm -rf "$APP_ROOT"
@@ -203,6 +332,7 @@ fi
 chmod +x "$APP_ROOT/Contents/MacOS/Maumau"
 # SwiftPM outputs ad-hoc signed binaries; strip the signature before install_name_tool to avoid warnings.
 /usr/bin/codesign --remove-signature "$APP_ROOT/Contents/MacOS/Maumau" 2>/dev/null || true
+ensure_binary_rpath "$APP_ROOT/Contents/MacOS/Maumau" "@executable_path/../Frameworks"
 
 SPARKLE_FRAMEWORK_PRIMARY="$(sparkle_framework_for_arch "$PRIMARY_ARCH")"
 if [ -d "$SPARKLE_FRAMEWORK_PRIMARY" ]; then
@@ -295,6 +425,9 @@ fi
 
 echo "⏹  Stopping any running Maumau"
 killall -q Maumau 2>/dev/null || true
+if launchctl print gui/"$UID" 2>/dev/null | grep -Fq 'ai.maumau.gateway'; then
+  launchctl bootout gui/"$UID"/ai.maumau.gateway 2>/dev/null || true
+fi
 
 echo "🔏 Signing bundle (auto-selects signing identity if SIGN_IDENTITY is unset)"
 "$ROOT_DIR/scripts/codesign-mac-app.sh" "$APP_ROOT"

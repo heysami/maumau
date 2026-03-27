@@ -109,6 +109,38 @@ function buildBundledHookEntries(): Record<string, string> {
 
 const bundledHookEntries = buildBundledHookEntries();
 
+function buildSrcRuntimeBoundaryEntries(): Record<string, string> {
+  const srcRoot = path.join(process.cwd(), "src");
+  const entries: Record<string, string> = {};
+
+  if (!fs.existsSync(srcRoot)) {
+    return entries;
+  }
+
+  function visit(dir: string) {
+    for (const dirent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, dirent.name);
+      if (dirent.isDirectory()) {
+        visit(fullPath);
+        continue;
+      }
+      const isRuntimeBoundaryFile =
+        dirent.name.endsWith(".runtime.ts") || dirent.name.endsWith("-runtime.ts");
+      if (!dirent.isFile() || !isRuntimeBoundaryFile) {
+        continue;
+      }
+
+      const relativePath = path.relative(srcRoot, fullPath).split(path.sep).join("/");
+      entries[relativePath.replace(/\.ts$/, "")] = fullPath;
+    }
+  }
+
+  visit(srcRoot);
+  return entries;
+}
+
+const srcRuntimeBoundaryEntries = buildSrcRuntimeBoundaryEntries();
+
 function buildCoreDistEntries(): Record<string, string> {
   return {
     index: "src/index.ts",
@@ -119,12 +151,9 @@ function buildCoreDistEntries(): Record<string, string> {
     // it by a deterministic path instead of a content-hashed chunk name.
     // See https://github.com/maumau/maumau/issues/51676
     "cli/memory-cli": "src/cli/memory-cli.ts",
-    // Keep long-lived lazy runtime boundaries on stable filenames so rebuilt
-    // dist/ trees do not strand already-running gateways on stale hashed chunks.
-    "agents/auth-profiles.runtime": "src/agents/auth-profiles.runtime.ts",
-    "agents/pi-model-discovery-runtime": "src/agents/pi-model-discovery-runtime.ts",
-    "commands/status.summary.runtime": "src/commands/status.summary.runtime.ts",
-    "plugins/provider-runtime.runtime": "src/plugins/provider-runtime.runtime.ts",
+    // Keep lazy runtime boundaries on stable filenames so rebuilt dist/ trees
+    // do not strand already-running processes on stale hashed chunks.
+    ...srcRuntimeBoundaryEntries,
     extensionAPI: "src/extensionAPI.ts",
     "infra/warning-filter": "src/infra/warning-filter.ts",
     "telegram/audit": "extensions/telegram/src/audit.ts",

@@ -2,36 +2,108 @@ import AppKit
 import SwiftUI
 
 extension OnboardingView {
-    var body: some View {
-        VStack(spacing: 0) {
-            GlowingMaumauIcon(size: 130, glowIntensity: 0.28)
-                .offset(y: 10)
-                .frame(height: 145)
+    private var showsHeaderProgress: Bool {
+        self.activePageIndex != 0 && self.activePageIndex != 9 && !self.progressHeaderSteps.isEmpty
+    }
 
-            GeometryReader { _ in
+    private var progressHeaderSteps: [(stage: OnboardingHeaderStage, title: String, metaText: String?, pageID: Int)] {
+        self.setupStepDefinitions
+            .filter { self.pageOrder.contains($0.pageID) }
+            .map { ($0.stage, $0.progressTitle, $0.headerMetaText, $0.pageID) }
+    }
+
+    private var progressHeaderActiveIndex: Int? {
+        self.progressHeaderSteps.firstIndex { $0.pageID == self.activePageIndex }
+    }
+
+    private var requiredSetupPageOrderIndex: Int? {
+        let shouldLockForRequiredSetup = Self.shouldWaitForLocalSetupBeforeWizard(
+            mode: self.state.connectionMode,
+            installingCLI: self.installingCLI,
+            isCheckingLocalGatewaySetup: self.isCheckingLocalGatewaySetup,
+            localGatewaySetupAvailable: self.localGatewaySetupAvailable)
+        return self.state.connectionMode == .local && shouldLockForRequiredSetup
+            ? self.pageOrder.firstIndex(of: self.connectionPageIndex)
+            : nil
+    }
+
+    private func navigateToPage(_ index: Int) {
+        guard index != self.currentPage else { return }
+        let leavingWizard = self.activePageIndex == self.wizardPageIndex
+        if leavingWizard, !self.onboardingWizard.isComplete {
+            Task {
+                await self.onboardingWizard.cancelIfRunning()
+                self.onboardingWizard.reset()
+            }
+        }
+        withAnimation {
+            self.currentPage = index
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let viewportWidth = max(Self.windowWidth, geometry.size.width)
+            let headerHeight = self.showsHeaderProgress ? Self.headerHeight : 0
+            let contentHeight = max(
+                Self.minimumContentHeight,
+                geometry.size.height - headerHeight - Self.navigationHeight)
+
+            VStack(spacing: 0) {
+                if self.showsHeaderProgress {
+                    OnboardingHeaderHero(
+                        steps: self.progressHeaderSteps.enumerated().map { index, step in
+                            let targetPageIndex = self.pageOrder.firstIndex(of: step.pageID) ?? 0
+                            let isLocked = Self.shouldLockForwardNavigation(
+                                currentPage: self.currentPage,
+                                targetPage: targetPageIndex,
+                                canAdvance: self.canAdvance,
+                                requiredSetupPageIndex: self.requiredSetupPageOrderIndex,
+                                wizardPageOrderIndex: self.wizardPageOrderIndex,
+                                wizardComplete: self.onboardingWizard.isComplete)
+                            return OnboardingHeaderHero.StepItem(
+                                stage: step.stage,
+                                title: step.title,
+                                metaText: step.metaText,
+                                isActive: self.progressHeaderActiveIndex == index,
+                                isComplete: (self.progressHeaderActiveIndex ?? -1) > index,
+                                isLocked: isLocked,
+                                action: { self.navigateToPage(targetPageIndex) })
+                        })
+                        .frame(height: Self.headerHeight)
+                }
+
                 HStack(spacing: 0) {
                     ForEach(self.pageOrder, id: \.self) { pageIndex in
                         self.pageView(for: pageIndex)
-                            .frame(width: self.pageWidth)
+                            .frame(width: viewportWidth)
+                            .frame(maxHeight: .infinity, alignment: .top)
                     }
                 }
-                .offset(x: CGFloat(-self.currentPage) * self.pageWidth)
+                .offset(x: CGFloat(-self.currentPage) * viewportWidth)
                 .animation(
                     .interactiveSpring(response: 0.5, dampingFraction: 0.86, blendDuration: 0.25),
                     value: self.currentPage)
-                .frame(height: self.contentHeight, alignment: .top)
+                .frame(width: viewportWidth, height: contentHeight, alignment: .topLeading)
                 .clipped()
-            }
-            .frame(height: self.contentHeight)
 
-            Spacer(minLength: 0)
-            self.navigationBar
+                self.navigationBar
+            }
+            .frame(width: viewportWidth, height: geometry.size.height, alignment: .top)
+            .onAppear {
+                self.pageWidth = viewportWidth
+            }
+            .onChange(of: geometry.size.width) { _, newValue in
+                self.pageWidth = max(Self.windowWidth, newValue)
+            }
         }
-        .frame(width: self.pageWidth, height: Self.windowHeight)
+        .frame(minWidth: Self.windowWidth)
+        .frame(minHeight: Self.minimumWindowHeight)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             self.currentPage = 0
-            self.updateMonitoring(for: 0)
+            self.maybeDefaultToLocalConnectionMode()
+            self.updateMonitoring(for: self.activePageIndex)
         }
         .onChange(of: self.currentPage) { _, newValue in
             self.updateMonitoring(for: self.activePageIndex(for: newValue))
@@ -39,7 +111,13 @@ extension OnboardingView {
         .onChange(of: self.state.connectionMode) { _, _ in
             let oldActive = self.activePageIndex
             self.reconcilePageForModeChange(previousActivePageIndex: oldActive)
+            self.resetCLIAutoInstallIfNeeded(for: self.state.connectionMode)
             self.updateDiscoveryMonitoring(for: self.activePageIndex)
+            self.maybeAutoInstallCLI(for: self.activePageIndex)
+            Task {
+                await self.refreshLocalGatewayRuntimeAvailability()
+                await self.loadWorkspaceDefaults(force: true)
+            }
         }
         .onChange(of: self.needsBootstrap) { _, _ in
             if self.currentPage >= self.pageOrder.count {
@@ -48,6 +126,7 @@ extension OnboardingView {
         }
         .onChange(of: self.onboardingWizard.isComplete) { _, newValue in
             guard newValue, self.activePageIndex == self.wizardPageIndex else { return }
+            self.refreshBootstrapStatus()
             self.handleNext()
         }
         .onDisappear {
@@ -58,8 +137,8 @@ extension OnboardingView {
         .task {
             await self.refreshPerms()
             self.refreshCLIStatus()
+            await self.refreshLocalGatewayRuntimeAvailability()
             await self.loadWorkspaceDefaults()
-            await self.ensureDefaultWorkspace()
             self.refreshBootstrapStatus()
             self.preferredGatewayID = GatewayDiscoveryPreferences.preferredStableID()
         }
@@ -85,63 +164,133 @@ extension OnboardingView {
 
     var navigationBar: some View {
         let wizardLockIndex = self.wizardPageOrderIndex
-        return HStack(spacing: 20) {
-            ZStack(alignment: .leading) {
-                Button(action: {}, label: {
-                    Label("Back", systemImage: "chevron.left").labelStyle(.iconOnly)
-                })
-                .buttonStyle(.plain)
-                .opacity(0)
-                .disabled(true)
+        let hideBackButton = self.activePageIndex == self.wizardPageIndex && self.onboardingWizard.isBlocking
+        let showsWizardFooterControls = self.activePageIndex == self.wizardPageIndex &&
+            !self.onboardingWizard.isComplete
+        let footerSlotWidth: CGFloat = 120
+        let showWizardPrimaryButton = showsWizardFooterControls &&
+            !self.onboardingWizard.isComplete &&
+            self.onboardingWizard.primaryActionTitle != nil
+        return Group {
+            if showsWizardFooterControls {
+                VStack(spacing: 10) {
+                    HStack(alignment: .center, spacing: 12) {
+                        HStack(spacing: 12) {
+                            Button(self.onboardingWizard.canGoBack ? "Previous step" : "Back to workspace") {
+                                if self.onboardingWizard.canGoBack {
+                                    Task { await self.onboardingWizard.goBackOneStep() }
+                                } else {
+                                    self.handleBack()
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(
+                                self.onboardingWizard.isSubmitting ||
+                                    self.onboardingWizard.isRewinding ||
+                                    self.onboardingWizard.isShowingProgressStep)
 
-                if self.currentPage > 0 {
-                    Button(action: self.handleBack, label: {
-                        Label("Back", systemImage: "chevron.left")
-                            .labelStyle(.iconOnly)
-                    })
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .opacity(0.8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                }
-            }
-            .frame(minWidth: 80, alignment: .leading)
+                            Button("Set up later") {
+                                self.skipWizardForLater()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .controlSize(.small)
 
-            Spacer()
+                        Spacer(minLength: 12)
 
-            HStack(spacing: 8) {
-                ForEach(0..<self.pageCount, id: \.self) { index in
-                    let isLocked = wizardLockIndex != nil && !self.onboardingWizard
-                        .isComplete && index > (wizardLockIndex ?? 0)
-                    Button {
-                        withAnimation { self.currentPage = index }
-                    } label: {
-                        Circle()
-                            .fill(index == self.currentPage ? Color.accentColor : Color.gray.opacity(0.3))
-                            .frame(width: 8, height: 8)
+                        if showWizardPrimaryButton, let title = self.onboardingWizard.primaryActionTitle {
+                            Button(title) {
+                                Task {
+                                    await self.onboardingWizard.triggerPrimaryAction(
+                                        mode: self.state.connectionMode,
+                                        workspace: self.workspacePath.isEmpty ? nil : self.workspacePath)
+                                }
+                            }
+                            .keyboardShortcut(.return)
+                            .buttonStyle(.borderedProminent)
+                            .disabled(self.onboardingWizard.isPrimaryActionDisabled)
+                        } else {
+                            Color.clear
+                                .frame(minWidth: 88, minHeight: 32)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isLocked)
-                    .opacity(isLocked ? 0.3 : 1)
+
+                    self.pageDots(wizardLockIndex: wizardLockIndex)
                 }
-            }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 13)
+                .frame(minHeight: 86, alignment: .bottom)
+            } else {
+                HStack(spacing: 20) {
+                    ZStack(alignment: .leading) {
+                        Button(action: {}, label: {
+                            Label("Back", systemImage: "chevron.left").labelStyle(.iconOnly)
+                        })
+                        .buttonStyle(.plain)
+                        .opacity(0)
+                        .disabled(true)
 
-            Spacer()
+                        if self.currentPage > 0 && !hideBackButton {
+                            Button(action: self.handleBack, label: {
+                                Label("Back", systemImage: "chevron.left")
+                                    .labelStyle(.iconOnly)
+                            })
+                            .buttonStyle(.plain)
+                            .foregroundColor(.secondary)
+                            .opacity(0.8)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
+                    }
+                    .frame(width: footerSlotWidth, alignment: .leading)
 
-            Button(action: self.handleNext) {
-                Text(self.buttonTitle)
-                    .frame(minWidth: 88)
+                    Spacer()
+
+                    self.pageDots(wizardLockIndex: wizardLockIndex)
+
+                    Spacer()
+
+                    Button(action: self.handleNext) {
+                        Text(self.buttonTitle)
+                            .frame(minWidth: 88)
+                    }
+                    .keyboardShortcut(.return)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!self.canAdvance)
+                    .frame(width: footerSlotWidth, alignment: .trailing)
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 13)
+                .frame(minHeight: 60, alignment: .bottom)
             }
-            .keyboardShortcut(.return)
-            .buttonStyle(.borderedProminent)
-            .disabled(!self.canAdvance)
         }
-        .padding(.horizontal, 28)
-        .padding(.bottom, 13)
-        .frame(minHeight: 60, alignment: .bottom)
     }
 
-    func onboardingPage(@ViewBuilder _ content: () -> some View) -> some View {
+    private func pageDots(wizardLockIndex: Int?) -> some View {
+        let requiredSetupPageIndex = self.requiredSetupPageOrderIndex
+        return HStack(spacing: 8) {
+            ForEach(0..<self.pageCount, id: \.self) { index in
+                let isLocked = Self.shouldLockForwardNavigation(
+                    currentPage: self.currentPage,
+                    targetPage: index,
+                    canAdvance: self.canAdvance,
+                    requiredSetupPageIndex: requiredSetupPageIndex,
+                    wizardPageOrderIndex: wizardLockIndex,
+                    wizardComplete: self.onboardingWizard.isComplete)
+                Button {
+                    withAnimation { self.currentPage = index }
+                } label: {
+                    Circle()
+                        .fill(index == self.currentPage ? Color.accentColor : Color.gray.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLocked)
+                .opacity(isLocked ? 0.3 : 1)
+            }
+        }
+    }
+
+    func onboardingPage(pageID: Int, @ViewBuilder _ content: () -> some View) -> some View {
         let scrollIndicatorGutter: CGFloat = 18
         return ScrollView {
             VStack(spacing: 16) {
@@ -154,6 +303,8 @@ extension OnboardingView {
         .scrollIndicators(.automatic)
         .padding(.horizontal, 28)
         .frame(width: self.pageWidth, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .id("onboarding-scroll-\(pageID)")
     }
 
     func onboardingCard(

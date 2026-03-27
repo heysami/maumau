@@ -1784,19 +1784,51 @@ public struct ConfigSchemaLookupResult: Codable, Sendable {
 
 public struct WizardStartParams: Codable, Sendable {
     public let mode: AnyCodable?
+    public let flow: AnyCodable?
     public let workspace: String?
+    public let acceptrisk: Bool?
+    public let skipchannels: Bool?
+    public let skipskills: Bool?
+    public let skipsearch: Bool?
+    public let skipui: Bool?
+    public let embedded: Bool?
+    public let fresh: Bool?
 
     public init(
         mode: AnyCodable?,
-        workspace: String?)
+        flow: AnyCodable?,
+        workspace: String?,
+        acceptrisk: Bool?,
+        skipchannels: Bool?,
+        skipskills: Bool?,
+        skipsearch: Bool?,
+        skipui: Bool?,
+        embedded: Bool?,
+        fresh: Bool?)
     {
         self.mode = mode
+        self.flow = flow
         self.workspace = workspace
+        self.acceptrisk = acceptrisk
+        self.skipchannels = skipchannels
+        self.skipskills = skipskills
+        self.skipsearch = skipsearch
+        self.skipui = skipui
+        self.embedded = embedded
+        self.fresh = fresh
     }
 
     private enum CodingKeys: String, CodingKey {
         case mode
+        case flow
         case workspace
+        case acceptrisk = "acceptRisk"
+        case skipchannels = "skipChannels"
+        case skipskills = "skipSkills"
+        case skipsearch = "skipSearch"
+        case skipui = "skipUi"
+        case embedded
+        case fresh
     }
 }
 

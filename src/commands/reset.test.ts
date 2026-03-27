@@ -4,8 +4,10 @@ import { createNonExitingRuntime } from "../runtime.js";
 const resolveCleanupPlanFromDisk = vi.fn();
 const removePath = vi.fn();
 const listAgentSessionDirs = vi.fn();
+const removeMacAppStateArtifacts = vi.fn();
 const removeStateAndLinkedPaths = vi.fn();
 const removeWorkspaceDirs = vi.fn();
+const uninstallGatewayServiceIfPresent = vi.fn();
 
 vi.mock("../config/config.js", () => ({
   isNixMode: false,
@@ -18,8 +20,13 @@ vi.mock("./cleanup-plan.js", () => ({
 vi.mock("./cleanup-utils.js", () => ({
   removePath,
   listAgentSessionDirs,
+  removeMacAppStateArtifacts,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
+}));
+
+vi.mock("./gateway-service-cleanup.js", () => ({
+  uninstallGatewayServiceIfPresent,
 }));
 
 const { resetCommand } = await import("./reset.js");
@@ -39,8 +46,10 @@ describe("resetCommand", () => {
     });
     removePath.mockResolvedValue({ ok: true });
     listAgentSessionDirs.mockResolvedValue(["/tmp/.maumau/agents/main/sessions"]);
+    removeMacAppStateArtifacts.mockResolvedValue(undefined);
     removeStateAndLinkedPaths.mockResolvedValue(undefined);
     removeWorkspaceDirs.mockResolvedValue(undefined);
+    uninstallGatewayServiceIfPresent.mockResolvedValue(true);
     vi.spyOn(runtime, "log").mockImplementation(() => {});
     vi.spyOn(runtime, "error").mockImplementation(() => {});
   });
@@ -65,5 +74,36 @@ describe("resetCommand", () => {
     });
 
     expect(runtime.log).not.toHaveBeenCalledWith(expect.stringContaining("maumau backup create"));
+  });
+
+  it("clean reset removes the gateway service before wiping local state", async () => {
+    await resetCommand(runtime, {
+      scope: "clean",
+      yes: true,
+      nonInteractive: true,
+      dryRun: true,
+    });
+
+    expect(uninstallGatewayServiceIfPresent).toHaveBeenCalledWith(runtime, { dryRun: true });
+    expect(removeStateAndLinkedPaths).toHaveBeenCalledWith(
+      expect.objectContaining({ stateDir: "/tmp/.maumau" }),
+      runtime,
+      { dryRun: true },
+    );
+    expect(removeWorkspaceDirs).toHaveBeenCalledWith(["/tmp/.maumau/workspace"], runtime, {
+      dryRun: true,
+    });
+    expect(removeMacAppStateArtifacts).toHaveBeenCalledWith(runtime, { dryRun: true });
+  });
+
+  it("config-only reset keeps mac app state untouched", async () => {
+    await resetCommand(runtime, {
+      scope: "config",
+      yes: true,
+      nonInteractive: true,
+      dryRun: true,
+    });
+
+    expect(removeMacAppStateArtifacts).not.toHaveBeenCalled();
   });
 });

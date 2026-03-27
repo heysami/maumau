@@ -39,7 +39,7 @@ struct SkillsSettings: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Skills")
                     .font(.headline)
-                Text("Skills are enabled when requirements are met (binaries, env, config).")
+                Text("Skills are enabled when requirements are met (binaries, env, config). This is not a full plugin list.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -164,6 +164,12 @@ private enum SkillsFilter: String, CaseIterable, Identifiable {
 private enum InstallTarget: String, CaseIterable {
     case gateway
     case local
+}
+
+struct SkillAutoInstallCandidate: Equatable {
+    let skillKey: String
+    let skillName: String
+    let installId: String
 }
 
 private struct SkillRow: View {
@@ -522,6 +528,81 @@ final class SkillsSettingsModel {
             self.error = error.localizedDescription
         }
         self.isLoading = false
+    }
+
+    static func autoInstallCandidates(
+        from skills: [SkillStatus],
+        preferredSkillKeys: Set<String>) -> [SkillAutoInstallCandidate]
+    {
+        skills
+            .filter { preferredSkillKeys.contains($0.skillKey) && !$0.disabled }
+            .compactMap { skill in
+                let missing = Set(skill.missing.bins)
+                guard !missing.isEmpty else { return nil }
+                guard let option = skill.install.first(where: { option in
+                    option.bins.isEmpty || !missing.isDisjoint(with: option.bins)
+                }) else {
+                    return nil
+                }
+                return SkillAutoInstallCandidate(
+                    skillKey: skill.skillKey,
+                    skillName: skill.name,
+                    installId: option.id)
+            }
+            .sorted { $0.skillName.localizedCaseInsensitiveCompare($1.skillName) == .orderedAscending }
+    }
+
+    func autoInstallSkills(skillKeys: [String]) async {
+        let preferredSkillKeys = Set(skillKeys)
+        let candidates = Self.autoInstallCandidates(
+            from: self.skills,
+            preferredSkillKeys: preferredSkillKeys)
+
+        guard !candidates.isEmpty else {
+            let readyDefaults = self.skills
+                .filter { preferredSkillKeys.contains($0.skillKey) && !$0.disabled && $0.missing.bins.isEmpty }
+                .map(\.name)
+                .sorted()
+            if !readyDefaults.isEmpty {
+                self.statusMessage = "Default skills already ready: \(readyDefaults.joined(separator: ", "))"
+            }
+            return
+        }
+
+        if AppStateStore.shared.connectionMode != .local {
+            AppStateStore.shared.connectionMode = .local
+        }
+
+        var installedNames: [String] = []
+        var failedNames: [String] = []
+        self.statusMessage = "Installing default skills on this Mac..."
+
+        for candidate in candidates {
+            await self.withBusy(candidate.skillKey) {
+                do {
+                    let result = try await GatewayConnection.shared.skillsInstall(
+                        name: candidate.skillName,
+                        installId: candidate.installId,
+                        timeoutMs: 300_000)
+                    if result.ok {
+                        installedNames.append(candidate.skillName)
+                    } else {
+                        failedNames.append(candidate.skillName)
+                    }
+                } catch {
+                    failedNames.append(candidate.skillName)
+                }
+                await self.refresh()
+            }
+        }
+
+        if !installedNames.isEmpty && failedNames.isEmpty {
+            self.statusMessage = "Installed default skills: \(installedNames.joined(separator: ", "))"
+        } else if !installedNames.isEmpty {
+            self.statusMessage = "Installed default skills: \(installedNames.joined(separator: ", ")); retry later for \(failedNames.joined(separator: ", "))"
+        } else if !failedNames.isEmpty {
+            self.statusMessage = "Couldn’t auto-install default skills yet: \(failedNames.joined(separator: ", "))"
+        }
     }
 
     fileprivate func install(skill: SkillStatus, option: SkillInstallOption, target: InstallTarget) async {

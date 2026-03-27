@@ -80,6 +80,16 @@ struct ExecApprovalsStoreRefactorTests {
         }
     }
 
+    @Test
+    func `defaults use ask first exec policy`() async throws {
+        try await self.withTempStateDir { _ in
+            let defaults = ExecApprovalsStore.resolveDefaults()
+            #expect(defaults.security == .allowlist)
+            #expect(defaults.ask == .always)
+            #expect(defaults.askFallback == .deny)
+        }
+    }
+
     private static func fileIdentity(at url: URL) throws -> Int {
         let attributes = try FileManager().attributesOfItem(atPath: url.path)
         guard let identifier = (attributes[.systemFileNumber] as? NSNumber)?.intValue else {

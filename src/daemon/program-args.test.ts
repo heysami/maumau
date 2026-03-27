@@ -48,6 +48,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       entryPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -91,6 +92,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       indexPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -114,6 +116,7 @@ describe("resolveGatewayProgramArguments", () => {
       "/usr/local/bin/bun",
       repoEntryPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);

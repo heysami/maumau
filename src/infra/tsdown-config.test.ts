@@ -35,11 +35,15 @@ describe("tsdown config", () => {
     expect(entryKeys(distGraphs[0])).toEqual(
       expect.arrayContaining([
         "agents/auth-profiles.runtime",
+        "agents/model-suppression.runtime",
+        "agents/pi-embedded.runtime",
         "agents/pi-model-discovery-runtime",
+        "auto-reply/reply/session-updates.runtime",
         "index",
         "cli/memory-cli",
         "commands/status.summary.runtime",
         "plugins/provider-runtime.runtime",
+        "wizard/setup.runtime",
         "plugins/runtime/index",
         "plugin-sdk/compat",
         "plugin-sdk/index",

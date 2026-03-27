@@ -28,6 +28,8 @@ function createBundledSkill(params: {
   name: string;
   description: string;
   bins: string[];
+  env?: string[];
+  primaryEnv?: string;
   os?: string[];
   installLabel: string;
 }): {
@@ -38,6 +40,7 @@ function createBundledSkill(params: {
   filePath: string;
   baseDir: string;
   skillKey: string;
+  primaryEnv?: string;
   always: boolean;
   disabled: boolean;
   blockedByAllowlist: boolean;
@@ -65,8 +68,21 @@ function createBundledSkill(params: {
     disabled: false,
     blockedByAllowlist: false,
     eligible: false,
-    requirements: { bins: params.bins, anyBins: [], env: [], config: [], os: params.os ?? [] },
-    missing: { bins: params.bins, anyBins: [], env: [], config: [], os: params.os ?? [] },
+    primaryEnv: params.primaryEnv,
+    requirements: {
+      bins: params.bins,
+      anyBins: [],
+      env: params.env ?? [],
+      config: [],
+      os: params.os ?? [],
+    },
+    missing: {
+      bins: params.bins,
+      anyBins: [],
+      env: params.env ?? [],
+      config: [],
+      os: params.os ?? [],
+    },
     configChecks: [],
     install: [{ id: "brew", kind: "brew", label: params.installLabel, bins: params.bins }],
   };
@@ -130,6 +146,41 @@ const runtime: RuntimeEnv = {
 };
 
 describe("setupSkills", () => {
+  it("preselects the supported default first-run skill installs", async () => {
+    mockMissingBrewStatus([
+      createBundledSkill({
+        name: "summarize",
+        description: "Summary CLI",
+        bins: ["summarize"],
+        installLabel: "Install summarize (brew)",
+      }),
+      createBundledSkill({
+        name: "openai-whisper",
+        description: "Whisper CLI",
+        bins: ["whisper"],
+        installLabel: "Install whisper (brew)",
+      }),
+      createBundledSkill({
+        name: "nano-pdf",
+        description: "PDF editor",
+        bins: ["nano-pdf"],
+        installLabel: "Install nano-pdf (uv)",
+      }),
+      createBundledSkill({
+        name: "another-skill",
+        description: "Not default",
+        bins: ["another-skill"],
+        installLabel: "Install another-skill (brew)",
+      }),
+    ]);
+
+    const { prompter } = createPrompter({ multiselect: ["__skip__"] });
+    await setupSkills({} as MaumauConfig, "/tmp/ws", runtime, prompter);
+
+    const multiSelectCall = vi.mocked(prompter.multiselect).mock.calls[0]?.[0];
+    expect(multiSelectCall?.initialValues).toEqual(["nano-pdf", "openai-whisper", "summarize"]);
+  });
+
   it("does not recommend Homebrew when user skips installing brew-backed deps", async () => {
     if (process.platform === "win32") {
       return;
@@ -181,5 +232,43 @@ describe("setupSkills", () => {
 
     const brewNote = notes.find((n) => n.title === "Homebrew recommended");
     expect(brewNote).toBeDefined();
+  });
+
+  it("explains what optional skill API keys are for", async () => {
+    mockMissingBrewStatus([
+      createBundledSkill({
+        name: "goplaces",
+        description: "Query Google Places API for place search and details.",
+        bins: [],
+        env: ["GOOGLE_PLACES_API_KEY"],
+        primaryEnv: "GOOGLE_PLACES_API_KEY",
+        installLabel: "Install goplaces (brew)",
+      }),
+    ]);
+
+    const { prompter } = createPrompter({ multiselect: ["__skip__"] });
+    await setupSkills({} as MaumauConfig, "/tmp/ws", runtime, prompter);
+
+    const notes = vi.mocked(prompter.note).mock.calls.map(([message]) => String(message));
+    expect(
+      notes.some((message) =>
+        message.includes(
+          "Optional skills are extra tools and integrations. Maumau works without them.",
+        ),
+      ),
+    ).toBe(true);
+
+    const confirmCalls = vi.mocked(prompter.confirm).mock.calls;
+    expect(
+      confirmCalls.some(
+        ([params]) =>
+          String(params.message).includes('optional skill "goplaces" now?') &&
+          String(params.message).includes(
+            "Query Google Places API for place search and details.",
+          ) &&
+          String(params.message).includes("not required") &&
+          String(params.message).includes("GOOGLE_PLACES_API_KEY"),
+      ),
+    ).toBe(true);
   });
 });

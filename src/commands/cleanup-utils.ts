@@ -140,6 +140,46 @@ export async function removeWorkspaceDirs(
   }
 }
 
+export function resolveMacAppStateArtifactPaths(
+  home: string | undefined = resolveHomeDir(),
+): string[] {
+  if (!home) {
+    return [];
+  }
+
+  return [
+    path.join(home, "Library", "Preferences", "ai.maumau.mac.plist"),
+    path.join(home, "Library", "Preferences", "ai.maumau.mac.debug.plist"),
+    path.join(home, "Library", "Preferences", "ai.maumau.shared.plist"),
+    path.join(home, "Library", "Group Containers", "group.ai.maumau.shared"),
+    path.join(home, "Library", "Application Support", "Maumau"),
+    path.join(home, "Library", "WebKit", "ai.maumau.mac"),
+    path.join(home, "Library", "WebKit", "ai.maumau.mac.debug"),
+    path.join(home, "Library", "HTTPStorages", "ai.maumau.mac"),
+    path.join(home, "Library", "HTTPStorages", "ai.maumau.mac.debug"),
+    path.join(home, "Library", "Caches", "ai.maumau.mac"),
+    path.join(home, "Library", "Caches", "ai.maumau.mac.debug"),
+    path.join(home, "Library", "Saved Application State", "ai.maumau.mac.savedState"),
+    path.join(home, "Library", "Saved Application State", "ai.maumau.mac.debug.savedState"),
+  ];
+}
+
+export async function removeMacAppStateArtifacts(
+  runtime: RuntimeEnv,
+  opts?: { dryRun?: boolean },
+): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  for (const target of resolveMacAppStateArtifactPaths()) {
+    await removePath(target, runtime, {
+      dryRun: opts?.dryRun,
+      label: target,
+    });
+  }
+}
+
 export async function listAgentSessionDirs(stateDir: string): Promise<string[]> {
   const root = path.join(stateDir, "agents");
   try {

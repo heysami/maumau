@@ -9,6 +9,7 @@ import {
 import {
   CLAUDE_CLI_PROFILE_ID,
   applyAuthProfileConfig,
+  buildTokenCredential,
   buildTokenProfileId,
   createProviderApiKeyAuthMethod,
   ensureApiKeyFromOptionEnvOrPrompt,
@@ -189,7 +190,7 @@ async function runAnthropicSetupToken(ctx: ProviderAuthContext): Promise<Provide
         copy: {
           modeMessage: "How do you want to provide this setup token?",
           plaintextLabel: "Paste setup token now",
-          plaintextHint: "Stores the token directly in the auth profile",
+          plaintextHint: "Stores the token in Maumau's managed state .env outside the workspace",
         },
       })
     : "plaintext";
@@ -297,12 +298,9 @@ async function runAnthropicSetupTokenNonInteractive(ctx: {
   upsertAuthProfile({
     profileId,
     agentDir: ctx.agentDir,
-    credential: {
-      type: "token",
-      provider: PROVIDER_ID,
-      token,
+    credential: buildTokenCredential(PROVIDER_ID, token, {
       ...(expires ? { expires } : {}),
-    },
+    }),
   });
   return applyAuthProfileConfig(ctx.config, {
     profileId,

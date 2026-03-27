@@ -3,6 +3,9 @@ import MaumauProtocol
 import SwiftUI
 
 struct CronJobEditor: View {
+    static let minimumContentHeight: CGFloat = 480
+    static let idealContentHeightTarget: CGFloat = 640
+
     let job: CronJob?
     @Binding var isSaving: Bool
     @Binding var error: String?
@@ -23,6 +26,18 @@ struct CronJobEditor: View {
         "Isolated jobs always run an agent turn. Announce sends a short summary to a channel."
     static let mainPayloadNote =
         "System events are injected into the current main session. Agent turns require an isolated session target."
+
+    static func maxContentHeight(visibleFrame: NSRect? = nil) -> CGFloat {
+        SettingsWindowSizing.defaultContentHeight(visibleFrame: visibleFrame)
+    }
+
+    static func minContentHeight(visibleFrame: NSRect? = nil) -> CGFloat {
+        min(self.minimumContentHeight, self.maxContentHeight(visibleFrame: visibleFrame))
+    }
+
+    static func idealContentHeight(visibleFrame: NSRect? = nil) -> CGFloat {
+        min(self.idealContentHeightTarget, self.maxContentHeight(visibleFrame: visibleFrame))
+    }
 
     @State var name: String = ""
     @State var description: String = ""
@@ -284,7 +299,12 @@ struct CronJobEditor: View {
             }
         }
         .padding(24)
-        .frame(minWidth: 720, minHeight: 640)
+        .frame(
+            minWidth: 720,
+            minHeight: Self.minContentHeight(),
+            idealHeight: Self.idealContentHeight(),
+            maxHeight: Self.maxContentHeight(),
+            alignment: .topLeading)
         .onAppear { self.hydrateFromJob() }
         .onChange(of: self.payloadKind) { _, newValue in
             if newValue == .agentTurn, self.sessionTarget == .main {

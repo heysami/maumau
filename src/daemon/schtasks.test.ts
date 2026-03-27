@@ -248,7 +248,7 @@ describe("readScheduledTaskCommand", () => {
       {
         scriptLines: [
           "@echo off",
-          '"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\maumau\\dist\\index.js gateway --port 18789',
+          '"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\maumau\\dist\\index.js gateway run --port 18789',
         ],
       },
       async (env) => {
@@ -258,6 +258,7 @@ describe("readScheduledTaskCommand", () => {
             "C:\\Program Files\\nodejs\\node.exe",
             "C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\maumau\\dist\\index.js",
             "gateway",
+            "run",
             "--port",
             "18789",
           ],
@@ -272,7 +273,7 @@ describe("readScheduledTaskCommand", () => {
       {
         scriptLines: [
           "@echo off",
-          '"\\\\fileserver\\Maumau Share\\node.exe" "\\\\fileserver\\Maumau Share\\dist\\index.js" gateway --port 18789',
+          '"\\\\fileserver\\Maumau Share\\node.exe" "\\\\fileserver\\Maumau Share\\dist\\index.js" gateway run --port 18789',
         ],
       },
       async (env) => {
@@ -282,6 +283,7 @@ describe("readScheduledTaskCommand", () => {
             "\\\\fileserver\\Maumau Share\\node.exe",
             "\\\\fileserver\\Maumau Share\\dist\\index.js",
             "gateway",
+            "run",
             "--port",
             "18789",
           ],

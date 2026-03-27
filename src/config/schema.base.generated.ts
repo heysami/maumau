@@ -15304,8 +15304,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.irc.dmPolicy": {
-      label: "IRC DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.irc.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this IRC identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.irc.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.irc.nickserv.enabled": {
@@ -15346,8 +15346,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       sensitive: true,
     },
     "channels.telegram.dmPolicy": {
-      label: "Telegram DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.telegram.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Telegram bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.telegram.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.telegram.configWrites": {
@@ -15486,13 +15486,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "storage", "channels"],
     },
     "channels.whatsapp.dmPolicy": {
-      label: "WhatsApp DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.whatsapp.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this WhatsApp agent. "pairing" lets people request access once, "allowlist" only allows listed phone numbers, and "open" allows anyone and requires channels.whatsapp.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.whatsapp.selfChatMode": {
-      label: "WhatsApp Self-Phone Mode",
-      help: "Same-phone setup (bot uses your personal WhatsApp number).",
+      label: "Use the Same WhatsApp Account (Legacy)",
+      help: "Legacy same-account mode. Turn this on only if the agent is linked to your own personal WhatsApp account and you intentionally want self-chat behavior.",
       tags: ["network", "channels"],
     },
     "channels.whatsapp.debounceMs": {
@@ -15506,8 +15506,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.signal.dmPolicy": {
-      label: "Signal DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Signal identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.signal.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.signal.configWrites": {
@@ -15516,8 +15516,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.imessage.dmPolicy": {
-      label: "iMessage DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.imessage.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this iMessage identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.imessage.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.imessage.configWrites": {
@@ -15526,8 +15526,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.bluebubbles.dmPolicy": {
-      label: "BlueBubbles DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.bluebubbles.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this BlueBubbles identity. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.bluebubbles.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.msteams.configWrites": {
@@ -15541,13 +15541,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.discord.dmPolicy": {
-      label: "Discord DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.discord.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Discord bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.discord.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.discord.dm.policy": {
-      label: "Discord DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.discord.allowFrom=["*"] (legacy: channels.discord.dm.allowFrom).',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Discord bot. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.discord.allowFrom=["*"] (legacy: channels.discord.dm.allowFrom).',
       tags: ["access", "network", "channels"],
     },
     "channels.discord.configWrites": {
@@ -15767,13 +15767,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["network", "channels"],
     },
     "channels.slack.dm.policy": {
-      label: "Slack DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.slack.allowFrom=["*"] (legacy: channels.slack.dm.allowFrom).',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Slack app. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.slack.allowFrom=["*"] (legacy: channels.slack.dm.allowFrom).',
       tags: ["access", "network", "channels"],
     },
     "channels.slack.dmPolicy": {
-      label: "Slack DM Policy",
-      help: 'Direct message access control ("pairing" recommended). "open" requires channels.slack.allowFrom=["*"].',
+      label: "Who Can Start a Direct Chat",
+      help: 'Choose who can start a direct chat with this Slack app. "pairing" lets people request access once, "allowlist" only allows listed people, and "open" allows anyone and requires channels.slack.allowFrom=["*"].',
       tags: ["access", "network", "channels"],
     },
     "channels.slack.configWrites": {
@@ -16286,6 +16286,6 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["security", "auth"],
     },
   },
-  version: "2026.3.24",
+  version: "2026.3.27",
   generatedAt: "2026-03-22T21:17:33.302Z",
 } as const satisfies BaseConfigSchemaResponse;

@@ -88,7 +88,7 @@ export type BuiltInAuthChoiceGroupId =
   | "custom";
 export type AuthChoiceGroupId = BuiltInAuthChoiceGroupId | (string & {});
 export type GatewayAuthChoice = "token" | "password";
-export type ResetScope = "config" | "config+creds+sessions" | "full";
+export type ResetScope = "config" | "config+creds+sessions" | "full" | "clean";
 export type GatewayBind = "loopback" | "lan" | "auto" | "custom" | "tailnet";
 export type TailscaleMode = "off" | "serve" | "funnel";
 export type NodeManagerChoice = "npm" | "pnpm" | "bun";
@@ -116,7 +116,7 @@ export type OnboardOptions = {
   tokenProfileId?: string;
   /** Used when `authChoice=token` in non-interactive mode. */
   tokenExpiresIn?: string;
-  /** API key persistence mode for setup flows (default: plaintext). */
+  /** Secret input mode for setup flows (default: paste now). */
   secretInputMode?: SecretInputMode;
   anthropicApiKey?: string;
   deepseekApiKey?: string;
@@ -171,6 +171,8 @@ export type OnboardOptions = {
   skipSearch?: boolean;
   skipHealth?: boolean;
   skipUi?: boolean;
+  /** Used by native app onboarding to suppress CLI-only filler steps. */
+  embedded?: boolean;
   nodeManager?: NodeManagerChoice;
   remoteUrl?: string;
   remoteToken?: string;

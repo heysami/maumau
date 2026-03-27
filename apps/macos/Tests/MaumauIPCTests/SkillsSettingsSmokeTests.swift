@@ -41,6 +41,53 @@ private func makeSkillStatus(
 @Suite(.serialized)
 @MainActor
 struct SkillsSettingsSmokeTests {
+    @Test func `default auto install candidates only include missing installable defaults`() {
+        let candidates = SkillsSettingsModel.autoInstallCandidates(
+            from: [
+                makeSkillStatus(
+                    name: "summarize",
+                    description: "Summary helper",
+                    source: "maumau-bundled",
+                    filePath: "/tmp/skills/summarize",
+                    skillKey: "summarize",
+                    emoji: "📝",
+                    eligible: false,
+                    missing: SkillMissing(bins: ["summarize"], env: [], config: []),
+                    install: [
+                        SkillInstallOption(
+                            id: "brew",
+                            kind: "brew",
+                            label: "Install summarize (brew)",
+                            bins: ["summarize"]),
+                    ]),
+                makeSkillStatus(
+                    name: "skill-creator",
+                    description: "Already bundled",
+                    source: "maumau-bundled",
+                    filePath: "/tmp/skills/skill-creator",
+                    skillKey: "skill-creator",
+                    emoji: "🛠️",
+                    eligible: true),
+                makeSkillStatus(
+                    name: "nano-pdf",
+                    description: "No install option",
+                    source: "maumau-bundled",
+                    filePath: "/tmp/skills/nano-pdf",
+                    skillKey: "nano-pdf",
+                    emoji: "📄",
+                    eligible: false,
+                    missing: SkillMissing(bins: ["nano-pdf"], env: [], config: [])),
+            ],
+            preferredSkillKeys: ["nano-pdf", "skill-creator", "summarize"])
+
+        #expect(candidates == [
+            SkillAutoInstallCandidate(
+                skillKey: "summarize",
+                skillName: "summarize",
+                installId: "brew"),
+        ])
+    }
+
     @Test func `skills settings builds body with skills remote`() {
         let model = SkillsSettingsModel()
         model.statusMessage = "Loaded"

@@ -4,6 +4,7 @@ import type { MaumauConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import {
   buildCleanupPlan,
+  resolveMacAppStateArtifactPaths,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
 } from "./cleanup-utils.js";
@@ -96,5 +97,19 @@ describe("cleanup path removals", () => {
     const logs = runtime.log.mock.calls.map(([line]) => line);
     expect(logs).toContain("[dry-run] remove /tmp/maumau-workspace-1");
     expect(logs).toContain("[dry-run] remove /tmp/maumau-workspace-2");
+  });
+});
+
+describe("resolveMacAppStateArtifactPaths", () => {
+  it("includes app support, browser storage, and preference artifacts", () => {
+    const paths = resolveMacAppStateArtifactPaths("/tmp/maumau-home").map((entry) =>
+      entry.replaceAll("\\", "/"),
+    );
+
+    expect(paths).toContain("/tmp/maumau-home/Library/Application Support/Maumau");
+    expect(paths).toContain("/tmp/maumau-home/Library/WebKit/ai.maumau.mac.debug");
+    expect(paths).toContain("/tmp/maumau-home/Library/HTTPStorages/ai.maumau.mac");
+    expect(paths).toContain("/tmp/maumau-home/Library/Preferences/ai.maumau.mac.debug.plist");
+    expect(paths).toContain("/tmp/maumau-home/Library/Group Containers/group.ai.maumau.shared");
   });
 });

@@ -1,0 +1,73 @@
+{
+  "id": "nemoclaw",
+  "name": "Maumau Guardrails",
+  "description": "NeMo Guardrails bridge for Maumau prompt, tool, and output policy checks.",
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "failClosed": {
+        "type": "boolean"
+      },
+      "promptGuards": {
+        "type": "boolean"
+      },
+      "toolGuards": {
+        "type": "boolean"
+      },
+      "outputGuards": {
+        "type": "boolean"
+      },
+      "authToken": {
+        "type": "string"
+      },
+      "promptPath": {
+        "type": "string"
+      },
+      "toolPath": {
+        "type": "string"
+      },
+      "outputPath": {
+        "type": "string"
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "Guardrails URL",
+      "help": "Base URL for the local Maumau guardrails or NeMo Guardrails sidecar.",
+      "placeholder": "http://127.0.0.1:8000"
+    },
+    "authToken": {
+      "label": "Auth Token",
+      "help": "Optional bearer token sent to the guardrails sidecar.",
+      "sensitive": true,
+      "advanced": true
+    },
+    "failClosed": {
+      "label": "Fail Closed",
+      "help": "Block sends and tool calls when the sidecar is unavailable.",
+      "advanced": true
+    },
+    "promptGuards": {
+      "label": "Prompt Guards",
+      "help": "Run prompt policy checks before the model prompt is finalized."
+    },
+    "toolGuards": {
+      "label": "Tool Guards",
+      "help": "Run policy checks before tool execution."
+    },
+    "outputGuards": {
+      "label": "Output Guards",
+      "help": "Run policy checks before outbound messages are sent."
+    }
+  }
+}

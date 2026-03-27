@@ -52,6 +52,10 @@ actor GatewayConnection {
     static let shared = GatewayConnection()
 
     typealias Config = (url: URL, token: String?, password: String?)
+    private enum RecoveryBehavior {
+        case automatic
+        case disabled
+    }
 
     enum Method: String {
         case agent
@@ -74,6 +78,7 @@ actor GatewayConnection {
         case webLoginWait = "web.login.wait"
         case channelsLogout = "channels.logout"
         case modelsList = "models.list"
+        case pluginsStatus = "plugins.status"
         case chatHistory = "chat.history"
         case sessionsPreview = "sessions.preview"
         case chatSend = "chat.send"
@@ -163,6 +168,19 @@ actor GatewayConnection {
         params: [String: AnyCodable]?,
         timeoutMs: Double? = nil) async throws -> Data
     {
+        try await self.performRequest(
+            method: method,
+            params: params,
+            timeoutMs: timeoutMs,
+            recoveryBehavior: .automatic)
+    }
+
+    private func performRequest(
+        method: String,
+        params: [String: AnyCodable]?,
+        timeoutMs: Double?,
+        recoveryBehavior: RecoveryBehavior) async throws -> Data
+    {
         let cfg = try await self.configProvider()
         await self.configure(url: cfg.url, token: cfg.token, password: cfg.password)
         guard let client else {
@@ -172,7 +190,11 @@ actor GatewayConnection {
         do {
             return try await client.request(method: method, params: params, timeoutMs: timeoutMs)
         } catch {
-            if error is GatewayResponseError || error is GatewayDecodingError {
+            if recoveryBehavior == .disabled ||
+                error is GatewayResponseError ||
+                error is GatewayDecodingError ||
+                error is GatewayConnectAuthError
+            {
                 throw error
             }
 
@@ -184,22 +206,31 @@ actor GatewayConnection {
                 await MainActor.run { GatewayProcessManager.shared.setActive(true) }
 
                 var lastError: Error = error
-                for delayMs in [150, 400, 900] {
-                    try await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
-                    do {
-                        return try await client.request(method: method, params: params, timeoutMs: timeoutMs)
-                    } catch {
-                        lastError = error
-                    }
+                // Wizard completion rewrites gateway config and triggers a launchd restart.
+                // Wait for the restarted gateway, then re-read the endpoint/token before retrying.
+                let gatewayReady = await GatewayProcessManager.shared.waitForGatewayReady(
+                    timeout: GatewayProcessManager.localGatewayStartupTimeout)
+                let retryDelays = gatewayReady ? [0, 150, 400, 900] : [150, 400, 900]
+                do {
+                    return try await self.retryRequestWithFreshConfig(
+                        method: method,
+                        params: params,
+                        timeoutMs: timeoutMs,
+                        delaysMs: retryDelays)
+                } catch {
+                    lastError = error
                 }
 
                 let nsError = lastError as NSError
                 if nsError.domain == URLError.errorDomain,
-                   let fallback = await GatewayEndpointStore.shared.maybeFallbackToTailnet(from: cfg.url)
+                   let fallback = await GatewayEndpointStore.shared.maybeFallbackToTailnet(
+                       from: self.configuredURL ?? cfg.url)
                 {
                     await self.configure(url: fallback.url, token: fallback.token, password: fallback.password)
-                    for delayMs in [150, 400, 900] {
-                        try await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
+                    for delayMs in [0, 150, 400, 900] {
+                        if delayMs > 0 {
+                            try await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
+                        }
                         do {
                             guard let client = self.client else {
                                 throw NSError(
@@ -265,6 +296,20 @@ actor GatewayConnection {
         timeoutMs: Double? = nil) async throws -> Data
     {
         try await self.request(method: method, params: params, timeoutMs: timeoutMs)
+    }
+
+    /// Internal readiness/health probes must bypass auto-recovery to avoid recursively
+    /// re-entering `GatewayProcessManager.waitForGatewayReady()` on startup failures.
+    func requestRawWithoutRecovery(
+        method: Method,
+        params: [String: AnyCodable]? = nil,
+        timeoutMs: Double? = nil) async throws -> Data
+    {
+        try await self.performRequest(
+            method: method.rawValue,
+            params: params,
+            timeoutMs: timeoutMs,
+            recoveryBehavior: .disabled)
     }
 
     func requestDecoded<T: Decodable>(
@@ -410,10 +455,58 @@ actor GatewayConnection {
             session: self.sessionBox,
             pushHandler: { [weak self] push in
                 await self?.handle(push: push)
-            })
+            },
+            connectOptions: GatewayConnectOptions(
+                role: "operator",
+                scopes: [
+                    "operator.admin",
+                    "operator.read",
+                    "operator.write",
+                    "operator.approvals",
+                    "operator.pairing",
+                ],
+                caps: [],
+                commands: [],
+                permissions: [:],
+                clientId: "maumau-macos",
+                clientMode: "ui",
+                clientDisplayName: InstanceIdentity.displayName,
+                deviceIdentityNamespace: "ui"))
         self.configuredURL = url
         self.configuredToken = token
         self.configuredPassword = password
+    }
+
+    private func retryRequestWithFreshConfig(
+        method: String,
+        params: [String: AnyCodable]?,
+        timeoutMs: Double?,
+        delaysMs: [Int]) async throws -> Data
+    {
+        var lastError: Error?
+        for delayMs in delaysMs {
+            if delayMs > 0 {
+                try await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
+            }
+            do {
+                let cfg = try await self.configProvider()
+                await self.configure(url: cfg.url, token: cfg.token, password: cfg.password)
+                guard let client = self.client else {
+                    throw NSError(
+                        domain: "Gateway",
+                        code: 0,
+                        userInfo: [NSLocalizedDescriptionKey: "gateway not configured"])
+                }
+                return try await client.request(method: method, params: params, timeoutMs: timeoutMs)
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? NSError(
+            domain: "Gateway",
+            code: 0,
+            userInfo: [NSLocalizedDescriptionKey: "gateway request retry failed"])
     }
 
     private func handle(push: GatewayPush) {
@@ -550,6 +643,10 @@ extension GatewayConnection {
     }
 
     // MARK: - Skills
+
+    func pluginsStatus() async throws -> PluginsStatusReport {
+        try await self.requestDecoded(method: .pluginsStatus)
+    }
 
     func skillsStatus() async throws -> SkillsStatusReport {
         try await self.requestDecoded(method: .skillsStatus)

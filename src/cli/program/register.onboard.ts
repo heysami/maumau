@@ -72,9 +72,9 @@ export function registerOnboardCommand(program: Command) {
     .option("--workspace <dir>", "Agent workspace directory (default: ~/.maumau/workspace)")
     .option(
       "--reset",
-      "Reset config + credentials + sessions before running onboard (workspace only with --reset-scope full)",
+      "Reset config + credentials + sessions before running onboard (use --reset-scope clean to also remove the local gateway service and app-managed CLI)",
     )
-    .option("--reset-scope <scope>", "Reset scope: config|config+creds+sessions|full")
+    .option("--reset-scope <scope>", "Reset scope: config|config+creds+sessions|full|clean")
     .option("--non-interactive", "Run without prompts", false)
     .option(
       "--accept-risk",

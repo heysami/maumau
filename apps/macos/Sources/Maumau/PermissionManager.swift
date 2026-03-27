@@ -10,6 +10,10 @@ import Speech
 import UserNotifications
 
 enum PermissionManager {
+    private static var canUseNotificationCenter: Bool {
+        NotificationManager.isAvailableInCurrentProcess
+    }
+
     static func isLocationAuthorized(status: CLAuthorizationStatus, requireAlways: Bool) -> Bool {
         if requireAlways { return status == .authorizedAlways }
         switch status {
@@ -52,6 +56,7 @@ enum PermissionManager {
     }
 
     private static func ensureNotifications(interactive: Bool) async -> Bool {
+        guard self.canUseNotificationCenter else { return false }
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
 
@@ -190,6 +195,10 @@ enum PermissionManager {
         for cap in caps {
             switch cap {
             case .notifications:
+                guard self.canUseNotificationCenter else {
+                    results[cap] = false
+                    continue
+                }
                 let center = UNUserNotificationCenter.current()
                 let settings = await center.notificationSettings()
                 results[cap] = settings.authorizationStatus == .authorized

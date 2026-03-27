@@ -180,6 +180,50 @@ describe("config schema", () => {
     expect(listHint?.help).toContain("bluebubbles");
   });
 
+  it("adds shared labels and advanced metadata for common channel fields", () => {
+    const res = buildConfigSchema({
+      channels: [
+        {
+          id: "whatsapp",
+          label: "WhatsApp",
+          configSchema: {
+            type: "object",
+            properties: {
+              enabled: { type: "boolean" },
+              allowFrom: { type: "array", items: { type: "string" } },
+              accounts: {
+                type: "object",
+                additionalProperties: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(res.uiHints["channels.*.enabled"]).toMatchObject({
+      label: "Enabled",
+      order: 10,
+    });
+    expect(res.uiHints["channels.*.allowFrom"]).toMatchObject({
+      label: "Allowed People",
+      order: 30,
+    });
+    expect(res.uiHints["channels.*.accounts"]).toMatchObject({
+      label: "Additional Agent Identities",
+      advanced: true,
+    });
+    expect(res.uiHints["channels.*.accounts.*.enabled"]).toMatchObject({
+      label: "Enabled",
+      order: 10,
+    });
+  });
+
   it("caches merged schemas for identical plugin/channel metadata", () => {
     const first = buildConfigSchema(cachedMergeInput);
     const second = buildConfigSchema({

@@ -31,7 +31,7 @@ function buildFailClosedPrompt(reason: string): GuardResponse {
     block: true,
     reason,
     prependContext:
-      "The latest request could not be cleared by NemoClaw. Refuse briefly and do not provide unsafe guidance.",
+      "The latest request could not be cleared by Maumau Guardrails. Refuse briefly and do not provide unsafe guidance.",
   };
 }
 
@@ -82,7 +82,7 @@ function toPromptBlockResult(result: GuardResponse): GuardResponse | undefined {
     return {
       prependContext:
         result.content?.trim() ||
-        `The latest request was blocked by NemoClaw.${reason ? ` Reason: ${reason}.` : ""} Refuse briefly and do not provide unsafe instructions.`,
+        `The latest request was blocked by Maumau Guardrails.${reason ? ` Reason: ${reason}.` : ""} Refuse briefly and do not provide unsafe instructions.`,
     };
   }
 
@@ -101,8 +101,8 @@ function toPromptBlockResult(result: GuardResponse): GuardResponse | undefined {
 
 export default definePluginEntry({
   id: "nemoclaw",
-  name: "NemoClaw",
-  description: "NeMo Guardrails bridge for prompt, tool, and output policy checks",
+  name: "Maumau Guardrails",
+  description: "NeMo Guardrails bridge for Maumau prompt, tool, and output policy checks",
   configSchema: nemoclawPluginConfigSchema,
   register(api: MaumauPluginApi) {
     const config = resolveNemoClawPluginConfig(api.pluginConfig);

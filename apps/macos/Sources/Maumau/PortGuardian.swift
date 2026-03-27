@@ -60,7 +60,7 @@ actor PortGuardian {
                     port \(port) held by \(listener.command)
                     (pid \(listener.pid)) in remote mode — not killing
                     """
-                    self.logger.warning(message)
+                    self.logger.warning("\(message, privacy: .public)")
                     continue
                 }
                 let killed = await self.kill(listener.pid)
@@ -368,6 +368,9 @@ actor PortGuardian {
             if port == GatewayEnvironment.gatewayPort() { return true }
             return false
         case .local:
+            // launchd can surface the managed gateway as `node` in lsof while argv[0]
+            // is the wrapper name (`maumau-gateway`). Treat both shapes as expected.
+            if full.contains("maumau-gateway") { return true }
             // The gateway daemon may listen as `maumau` or as its runtime (`node`, `bun`, etc).
             if full.contains("gateway-daemon") { return true }
             // If args are unavailable, treat a CLI listener as expected.

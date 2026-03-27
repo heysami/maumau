@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import type { ChannelPlugin } from "../channels/plugins/types.js";
+import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { createChannelTestPluginBase } from "../test-utils/channel-plugins.js";
 import { setRegistry } from "./server.agent.gateway-server-agent.mocks.js";
 import { createRegistry } from "./server.e2e-registry-helpers.js";
@@ -60,6 +61,21 @@ const telegramPlugin: ChannelPlugin = {
       });
       return { cleared: true, envToken: false, loggedOut: true };
     },
+  },
+};
+
+const whatsappSetupPlugin: ChannelPlugin = {
+  ...createStubChannelPlugin({ id: "whatsapp", label: "WhatsApp" }),
+  gatewayMethods: ["web.login.start", "web.login.wait"],
+  gateway: {
+    loginWithQrStart: async () => ({
+      message: "Scan the QR code in WhatsApp.",
+      qrDataUrl: "data:image/png;base64,ZmFrZQ==",
+    }),
+    loginWithQrWait: async () => ({
+      connected: true,
+      message: "WhatsApp linked.",
+    }),
   },
 };
 
@@ -129,6 +145,77 @@ describe("gateway server channels", () => {
     expect(signal?.configured).toBe(false);
     expect(signal?.probe).toBeUndefined();
     expect(signal?.lastProbeAt).toBeNull();
+  });
+
+  test("channels.status includes setup-only channels during fresh setup", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", undefined);
+    const setupOnlyRegistry = createEmptyPluginRegistry();
+    setupOnlyRegistry.channelSetups = [
+      {
+        pluginId: "telegram",
+        plugin: telegramPlugin,
+        source: "test",
+        enabled: true,
+      },
+    ];
+    setRegistry(setupOnlyRegistry);
+
+    const res = await rpcReq<{
+      channelOrder?: string[];
+      channelLabels?: Record<string, string>;
+      channels?: Record<string, { configured?: boolean }>;
+    }>(ws, "channels.status", { probe: false, timeoutMs: 2000 });
+
+    expect(res.ok).toBe(true);
+    expect(res.payload?.channelOrder).toContain("telegram");
+    expect(res.payload?.channelLabels?.telegram).toBe("Telegram");
+    expect(res.payload?.channels?.telegram?.configured).toBe(false);
+  });
+
+  test("channels.status falls back to bundled setup channels when none are loaded", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", undefined);
+    setRegistry(createEmptyPluginRegistry());
+
+    const res = await rpcReq<{
+      channelOrder?: string[];
+      channelLabels?: Record<string, string>;
+      channels?: Record<string, { configured?: boolean; linked?: boolean }>;
+    }>(ws, "channels.status", { probe: false, timeoutMs: 2000 });
+
+    expect(res.ok).toBe(true);
+    expect(res.payload?.channelOrder).toEqual(
+      expect.arrayContaining(["whatsapp", "telegram", "discord"]),
+    );
+    expect(res.payload?.channelLabels?.whatsapp).toBe("WhatsApp");
+    expect(res.payload?.channels?.whatsapp).toBeTruthy();
+  });
+
+  test("web login falls back to setup-only channels during fresh setup", async () => {
+    const setupOnlyRegistry = createEmptyPluginRegistry();
+    setupOnlyRegistry.channelSetups = [
+      {
+        pluginId: "whatsapp",
+        plugin: whatsappSetupPlugin,
+        source: "test",
+        enabled: true,
+      },
+    ];
+    setRegistry(setupOnlyRegistry);
+
+    const start = await rpcReq<{ message?: string; qrDataUrl?: string }>(ws, "web.login.start", {
+      force: true,
+      timeoutMs: 2_000,
+    });
+    expect(start.ok).toBe(true);
+    expect(start.payload?.message).toBe("Scan the QR code in WhatsApp.");
+    expect(start.payload?.qrDataUrl).toBe("data:image/png;base64,ZmFrZQ==");
+
+    const wait = await rpcReq<{ connected?: boolean; message?: string }>(ws, "web.login.wait", {
+      timeoutMs: 2_000,
+    });
+    expect(wait.ok).toBe(true);
+    expect(wait.payload?.connected).toBe(true);
+    expect(wait.payload?.message).toBe("WhatsApp linked.");
   });
 
   test("channels.logout reports no session when missing", async () => {

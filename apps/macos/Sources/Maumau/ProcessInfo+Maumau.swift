@@ -1,6 +1,10 @@
 import Foundation
 
 extension ProcessInfo {
+    var isAppBundle: Bool {
+        Bundle.main.bundleURL.pathExtension == "app"
+    }
+
     var isPreview: Bool {
         guard let raw = getenv("XCODE_RUNNING_FOR_PREVIEWS") else { return false }
         return String(cString: raw) == "1"
@@ -25,13 +29,12 @@ extension ProcessInfo {
     }
 
     var isNixMode: Bool {
-        let isAppBundle = Bundle.main.bundleURL.pathExtension == "app"
         let stableSuite = UserDefaults(suiteName: launchdLabel)
         return Self.resolveNixMode(
             environment: self.environment,
             standard: .standard,
             stableSuite: stableSuite,
-            isAppBundle: isAppBundle)
+            isAppBundle: self.isAppBundle)
     }
 
     var isRunningTests: Bool {

@@ -23,6 +23,8 @@ import { stylePromptTitle } from "../terminal/prompt-style.js";
 import { CONFIG_DIR, shortenHomeInString, shortenHomePath, sleep } from "../utils.js";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../utils/message-channel.js";
 import { VERSION } from "../version.js";
+import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
+import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 import type { NodeManagerChoice, OnboardMode, ResetScope } from "./onboard-types.js";
 
 export { detectBinary };
@@ -329,6 +331,19 @@ export async function moveToTrash(pathname: string, runtime: RuntimeEnv): Promis
 }
 
 export async function handleReset(scope: ResetScope, workspaceDir: string, runtime: RuntimeEnv) {
+  if (scope === "clean") {
+    await uninstallGatewayServiceIfPresent(runtime);
+    const cleanup = resolveCleanupPlanFromDisk();
+    await moveToTrash(cleanup.stateDir, runtime);
+    if (!cleanup.configInsideState) {
+      await moveToTrash(cleanup.configPath, runtime);
+    }
+    if (!cleanup.oauthInsideState) {
+      await moveToTrash(cleanup.oauthDir, runtime);
+    }
+    await moveToTrash(workspaceDir, runtime);
+    return;
+  }
   await moveToTrash(CONFIG_PATH, runtime);
   if (scope === "config") {
     return;

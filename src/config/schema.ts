@@ -142,6 +142,303 @@ export type ChannelUiMetadata = {
   configUiHints?: Record<string, ConfigUiHint>;
 };
 
+const COMMON_CHANNEL_HINTS: ConfigUiHints = {
+  "channels.*.enabled": {
+    label: "Enabled",
+    help: "Turn this channel on for this agent identity.",
+    order: 10,
+  },
+  "channels.*.dmPolicy": {
+    label: "Who Can Start a Direct Chat",
+    help: 'Choose who can start a direct chat with this agent identity. Use "allowlist" if you only want approved people to reach it first.',
+    order: 20,
+  },
+  "channels.*.allowFrom": {
+    label: "Allowed People",
+    help: 'Who can message this agent first when direct-chat access is restricted. This matters most when direct chats use "allowlist" or "open".',
+    order: 30,
+  },
+  "channels.*.defaultTo": {
+    label: "Default Reply Target",
+    help: "Where proactive outbound messages should go when there is no active conversation to reply to.",
+    order: 35,
+    advanced: true,
+  },
+  "channels.*.groupPolicy": {
+    label: "Who Can Trigger the Agent in Groups",
+    help: "Controls whether the agent answers in group chats and whether only approved people can trigger it there.",
+    order: 40,
+    advanced: true,
+  },
+  "channels.*.groupAllowFrom": {
+    label: "Allowed Group Senders",
+    help: "The people allowed to trigger the agent in groups when group access is restricted.",
+    order: 50,
+    advanced: true,
+  },
+  "channels.*.accounts": {
+    label: "Additional Agent Identities",
+    help: "Optional extra bot/account identities for this channel. Most people can leave this empty.",
+    order: 200,
+    advanced: true,
+  },
+  "channels.*.accounts.*": {
+    label: "Agent Identity",
+    advanced: true,
+  },
+  "channels.*.defaultAccount": {
+    label: "Default Agent Identity",
+    help: "Which configured account/identity to use by default when this channel has more than one.",
+    order: 210,
+    advanced: true,
+  },
+  "channels.*.configWrites": {
+    label: "Let This Channel Change Settings",
+    help: "Allow the channel to update config in response to channel-specific commands or events.",
+    order: 220,
+    advanced: true,
+  },
+  "channels.*.sendReadReceipts": {
+    label: "Send Read Receipts",
+    help: "Mark messages as read when the channel supports it.",
+    order: 230,
+    advanced: true,
+  },
+  "channels.*.messagePrefix": {
+    label: "Incoming Message Prefix",
+    help: "Text added before inbound messages from this channel before the agent sees them.",
+    order: 240,
+    advanced: true,
+  },
+  "channels.*.responsePrefix": {
+    label: "Reply Prefix",
+    help: "Text added before outbound replies sent through this channel.",
+    order: 250,
+    advanced: true,
+  },
+  "channels.*.historyLimit": {
+    label: "Conversation History Limit",
+    help: "How many previous messages this channel should include for context.",
+    order: 260,
+    advanced: true,
+  },
+  "channels.*.dmHistoryLimit": {
+    label: "Direct Chat History Limit",
+    help: "How many direct-chat messages to keep in context for this channel.",
+    order: 270,
+    advanced: true,
+  },
+  "channels.*.dms": {
+    label: "Direct Chat Overrides",
+    help: "Per-person direct-chat overrides for special routing or context limits.",
+    order: 280,
+    advanced: true,
+  },
+  "channels.*.dms.*": {
+    label: "Direct Chat Override",
+    advanced: true,
+  },
+  "channels.*.dms.*.historyLimit": {
+    label: "History Limit",
+    help: "How many messages to keep for this specific direct chat.",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.textChunkLimit": {
+    label: "Reply Chunk Size",
+    help: "Maximum size of each outbound reply chunk before Maumau splits it.",
+    order: 290,
+    advanced: true,
+  },
+  "channels.*.chunkMode": {
+    label: "Reply Chunking Style",
+    help: "How long replies are split when they need multiple messages.",
+    order: 300,
+    advanced: true,
+  },
+  "channels.*.blockStreaming": {
+    label: "Send Only Final Replies",
+    help: "Buffer draft updates and only send the final reply to this channel.",
+    order: 310,
+    advanced: true,
+  },
+  "channels.*.blockStreamingCoalesce": {
+    label: "Draft Batching",
+    help: "How partial drafts are grouped before they are shown in this channel.",
+    order: 320,
+    advanced: true,
+  },
+  "channels.*.blockStreamingCoalesce.minChars": {
+    label: "Minimum Draft Size",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.blockStreamingCoalesce.maxChars": {
+    label: "Maximum Draft Size",
+    order: 20,
+    advanced: true,
+  },
+  "channels.*.blockStreamingCoalesce.idleMs": {
+    label: "Draft Idle Delay (ms)",
+    order: 30,
+    advanced: true,
+  },
+  "channels.*.groups": {
+    label: "Group Overrides",
+    help: "Per-group settings for when the agent should reply and what it can do there.",
+    order: 330,
+    advanced: true,
+  },
+  "channels.*.groups.*": {
+    label: "Group Override",
+    advanced: true,
+  },
+  "channels.*.groups.*.requireMention": {
+    label: "Only Reply When Mentioned",
+    help: "Require an explicit mention before the agent answers in this group.",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.groups.*.tools": {
+    label: "Tool Rules",
+    order: 20,
+    advanced: true,
+  },
+  "channels.*.groups.*.toolsBySender": {
+    label: "Tool Rules by Sender",
+    order: 30,
+    advanced: true,
+  },
+  "channels.*.ackReaction": {
+    label: "Acknowledgement Reaction",
+    help: "Automatic reaction shown when the agent has received a message.",
+    order: 340,
+    advanced: true,
+  },
+  "channels.*.ackReaction.emoji": {
+    label: "Reaction Emoji",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.ackReaction.direct": {
+    label: "Use in Direct Chats",
+    order: 20,
+    advanced: true,
+  },
+  "channels.*.ackReaction.group": {
+    label: "Use in Groups",
+    order: 30,
+    advanced: true,
+  },
+  "channels.*.debounceMs": {
+    label: "Message Debounce (ms)",
+    help: "Small batching window for rapid-fire inbound messages from the same sender.",
+    order: 350,
+    advanced: true,
+  },
+  "channels.*.heartbeat": {
+    label: "Heartbeat Messages",
+    help: "Controls which periodic health updates this channel shows.",
+    order: 360,
+    advanced: true,
+  },
+  "channels.*.heartbeat.showOk": {
+    label: "Show Healthy Updates",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.heartbeat.showAlerts": {
+    label: "Show Problems",
+    order: 20,
+    advanced: true,
+  },
+  "channels.*.heartbeat.useIndicator": {
+    label: "Use Status Indicator",
+    order: 30,
+    advanced: true,
+  },
+  "channels.*.healthMonitor": {
+    label: "Auto-Restart Monitoring",
+    help: "Automatically watch this channel and restart it if the connection looks stale.",
+    order: 370,
+    advanced: true,
+  },
+  "channels.*.healthMonitor.enabled": {
+    label: "Monitor Connection Health",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.markdown": {
+    label: "Markdown Formatting",
+    order: 380,
+    advanced: true,
+  },
+  "channels.*.markdown.tables": {
+    label: "Table Formatting",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.capabilities": {
+    label: "Enabled Features",
+    order: 390,
+    advanced: true,
+  },
+  "channels.*.mediaMaxMb": {
+    label: "Media Size Limit (MB)",
+    order: 400,
+    advanced: true,
+  },
+  "channels.*.actions": {
+    label: "Allowed Message Actions",
+    help: "Controls which message actions the agent may use in this channel.",
+    order: 410,
+    advanced: true,
+  },
+  "channels.*.actions.reactions": {
+    label: "Allow Reactions",
+    order: 10,
+    advanced: true,
+  },
+  "channels.*.actions.sendMessage": {
+    label: "Allow Sending Messages",
+    order: 20,
+    advanced: true,
+  },
+  "channels.*.actions.polls": {
+    label: "Allow Polls",
+    order: 30,
+    advanced: true,
+  },
+  "channels.*.name": {
+    label: "Display Name",
+    order: 10,
+  },
+  "channels.*.authDir": {
+    label: "Auth Session Folder",
+    order: 20,
+    advanced: true,
+  },
+};
+
+function buildExpandedCommonChannelHints(): ConfigUiHints {
+  const next: ConfigUiHints = { ...COMMON_CHANNEL_HINTS };
+  for (const [path, hint] of Object.entries(COMMON_CHANNEL_HINTS)) {
+    if (
+      !path.startsWith("channels.*.") ||
+      path === "channels.*.accounts" ||
+      path === "channels.*.accounts.*" ||
+      path === "channels.*.defaultAccount"
+    ) {
+      continue;
+    }
+    const nestedPath = path.replace("channels.*.", "channels.*.accounts.*.");
+    next[nestedPath] = hint;
+  }
+  return next;
+}
+
+const EXPANDED_COMMON_CHANNEL_HINTS = buildExpandedCommonChannelHints();
+
 function collectExtensionHintKeys(
   hints: ConfigUiHints,
   plugins: PluginUiMetadata[],
@@ -236,6 +533,17 @@ function applyChannelHints(hints: ConfigUiHints, channels: ChannelUiMetadata[]):
         ...hint,
       };
     }
+  }
+  return next;
+}
+
+function applyCommonChannelHints(hints: ConfigUiHints): ConfigUiHints {
+  const next: ConfigUiHints = { ...hints };
+  for (const [path, hint] of Object.entries(EXPANDED_COMMON_CHANNEL_HINTS)) {
+    next[path] = {
+      ...hint,
+      ...next[path],
+    };
   }
   return next;
 }
@@ -434,7 +742,7 @@ export function buildConfigSchema(params?: {
     }
   }
   const mergedWithoutSensitiveHints = applyHeartbeatTargetHints(
-    applyChannelHints(applyPluginHints(base.uiHints, plugins), channels),
+    applyCommonChannelHints(applyChannelHints(applyPluginHints(base.uiHints, plugins), channels)),
     channels,
   );
   const extensionHintKeys = collectExtensionHintKeys(

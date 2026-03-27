@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ChannelPlugin } from "../channels/plugins/types.js";
+import { createEmptyPluginRegistry } from "../plugins/registry.js";
+import { createChannelTestPluginBase } from "../test-utils/channel-plugins.js";
+import { setRegistry } from "./server.agent.gateway-server-agent.mocks.js";
 import {
   connectOk,
   installGatewayTestHooks,
@@ -60,6 +64,25 @@ async function expectSchemaLookupInvalid(path: unknown) {
   expect(res.ok).toBe(false);
   expect(res.error?.message ?? "").toContain("invalid config.schema.lookup params");
 }
+
+const setupOnlySchemaChannel: ChannelPlugin = {
+  ...createChannelTestPluginBase({
+    id: "setuponlytest" as ChannelPlugin["id"],
+    label: "Setup Only Test",
+    config: { listAccountIds: () => [], resolveAccount: () => ({}) },
+  }),
+  configSchema: {
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        enabled: { type: "boolean" },
+        token: { type: "string" },
+      },
+    },
+    uiHints: {},
+  },
+};
 
 describe("gateway config methods", () => {
   it("round-trips config.set and returns the live config path", async () => {
@@ -133,6 +156,36 @@ describe("gateway config methods", () => {
       hintPath: "gateway.auth.token",
     });
     expect(res.payload?.schema?.properties).toBeUndefined();
+  });
+
+  it("includes setup-only channel schemas during fresh setup", async () => {
+    const setupOnlyRegistry = createEmptyPluginRegistry();
+    setupOnlyRegistry.channelSetups = [
+      {
+        pluginId: "setuponlytest",
+        plugin: setupOnlySchemaChannel,
+        source: "test",
+        enabled: true,
+      },
+    ];
+    setRegistry(setupOnlyRegistry);
+
+    try {
+      const res = await rpcReq<{
+        schema?: {
+          properties?: {
+            channels?: {
+              properties?: Record<string, unknown>;
+            };
+          };
+        };
+      }>(requireWs(), "config.schema", {});
+
+      expect(res.ok).toBe(true);
+      expect(res.payload?.schema?.properties?.channels?.properties?.setuponlytest).toBeTruthy();
+    } finally {
+      setRegistry(createEmptyPluginRegistry());
+    }
   });
 
   it("rejects config.schema.lookup when the path is missing", async () => {

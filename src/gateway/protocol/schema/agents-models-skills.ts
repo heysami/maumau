@@ -180,6 +180,8 @@ export const SkillsStatusParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const PluginsStatusParamsSchema = Type.Object({}, { additionalProperties: false });
+
 export const SkillsBinsParamsSchema = Type.Object({}, { additionalProperties: false });
 
 export const SkillsBinsResultSchema = Type.Object(

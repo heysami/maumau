@@ -1,16 +1,26 @@
 import Foundation
 import os
+#if !MAUMAU_DISABLE_PEEKABOO_BRIDGE
 import PeekabooAutomationKit
 import PeekabooBridge
 import PeekabooFoundation
+#endif
 import Security
 
 @MainActor
 final class PeekabooBridgeHostCoordinator {
     static let shared = PeekabooBridgeHostCoordinator()
+    static let isAvailable: Bool = {
+#if MAUMAU_DISABLE_PEEKABOO_BRIDGE
+        false
+#else
+        true
+#endif
+    }()
 
     private let logger = Logger(subsystem: "ai.maumau", category: "PeekabooBridge")
 
+#if !MAUMAU_DISABLE_PEEKABOO_BRIDGE
     private var host: PeekabooBridgeHost?
     private var services: MaumauPeekabooBridgeServices?
 
@@ -35,22 +45,6 @@ final class PeekabooBridgeHostCoordinator {
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         return Self.legacySocketDirectoryNames.map { Self.makeSocketPath(for: $0, in: base) }
-    }
-
-    func setEnabled(_ enabled: Bool) async {
-        if enabled {
-            await self.startIfNeeded()
-        } else {
-            await self.stop()
-        }
-    }
-
-    func stop() async {
-        guard let host else { return }
-        await host.stop()
-        self.host = nil
-        self.services = nil
-        self.logger.info("PeekabooBridge host stopped")
     }
 
     private func startIfNeeded() async {
@@ -122,6 +116,7 @@ final class PeekabooBridgeHostCoordinator {
                 .debug("\(message, privacy: .public)")
         }
     }
+#endif
 
     private static func currentTeamID() -> String? {
         var code: SecCode?
@@ -150,8 +145,34 @@ final class PeekabooBridgeHostCoordinator {
 
         return info[kSecCodeInfoTeamIdentifier as String] as? String
     }
+
+    func setEnabled(_ enabled: Bool) async {
+#if MAUMAU_DISABLE_PEEKABOO_BRIDGE
+        let mode = enabled ? "enabled" : "disabled"
+        self.logger.info("PeekabooBridge unavailable in this local test build; requested mode=\(mode, privacy: .public)")
+#else
+        if enabled {
+            await self.startIfNeeded()
+        } else {
+            await self.stop()
+        }
+#endif
+    }
+
+    func stop() async {
+#if MAUMAU_DISABLE_PEEKABOO_BRIDGE
+        self.logger.info("PeekabooBridge unavailable in this local test build; stop ignored")
+#else
+        guard let host else { return }
+        await host.stop()
+        self.host = nil
+        self.services = nil
+        self.logger.info("PeekabooBridge host stopped")
+#endif
+    }
 }
 
+#if !MAUMAU_DISABLE_PEEKABOO_BRIDGE
 @MainActor
 private final class MaumauPeekabooBridgeServices: PeekabooBridgeServiceProviding {
     let permissions: PermissionsService
@@ -191,3 +212,4 @@ private final class MaumauPeekabooBridgeServices: PeekabooBridgeServiceProviding
         self.dialogs = DialogService(feedbackClient: feedbackClient)
     }
 }
+#endif

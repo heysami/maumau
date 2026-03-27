@@ -2,6 +2,42 @@
 // Package manifest for the Maumau macOS companion (menu bar app + IPC library).
 
 import PackageDescription
+import Foundation
+
+func currentMacOSSDKMajorVersion() -> Int? {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+    process.arguments = ["--sdk", "macosx", "--show-sdk-version"]
+
+    let output = Pipe()
+    process.standardOutput = output
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+    } catch {
+        return nil
+    }
+
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        return nil
+    }
+
+    let data = output.fileHandleForReading.readDataToEndOfFile()
+    guard let version = String(data: data, encoding: .utf8)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .split(separator: ".")
+        .first
+    else {
+        return nil
+    }
+
+    return Int(version)
+}
+
+let disablePeekabooBridge = ProcessInfo.processInfo.environment["MAUMAU_DISABLE_PEEKABOO_BRIDGE"] == "1"
+    || (currentMacOSSDKMajorVersion().map { $0 >= 26 } ?? false)
 
 let package = Package(
     name: "Maumau",
@@ -52,9 +88,10 @@ let package = Package(
                 .product(name: "Subprocess", package: "swift-subprocess"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Sparkle", package: "Sparkle"),
+            ] + (disablePeekabooBridge ? [] : [
                 .product(name: "PeekabooBridge", package: "Peekaboo"),
                 .product(name: "PeekabooAutomationKit", package: "Peekaboo"),
-            ],
+            ]),
             exclude: [
                 "Resources/Info.plist",
             ],
@@ -64,7 +101,9 @@ let package = Package(
             ],
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency"),
-            ]),
+            ] + (disablePeekabooBridge ? [
+                .define("MAUMAU_DISABLE_PEEKABOO_BRIDGE"),
+            ] : [])),
         .executableTarget(
             name: "MaumauMacCLI",
             dependencies: [

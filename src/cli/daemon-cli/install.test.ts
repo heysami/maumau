@@ -174,8 +174,12 @@ describe("runDaemonInstall", () => {
     actionState.emitted.length = 0;
     actionState.failed.length = 0;
 
-    loadConfigMock.mockReturnValue({ gateway: { auth: { mode: "token" } } });
-    readConfigFileSnapshotMock.mockResolvedValue({ exists: false, valid: true, config: {} });
+    loadConfigMock.mockReturnValue({ gateway: { mode: "local", auth: { mode: "token" } } });
+    readConfigFileSnapshotMock.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: { gateway: { mode: "local", auth: { mode: "token" } } },
+    });
     resolveGatewayPortMock.mockReturnValue(18789);
     resolveIsNixModeMock.mockReturnValue(false);
     resolveSecretInputRefMock.mockReturnValue({ ref: undefined });
@@ -258,7 +262,7 @@ describe("runDaemonInstall", () => {
     readConfigFileSnapshotMock.mockResolvedValue({
       exists: true,
       valid: true,
-      config: { gateway: { auth: { mode: "token" } } },
+      config: { gateway: { mode: "local", auth: { mode: "token" } } },
     });
 
     await runDaemonInstall({ json: true });
@@ -266,8 +270,9 @@ describe("runDaemonInstall", () => {
     expect(actionState.failed).toEqual([]);
     expect(writeConfigFileMock).toHaveBeenCalledTimes(1);
     const writtenConfig = writeConfigFileMock.mock.calls[0]?.[0] as {
-      gateway?: { auth?: { token?: string } };
+      gateway?: { mode?: string; auth?: { token?: string } };
     };
+    expect(writtenConfig.gateway?.mode).toBe("local");
     expect(writtenConfig.gateway?.auth?.token).toBe("minted-token");
     expect(buildGatewayInstallPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({ port: 18789 }),
@@ -275,6 +280,55 @@ describe("runDaemonInstall", () => {
     expectFirstInstallPlanCallOmitsToken();
     expect(installDaemonServiceAndEmitMock).toHaveBeenCalledTimes(1);
     expect(actionState.warnings.some((warning) => warning.includes("Auto-generated"))).toBe(true);
+  });
+
+  it("persists gateway.mode=local before installing a fresh local service", async () => {
+    loadConfigMock.mockReturnValue({
+      gateway: {
+        auth: {
+          mode: "token",
+          token: "existing-token",
+        },
+      },
+    });
+    readConfigFileSnapshotMock.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        gateway: {
+          auth: {
+            mode: "token",
+            token: "existing-token",
+          },
+        },
+      },
+    });
+
+    await runDaemonInstall({ json: true });
+
+    expect(actionState.failed).toEqual([]);
+    expect(writeConfigFileMock).toHaveBeenCalledTimes(1);
+    expect(writeConfigFileMock).toHaveBeenCalledWith({
+      gateway: {
+        mode: "local",
+        auth: {
+          mode: "token",
+          token: "existing-token",
+        },
+      },
+    });
+    expect(buildGatewayInstallPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          gateway: expect.objectContaining({
+            mode: "local",
+            auth: expect.objectContaining({
+              token: "existing-token",
+            }),
+          }),
+        }),
+      }),
+    );
   });
 
   it("continues Linux install when service probe hits a non-fatal systemd bus failure", async () => {

@@ -184,6 +184,10 @@ final class CanvasManager {
 
     private func maybeAutoNavigateToA2UI(controller: CanvasWindowController, a2uiUrl: String?) {
         guard let a2uiUrl else { return }
+        guard Self.canAutoNavigateToA2UI(a2uiUrl) else {
+            Self.logger.debug("canvas auto-nav skipped; gateway A2UI URL is not scoped for the macOS panel")
+            return
+        }
         let shouldNavigate = controller.shouldAutoNavigateToA2UI(lastAutoTarget: self.lastAutoA2UIUrl)
         guard shouldNavigate else {
             Self.logger.debug("canvas auto-nav skipped; target unchanged")
@@ -232,6 +236,18 @@ final class CanvasManager {
         let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmed.isEmpty, let base = URL(string: trimmed) else { return nil }
         return base.appendingPathComponent("__maumau__/a2ui/").absoluteString + "?platform=macos"
+    }
+
+    static func canAutoNavigateToA2UI(_ rawUrl: String?) -> Bool {
+        let trimmed = rawUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return false }
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
+
+        // The operator UI only receives the plain canvas host URL. Auto-opening that page
+        // in the WKWebView produces a gateway 401 because the panel cannot attach auth to
+        // every A2UI subresource request. Only scoped node capability URLs are safe here.
+        let normalizedPath = url.path.removingPercentEncoding ?? url.path
+        return normalizedPath.contains("/__maumau__/cap/")
     }
 
     // MARK: - Anchoring

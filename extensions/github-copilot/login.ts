@@ -2,7 +2,7 @@ import { intro, note, outro, spinner } from "@clack/prompts";
 import { ensureAuthProfileStore, upsertAuthProfile } from "maumau/plugin-sdk/agent-runtime";
 import { stylePromptTitle } from "maumau/plugin-sdk/cli-runtime";
 import { logConfigUpdated, updateConfig } from "maumau/plugin-sdk/config-runtime";
-import { applyAuthProfileConfig } from "maumau/plugin-sdk/provider-auth";
+import { applyAuthProfileConfig, buildTokenCredential } from "maumau/plugin-sdk/provider-auth";
 import type { RuntimeEnv } from "maumau/plugin-sdk/runtime";
 
 const CLIENT_ID = "Iv1.b507a08c87ecfe98";
@@ -159,13 +159,7 @@ export async function githubCopilotLoginCommand(
 
   upsertAuthProfile({
     profileId,
-    credential: {
-      type: "token",
-      provider: "github-copilot",
-      token: accessToken,
-      // GitHub device flow token doesn't reliably include expiry here.
-      // Leave expires unset; we'll exchange into Copilot token plus expiry later.
-    },
+    credential: buildTokenCredential("github-copilot", accessToken),
   });
 
   await updateConfig((cfg) =>

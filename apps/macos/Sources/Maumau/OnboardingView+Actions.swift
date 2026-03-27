@@ -5,6 +5,13 @@ import MaumauIPC
 import SwiftUI
 
 extension OnboardingView {
+    private func resetWizardAfterNavigation() {
+        Task {
+            await self.onboardingWizard.cancelIfRunning()
+            self.onboardingWizard.reset()
+        }
+    }
+
     func selectLocalGateway() {
         self.state.connectionMode = .local
         self.preferredGatewayID = nil
@@ -38,7 +45,20 @@ extension OnboardingView {
         }
     }
 
+    func maybeDefaultToLocalConnectionMode() {
+        guard Self.shouldDefaultToLocalConnectionMode(
+            connectionMode: self.state.connectionMode,
+            onboardingSeen: self.state.onboardingSeen,
+            remoteUrl: self.state.remoteUrl)
+        else { return }
+        self.selectLocalGateway()
+    }
+
     func handleBack() {
+        let leavingWizard = self.activePageIndex == self.wizardPageIndex
+        if leavingWizard, !self.onboardingWizard.isComplete {
+            self.resetWizardAfterNavigation()
+        }
         withAnimation {
             self.currentPage = max(0, self.currentPage - 1)
         }
@@ -46,6 +66,10 @@ extension OnboardingView {
 
     func handleNext() {
         if self.isWizardBlocking { return }
+        let leavingWizard = self.activePageIndex == self.wizardPageIndex
+        if leavingWizard, !self.onboardingWizard.isComplete {
+            self.resetWizardAfterNavigation()
+        }
         if self.currentPage < self.pageCount - 1 {
             withAnimation { self.currentPage += 1 }
         } else {
@@ -54,6 +78,7 @@ extension OnboardingView {
     }
 
     func finish() {
+        AppStateStore.shared.onboardingSeen = true
         UserDefaults.standard.set(true, forKey: "maumau.onboardingSeen")
         UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
         OnboardingController.shared.close()
@@ -65,5 +90,9 @@ extension OnboardingView {
         pb.setString(text, forType: .string)
         self.copied = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self.copied = false }
+    }
+
+    func skipWizardForLater() {
+        Task { await self.onboardingWizard.skipForNow() }
     }
 }

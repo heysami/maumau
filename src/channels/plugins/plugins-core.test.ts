@@ -304,7 +304,8 @@ describe("channel plugin catalog", () => {
             selectionLabel: "WhatsApp (QR link)",
             detailLabel: "WhatsApp Web",
             docsPath: "/channels/whatsapp",
-            blurb: "works with your own number; recommend a separate phone + eSIM.",
+            blurb:
+              "best with a dedicated agent number or linked device that people message from their normal account.",
           },
           install: {
             npmSpec: "@maumau/whatsapp",
@@ -347,7 +348,8 @@ describe("channel plugin catalog", () => {
                 selectionLabel: "WhatsApp (QR link)",
                 detailLabel: "WhatsApp Web",
                 docsPath: "/channels/whatsapp",
-                blurb: "works with your own number; recommend a separate phone + eSIM.",
+                blurb:
+                  "best with a dedicated agent number or linked device that people message from their normal account.",
               },
               install: {
                 npmSpec: "@maumau/whatsapp",

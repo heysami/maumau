@@ -44,6 +44,7 @@ import {
   createExitThrowingRuntime,
   createWizardPrompter,
   readAuthProfilesForAgent,
+  readStateDirDotEnv,
   requireMaumauAgentDir,
   setupAuthTestEnv,
 } from "./test-wizard-helpers.js";
@@ -183,6 +184,19 @@ describe("applyAuthChoice", () => {
   async function readAuthProfile(profileId: string) {
     return (await readAuthProfiles()).profiles?.[profileId];
   }
+  async function expectStoredApiKeyProfile(profileId: string, envVar: string, value: string) {
+    const profile = await readAuthProfile(profileId);
+    expect(profile?.key).toBeUndefined();
+    expect(profile?.keyRef).toEqual({
+      source: "env",
+      provider: "default",
+      id: envVar,
+    });
+    if (!activeStateDir) {
+      throw new Error("Expected active state dir");
+    }
+    expect(await readStateDirDotEnv(activeStateDir)).toContain(`${envVar}=${value}`);
+  }
 
   afterEach(async () => {
     vi.unstubAllGlobals();
@@ -320,6 +334,7 @@ describe("applyAuthChoice", () => {
       promptContains: string;
       profileId: string;
       provider: string;
+      envVar: string;
       token: string;
       expectedBaseUrl?: string;
       expectedModelPrefix?: string;
@@ -329,6 +344,7 @@ describe("applyAuthChoice", () => {
         promptContains: "Enter MiniMax API key",
         profileId: "minimax:global",
         provider: "minimax",
+        envVar: "MINIMAX_API_KEY",
         token: "sk-minimax-test",
       },
       {
@@ -336,6 +352,7 @@ describe("applyAuthChoice", () => {
         promptContains: "Enter MiniMax CN API key",
         profileId: "minimax:cn",
         provider: "minimax",
+        envVar: "MINIMAX_API_KEY",
         token: "sk-minimax-test",
         expectedBaseUrl: MINIMAX_CN_API_BASE_URL,
       },
@@ -344,6 +361,7 @@ describe("applyAuthChoice", () => {
         promptContains: "Enter Synthetic API key",
         profileId: "synthetic:default",
         provider: "synthetic",
+        envVar: "SYNTHETIC_API_KEY",
         token: "sk-synthetic-test",
       },
       {
@@ -351,6 +369,7 @@ describe("applyAuthChoice", () => {
         promptContains: "Hugging Face",
         profileId: "huggingface:default",
         provider: "huggingface",
+        envVar: "HUGGINGFACE_HUB_TOKEN",
         token: "hf-test-token",
         expectedModelPrefix: "huggingface/",
       },
@@ -388,7 +407,7 @@ describe("applyAuthChoice", () => {
           ),
         ).toBe(true);
       }
-      expect((await readAuthProfile(scenario.profileId))?.key).toBe(scenario.token);
+      await expectStoredApiKeyProfile(scenario.profileId, scenario.envVar, scenario.token);
     }
   });
 
@@ -492,7 +511,7 @@ describe("applyAuthChoice", () => {
         );
       }
       if (scenario.authChoice === "zai-api-key") {
-        expect((await readAuthProfile("zai:default"))?.key).toBe(scenario.token);
+        await expectStoredApiKeyProfile("zai:default", "ZAI_API_KEY", scenario.token);
       }
     }
   });
@@ -503,6 +522,7 @@ describe("applyAuthChoice", () => {
       token: string;
       profileId: string;
       provider: string;
+      envVar: string;
       expectedModel?: string;
       expectedModelPrefix?: string;
     }> = [
@@ -511,6 +531,7 @@ describe("applyAuthChoice", () => {
         token: "hf-token-provider-test",
         profileId: "huggingface:default",
         provider: "huggingface",
+        envVar: "HUGGINGFACE_HUB_TOKEN",
         expectedModelPrefix: "huggingface/",
       },
       {
@@ -518,6 +539,7 @@ describe("applyAuthChoice", () => {
         token: "sk-together-token-provider-test",
         profileId: "together:default",
         provider: "together",
+        envVar: "TOGETHER_API_KEY",
         expectedModelPrefix: "together/",
       },
       {
@@ -525,6 +547,7 @@ describe("applyAuthChoice", () => {
         token: "sk-kimi-token-provider-test",
         profileId: "kimi:default",
         provider: "kimi",
+        envVar: "KIMI_API_KEY",
         expectedModelPrefix: "kimi/",
       },
       {
@@ -532,6 +555,7 @@ describe("applyAuthChoice", () => {
         token: "sk-gemini-token-provider-test",
         profileId: "google:default",
         provider: "google",
+        envVar: "GEMINI_API_KEY",
         expectedModel: GOOGLE_GEMINI_DEFAULT_MODEL,
       },
       {
@@ -539,6 +563,7 @@ describe("applyAuthChoice", () => {
         token: "sk-litellm-token-provider-test",
         profileId: "litellm:default",
         provider: "litellm",
+        envVar: "LITELLM_API_KEY",
         expectedModelPrefix: "litellm/",
       },
     ];
@@ -581,7 +606,7 @@ describe("applyAuthChoice", () => {
       }
       expect(text).not.toHaveBeenCalled();
       expect(confirm).not.toHaveBeenCalled();
-      expect((await readAuthProfile(scenario.profileId))?.key).toBe(scenario.token);
+      await expectStoredApiKeyProfile(scenario.profileId, scenario.envVar, scenario.token);
     }
   });
 
@@ -591,6 +616,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "moonshot",
       profileId: "moonshot:default",
       provider: "moonshot",
+      envVar: "MOONSHOT_API_KEY",
       modelPrefix: "moonshot/",
     },
     {
@@ -598,6 +624,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "mistral",
       profileId: "mistral:default",
       provider: "mistral",
+      envVar: "MISTRAL_API_KEY",
       modelPrefix: "mistral/",
     },
     {
@@ -605,6 +632,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "kimi-code",
       profileId: "kimi:default",
       provider: "kimi",
+      envVar: "KIMI_API_KEY",
       modelPrefix: "kimi/",
     },
     {
@@ -612,6 +640,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "xiaomi",
       profileId: "xiaomi:default",
       provider: "xiaomi",
+      envVar: "XIAOMI_API_KEY",
       modelPrefix: "xiaomi/",
     },
     {
@@ -619,6 +648,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "venice",
       profileId: "venice:default",
       provider: "venice",
+      envVar: "VENICE_API_KEY",
       modelPrefix: "venice/",
     },
     {
@@ -626,6 +656,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "opencode",
       profileId: "opencode:default",
       provider: "opencode",
+      envVar: "OPENCODE_API_KEY",
       modelPrefix: "opencode/",
       extraProfiles: ["opencode-go:default"],
     },
@@ -634,6 +665,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "opencode-go",
       profileId: "opencode-go:default",
       provider: "opencode-go",
+      envVar: "OPENCODE_API_KEY",
       modelPrefix: "opencode-go/",
       extraProfiles: ["opencode:default"],
     },
@@ -642,6 +674,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "together",
       profileId: "together:default",
       provider: "together",
+      envVar: "TOGETHER_API_KEY",
       modelPrefix: "together/",
     },
     {
@@ -649,6 +682,7 @@ describe("applyAuthChoice", () => {
       tokenProvider: "qianfan",
       profileId: "qianfan:default",
       provider: "qianfan",
+      envVar: "QIANFAN_API_KEY",
       modelPrefix: "qianfan/",
     },
     {
@@ -656,11 +690,20 @@ describe("applyAuthChoice", () => {
       tokenProvider: "synthetic",
       profileId: "synthetic:default",
       provider: "synthetic",
+      envVar: "SYNTHETIC_API_KEY",
       modelPrefix: "synthetic/",
     },
   ] as const)(
     "uses opts token for $authChoice without prompting",
-    async ({ authChoice, tokenProvider, profileId, provider, modelPrefix, extraProfiles }) => {
+    async ({
+      authChoice,
+      tokenProvider,
+      profileId,
+      provider,
+      envVar,
+      modelPrefix,
+      extraProfiles,
+    }) => {
       await setupTempState();
 
       const text = vi.fn();
@@ -691,9 +734,9 @@ describe("applyAuthChoice", () => {
           modelPrefix,
         ),
       ).toBe(true);
-      expect((await readAuthProfile(profileId))?.key).toBe(token);
+      await expectStoredApiKeyProfile(profileId, envVar, token);
       for (const extraProfile of extraProfiles ?? []) {
-        expect((await readAuthProfile(extraProfile))?.key).toBe(token);
+        await expectStoredApiKeyProfile(extraProfile, envVar, token);
       }
     },
   );
@@ -727,7 +770,7 @@ describe("applyAuthChoice", () => {
       "openai/gpt-4o-mini",
     );
     expect(result.agentModelOverride).toBe(GOOGLE_GEMINI_DEFAULT_MODEL);
-    expect((await readAuthProfile("google:default"))?.key).toBe("sk-gemini-test");
+    await expectStoredApiKeyProfile("google:default", "GEMINI_API_KEY", "sk-gemini-test");
   });
 
   it("prompts for Venice API key and shows the Venice note when no token is provided", async () => {
@@ -760,7 +803,7 @@ describe("applyAuthChoice", () => {
       provider: "venice",
       mode: "api_key",
     });
-    expect((await readAuthProfile("venice:default"))?.key).toBe("sk-venice-manual");
+    await expectStoredApiKeyProfile("venice:default", "VENICE_API_KEY", "sk-venice-manual");
   });
 
   it("uses existing env API keys for selected providers", async () => {
@@ -773,8 +816,7 @@ describe("applyAuthChoice", () => {
       opts?: { secretInputMode?: "ref" };
       expectEnvPrompt: boolean;
       expectedTextCalls: number;
-      expectedKey?: string;
-      expectedKeyRef?: { source: "env"; provider: string; id: string };
+      expectedKeyRef: { source: "env"; provider: string; id: string };
       expectedModel?: string;
       expectedModelPrefix?: string;
     }> = [
@@ -786,7 +828,7 @@ describe("applyAuthChoice", () => {
         provider: "synthetic",
         expectEnvPrompt: true,
         expectedTextCalls: 0,
-        expectedKey: "sk-synthetic-env",
+        expectedKeyRef: { source: "env", provider: "default", id: "SYNTHETIC_API_KEY" },
         expectedModelPrefix: "synthetic/",
       },
       {
@@ -797,7 +839,7 @@ describe("applyAuthChoice", () => {
         provider: "openrouter",
         expectEnvPrompt: true,
         expectedTextCalls: 0,
-        expectedKey: "sk-openrouter-test",
+        expectedKeyRef: { source: "env", provider: "default", id: "OPENROUTER_API_KEY" },
         expectedModel: "openrouter/auto",
       },
       {
@@ -808,7 +850,7 @@ describe("applyAuthChoice", () => {
         provider: "vercel-ai-gateway",
         expectEnvPrompt: true,
         expectedTextCalls: 0,
-        expectedKey: "gateway-test-key",
+        expectedKeyRef: { source: "env", provider: "default", id: "AI_GATEWAY_API_KEY" },
         expectedModel: "vercel-ai-gateway/anthropic/claude-opus-4.6",
       },
       {
@@ -871,13 +913,11 @@ describe("applyAuthChoice", () => {
         ).toBe(true);
       }
       const profile = await readAuthProfile(scenario.profileId);
-      if (scenario.expectedKeyRef) {
-        expect(profile?.keyRef).toEqual(scenario.expectedKeyRef);
-        expect(profile?.key).toBeUndefined();
-      } else {
-        expect(profile?.key).toBe(scenario.expectedKey);
-        expect(profile?.keyRef).toBeUndefined();
-      }
+      expect(profile?.keyRef).toEqual(scenario.expectedKeyRef);
+      expect(profile?.key).toBeUndefined();
+      expect(await readStateDirDotEnv(activeStateDir ?? "")).toContain(
+        `${scenario.envKey}=${scenario.envValue}`,
+      );
     }
   });
 
@@ -1023,7 +1063,8 @@ describe("applyAuthChoice", () => {
                 resolveAgentDir(result.config, scenario.agentId),
               )
             : await readAuthProfiles();
-        expect(profileStore.profiles?.[scenario.profileId]?.key).toBe(scenario.token);
+        expect(profileStore.profiles?.[scenario.profileId]?.key).toBeUndefined();
+        expect(profileStore.profiles?.[scenario.profileId]?.keyRef).toBeDefined();
       }
       if (scenario.extraProfileId) {
         const profileStore =
@@ -1032,7 +1073,8 @@ describe("applyAuthChoice", () => {
                 resolveAgentDir(result.config, scenario.agentId),
               )
             : await readAuthProfiles();
-        expect(profileStore.profiles?.[scenario.extraProfileId]?.key).toBe(scenario.token);
+        expect(profileStore.profiles?.[scenario.extraProfileId]?.key).toBeUndefined();
+        expect(profileStore.profiles?.[scenario.extraProfileId]?.keyRef).toBeDefined();
       }
       if (scenario.expectProviderConfigUndefined) {
         expect(
@@ -1143,8 +1185,12 @@ describe("applyAuthChoice", () => {
       });
 
       const profile = await readAuthProfile(scenario.profileId);
-      expect(profile?.key).toBe("");
-      expect(profile?.key).not.toBe("undefined");
+      expect(profile?.key).toBeUndefined();
+      expect(profile?.keyRef).toEqual({
+        source: "env",
+        provider: "default",
+        id: scenario.envKey,
+      });
     }
   });
 
@@ -1204,10 +1250,7 @@ describe("applyAuthChoice", () => {
       mode: "api_key",
     });
 
-    expect(await readAuthProfile("litellm:default")).toMatchObject({
-      type: "api_key",
-      key: "sk-litellm-test",
-    });
+    await expectStoredApiKeyProfile("litellm:default", "LITELLM_API_KEY", "sk-litellm-test");
   });
 
   it("configures cloudflare ai gateway via env key and explicit opts", async () => {
@@ -1313,12 +1356,22 @@ describe("applyAuthChoice", () => {
       );
 
       const profile = await readAuthProfile("cloudflare-ai-gateway:default");
-      if (scenario.expectedKeyRef) {
-        expect(profile?.keyRef).toEqual(scenario.expectedKeyRef);
-      } else {
-        expect(profile?.key).toBe(scenario.expectedKey);
-      }
+      expect(profile?.keyRef).toEqual(
+        scenario.expectedKeyRef ?? {
+          source: "env",
+          provider: "default",
+          id: "CLOUDFLARE_AI_GATEWAY_API_KEY",
+        },
+      );
+      expect(profile?.key).toBeUndefined();
       expect(profile?.metadata).toEqual(scenario.expectedMetadata);
+      const expectedEnvValue =
+        scenario.envGatewayKey ?? scenario.opts?.cloudflareAiGatewayApiKey ?? undefined;
+      if (expectedEnvValue) {
+        expect(await readStateDirDotEnv(activeStateDir ?? "")).toContain(
+          `CLOUDFLARE_AI_GATEWAY_API_KEY=${expectedEnvValue}`,
+        );
+      }
     }
     delete process.env.CLOUDFLARE_AI_GATEWAY_API_KEY;
   });

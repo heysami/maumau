@@ -139,6 +139,38 @@ import Testing
         #expect(first == tmp.appendingPathComponent("node_modules/.bin").path)
     }
 
+    @Test func `detects bundled project root from local app layout`() throws {
+        let tmp = try makeTempDirForTests()
+        let appBundle = tmp.appendingPathComponent("dist/Maumau.app")
+        try FileManager.default.createDirectory(at: appBundle, withIntermediateDirectories: true)
+        try makeExecutableForTests(at: tmp.appendingPathComponent("dist/index.js"))
+
+        let detected = CommandResolver.bundledProjectRoot(bundleURL: appBundle, fileManager: .default)
+        #expect(detected == tmp)
+    }
+
+    @Test func `prefers project local executables for bundled local app layout`() throws {
+        let tmp = try makeTempDirForTests()
+        let appBundle = tmp.appendingPathComponent("dist/Maumau.app")
+        try FileManager.default.createDirectory(at: appBundle, withIntermediateDirectories: true)
+        try makeExecutableForTests(at: tmp.appendingPathComponent("dist/index.js"))
+
+        let prefersLocal = CommandResolver.prefersProjectLocalExecutables(
+            projectRoot: tmp,
+            bundleURL: appBundle,
+            fileManager: .default)
+        #expect(prefersLocal == true)
+    }
+
+    @Test func `ignores bundled app layout without gateway entrypoint`() throws {
+        let tmp = try makeTempDirForTests()
+        let appBundle = tmp.appendingPathComponent("dist/Maumau.app")
+        try FileManager.default.createDirectory(at: appBundle, withIntermediateDirectories: true)
+
+        let detected = CommandResolver.bundledProjectRoot(bundleURL: appBundle, fileManager: .default)
+        #expect(detected == nil)
+    }
+
     @Test func `builds SSH command for remote mode`() {
         let defaults = self.makeDefaults()
         defaults.set(AppState.ConnectionMode.remote.rawValue, forKey: connectionModeKey)

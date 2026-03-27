@@ -10,7 +10,12 @@ import { runInteractiveSetup } from "./onboard-interactive.js";
 import { runNonInteractiveSetup } from "./onboard-non-interactive.js";
 import type { OnboardOptions, ResetScope } from "./onboard-types.js";
 
-const VALID_RESET_SCOPES = new Set<ResetScope>(["config", "config+creds+sessions", "full"]);
+const VALID_RESET_SCOPES = new Set<ResetScope>([
+  "config",
+  "config+creds+sessions",
+  "full",
+  "clean",
+]);
 
 export async function setupWizardCommand(
   opts: OnboardOptions,
@@ -51,7 +56,9 @@ export async function setupWizardCommand(
   }
 
   if (normalizedOpts.resetScope && !VALID_RESET_SCOPES.has(normalizedOpts.resetScope)) {
-    runtime.error('Invalid --reset-scope. Use "config", "config+creds+sessions", or "full".');
+    runtime.error(
+      'Invalid --reset-scope. Use "config", "config+creds+sessions", "full", or "clean".',
+    );
     runtime.exit(1);
     return;
   }

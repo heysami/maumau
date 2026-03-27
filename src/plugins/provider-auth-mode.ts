@@ -27,7 +27,9 @@ export async function resolveSecretInputModeForEnvSelection(params: {
       {
         value: "plaintext",
         label: params.copy?.plaintextLabel ?? "Paste API key now",
-        hint: params.copy?.plaintextHint ?? "Stores the key directly in Maumau config",
+        hint:
+          params.copy?.plaintextHint ??
+          "Stores the key in Maumau's managed state .env outside the workspace",
       },
       {
         value: "ref",

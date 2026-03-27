@@ -7,6 +7,7 @@ import {
   createExitThrowingRuntime,
   createWizardPrompter,
   readAuthProfilesForAgent,
+  readStateDirDotEnv,
   requireMaumauAgentDir,
   setupAuthTestEnv,
 } from "./test-wizard-helpers.js";
@@ -31,7 +32,7 @@ describe("applyAuthChoice (moonshot)", () => {
 
   async function readAuthProfiles() {
     return await readAuthProfilesForAgent<{
-      profiles?: Record<string, { key?: string }>;
+      profiles?: Record<string, { key?: string; keyRef?: unknown }>;
     }>(requireMaumauAgentDir());
   }
 
@@ -81,7 +82,15 @@ describe("applyAuthChoice (moonshot)", () => {
     expect(result.agentModelOverride).toBe("moonshot/kimi-k2.5");
 
     const parsed = await readAuthProfiles();
-    expect(parsed.profiles?.["moonshot:default"]?.key).toBe("sk-moonshot-cn-test");
+    expect(parsed.profiles?.["moonshot:default"]?.key).toBeUndefined();
+    expect(parsed.profiles?.["moonshot:default"]?.keyRef).toEqual({
+      source: "env",
+      provider: "default",
+      id: "MOONSHOT_API_KEY",
+    });
+    expect(await readStateDirDotEnv(process.env.MAUMAU_STATE_DIR ?? "")).toContain(
+      "MOONSHOT_API_KEY=sk-moonshot-cn-test",
+    );
   });
 
   it("sets the default model when setDefaultModel is true", async () => {
@@ -100,6 +109,14 @@ describe("applyAuthChoice (moonshot)", () => {
     expect(result.agentModelOverride).toBeUndefined();
 
     const parsed = await readAuthProfiles();
-    expect(parsed.profiles?.["moonshot:default"]?.key).toBe("sk-moonshot-cn-test");
+    expect(parsed.profiles?.["moonshot:default"]?.key).toBeUndefined();
+    expect(parsed.profiles?.["moonshot:default"]?.keyRef).toEqual({
+      source: "env",
+      provider: "default",
+      id: "MOONSHOT_API_KEY",
+    });
+    expect(await readStateDirDotEnv(process.env.MAUMAU_STATE_DIR ?? "")).toContain(
+      "MOONSHOT_API_KEY=sk-moonshot-cn-test",
+    );
   });
 });

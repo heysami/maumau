@@ -115,7 +115,7 @@ extension ChannelsSettings {
     private func detailHeader(for channel: ChannelItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Label(channel.detailTitle, systemImage: channel.systemImage)
+                Label(channel.title, systemImage: channel.systemImage)
                     .font(.title3.weight(.semibold))
                 self.statusBadge(
                     self.channelSummary(channel),

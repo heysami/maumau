@@ -39,7 +39,7 @@ const serviceReadCommand = vi.fn<
     environment?: Record<string, string>;
   }>
 >(async (_env?: NodeJS.ProcessEnv) => ({
-  programArguments: ["/bin/node", "cli", "gateway", "--port", "19001"],
+  programArguments: ["/bin/node", "cli", "gateway", "run", "--port", "19001"],
   environment: {
     MAUMAU_STATE_DIR: "/tmp/maumau-daemon",
     MAUMAU_CONFIG_PATH: "/tmp/maumau-daemon/maumau.json",
@@ -252,7 +252,7 @@ describe("gatherDaemonStatus", () => {
 
   it("reuses command environment when reading runtime status", async () => {
     serviceReadCommand.mockResolvedValueOnce({
-      programArguments: ["/bin/node", "cli", "gateway", "--port", "19001"],
+      programArguments: ["/bin/node", "cli", "gateway", "run", "--port", "19001"],
       environment: {
         MAUMAU_GATEWAY_PORT: "19001",
         MAUMAU_CONFIG_PATH: "/tmp/maumau-daemon/maumau.json",

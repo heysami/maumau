@@ -6,7 +6,9 @@ import type { RuntimeEnv } from "../runtime.js";
 
 const runTui = vi.hoisted(() => vi.fn(async () => {}));
 const probeGatewayReachable = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+const waitForGatewayReachable = vi.hoisted(() => vi.fn(async () => {}));
 const setupWizardShellCompletion = vi.hoisted(() => vi.fn(async () => {}));
+const healthCommand = vi.hoisted(() => vi.fn(async () => {}));
 const buildGatewayInstallPlan = vi.hoisted(() =>
   vi.fn(async () => ({
     programArguments: [],
@@ -58,7 +60,7 @@ vi.mock("../commands/onboard-helpers.js", () => ({
     httpUrl: "http://127.0.0.1:18789",
     wsUrl: "ws://127.0.0.1:18789",
   })),
-  waitForGatewayReachable: vi.fn(async () => {}),
+  waitForGatewayReachable,
 }));
 
 vi.mock("../commands/daemon-install-helpers.js", () => ({
@@ -80,7 +82,7 @@ vi.mock("../commands/health-format.js", () => ({
 }));
 
 vi.mock("../commands/health.js", () => ({
-  healthCommand: vi.fn(async () => {}),
+  healthCommand,
 }));
 
 vi.mock("../commands/onboard-search.js", () => ({
@@ -190,6 +192,39 @@ function createLaterPrompter() {
   });
 }
 
+async function withMockedTtyStreams<T>(tty: boolean, run: () => Promise<T>): Promise<T> {
+  const stdin = process.stdin as NodeJS.ReadStream & { isTTY?: boolean };
+  const stdout = process.stdout as NodeJS.WriteStream & { isTTY?: boolean };
+  const stdinHadOwn = Object.prototype.hasOwnProperty.call(stdin, "isTTY");
+  const stdoutHadOwn = Object.prototype.hasOwnProperty.call(stdout, "isTTY");
+  const stdinDescriptor = Object.getOwnPropertyDescriptor(stdin, "isTTY");
+  const stdoutDescriptor = Object.getOwnPropertyDescriptor(stdout, "isTTY");
+
+  Object.defineProperty(stdin, "isTTY", {
+    configurable: true,
+    value: tty,
+  });
+  Object.defineProperty(stdout, "isTTY", {
+    configurable: true,
+    value: tty,
+  });
+
+  try {
+    return await run();
+  } finally {
+    if (stdinHadOwn && stdinDescriptor) {
+      Object.defineProperty(stdin, "isTTY", stdinDescriptor);
+    } else {
+      delete (stdin as { isTTY?: boolean }).isTTY;
+    }
+    if (stdoutHadOwn && stdoutDescriptor) {
+      Object.defineProperty(stdout, "isTTY", stdoutDescriptor);
+    } else {
+      delete (stdout as { isTTY?: boolean }).isTTY;
+    }
+  }
+}
+
 function createEnabledFirecrawlSearchConfig(): MaumauConfig {
   return {
     tools: {
@@ -233,7 +268,9 @@ describe("finalizeSetupWizard", () => {
   beforeEach(() => {
     runTui.mockClear();
     probeGatewayReachable.mockClear();
+    waitForGatewayReachable.mockClear();
     setupWizardShellCompletion.mockClear();
+    healthCommand.mockClear();
     buildGatewayInstallPlan.mockClear();
     gatewayServiceInstall.mockClear();
     gatewayServiceIsLoaded.mockReset();
@@ -275,46 +312,48 @@ describe("finalizeSetupWizard", () => {
     const runtime = createRuntime();
 
     try {
-      await finalizeSetupWizard({
-        flow: "quickstart",
-        opts: {
-          acceptRisk: true,
-          authChoice: "skip",
-          installDaemon: false,
-          skipHealth: true,
-          skipUi: false,
-        },
-        baseConfig: {},
-        nextConfig: {
-          gateway: {
-            auth: {
-              mode: "password",
-              password: {
-                source: "env",
-                provider: "default",
-                id: "MAUMAU_GATEWAY_PASSWORD",
+      await withMockedTtyStreams(true, async () => {
+        await finalizeSetupWizard({
+          flow: "quickstart",
+          opts: {
+            acceptRisk: true,
+            authChoice: "skip",
+            installDaemon: false,
+            skipHealth: true,
+            skipUi: false,
+          },
+          baseConfig: {},
+          nextConfig: {
+            gateway: {
+              auth: {
+                mode: "password",
+                password: {
+                  source: "env",
+                  provider: "default",
+                  id: "MAUMAU_GATEWAY_PASSWORD",
+                },
+              },
+            },
+            tools: {
+              web: {
+                search: {
+                  apiKey: "",
+                },
               },
             },
           },
-          tools: {
-            web: {
-              search: {
-                apiKey: "",
-              },
-            },
+          workspaceDir: "/tmp",
+          settings: {
+            port: 18789,
+            bind: "loopback",
+            authMode: "password",
+            gatewayToken: undefined,
+            tailscaleMode: "off",
+            tailscaleResetOnExit: false,
           },
-        },
-        workspaceDir: "/tmp",
-        settings: {
-          port: 18789,
-          bind: "loopback",
-          authMode: "password",
-          gatewayToken: undefined,
-          tailscaleMode: "off",
-          tailscaleResetOnExit: false,
-        },
-        prompter,
-        runtime,
+          prompter,
+          runtime,
+        });
       });
     } finally {
       if (previous === undefined) {
@@ -336,6 +375,64 @@ describe("finalizeSetupWizard", () => {
         password: "resolved-gateway-password", // pragma: allowlist secret
       }),
     );
+  });
+
+  it("does not offer TUI hatch without a terminal", async () => {
+    const select = vi.fn(async () => "web");
+    const prompter = buildWizardPrompter({
+      select: select as never,
+      confirm: vi.fn(async () => false),
+    });
+
+    await withMockedTtyStreams(false, async () => {
+      await finalizeSetupWizard({
+        flow: "quickstart",
+        opts: {
+          acceptRisk: true,
+          authChoice: "skip",
+          installDaemon: false,
+          skipHealth: true,
+          skipUi: false,
+        },
+        baseConfig: {},
+        nextConfig: {},
+        workspaceDir: "/tmp",
+        settings: {
+          port: 18789,
+          bind: "loopback",
+          authMode: "token",
+          gatewayToken: "test-token",
+          tailscaleMode: "off",
+          tailscaleResetOnExit: false,
+        },
+        prompter,
+        runtime: createRuntime(),
+      });
+    });
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "How do you want to hatch your bot?",
+        initialValue: "web",
+        options: [
+          expect.objectContaining({ value: "web", label: "Open the Web UI" }),
+          expect.objectContaining({ value: "later", label: "Do this later" }),
+        ],
+      }),
+    );
+    const hatchPrompt = (
+      select.mock.calls as unknown as Array<
+        [
+          {
+            message: string;
+            options: Array<{ value: string; label?: string }>;
+          },
+        ]
+      >
+    ).find(([params]) => params.message === "How do you want to hatch your bot?");
+    expect(hatchPrompt).toBeDefined();
+    expect(hatchPrompt?.[0].options).not.toContainEqual(expect.objectContaining({ value: "tui" }));
+    expect(runTui).not.toHaveBeenCalled();
   });
 
   it("does not persist resolved SecretRef token in daemon install plan", async () => {
@@ -384,6 +481,82 @@ describe("finalizeSetupWizard", () => {
     expect(buildGatewayInstallPlan).toHaveBeenCalledTimes(1);
     expectFirstOnboardingInstallPlanCallOmitsToken();
     expect(gatewayServiceInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns early for embedded app onboarding before control-ui followups", async () => {
+    const note = vi.fn(async () => {});
+    const select = vi.fn(async () => "later");
+    const prompter = buildWizardPrompter({
+      note,
+      select: select as never,
+      confirm: vi.fn(async () => false),
+    });
+
+    await finalizeSetupWizard({
+      ...createAdvancedFinalizeArgs({ prompter }),
+      opts: {
+        acceptRisk: true,
+        authChoice: "skip",
+        embedded: true,
+        installDaemon: false,
+        skipUi: false,
+      },
+    });
+
+    expect(note).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+    expect(probeGatewayReachable).not.toHaveBeenCalled();
+    expect(waitForGatewayReachable).not.toHaveBeenCalled();
+    expect(healthCommand).not.toHaveBeenCalled();
+    expect(setupWizardShellCompletion).not.toHaveBeenCalled();
+  });
+
+  it("skips gateway service prompts for embedded quickstart onboarding", async () => {
+    const note = vi.fn(async () => {});
+    const select = vi.fn(async () => "later");
+    const confirm = vi.fn(async () => true);
+    const prompter = buildWizardPrompter({
+      note,
+      select: select as never,
+      confirm: confirm as never,
+    });
+
+    await finalizeSetupWizard({
+      flow: "quickstart",
+      opts: {
+        acceptRisk: true,
+        authChoice: "skip",
+        embedded: true,
+        skipHealth: false,
+        skipUi: false,
+      },
+      baseConfig: {},
+      nextConfig: {},
+      workspaceDir: "/tmp",
+      settings: {
+        port: 18789,
+        bind: "loopback",
+        authMode: "token",
+        gatewayToken: "test-token",
+        tailscaleMode: "off",
+        tailscaleResetOnExit: false,
+      },
+      prompter,
+      runtime: createRuntime(),
+    });
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+    expect(note).not.toHaveBeenCalled();
+    expect(gatewayServiceIsLoaded).not.toHaveBeenCalled();
+    expect(gatewayServiceInstall).not.toHaveBeenCalled();
+    expect(gatewayServiceRestart).not.toHaveBeenCalled();
+    expect(gatewayServiceUninstall).not.toHaveBeenCalled();
+    expect(resolveGatewayInstallToken).not.toHaveBeenCalled();
+    expect(buildGatewayInstallPlan).not.toHaveBeenCalled();
+    expect(probeGatewayReachable).not.toHaveBeenCalled();
+    expect(waitForGatewayReachable).not.toHaveBeenCalled();
+    expect(healthCommand).not.toHaveBeenCalled();
   });
 
   it("stops after a scheduled restart instead of reinstalling the service", async () => {

@@ -1,6 +1,19 @@
 import SwiftUI
 
 extension CronSettings {
+    var selectedJobIdBinding: Binding<String?> {
+        Binding(
+            get: { self.store.selectedJobId },
+            set: { newValue in
+                self.store.selectedJobId = newValue
+                guard let newValue else {
+                    self.store.runEntries = []
+                    return
+                }
+                Task { await self.store.refreshRuns(jobId: newValue) }
+            })
+    }
+
     var selectedJob: CronJob? {
         guard let id = self.store.selectedJobId else { return nil }
         return self.store.jobs.first(where: { $0.id == id })

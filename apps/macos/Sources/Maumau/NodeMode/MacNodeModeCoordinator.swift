@@ -33,9 +33,22 @@ final class MacNodeModeCoordinator {
         var retryDelay: UInt64 = 1_000_000_000
         var lastCameraEnabled: Bool?
         var lastBrowserControlEnabled: Bool?
+        var suspendedForOnboarding = false
         let defaults = UserDefaults.standard
 
         while !Task.isCancelled {
+            if self.shouldSuspendForOnboarding(defaults: defaults) {
+                if !suspendedForOnboarding {
+                    suspendedForOnboarding = true
+                    await self.runtime.setEventSender(nil)
+                    await self.session.disconnect()
+                    self.logger.info("mac node suspended until onboarding completes")
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                continue
+            }
+            suspendedForOnboarding = false
+
             if await MainActor.run(body: { AppStateStore.shared.isPaused }) {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 continue
@@ -71,7 +84,8 @@ final class MacNodeModeCoordinator {
                     permissions: permissions,
                     clientId: "maumau-macos",
                     clientMode: "node",
-                    clientDisplayName: InstanceIdentity.displayName)
+                    clientDisplayName: InstanceIdentity.displayName,
+                    deviceIdentityNamespace: "node")
                 let sessionBox = self.buildSessionBox(url: config.url)
 
                 try await self.session.connect(
@@ -114,6 +128,12 @@ final class MacNodeModeCoordinator {
                 retryDelay = min(retryDelay * 2, 10_000_000_000)
             }
         }
+    }
+
+    private func shouldSuspendForOnboarding(defaults: UserDefaults) -> Bool {
+        OnboardingController.shared.isPresented ||
+            !AppStateStore.shared.onboardingSeen ||
+            defaults.integer(forKey: onboardingVersionKey) < currentOnboardingVersion
     }
 
     private func currentCaps() -> [String] {

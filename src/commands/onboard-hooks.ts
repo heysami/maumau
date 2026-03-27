@@ -5,6 +5,43 @@ import { buildWorkspaceHookStatus } from "../hooks/hooks-status.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 
+type HookOnboardingCopy = {
+  title: string;
+  hint: string;
+  advanced?: boolean;
+};
+
+const HOOK_ONBOARDING_COPY: Record<string, HookOnboardingCopy> = {
+  "session-memory": {
+    title: "Save chat context for later",
+    hint: "When you start fresh with /new or /reset, save the recent session so your agent can remember it later.",
+  },
+  "command-logger": {
+    title: "Keep a local activity log",
+    hint: "Save command activity to a local log file for debugging and audits.",
+  },
+  "boot-md": {
+    title: "Run BOOT.md at startup",
+    hint: "Advanced: automatically run BOOT.md whenever the gateway starts.",
+    advanced: true,
+  },
+  "bootstrap-extra-files": {
+    title: "Inject extra bootstrap files",
+    hint: "Advanced: add extra files during workspace bootstrap using custom path patterns.",
+    advanced: true,
+  },
+};
+
+function onboardingCopyForHook(hook: { name: string; description: string }): HookOnboardingCopy {
+  return (
+    HOOK_ONBOARDING_COPY[hook.name] ?? {
+      title: hook.name,
+      hint: hook.description,
+      advanced: true,
+    }
+  );
+}
+
 export async function setupInternalHooks(
   cfg: MaumauConfig,
   runtime: RuntimeEnv,
@@ -12,38 +49,44 @@ export async function setupInternalHooks(
 ): Promise<MaumauConfig> {
   await prompter.note(
     [
-      "Hooks let you automate actions when agent commands are issued.",
-      "Example: Save session context to memory when you issue /new or /reset.",
+      "These are optional automations.",
+      "Maumau works without them.",
+      "For most people, the useful one is saving chat context for later.",
       "",
+      "Advanced automation options can be enabled later.",
       "Learn more: https://docs.maumau.ai/automation/hooks",
     ].join("\n"),
-    "Hooks",
+    "Optional automations",
   );
 
   // Discover available hooks using the hook discovery system
   const workspaceDir = resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
   const report = buildWorkspaceHookStatus(workspaceDir, { config: cfg });
 
-  // Show every eligible hook so users can opt in during setup.
+  // Keep first-run onboarding beginner-friendly by hiding advanced hooks here.
   const eligibleHooks = report.hooks.filter((h) => h.loadable);
+  const onboardingHooks = eligibleHooks.filter((hook) => !onboardingCopyForHook(hook).advanced);
 
-  if (eligibleHooks.length === 0) {
+  if (onboardingHooks.length === 0) {
     await prompter.note(
-      "No eligible hooks found. You can configure hooks later in your config.",
-      "No Hooks Available",
+      "No beginner-friendly automations are available right now. You can enable advanced ones later.",
+      "No Optional Automations",
     );
     return cfg;
   }
 
   const toEnable = await prompter.multiselect({
-    message: "Enable hooks?",
+    message: "Choose optional automations",
     options: [
       { value: "__skip__", label: "Skip for now" },
-      ...eligibleHooks.map((hook) => ({
-        value: hook.name,
-        label: `${hook.emoji ?? "🔗"} ${hook.name}`,
-        hint: hook.description,
-      })),
+      ...onboardingHooks.map((hook) => {
+        const copy = onboardingCopyForHook(hook);
+        return {
+          value: hook.name,
+          label: `${hook.emoji ?? "🔗"} ${copy.title}`,
+          hint: copy.hint,
+        };
+      }),
     ],
   });
 
@@ -71,14 +114,16 @@ export async function setupInternalHooks(
 
   await prompter.note(
     [
-      `Enabled ${selected.length} hook${selected.length > 1 ? "s" : ""}: ${selected.join(", ")}`,
+      `Enabled ${selected.length} automation${selected.length > 1 ? "s" : ""}: ${selected
+        .map((name) => onboardingCopyForHook({ name, description: name }).title)
+        .join(", ")}`,
       "",
-      "You can manage hooks later with:",
+      "You can change these later with:",
       `  ${formatCliCommand("maumau hooks list")}`,
       `  ${formatCliCommand("maumau hooks enable <name>")}`,
       `  ${formatCliCommand("maumau hooks disable <name>")}`,
     ].join("\n"),
-    "Hooks Configured",
+    "Automations enabled",
   );
 
   return next;

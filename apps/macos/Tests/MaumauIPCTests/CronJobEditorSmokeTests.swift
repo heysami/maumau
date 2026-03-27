@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Testing
 @testable import Maumau
@@ -72,5 +73,23 @@ struct CronJobEditorSmokeTests {
         view.applyDeleteAfterRun(to: &root, scheduleKind: CronJobEditor.ScheduleKind.at, deleteAfterRun: true)
         let raw = root["deleteAfterRun"] as? Bool
         #expect(raw == true)
+    }
+
+    @Test func `cron job editor height stays within available content height`() {
+        let shortVisibleFrame = NSRect(x: 0, y: 0, width: 900, height: 620)
+
+        #expect(
+            CronJobEditor.maxContentHeight(visibleFrame: shortVisibleFrame) ==
+                SettingsWindowSizing.defaultContentHeight(visibleFrame: shortVisibleFrame))
+        #expect(
+            CronJobEditor.idealContentHeight(visibleFrame: shortVisibleFrame) <=
+                CronJobEditor.maxContentHeight(visibleFrame: shortVisibleFrame))
+        #expect(
+            CronJobEditor.minContentHeight(visibleFrame: shortVisibleFrame) <=
+                CronJobEditor.maxContentHeight(visibleFrame: shortVisibleFrame))
+
+        let hosting = NSHostingView(rootView: self.makeEditor())
+        let size = hosting.fittingSize
+        #expect(size.height <= CronJobEditor.maxContentHeight() + 1)
     }
 }

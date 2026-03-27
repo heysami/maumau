@@ -1,4 +1,6 @@
 import { listChannelPlugins } from "../../channels/plugins/index.js";
+import { listChannelSetupPlugins } from "../../channels/plugins/setup-registry.js";
+import type { ChannelPlugin } from "../../channels/plugins/types.js";
 import {
   ErrorCodes,
   errorShape,
@@ -11,10 +13,19 @@ import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 
 const WEB_LOGIN_METHODS = new Set(["web.login.start", "web.login.wait"]);
 
-const resolveWebLoginProvider = () =>
-  listChannelPlugins().find((plugin) =>
-    (plugin.gatewayMethods ?? []).some((method) => WEB_LOGIN_METHODS.has(method)),
-  ) ?? null;
+function resolveWebLoginProvider(): ChannelPlugin | null {
+  const seen = new Set<string>();
+  return (
+    [...listChannelPlugins(), ...listChannelSetupPlugins()].find((plugin) => {
+      const id = String(plugin.id).trim();
+      if (!id || seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return (plugin.gatewayMethods ?? []).some((method) => WEB_LOGIN_METHODS.has(method));
+    }) ?? null
+  );
+}
 
 function resolveAccountId(params: unknown): string | undefined {
   return typeof (params as { accountId?: unknown }).accountId === "string"

@@ -3,6 +3,9 @@ import Foundation
 enum GatewayLaunchAgentManager {
     private static let logger = Logger(subsystem: "ai.maumau", category: "gateway.launchd")
     private static let disableLaunchAgentMarker = ".maumau/disable-launchagent"
+    // Fresh local installs can spend noticeable time inside `maumau gateway install`
+    // before launchd has even handed control to the listener.
+    private static let enableCommandTimeout: Double = 30
 
     private static var disableLaunchAgentMarkerURL: URL {
         FileManager().homeDirectoryForCurrentUser
@@ -70,7 +73,7 @@ enum GatewayLaunchAgentManager {
                 "\(port)",
                 "--runtime",
                 "node",
-            ])
+            ], timeout: self.enableCommandTimeout)
         }
 
         self.logger.info("launchd disable requested via CLI")
