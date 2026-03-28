@@ -10,6 +10,17 @@ Docs: https://docs.maumau.ai
 
 ### Fixes
 
+## 2026.3.28-beta.1
+
+### Breaking
+
+### Changes
+
+### Fixes
+
+- macOS onboarding/auth: make embedded provider sign-in flows open the browser from the app itself, show a manual URL or approval-code fallback for OpenAI Codex, Gemini CLI, Chutes, MiniMax, Qwen, and Ollama Cloud when browser launch fails, and hide GitHub Copilot from embedded onboarding until a non-TTY flow exists.
+- macOS/source packaging: rebuild missing Control UI assets automatically during local `Maumau.app` packaging so source builds stop failing before the app bundle is created.
+
 ## 2026.3.27
 
 ### Breaking
