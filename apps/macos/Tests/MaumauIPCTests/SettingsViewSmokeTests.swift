@@ -150,6 +150,13 @@ struct SettingsViewSmokeTests {
         _ = view.body
     }
 
+    @Test func `models settings mounts in window`() {
+        let controller = NSHostingController(rootView: ModelsSettings())
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
     @Test func `model provider connect sheet mounts in window`() {
         let controller = NSHostingController(rootView: ModelProviderConnectSheetHarness())
         let window = NSWindow(contentViewController: controller)

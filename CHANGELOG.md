@@ -8,11 +8,19 @@ Docs: https://docs.maumau.ai
 
 ### Changes
 
-- macOS/models settings: replace the raw model editor with a guided provider-first flow inside Settings, including in-place provider connect, provider-scoped primary/fallback selection, and clearer loading/saving states.
+### Fixes
+
+## 2026.3.28-beta.3
+
+### Breaking
+
+### Changes
+
+- Automation/models: add shared background model and thinking defaults for heartbeat, cron, and hook-driven runs, and expose the background automation model controls in macOS Settings -> Models.
 
 ### Fixes
 
-- macOS/models settings: stop showing misleading mixed-provider selections, keep `Connect another provider` available while editing fallbacks, and immediately add a newly connected provider into fallback setup when that flow asked for it.
+- Heartbeat/models: preserve partial heartbeat overrides while inheriting background automation defaults, and make the macOS models/settings coverage pass cleanly in both workspace checks and window-backed smoke tests.
 
 ## 2026.3.28-beta.1
 

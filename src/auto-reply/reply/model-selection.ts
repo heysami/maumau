@@ -302,6 +302,8 @@ export async function createModelSelectionState(params: {
   /** True when heartbeat.model was explicitly resolved for this run.
    *  In that case, skip session-stored overrides so the heartbeat selection wins. */
   hasResolvedHeartbeatModelOverride?: boolean;
+  /** Shared automation thinking default used when no session override is set. */
+  automationThinkingDefault?: ThinkLevel;
 }): Promise<ModelSelectionState> {
   const timingEnabled = shouldLogModelSelectionTiming();
   const startMs = timingEnabled ? Date.now() : 0;
@@ -465,6 +467,7 @@ export async function createModelSelectionState(params: {
     });
     const agentThinkingDefault = agentEntry?.thinkingDefault as ThinkLevel | undefined;
     defaultThinkingLevel =
+      params.automationThinkingDefault ??
       agentThinkingDefault ??
       resolved ??
       (agentCfg?.thinkingDefault as ThinkLevel | undefined) ??

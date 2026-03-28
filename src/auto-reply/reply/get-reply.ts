@@ -4,6 +4,10 @@ import {
   resolveSessionAgentId,
   resolveAgentSkillsFilter,
 } from "../../agents/agent-scope.js";
+import {
+  resolveAutomationPolicy,
+  resolveHeartbeatAutomationDefaults,
+} from "../../agents/background-automation.js";
 import { resolveModelRefFromString } from "../../agents/model-selection.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../../agents/workspace.js";
@@ -125,6 +129,10 @@ export async function getReplyFromConfig(
     mergedSkillFilter !== undefined ? { ...opts, skillFilter: mergedSkillFilter } : opts;
   const agentCfg = cfg.agents?.defaults;
   const sessionCfg = cfg.session;
+  const automationPolicy = resolveAutomationPolicy(cfg, agentId);
+  const heartbeatAutomationDefaults = opts?.isHeartbeat
+    ? resolveHeartbeatAutomationDefaults(automationPolicy)
+    : undefined;
   const { defaultProvider, defaultModel, aliasIndex } = resolveDefaultModel({
     cfg,
     agentId,
@@ -132,11 +140,12 @@ export async function getReplyFromConfig(
   let provider = defaultProvider;
   let model = defaultModel;
   let hasResolvedHeartbeatModelOverride = false;
+  let hasResolvedAutomationModelOverride = false;
   if (opts?.isHeartbeat) {
-    // Prefer the resolved per-agent heartbeat model passed from the heartbeat runner,
-    // fall back to the global defaults heartbeat model for backward compatibility.
+    // Prefer the resolved per-agent heartbeat model passed from the heartbeat runner.
+    // Heartbeat-specific model overrides intentionally beat stored session overrides.
     const heartbeatRaw =
-      opts.heartbeatModelOverride?.trim() ?? agentCfg?.heartbeat?.model?.trim() ?? "";
+      opts.heartbeatModelOverride?.trim() ?? automationPolicy.heartbeat?.model?.trim() ?? "";
     const heartbeatRef = heartbeatRaw
       ? resolveModelRefFromString({
           raw: heartbeatRaw,
@@ -148,6 +157,27 @@ export async function getReplyFromConfig(
       provider = heartbeatRef.ref.provider;
       model = heartbeatRef.ref.model;
       hasResolvedHeartbeatModelOverride = true;
+    }
+  }
+  if (!hasResolvedHeartbeatModelOverride) {
+    const automationModelRaw =
+      opts?.automationModelOverride?.trim() ??
+      (opts?.isHeartbeat ? heartbeatAutomationDefaults?.model : undefined);
+    const automationRef = automationModelRaw
+      ? resolveModelRefFromString({
+          raw: automationModelRaw,
+          defaultProvider,
+          aliasIndex,
+        })
+      : null;
+    if (automationRef) {
+      provider = automationRef.ref.provider;
+      model = automationRef.ref.model;
+      hasResolvedAutomationModelOverride = true;
+    } else if (automationModelRaw) {
+      defaultRuntime.log(
+        `automation: invalid background model '${automationModelRaw}', falling back to session/default selection`,
+      );
     }
   }
 
@@ -256,7 +286,12 @@ export async function getReplyFromConfig(
   const hasSessionModelOverride = Boolean(
     sessionEntry.modelOverride?.trim() || sessionEntry.providerOverride?.trim(),
   );
-  if (!hasResolvedHeartbeatModelOverride && !hasSessionModelOverride && channelModelOverride) {
+  if (
+    !hasResolvedHeartbeatModelOverride &&
+    !hasResolvedAutomationModelOverride &&
+    !hasSessionModelOverride &&
+    channelModelOverride
+  ) {
     const resolved = resolveModelRefFromString({
       raw: channelModelOverride.model,
       defaultProvider,

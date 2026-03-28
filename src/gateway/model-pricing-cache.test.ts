@@ -25,6 +25,7 @@ describe("model-pricing-cache", () => {
           model: { primary: "gpt", fallbacks: ["anthropic/claude-sonnet-4-6"] },
           imageModel: { primary: "google/gemini-3-pro" },
           compaction: { model: "opus" },
+          background: { model: "openai/gpt-5.4-mini" },
           heartbeat: { model: "xai/grok-4" },
           models: {
             "openai/gpt-5.4": { alias: "gpt" },
@@ -36,6 +37,7 @@ describe("model-pricing-cache", () => {
             id: "router",
             model: { primary: "openrouter/anthropic/claude-opus-4-6" },
             subagents: { model: { primary: "openrouter/auto" } },
+            background: { model: "google/gemini-2.5-flash" },
             heartbeat: { model: "anthropic/claude-opus-4-6" },
           },
         ],
@@ -74,8 +76,10 @@ describe("model-pricing-cache", () => {
     expect(refs).toEqual(
       expect.arrayContaining([
         "openai/gpt-5.4",
+        "openai/gpt-5.4-mini",
         "anthropic/claude-sonnet-4-6",
         "google/gemini-3-pro-preview",
+        "google/gemini-2.5-flash",
         "anthropic/claude-opus-4-6",
         "xai/grok-4",
         "openrouter/anthropic/claude-opus-4-6",

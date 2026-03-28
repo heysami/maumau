@@ -1,3 +1,4 @@
+import { resolveBackgroundAutomationDefaults } from "../../agents/background-automation.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../../agents/defaults.js";
 import { loadModelCatalog } from "../../agents/model-catalog.js";
 import {
@@ -8,6 +9,7 @@ import {
   resolveHooksGmailModel,
 } from "../../agents/model-selection.js";
 import type { MaumauConfig } from "../../config/config.js";
+import { logWarn } from "../../logger.js";
 import type { CronJob } from "../types.js";
 
 type CronSessionModelOverrides = {
@@ -76,6 +78,27 @@ export async function resolveCronModelSelection(
     }
   }
 
+  const backgroundModelRaw = resolveBackgroundAutomationDefaults({
+    background: params.cfgWithAgentDefaults.agents?.defaults?.background,
+  }).model;
+  if (backgroundModelRaw) {
+    const resolvedBackground = resolveAllowedModelRef({
+      cfg: params.cfgWithAgentDefaults,
+      catalog: await loadCatalogOnce(),
+      raw: backgroundModelRaw,
+      defaultProvider: resolvedDefault.provider,
+      defaultModel: resolvedDefault.model,
+    });
+    if ("error" in resolvedBackground) {
+      logWarn(
+        `cron: background.model '${backgroundModelRaw}' is invalid or not allowed; falling back to standard defaults (${resolvedBackground.error})`,
+      );
+    } else {
+      provider = resolvedBackground.ref.provider;
+      model = resolvedBackground.ref.model;
+    }
+  }
+
   let hooksGmailModelApplied = false;
   const hooksGmailModelRef = params.isGmailHook
     ? resolveHooksGmailModel({
@@ -114,7 +137,7 @@ export async function resolveCronModelSelection(
           ok: true,
           provider,
           model,
-          warning: `cron: payload.model '${modelOverride}' not allowed, falling back to agent defaults`,
+          warning: `cron: payload.model '${modelOverride}' not allowed, falling back to configured automation defaults`,
         };
       }
       return { ok: false, error: resolvedOverride.error };

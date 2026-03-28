@@ -216,6 +216,18 @@ export const FIELD_HELP: Record<string, string> = {
     "Explicit list of configured agents with IDs and optional overrides for model, tools, identity, and workspace. Keep IDs stable over time so bindings, approvals, and session routing remain deterministic.",
   "agents.list[].thinkingDefault":
     "Optional per-agent default thinking level. Overrides agents.defaults.thinkingDefault for this agent when no per-message or session override is set.",
+  "agents.defaults.background":
+    "Shared low-cost automation defaults used by background-style runs such as heartbeat turns, main-session wake flows, cron agent turns, and hook-driven automation when they do not set a more explicit model or thinking level.",
+  "agents.defaults.background.model":
+    "Default provider/model for background automation runs when no heartbeat-specific, session, or per-job override is set.",
+  "agents.defaults.background.thinking":
+    "Default thinking level for background automation runs when no session or per-job override is set.",
+  "agents.list[].background":
+    "Optional per-agent background automation overrides that replace the shared agents.defaults.background values for that agent.",
+  "agents.list[].background.model":
+    "Per-agent background automation model override used when no heartbeat-specific, session, or per-job override is set.",
+  "agents.list[].background.thinking":
+    "Per-agent background automation thinking override used when no session or per-job override is set.",
   "agents.list[].reasoningDefault":
     "Optional per-agent default reasoning visibility (on|off|stream). Applies when no per-message or session reasoning override is set.",
   "agents.list[].fastModeDefault":
@@ -238,8 +250,12 @@ export const FIELD_HELP: Record<string, string> = {
     "Avatar image path (relative to the agent workspace only) or a remote URL/data URL.",
   "agents.defaults.heartbeat.suppressToolErrorWarnings":
     "Suppress tool error warning payloads during heartbeat runs.",
+  "agents.defaults.heartbeat.thinking":
+    "Default thinking level for heartbeat runs. More specific than agents.defaults.background.thinking, but still lower priority than a stored session /think override.",
   "agents.list[].heartbeat.suppressToolErrorWarnings":
     "Suppress tool error warning payloads during heartbeat runs.",
+  "agents.list[].heartbeat.thinking":
+    "Per-agent default thinking level for heartbeat runs. More specific than agents.list[].background.thinking, but still lower priority than a stored session /think override.",
   browser:
     "Browser runtime controls for local or remote CDP attachment, profile routing, and screenshot/snapshot behavior. Keep defaults unless your automation workflow requires custom browser transport settings.",
   "browser.enabled":

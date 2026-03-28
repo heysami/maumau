@@ -161,7 +161,7 @@ describe("ollama setup", () => {
 
   it("cloud+local mode prefers the wizard browser opener and shows a manual URL when it fails", async () => {
     const wizardOpenUrl = vi.fn(async () => false);
-    const note = vi.fn(async () => undefined);
+    const note = vi.fn(async (_message: string, _title?: string) => undefined);
     const prompter = {
       text: vi.fn().mockResolvedValueOnce("http://127.0.0.1:11434"),
       select: vi.fn().mockResolvedValueOnce("remote"),

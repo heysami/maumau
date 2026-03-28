@@ -15,7 +15,7 @@ describe("loginQwenPortalOAuth", () => {
 
   it("shows a manual approval note when browser open returns false", async () => {
     const progress = { update: vi.fn(), stop: vi.fn() };
-    const note = vi.fn(async () => {});
+    const note = vi.fn(async (_message: string, _title?: string) => {});
     const openUrl = vi.fn(async () => false);
     const fetchMock = vi
       .fn()
@@ -60,7 +60,7 @@ describe("loginQwenPortalOAuth", () => {
 
   it("shows a manual approval note when browser open throws", async () => {
     const progress = { update: vi.fn(), stop: vi.fn() };
-    const note = vi.fn(async () => {});
+    const note = vi.fn(async (_message: string, _title?: string) => {});
     const openUrl = vi.fn(async () => {
       throw new Error("browser blocked");
     });

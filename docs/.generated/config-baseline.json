@@ -324,6 +324,57 @@
       "hasChildren": true
     },
     {
+      "path": "agents.defaults.background",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Automation",
+      "help": "Shared low-cost automation defaults used by background-style runs such as heartbeat turns, main-session wake flows, cron agent turns, and hook-driven automation when they do not set a more explicit model or thinking level.",
+      "hasChildren": true
+    },
+    {
+      "path": "agents.defaults.background.model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "models"
+      ],
+      "label": "Background Model Override",
+      "help": "Default provider/model for background automation runs when no heartbeat-specific, session, or per-job override is set.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.background.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Thinking Default",
+      "help": "Default thinking level for background automation runs when no session or per-job override is set.",
+      "hasChildren": false
+    },
+    {
       "path": "agents.defaults.blockStreamingBreak",
       "kind": "core",
       "type": "string",
@@ -1690,6 +1741,29 @@
         "automation"
       ],
       "help": "Delivery target (\"last\", \"none\", or a channel id). Known channels: telegram, whatsapp, discord, irc, googlechat, slack, signal, imessage, line, bluebubbles, feishu, matrix, mattermost, msteams, nextcloud-talk, nostr, synology-chat, tlon, twitch, zalo, zalouser.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.heartbeat.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "automation"
+      ],
+      "label": "Heartbeat Thinking Default",
+      "help": "Default thinking level for heartbeat runs. More specific than agents.defaults.background.thinking, but still lower priority than a stored session /think override.",
       "hasChildren": false
     },
     {
@@ -3988,6 +4062,15 @@
       "kind": "core",
       "type": "string",
       "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
       "deprecated": false,
       "sensitive": false,
       "tags": [],
@@ -4099,6 +4182,57 @@
       "deprecated": false,
       "sensitive": false,
       "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.background",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Automation",
+      "help": "Optional per-agent background automation overrides that replace the shared agents.defaults.background values for that agent.",
+      "hasChildren": true
+    },
+    {
+      "path": "agents.list.*.background.model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "models"
+      ],
+      "label": "Background Model Override",
+      "help": "Per-agent background automation model override used when no heartbeat-specific, session, or per-job override is set.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.background.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Thinking Default",
+      "help": "Per-agent background automation thinking override used when no session or per-job override is set.",
       "hasChildren": false
     },
     {
@@ -4346,6 +4480,29 @@
         "automation"
       ],
       "help": "Delivery target (\"last\", \"none\", or a channel id). Known channels: telegram, whatsapp, discord, irc, googlechat, slack, signal, imessage, line, bluebubbles, feishu, matrix, mattermost, msteams, nextcloud-talk, nostr, synology-chat, tlon, twitch, zalo, zalouser.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.heartbeat.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "automation"
+      ],
+      "label": "Heartbeat Thinking Default",
+      "help": "Per-agent default thinking level for heartbeat runs. More specific than agents.list[].background.thinking, but still lower priority than a stored session /think override.",
       "hasChildren": false
     },
     {

@@ -1,4 +1,5 @@
 import Testing
+import MaumauProtocol
 @testable import Maumau
 
 struct ModelsSettingsTests {
@@ -173,6 +174,41 @@ struct ModelsSettingsTests {
             preferredProviderId: nil)
 
         #expect(providerId == "google")
+    }
+
+    @Test func `background automation draft trims hydrated values`() {
+        let draft = resolveBackgroundAutomationSettingsDraft(
+            modelRaw: "  openai/gpt-5.4-mini  ",
+            thinkingRaw: "  low  ")
+
+        #expect(draft == BackgroundAutomationSettingsDraft(
+            modelRef: "openai/gpt-5.4-mini",
+            thinking: "low"))
+    }
+
+    @Test func `background automation updates clear root then set leaf values`() {
+        let backgroundConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background")]
+        let backgroundModelConfigPath: ConfigPath = [
+            .key("agents"), .key("defaults"), .key("background"), .key("model"),
+        ]
+        let backgroundThinkingConfigPath: ConfigPath = [
+            .key("agents"), .key("defaults"), .key("background"), .key("thinking"),
+        ]
+
+        let updates = buildBackgroundAutomationSettingsUpdates(
+            backgroundConfigPath: backgroundConfigPath,
+            backgroundModelConfigPath: backgroundModelConfigPath,
+            backgroundThinkingConfigPath: backgroundThinkingConfigPath,
+            modelRef: "  openai/gpt-5.4-mini  ",
+            thinking: " low ")
+
+        #expect(updates.count == 3)
+        #expect(updates[0].path == backgroundConfigPath)
+        #expect(updates[0].value == nil)
+        #expect(updates[1].path == backgroundModelConfigPath)
+        #expect((updates[1].value as? String) == "openai/gpt-5.4-mini")
+        #expect(updates[2].path == backgroundThinkingConfigPath)
+        #expect((updates[2].value as? String) == "low")
     }
 
     private func option(

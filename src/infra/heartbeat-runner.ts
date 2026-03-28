@@ -4,11 +4,11 @@ import {
   hasOutboundReplyContent,
   resolveSendableOutboundReplyParts,
 } from "maumau/plugin-sdk/reply-payload";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import {
-  resolveAgentConfig,
-  resolveAgentWorkspaceDir,
-  resolveDefaultAgentId,
-} from "../agents/agent-scope.js";
+  resolveAutomationPolicy,
+  resolveHeartbeatAutomationDefaults,
+} from "../agents/background-automation.js";
 import { appendCronStyleCurrentTimeLine } from "../agents/current-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
@@ -126,15 +126,7 @@ function hasExplicitHeartbeatAgents(cfg: MaumauConfig) {
 }
 
 function resolveHeartbeatConfig(cfg: MaumauConfig, agentId?: string): HeartbeatConfig | undefined {
-  const defaults = cfg.agents?.defaults?.heartbeat;
-  if (!agentId) {
-    return defaults;
-  }
-  const overrides = resolveAgentConfig(cfg, agentId)?.heartbeat;
-  if (!defaults && !overrides) {
-    return overrides;
-  }
-  return { ...defaults, ...overrides };
+  return resolveAutomationPolicy(cfg, agentId).heartbeat;
 }
 
 function resolveHeartbeatAgents(cfg: MaumauConfig): HeartbeatAgent[] {
@@ -532,7 +524,11 @@ export async function runHeartbeatOnce(opts: {
   const agentId = normalizeAgentId(
     explicitAgentId || forcedSessionAgentId || resolveDefaultAgentId(cfg),
   );
-  const heartbeat = opts.heartbeat ?? resolveHeartbeatConfig(cfg, agentId);
+  const automationPolicy = resolveAutomationPolicy(cfg, agentId);
+  const heartbeat = {
+    ...automationPolicy.heartbeat,
+    ...opts.heartbeat,
+  } as HeartbeatConfig;
   if (!areHeartbeatsEnabled()) {
     return { status: "skipped", reason: "disabled" };
   }
@@ -703,17 +699,23 @@ export async function runHeartbeatOnce(opts: {
     });
 
     const heartbeatModelOverride = heartbeat?.model?.trim() || undefined;
+    const automationDefaults = resolveHeartbeatAutomationDefaults({
+      background: automationPolicy.background,
+      heartbeat,
+    });
     const suppressToolErrorWarnings = heartbeat?.suppressToolErrorWarnings === true;
     const bootstrapContextMode: "lightweight" | undefined =
       heartbeat?.lightContext === true ? "lightweight" : undefined;
-    const replyOpts = heartbeatModelOverride
-      ? {
-          isHeartbeat: true,
-          heartbeatModelOverride,
-          suppressToolErrorWarnings,
-          bootstrapContextMode,
-        }
-      : { isHeartbeat: true, suppressToolErrorWarnings, bootstrapContextMode };
+    const replyOpts = {
+      isHeartbeat: true,
+      ...(heartbeatModelOverride ? { heartbeatModelOverride } : {}),
+      ...(automationDefaults.model ? { automationModelOverride: automationDefaults.model } : {}),
+      ...(automationDefaults.thinking
+        ? { automationThinkingDefault: automationDefaults.thinking }
+        : {}),
+      suppressToolErrorWarnings,
+      bootstrapContextMode,
+    };
     const replyResult = await getReplyFromConfig(ctx, replyOpts, cfg);
     const replyPayload = resolveHeartbeatReplyPayload(replyResult);
     const includeReasoning = heartbeat?.includeReasoning === true;

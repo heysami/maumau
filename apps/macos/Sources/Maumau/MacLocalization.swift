@@ -90,6 +90,15 @@ private let indonesianMacStrings: [String: String] = [
         "Ganti provider hanya jika provider itu sudah terhubung.",
     "Fallback models are tried in order if the primary model fails.":
         "Model fallback dicoba berurutan jika model utama gagal.",
+    "Background automation": "Otomasi latar belakang",
+    "Pick the low-cost defaults heartbeats and automated turns should use when they do not set their own model or thinking.":
+        "Pilih default hemat biaya yang harus dipakai heartbeat dan giliran otomatis saat mereka tidak menetapkan model atau level thinking sendiri.",
+    "Background model": "Model latar belakang",
+    "Pick from connected models or type a provider/model reference directly.":
+        "Pilih dari model yang sudah terhubung atau ketik referensi provider/model secara langsung.",
+    "Background thinking": "Thinking latar belakang",
+    "Leave unset to use each model's normal defaults. Session /think and explicit job settings still win.":
+        "Biarkan kosong untuk memakai default normal tiap model. Pengaturan sesi /think dan pengaturan job eksplisit tetap lebih diutamakan.",
     "Could not load models. You can still change them in the Config tab.":
         "Tidak bisa memuat model. Anda masih bisa mengubahnya di tab Konfigurasi.",
     "Managed by Nix": "Dikelola oleh Nix",

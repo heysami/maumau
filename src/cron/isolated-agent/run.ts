@@ -6,6 +6,7 @@ import {
   resolveDefaultAgentId,
 } from "../../agents/agent-scope.js";
 import { resolveSessionAuthProfileOverride } from "../../agents/auth-profiles/session-override.js";
+import { resolveBackgroundAutomationDefaults } from "../../agents/background-automation.js";
 import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
 import { runCliAgent } from "../../agents/cli-runner.js";
 import { getCliSessionId, setCliSessionId } from "../../agents/cli-session.js";
@@ -306,7 +307,11 @@ export async function runCronIsolatedAgentTurn(params: {
     (params.job.payload.kind === "agentTurn" ? params.job.payload.thinking : undefined) ??
       undefined,
   );
-  let thinkLevel = jobThink ?? hooksGmailThinking;
+  const sessionThink = normalizeThinkLevel(cronSession.sessionEntry.thinkingLevel);
+  const backgroundThink = resolveBackgroundAutomationDefaults({
+    background: cfgWithAgentDefaults.agents?.defaults?.background,
+  }).thinking;
+  let thinkLevel = jobThink ?? hooksGmailThinking ?? sessionThink ?? backgroundThink;
   if (!thinkLevel) {
     thinkLevel = resolveThinkingDefault({
       cfg: cfgWithAgentDefaults,

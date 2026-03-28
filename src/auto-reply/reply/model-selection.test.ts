@@ -100,6 +100,42 @@ describe("createModelSelectionState catalog loading", () => {
     await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("minimal");
   });
 
+  it("prefers automation thinking default over agent and model defaults", async () => {
+    vi.mocked(loadModelCatalog).mockClear();
+    const cfg = {
+      agents: {
+        defaults: {
+          thinkingDefault: "low",
+          models: {
+            "openai-codex/gpt-5.4": {
+              params: { thinking: "high" },
+            },
+          },
+        },
+        list: [
+          {
+            id: "alpha",
+            thinkingDefault: "minimal",
+          },
+        ],
+      },
+    } as MaumauConfig;
+
+    const state = await createModelSelectionState({
+      cfg,
+      agentId: "alpha",
+      agentCfg: cfg.agents?.defaults,
+      defaultProvider: "openai-codex",
+      defaultModel: "gpt-5.4",
+      provider: "openai-codex",
+      model: "gpt-5.4",
+      hasModelDirective: false,
+      automationThinkingDefault: "off",
+    });
+
+    await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("off");
+  });
+
   it("loads the full catalog for explicit model directives", async () => {
     vi.mocked(loadModelCatalog).mockClear();
     const cfg = {

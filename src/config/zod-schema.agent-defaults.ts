@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { isValidNonNegativeByteSizeString } from "./byte-size.js";
 import {
+  BackgroundAutomationSchema,
   HeartbeatSchema,
   AgentSandboxSchema,
   AgentModelSchema,
   MemorySearchSchema,
+  ThinkingLevelSchema,
 } from "./zod-schema.agent-runtime.js";
 import {
   BlockStreamingChunkSchema,
@@ -137,17 +139,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
-    thinkingDefault: z
-      .union([
-        z.literal("off"),
-        z.literal("minimal"),
-        z.literal("low"),
-        z.literal("medium"),
-        z.literal("high"),
-        z.literal("xhigh"),
-        z.literal("adaptive"),
-      ])
-      .optional(),
+    thinkingDefault: ThinkingLevelSchema,
     verboseDefault: z.union([z.literal("off"), z.literal("on"), z.literal("full")]).optional(),
     elevatedDefault: z
       .union([z.literal("off"), z.literal("on"), z.literal("ask"), z.literal("full")])
@@ -162,6 +154,7 @@ export const AgentDefaultsSchema = z
     imageMaxDimensionPx: z.number().int().positive().optional(),
     typingIntervalSeconds: z.number().int().positive().optional(),
     typingMode: TypingModeSchema.optional(),
+    background: BackgroundAutomationSchema,
     heartbeat: HeartbeatSchema,
     maxConcurrent: z.number().int().positive().optional(),
     subagents: z

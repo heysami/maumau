@@ -519,6 +519,55 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
+  it("uses background automation thinking when no explicit thinking override is present", async () => {
+    await withTempHome(async (home) => {
+      await runCronTurn(home, {
+        cfgOverrides: {
+          agents: {
+            defaults: {
+              background: {
+                thinking: "minimal",
+              },
+            },
+          },
+        },
+        jobPayload: DEFAULT_AGENT_TURN_PAYLOAD,
+        mockTexts: ["done"],
+      });
+
+      const callArgs = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
+      expect(callArgs?.thinkLevel).toBe("minimal");
+    });
+  });
+
+  it("keeps stored session thinking over background automation thinking", async () => {
+    await withTempHome(async (home) => {
+      await runCronTurn(home, {
+        cfgOverrides: {
+          agents: {
+            defaults: {
+              background: {
+                thinking: "low",
+              },
+            },
+          },
+        },
+        storeEntries: {
+          "agent:main:cron:job-1": {
+            sessionId: "existing-cron-session",
+            updatedAt: Date.now(),
+            thinkingLevel: "minimal",
+          },
+        },
+        jobPayload: DEFAULT_AGENT_TURN_PAYLOAD,
+        mockTexts: ["done"],
+      });
+
+      const callArgs = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
+      expect(callArgs?.thinkLevel).toBe("minimal");
+    });
+  });
+
   it("starts a fresh session id for each cron run", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
