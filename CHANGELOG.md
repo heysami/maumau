@@ -8,7 +8,11 @@ Docs: https://docs.maumau.ai
 
 ### Changes
 
+- macOS/models settings: replace the raw model editor with a guided provider-first flow inside Settings, including in-place provider connect, provider-scoped primary/fallback selection, and clearer loading/saving states.
+
 ### Fixes
+
+- macOS/models settings: stop showing misleading mixed-provider selections, keep `Connect another provider` available while editing fallbacks, and immediately add a newly connected provider into fallback setup when that flow asked for it.
 
 ## 2026.3.28-beta.1
 
