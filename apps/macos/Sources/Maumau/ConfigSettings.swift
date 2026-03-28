@@ -13,6 +13,10 @@ struct ConfigSettings: View {
         self.store = store
     }
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             self.sidebar
@@ -75,7 +79,7 @@ extension ConfigSettings {
         SettingsSidebarScroll {
             LazyVStack(alignment: .leading, spacing: 4) {
                 if self.sections.isEmpty {
-                    Text("No config sections available.")
+                    Text(macLocalized("No config sections available.", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
@@ -98,7 +102,7 @@ extension ConfigSettings {
             } else if self.store.configSchema != nil {
                 self.emptyDetail
             } else {
-                Text("Schema unavailable.")
+                Text(macLocalized("Schema unavailable.", language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -109,7 +113,7 @@ extension ConfigSettings {
     private var emptyDetail: some View {
         VStack(alignment: .leading, spacing: 8) {
             self.header
-            Text("Select a config section to view settings.")
+            Text(macLocalized("Select a config section to view settings.", language: self.language))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -122,7 +126,7 @@ extension ConfigSettings {
             VStack(alignment: .leading, spacing: 16) {
                 self.header
                 if let status = self.store.configStatus {
-                    Text(status)
+                    Text(macWizardText(status, language: self.language) ?? status)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -130,7 +134,7 @@ extension ConfigSettings {
                 self.sectionHeader(section)
                 self.sectionForm(section)
                 if self.store.configDirty, !self.isNixMode {
-                    Text("Unsaved changes")
+                    Text(macLocalized("Unsaved changes", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -145,21 +149,21 @@ extension ConfigSettings {
 
     @ViewBuilder
     private var header: some View {
-        Text("Config")
+        Text(macLocalized("Config", language: self.language))
             .font(.title3.weight(.semibold))
         Text(self.isNixMode
-            ? "This tab is read-only in Nix mode. Edit config via Nix and rebuild."
-            : "Edit ~/.maumau/maumau.json using the schema-driven form.")
+            ? macLocalized("This tab is read-only in Nix mode. Edit config via Nix and rebuild.", language: self.language)
+            : macLocalized("Edit ~/.maumau/maumau.json using the schema-driven form.", language: self.language))
             .font(.callout)
             .foregroundStyle(.secondary)
     }
 
     private func sectionHeader(_ section: ConfigSection) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(section.label)
+            Text(macLocalized(section.label, language: self.language))
                 .font(.title3.weight(.semibold))
             if let help = section.help {
-                Text(help)
+                Text(macLocalized(help, language: self.language))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -168,12 +172,15 @@ extension ConfigSettings {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            Button("Reload") {
+            Button(macLocalized("Reload", language: self.language)) {
                 Task { await self.store.reloadConfigDraft() }
             }
             .disabled(!self.store.configLoaded)
 
-            Button(self.store.isSavingConfig ? "Saving…" : "Save") {
+            Button(self.store.isSavingConfig
+                ? macLocalized("Saving…", language: self.language)
+                : macLocalized("Save", language: self.language))
+            {
                 Task { await self.store.saveConfigDraft() }
             }
             .disabled(self.isNixMode || self.store.isSavingConfig || !self.store.configDirty)
@@ -194,7 +201,7 @@ extension ConfigSettings {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    Text(section.label)
+                    Text(macLocalized(section.label, language: self.language))
                         .lineLimit(1)
                 }
                 .padding(.vertical, 5)
@@ -211,9 +218,15 @@ extension ConfigSettings {
 
             if isExpanded, !subsections.isEmpty {
                 VStack(alignment: .leading, spacing: 1) {
-                    self.sidebarSubRow(title: "All", key: nil, sectionKey: section.key)
+                    self.sidebarSubRow(
+                        title: macLocalized("All", language: self.language),
+                        key: nil,
+                        sectionKey: section.key)
                     ForEach(subsections) { sub in
-                        self.sidebarSubRow(title: sub.label, key: sub.key, sectionKey: section.key)
+                        self.sidebarSubRow(
+                            title: macLocalized(sub.label, language: self.language),
+                            key: sub.key,
+                            sectionKey: section.key)
                     }
                 }
                 .padding(.leading, 20)

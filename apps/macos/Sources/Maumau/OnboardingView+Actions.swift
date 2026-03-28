@@ -49,7 +49,8 @@ extension OnboardingView {
         guard Self.shouldDefaultToLocalConnectionMode(
             connectionMode: self.state.connectionMode,
             onboardingSeen: self.state.onboardingSeen,
-            remoteUrl: self.state.remoteUrl)
+            remoteUrl: self.state.remoteUrl,
+            hasSelectedOnboardingLanguage: self.state.hasSelectedOnboardingLanguage)
         else { return }
         self.selectLocalGateway()
     }

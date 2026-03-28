@@ -8,6 +8,10 @@ struct ContextMenuCardView: View {
     private let isLoading: Bool
     private let barHeight: CGFloat = 3
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     init(
         rows: [SessionRow],
         statusText: String? = nil,
@@ -20,14 +24,14 @@ struct ContextMenuCardView: View {
 
     var body: some View {
         MenuHeaderCard(
-            title: "Context",
+            title: macLocalized("Context", language: self.language),
             subtitle: self.subtitle,
             statusText: self.statusText,
             paddingBottom: 8)
         {
             if self.statusText == nil {
                 if self.rows.isEmpty, !self.isLoading {
-                    Text("No active sessions")
+                    Text(macLocalized("No active sessions", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -48,9 +52,7 @@ struct ContextMenuCardView: View {
     }
 
     private var subtitle: String {
-        let count = self.rows.count
-        if count == 1 { return "1 session · 24h" }
-        return "\(count) sessions · 24h"
+        macSessionSubtitle(count: self.rows.count, language: self.language)
     }
 
     private func sessionRow(_ row: SessionRow) -> some View {

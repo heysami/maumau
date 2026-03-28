@@ -100,23 +100,45 @@ struct OnboardingViewSmokeTests {
         #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
             connectionMode: .unconfigured,
             onboardingSeen: false,
-            remoteUrl: ""))
+            remoteUrl: "",
+            hasSelectedOnboardingLanguage: true))
         #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
             connectionMode: .unconfigured,
             onboardingSeen: false,
-            remoteUrl: "   "))
+            remoteUrl: "   ",
+            hasSelectedOnboardingLanguage: true))
         #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
             connectionMode: .remote,
             onboardingSeen: false,
-            remoteUrl: "wss://gateway.example"))
+            remoteUrl: "wss://gateway.example",
+            hasSelectedOnboardingLanguage: true))
         #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
             connectionMode: .local,
             onboardingSeen: false,
-            remoteUrl: "") == false)
+            remoteUrl: "",
+            hasSelectedOnboardingLanguage: true) == false)
         #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
             connectionMode: .unconfigured,
             onboardingSeen: true,
-            remoteUrl: "") == false)
+            remoteUrl: "",
+            hasSelectedOnboardingLanguage: true) == false)
+        #expect(OnboardingView.shouldDefaultToLocalConnectionMode(
+            connectionMode: .unconfigured,
+            onboardingSeen: false,
+            remoteUrl: "",
+            hasSelectedOnboardingLanguage: false) == false)
+    }
+
+    @Test func `language selection is the first onboarding cursor until chosen`() {
+        #expect(OnboardingView.initialPageCursor(hasSelectedOnboardingLanguage: false, onboardingSeen: false) == 0)
+        #expect(OnboardingView.initialPageCursor(hasSelectedOnboardingLanguage: true, onboardingSeen: false) == 0)
+        #expect(OnboardingView.initialPageCursor(hasSelectedOnboardingLanguage: true, onboardingSeen: true) == 1)
+    }
+
+    @Test func `language catalog defaults to english and supports indonesian`() {
+        #expect(OnboardingLanguage.loadSelection(from: nil) == nil)
+        #expect(OnboardingLanguage.loadSelection(from: "id") == .id)
+        #expect(AppState(preview: true).effectiveOnboardingLanguage == .en)
     }
 
     @Test func `wizard start waits until the wizard page is active`() {
@@ -154,6 +176,22 @@ struct OnboardingViewSmokeTests {
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .unconfigured, onboardingSeen: true))
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: false))
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .remote, onboardingSeen: false))
+    }
+
+    @Test func `fresh launch keeps retrying onboarding until it is visible or no longer needed`() {
+        #expect(AppDelegate.shouldShowInitialOnboarding(seenVersion: 0, onboardingSeen: false))
+        #expect(AppDelegate.shouldRetryInitialOnboardingPresentation(
+            seenVersion: 0,
+            onboardingSeen: false,
+            onboardingPresented: false))
+        #expect(!AppDelegate.shouldRetryInitialOnboardingPresentation(
+            seenVersion: currentOnboardingVersion,
+            onboardingSeen: true,
+            onboardingPresented: false))
+        #expect(!AppDelegate.shouldRetryInitialOnboardingPresentation(
+            seenVersion: 0,
+            onboardingSeen: false,
+            onboardingPresented: true))
     }
 
     @Test func `local gateway setup requires cli or local project gateway`() throws {

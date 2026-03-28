@@ -14,18 +14,6 @@ struct CronJobEditor: View {
     let onSave: ([String: AnyCodable]) -> Void
 
     let labelColumnWidth: CGFloat = 160
-    static let introText =
-        "Create a schedule that wakes Maumau via the Gateway. "
-            + "Use an isolated session for agent turns so your main chat stays clean."
-    static let sessionTargetNote =
-        "Main jobs post a system event into the current main session. "
-            + "Current and isolated-style jobs run agent turns and can announce results to a channel."
-    static let scheduleKindNote =
-        "“At” runs once, “Every” repeats with a duration, “Cron” uses a 5-field Unix expression."
-    static let isolatedPayloadNote =
-        "Isolated jobs always run an agent turn. Announce sends a short summary to a channel."
-    static let mainPayloadNote =
-        "System events are injected into the current main session. Agent turns require an isolated session target."
 
     static func maxContentHeight(visibleFrame: NSRect? = nil) -> CGFloat {
         SettingsWindowSizing.defaultContentHeight(visibleFrame: visibleFrame)
@@ -73,6 +61,36 @@ struct CronJobEditor: View {
     @State var timeoutSeconds: String = ""
     @State var bestEffortDeliver: Bool = false
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
+    private func loc(_ english: String) -> String {
+        macLocalized(english, language: self.language)
+    }
+
+    private var introText: String {
+        self.loc(
+            "Create a schedule that wakes Maumau via the Gateway. Use an isolated session for agent turns so your main chat stays clean.")
+    }
+
+    private var sessionTargetNote: String {
+        self.loc(
+            "Main jobs post a system event into the current main session. Current and isolated-style jobs run agent turns and can announce results to a channel.")
+    }
+
+    private var scheduleKindNote: String {
+        self.loc("“At” runs once, “Every” repeats with a duration, “Cron” uses a 5-field Unix expression.")
+    }
+
+    private var isolatedPayloadNote: String {
+        self.loc("Isolated jobs always run an agent turn. Announce sends a short summary to a channel.")
+    }
+
+    private var mainPayloadNote: String {
+        self.loc("System events are injected into the current main session. Agent turns require an isolated session target.")
+    }
+
     var channelOptions: [String] {
         let ordered = self.channelsStore.orderedChannelIds()
         var options = ["last"] + ordered
@@ -85,16 +103,16 @@ struct CronJobEditor: View {
     }
 
     func channelLabel(for id: String) -> String {
-        if id == "last" { return "last" }
+        if id == "last" { return self.loc("last") }
         return self.channelsStore.resolveChannelLabel(id)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(self.job == nil ? "New cron job" : "Edit cron job")
+                Text(self.job == nil ? self.loc("New cron job") : self.loc("Edit cron job"))
                     .font(.title3.weight(.semibold))
-                Text(Self.introText)
+                Text(self.introText)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -102,48 +120,48 @@ struct CronJobEditor: View {
 
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 14) {
-                    GroupBox("Basics") {
+                    GroupBox(self.loc("Basics")) {
                         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                             GridRow {
-                                self.gridLabel("Name")
-                                TextField("Required (e.g. “Daily summary”)", text: self.$name)
+                                self.gridLabel(self.loc("Name"))
+                                TextField(self.loc("Required (e.g. “Daily summary”)"), text: self.$name)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(maxWidth: .infinity)
                             }
                             GridRow {
-                                self.gridLabel("Description")
-                                TextField("Optional notes", text: self.$description)
+                                self.gridLabel(self.loc("Description"))
+                                TextField(self.loc("Optional notes"), text: self.$description)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(maxWidth: .infinity)
                             }
                             GridRow {
-                                self.gridLabel("Agent ID")
-                                TextField("Optional (default agent)", text: self.$agentId)
+                                self.gridLabel(self.loc("Agent ID"))
+                                TextField(self.loc("Optional (default agent)"), text: self.$agentId)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(maxWidth: .infinity)
                             }
                             GridRow {
-                                self.gridLabel("Enabled")
+                                self.gridLabel(self.loc("Enabled"))
                                 Toggle("", isOn: self.$enabled)
                                     .labelsHidden()
                                     .toggleStyle(.switch)
                             }
                             GridRow {
-                                self.gridLabel("Session target")
+                                self.gridLabel(self.loc("Session target"))
                                 Picker("", selection: self.$sessionTarget) {
-                                    Text("main").tag(CronSessionTarget.main)
-                                    Text("isolated").tag(CronSessionTarget.isolated)
-                                    Text("current").tag(CronSessionTarget.current)
+                                    Text(self.loc("main")).tag(CronSessionTarget.main)
+                                    Text(self.loc("isolated")).tag(CronSessionTarget.isolated)
+                                    Text(self.loc("current")).tag(CronSessionTarget.current)
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             GridRow {
-                                self.gridLabel("Wake mode")
+                                self.gridLabel(self.loc("Wake mode"))
                                 Picker("", selection: self.$wakeMode) {
-                                    Text("now").tag(CronWakeMode.now)
-                                    Text("next-heartbeat").tag(CronWakeMode.nextHeartbeat)
+                                    Text(self.loc("now")).tag(CronWakeMode.now)
+                                    Text(self.loc("next-heartbeat")).tag(CronWakeMode.nextHeartbeat)
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
@@ -153,7 +171,7 @@ struct CronJobEditor: View {
                                 Color.clear
                                     .frame(width: self.labelColumnWidth, height: 1)
                                 Text(
-                                    Self.sessionTargetNote)
+                                    self.sessionTargetNote)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,14 +179,14 @@ struct CronJobEditor: View {
                         }
                     }
 
-                    GroupBox("Schedule") {
+                    GroupBox(self.loc("Schedule")) {
                         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                             GridRow {
-                                self.gridLabel("Kind")
+                                self.gridLabel(self.loc("Kind"))
                                 Picker("", selection: self.$scheduleKind) {
-                                    Text("at").tag(ScheduleKind.at)
-                                    Text("every").tag(ScheduleKind.every)
-                                    Text("cron").tag(ScheduleKind.cron)
+                                    Text(self.loc("at")).tag(ScheduleKind.at)
+                                    Text(self.loc("every")).tag(ScheduleKind.every)
+                                    Text(self.loc("cron")).tag(ScheduleKind.cron)
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
@@ -178,7 +196,7 @@ struct CronJobEditor: View {
                                 Color.clear
                                     .frame(width: self.labelColumnWidth, height: 1)
                                 Text(
-                                    Self.scheduleKindNote)
+                                    self.scheduleKindNote)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -187,7 +205,7 @@ struct CronJobEditor: View {
                             switch self.scheduleKind {
                             case .at:
                                 GridRow {
-                                    self.gridLabel("At")
+                                    self.gridLabel(self.loc("At"))
                                     DatePicker(
                                         "",
                                         selection: self.$atDate,
@@ -196,27 +214,27 @@ struct CronJobEditor: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 GridRow {
-                                    self.gridLabel("Auto-delete")
-                                    Toggle("Delete after successful run", isOn: self.$deleteAfterRun)
+                                    self.gridLabel(self.loc("Auto-delete"))
+                                    Toggle(self.loc("Delete after successful run"), isOn: self.$deleteAfterRun)
                                         .toggleStyle(.switch)
                                 }
                             case .every:
                                 GridRow {
-                                    self.gridLabel("Every")
-                                    TextField("10m, 1h, 1d", text: self.$everyText)
+                                    self.gridLabel(self.loc("Every"))
+                                    TextField(self.loc("10m, 1h, 1d"), text: self.$everyText)
                                         .textFieldStyle(.roundedBorder)
                                         .frame(maxWidth: .infinity)
                                 }
                             case .cron:
                                 GridRow {
-                                    self.gridLabel("Expression")
-                                    TextField("e.g. 0 9 * * 3", text: self.$cronExpr)
+                                    self.gridLabel(self.loc("Expression"))
+                                    TextField(self.loc("e.g. 0 9 * * 3"), text: self.$cronExpr)
                                         .textFieldStyle(.roundedBorder)
                                         .frame(maxWidth: .infinity)
                                 }
                                 GridRow {
-                                    self.gridLabel("Timezone")
-                                    TextField("Optional (e.g. America/Los_Angeles)", text: self.$cronTz)
+                                    self.gridLabel(self.loc("Timezone"))
+                                    TextField(self.loc("Optional (e.g. America/Los_Angeles)"), text: self.$cronTz)
                                         .textFieldStyle(.roundedBorder)
                                         .frame(maxWidth: .infinity)
                                 }
@@ -224,10 +242,10 @@ struct CronJobEditor: View {
                         }
                     }
 
-                    GroupBox("Payload") {
+                    GroupBox(self.loc("Payload")) {
                         VStack(alignment: .leading, spacing: 10) {
                             if self.isIsolatedLikeSessionTarget {
-                                Text(Self.isolatedPayloadNote)
+                                Text(self.isolatedPayloadNote)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -235,10 +253,10 @@ struct CronJobEditor: View {
                             } else {
                                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                                     GridRow {
-                                        self.gridLabel("Kind")
+                                        self.gridLabel(self.loc("Kind"))
                                         Picker("", selection: self.$payloadKind) {
-                                            Text("systemEvent").tag(PayloadKind.systemEvent)
-                                            Text("agentTurn").tag(PayloadKind.agentTurn)
+                                            Text(self.loc("systemEvent")).tag(PayloadKind.systemEvent)
+                                            Text(self.loc("agentTurn")).tag(PayloadKind.agentTurn)
                                         }
                                         .labelsHidden()
                                         .pickerStyle(.segmented)
@@ -248,7 +266,7 @@ struct CronJobEditor: View {
                                         Color.clear
                                             .frame(width: self.labelColumnWidth, height: 1)
                                         Text(
-                                            Self.mainPayloadNote)
+                                            self.mainPayloadNote)
                                             .font(.footnote)
                                             .foregroundStyle(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -257,7 +275,7 @@ struct CronJobEditor: View {
 
                                 switch self.payloadKind {
                                 case .systemEvent:
-                                    TextField("System event text", text: self.$systemEventText, axis: .vertical)
+                                    TextField(self.loc("System event text"), text: self.$systemEventText, axis: .vertical)
                                         .textFieldStyle(.roundedBorder)
                                         .lineLimit(3...7)
                                         .frame(maxWidth: .infinity)
@@ -280,7 +298,7 @@ struct CronJobEditor: View {
             }
 
             HStack {
-                Button("Cancel") { self.onCancel() }
+                Button(self.loc("Cancel")) { self.onCancel() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(.bordered)
                 Spacer()
@@ -290,7 +308,7 @@ struct CronJobEditor: View {
                     if self.isSaving {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text("Save")
+                        Text(self.loc("Save"))
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -327,29 +345,29 @@ struct CronJobEditor: View {
         VStack(alignment: .leading, spacing: 10) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                 GridRow {
-                    self.gridLabel("Message")
-                    TextField("What should Maumau do?", text: self.$agentMessage, axis: .vertical)
+                    self.gridLabel(self.loc("Message"))
+                    TextField(self.loc("What should Maumau do?"), text: self.$agentMessage, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3...7)
                         .frame(maxWidth: .infinity)
                 }
                 GridRow {
-                    self.gridLabel("Thinking")
-                    TextField("Optional (e.g. low)", text: self.$thinking)
+                    self.gridLabel(self.loc("Thinking"))
+                    TextField(self.loc("Optional (e.g. low)"), text: self.$thinking)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: .infinity)
                 }
                 GridRow {
-                    self.gridLabel("Timeout")
-                    TextField("Seconds (optional)", text: self.$timeoutSeconds)
+                    self.gridLabel(self.loc("Timeout"))
+                    TextField(self.loc("Seconds (optional)"), text: self.$timeoutSeconds)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 180, alignment: .leading)
                 }
                 GridRow {
-                    self.gridLabel("Delivery")
+                    self.gridLabel(self.loc("Delivery"))
                     Picker("", selection: self.$deliveryMode) {
-                        Text("Announce summary").tag(DeliveryChoice.announce)
-                        Text("None").tag(DeliveryChoice.none)
+                        Text(self.loc("Announce summary")).tag(DeliveryChoice.announce)
+                        Text(self.loc("None")).tag(DeliveryChoice.none)
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
@@ -359,7 +377,7 @@ struct CronJobEditor: View {
             if self.deliveryMode == .announce {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                     GridRow {
-                        self.gridLabel("Channel")
+                        self.gridLabel(self.loc("Channel"))
                         Picker("", selection: self.$channel) {
                             ForEach(self.channelOptions, id: \.self) { channel in
                                 Text(self.channelLabel(for: channel)).tag(channel)
@@ -370,14 +388,14 @@ struct CronJobEditor: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     GridRow {
-                        self.gridLabel("To")
-                        TextField("Optional override (phone number / chat id / Discord channel)", text: self.$to)
+                        self.gridLabel(self.loc("To"))
+                        TextField(self.loc("Optional override (phone number / chat id / Discord channel)"), text: self.$to)
                             .textFieldStyle(.roundedBorder)
                             .frame(maxWidth: .infinity)
                     }
                     GridRow {
-                        self.gridLabel("Best-effort")
-                        Toggle("Do not fail the job if announce fails", isOn: self.$bestEffortDeliver)
+                        self.gridLabel(self.loc("Best-effort"))
+                        Toggle(self.loc("Do not fail the job if announce fails"), isOn: self.$bestEffortDeliver)
                             .toggleStyle(.switch)
                     }
                 }

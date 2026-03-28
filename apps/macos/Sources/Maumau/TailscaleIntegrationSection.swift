@@ -68,9 +68,13 @@ struct TailscaleIntegrationSection: View {
         return self.tailscaleService
     }
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Private access")
+            Text(macLocalized("Private access", language: self.language))
                 .font(.callout.weight(.semibold))
             Text(self.introText)
                 .font(.caption)
@@ -99,7 +103,7 @@ struct TailscaleIntegrationSection: View {
             }
 
             if self.connectionMode != .local {
-                Text("Local mode required. Update settings on the gateway host.")
+                Text(macLocalized("Local mode required. Update settings on the gateway host.", language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -144,14 +148,22 @@ struct TailscaleIntegrationSection: View {
         switch self.presentation {
         case .settings:
             if !self.effectiveService.isInstalled {
-                return "Install Tailscale here to turn on private access for this Gateway."
+                return macLocalized(
+                    "Install Tailscale here to turn on private access for this Gateway.",
+                    language: self.language)
             }
             if !self.effectiveService.isRunning {
-                return "Finish Tailscale sign-in on this Mac, then choose how this Gateway is shared."
+                return macLocalized(
+                    "Finish Tailscale sign-in on this Mac, then choose how this Gateway is shared.",
+                    language: self.language)
             }
-            return "Manage how this Gateway is shared through Tailscale."
+            return macLocalized(
+                "Manage how this Gateway is shared through Tailscale.",
+                language: self.language)
         case .onboarding:
-            return "Powered by Tailscale. Use the install button here on this Mac first, then add your phone or other devices later when you want them."
+            return macLocalized(
+                "Powered by Tailscale. Use the install button here on this Mac first, then add your phone or other devices later when you want them.",
+                language: self.language)
         }
     }
 
@@ -163,7 +175,7 @@ struct TailscaleIntegrationSection: View {
             Text(self.statusText)
                 .font(.callout)
             Spacer()
-            Button("Refresh") {
+            Button(macLocalized("Refresh", language: self.language)) {
                 Task { await self.effectiveService.checkTailscaleStatus() }
             }
             .buttonStyle(.bordered)
@@ -172,11 +184,11 @@ struct TailscaleIntegrationSection: View {
     }
 
     private var settingsGuide: some View {
-        DisclosureGroup("Need help adding another device later?") {
+        DisclosureGroup(macLocalized("Need help adding another device later?", language: self.language)) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Install Tailscale on that phone or laptop later.")
-                Text("Sign in there with the same Tailscale account or private network.")
-                Text("Then open the private link shown here.")
+                Text(macLocalized("Install Tailscale on that phone or laptop later.", language: self.language))
+                Text(macLocalized("Sign in there with the same Tailscale account or private network.", language: self.language))
+                Text(macLocalized("Then open the private link shown here.", language: self.language))
             }
             .padding(.top, 4)
         }
@@ -191,9 +203,13 @@ struct TailscaleIntegrationSection: View {
     }
 
     private var statusText: String {
-        if !self.effectiveService.isInstalled { return "Tailscale is not installed on this Mac yet" }
-        if self.effectiveService.isRunning { return "Tailscale is installed and signed in on this Mac" }
-        return "Tailscale is installed, but this Mac is not signed in yet"
+        if !self.effectiveService.isInstalled {
+            return macLocalized("Tailscale is not installed on this Mac yet", language: self.language)
+        }
+        if self.effectiveService.isRunning {
+            return macLocalized("Tailscale is installed and signed in on this Mac", language: self.language)
+        }
+        return macLocalized("Tailscale is installed, but this Mac is not signed in yet", language: self.language)
     }
 
     private var installButtons: some View {
@@ -202,34 +218,39 @@ struct TailscaleIntegrationSection: View {
                 if self.isInstallingTailscale {
                     self.busyLabel("Installing on this Mac…")
                 } else {
-                    Text("Install on this Mac")
+                    Text(macLocalized("Install on this Mac", language: self.language))
                 }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .disabled(self.isActionBusy)
 
-            Text("Maumau downloads the official Tailscale macOS package and runs the installer command here. macOS will ask for your administrator password.")
+            Text(
+                macLocalized(
+                    "Maumau downloads the official Tailscale macOS package and runs the installer command here. macOS will ask for your administrator password.",
+                    language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button("Open Tailscale guide") { self.effectiveService.openSetupGuide() }
+            Button(macLocalized("Open Tailscale guide", language: self.language)) {
+                self.effectiveService.openSetupGuide()
+            }
                 .buttonStyle(.link)
         }
     }
 
     private var modePicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Access mode")
+            Text(macLocalized("Access mode", language: self.language))
                 .font(.callout.weight(.semibold))
-            Picker("Access", selection: self.$tailscaleMode) {
+            Picker(macLocalized("Access", language: self.language), selection: self.$tailscaleMode) {
                 ForEach(GatewayTailscaleMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
+                    Text(macLocalized(mode.label, language: self.language)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            Text(self.tailscaleMode.description)
+            Text(macLocalized(self.tailscaleMode.description, language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -240,7 +261,7 @@ struct TailscaleIntegrationSection: View {
         if let host = self.effectiveService.tailscaleHostname {
             let url = "https://\(host)/ui/"
             HStack(spacing: 8) {
-                Text(self.tailscaleMode == .funnel ? "Public link:" : "Private link:")
+                Text(macPrivateLinkLabel(isPublic: self.tailscaleMode == .funnel, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let link = URL(string: url) {
@@ -252,7 +273,10 @@ struct TailscaleIntegrationSection: View {
                 }
             }
         } else if !self.effectiveService.isRunning {
-            Text("Sign in on this Mac first. Tailscale can open your browser, and then you can come back here for the private link.")
+            Text(
+                macLocalized(
+                    "Sign in on this Mac first. Tailscale can open your browser, and then you can come back here for the private link.",
+                    language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -262,7 +286,7 @@ struct TailscaleIntegrationSection: View {
                 if self.isOpeningBrowserSignIn {
                     self.busyLabel("Opening browser sign-in…")
                 } else {
-                    Text("Open browser sign-in")
+                    Text(macLocalized("Open browser sign-in", language: self.language))
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -273,12 +297,15 @@ struct TailscaleIntegrationSection: View {
 
     private var serveAuthSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Require credentials", isOn: self.$requireCredentialsForServe)
+            Toggle(macLocalized("Require credentials", language: self.language), isOn: self.$requireCredentialsForServe)
                 .toggleStyle(.checkbox)
             if self.requireCredentialsForServe {
                 self.authFields
             } else {
-                Text("Private mode trusts Tailscale's verified identity, so Maumau does not need its own password here.")
+                Text(
+                    macLocalized(
+                        "Private mode trusts Tailscale's verified identity, so Maumau does not need its own password here.",
+                        language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -287,7 +314,7 @@ struct TailscaleIntegrationSection: View {
 
     private var funnelAuthSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Public mode requires a Maumau password.")
+            Text(macLocalized("Public mode requires a Maumau password.", language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             self.authFields
@@ -296,14 +323,19 @@ struct TailscaleIntegrationSection: View {
 
     @ViewBuilder
     private var authFields: some View {
-        SecureField("Password", text: self.$password)
+        SecureField(macLocalized("Password", language: self.language), text: self.$password)
             .textFieldStyle(.roundedBorder)
             .frame(maxWidth: 240)
             .onSubmit { Task { await self.applySettings() } }
-        Text("Stored in ~/.maumau/maumau.json. Prefer MAUMAU_GATEWAY_PASSWORD if you want to manage it outside the app.")
+        Text(
+            macLocalized(
+                "Stored in ~/.maumau/maumau.json. Prefer MAUMAU_GATEWAY_PASSWORD if you want to manage it outside the app.",
+                language: self.language))
             .font(.caption)
             .foregroundStyle(.secondary)
-        Button("Update password") { Task { await self.applySettings() } }
+        Button(macLocalized("Update password", language: self.language)) {
+            Task { await self.applySettings() }
+        }
             .buttonStyle(.bordered)
             .controlSize(.small)
     }
@@ -343,7 +375,7 @@ struct TailscaleIntegrationSection: View {
         let requiresPassword = self.tailscaleMode == .funnel
             || (self.tailscaleMode == .serve && self.requireCredentialsForServe)
         if requiresPassword, trimmedPassword.isEmpty {
-            self.validationMessage = "Password required for this mode."
+            self.validationMessage = macLocalized("Password required for this mode.", language: self.language)
             return
         }
 
@@ -355,14 +387,18 @@ struct TailscaleIntegrationSection: View {
             isPaused: self.isPaused)
 
         if !success, let errorMessage {
-            self.statusMessage = errorMessage
+            self.statusMessage = macLocalized(errorMessage, language: self.language)
             return
         }
 
         if self.connectionMode == .local, !self.isPaused {
-            self.statusMessage = "Saved private access settings. Restarting gateway…"
+            self.statusMessage = macLocalized(
+                "Saved private access settings. Restarting gateway…",
+                language: self.language)
         } else {
-            self.statusMessage = "Saved private access settings. Restart the gateway to apply."
+            self.statusMessage = macLocalized(
+                "Saved private access settings. Restart the gateway to apply.",
+                language: self.language)
         }
         self.restartGatewayIfNeeded()
     }
@@ -448,7 +484,7 @@ struct TailscaleIntegrationSection: View {
         HStack(spacing: 8) {
             ProgressView()
                 .controlSize(.small)
-            Text(title)
+            Text(macLocalized(title, language: self.language))
         }
     }
 
@@ -466,13 +502,17 @@ struct TailscaleIntegrationSection: View {
         guard !self.isActionBusy else { return }
         self.validationMessage = nil
         self.statusMessage = nil
-        self.setActionMessage("Downloading the official Tailscale installer…", isError: false)
+        self.setActionMessage(
+            macLocalized("Downloading the official Tailscale installer…", language: self.language),
+            isError: false)
         self.isInstallingTailscale = true
 
         Task {
             let outcome = await self.effectiveService.installOnThisMac()
             self.isInstallingTailscale = false
-            self.setActionMessage(outcome.message, isError: !outcome.success)
+            self.setActionMessage(
+                macLocalized(outcome.message, language: self.language),
+                isError: !outcome.success)
         }
     }
 
@@ -480,13 +520,17 @@ struct TailscaleIntegrationSection: View {
         guard !self.isActionBusy else { return }
         self.validationMessage = nil
         self.statusMessage = nil
-        self.setActionMessage("Preparing browser sign-in…", isError: false)
+        self.setActionMessage(
+            macLocalized("Preparing browser sign-in…", language: self.language),
+            isError: false)
         self.isOpeningBrowserSignIn = true
 
         Task {
             let outcome = await self.effectiveService.openBrowserSignIn()
             self.isOpeningBrowserSignIn = false
-            self.setActionMessage(outcome.message, isError: !outcome.success)
+            self.setActionMessage(
+                macLocalized(outcome.message, language: self.language),
+                isError: !outcome.success)
         }
     }
 }

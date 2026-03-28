@@ -40,9 +40,9 @@ struct SessionsSettings: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Sessions")
+                Text(macLocalized("Sessions"))
                     .font(.headline)
-                Text("Peek at the stored conversation buckets the CLI reuses for context and rate limits.")
+                Text(macLocalized("Peek at the stored conversation buckets the CLI reuses for context and rate limits."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -57,7 +57,7 @@ struct SessionsSettings: View {
     private var content: some View {
         Group {
             if self.rows.isEmpty, self.errorMessage == nil {
-                Text("No sessions yet. They appear after the first inbound message or heartbeat.")
+                Text(macLocalized("No sessions yet. They appear after the first inbound message or heartbeat."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 6)
@@ -109,7 +109,7 @@ struct SessionsSettings: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text("Context")
+                    Text(macLocalized("Context"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()

@@ -3,14 +3,20 @@ import SwiftUI
 struct MenuUsageHeaderView: View {
     let count: Int
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         MenuHeaderCard(
-            title: "Usage",
+            title: self.language == .id ? "Penggunaan" : "Usage",
             subtitle: self.subtitle)
     }
 
     private var subtitle: String {
-        if self.count == 1 { return "1 provider" }
-        return "\(self.count) providers"
+        if self.language == .id {
+            return self.count == 1 ? "1 penyedia" : "\(self.count) penyedia"
+        }
+        return self.count == 1 ? "1 provider" : "\(self.count) providers"
     }
 }

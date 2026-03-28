@@ -240,14 +240,32 @@ private final class StatusItemMouseHandlerView: NSView {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var state: AppState?
+    private var firstRunOnboardingTask: Task<Void, Never>?
+    private static let logger = Logger(subsystem: "ai.maumau", category: "app")
     private let webChatAutoLogger = Logger(subsystem: "ai.maumau", category: "Chat")
     let updaterController: UpdaterProviding = makeUpdaterController()
+    private static let initialOnboardingDelay = Duration.milliseconds(600)
+    private static let initialOnboardingRetryDelay = Duration.milliseconds(700)
+    private static let initialOnboardingMaxAttempts = 8
 
     static func shouldApplyInitialConnectionMode(mode: AppState.ConnectionMode, onboardingSeen: Bool) -> Bool {
         // Fresh onboarding defaults to local immediately after the window appears.
         // Skip the stale `.unconfigured` launch apply so it cannot race in later and
         // tear down a gateway startup that onboarding already kicked off.
         !(mode == .unconfigured && !onboardingSeen)
+    }
+
+    static func shouldShowInitialOnboarding(seenVersion: Int, onboardingSeen: Bool) -> Bool {
+        seenVersion < currentOnboardingVersion || !onboardingSeen
+    }
+
+    static func shouldRetryInitialOnboardingPresentation(
+        seenVersion: Int,
+        onboardingSeen: Bool,
+        onboardingPresented: Bool) -> Bool
+    {
+        self.shouldShowInitialOnboarding(seenVersion: seenVersion, onboardingSeen: onboardingSeen)
+            && !onboardingPresented
     }
 
     func application(_: NSApplication, open urls: [URL]) {
@@ -298,6 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        self.firstRunOnboardingTask?.cancel()
         PresenceReporter.shared.stop()
         NodePairingApprovalPrompter.shared.stop()
         DevicePairingApprovalPrompter.shared.stop()
@@ -315,11 +334,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func scheduleFirstRunOnboardingIfNeeded() {
+        self.firstRunOnboardingTask?.cancel()
         let seenVersion = UserDefaults.standard.integer(forKey: onboardingVersionKey)
-        let shouldShow = seenVersion < currentOnboardingVersion || !AppStateStore.shared.onboardingSeen
-        guard shouldShow else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            OnboardingController.shared.show()
+        let onboardingSeen = AppStateStore.shared.onboardingSeen
+        guard Self.shouldShowInitialOnboarding(seenVersion: seenVersion, onboardingSeen: onboardingSeen) else { return }
+
+        self.firstRunOnboardingTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.initialOnboardingDelay)
+
+            for attempt in 1...Self.initialOnboardingMaxAttempts {
+                guard !Task.isCancelled else { return }
+
+                let currentSeenVersion = UserDefaults.standard.integer(forKey: onboardingVersionKey)
+                let currentOnboardingSeen = AppStateStore.shared.onboardingSeen
+                let onboardingPresented = OnboardingController.shared.isPresented
+                guard Self.shouldRetryInitialOnboardingPresentation(
+                    seenVersion: currentSeenVersion,
+                    onboardingSeen: currentOnboardingSeen,
+                    onboardingPresented: onboardingPresented)
+                else {
+                    return
+                }
+
+                Self.logger.info("initial onboarding show attempt \(attempt, privacy: .public)")
+                OnboardingController.shared.show()
+                try? await Task.sleep(for: Self.initialOnboardingRetryDelay)
+            }
+
+            let finalSeenVersion = UserDefaults.standard.integer(forKey: onboardingVersionKey)
+            let finalOnboardingSeen = AppStateStore.shared.onboardingSeen
+            if Self.shouldRetryInitialOnboardingPresentation(
+                seenVersion: finalSeenVersion,
+                onboardingSeen: finalOnboardingSeen,
+                onboardingPresented: OnboardingController.shared.isPresented)
+            {
+                Self.logger.error("initial onboarding failed to present after retries")
+            }
         }
     }
 

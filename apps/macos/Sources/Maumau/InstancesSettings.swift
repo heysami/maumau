@@ -4,6 +4,10 @@ import SwiftUI
 struct InstancesSettings: View {
     var store: InstancesStore
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     init(store: InstancesStore = .shared) {
         self.store = store
     }
@@ -12,14 +16,14 @@ struct InstancesSettings: View {
         VStack(alignment: .leading, spacing: 12) {
             self.header
             if let err = store.lastError {
-                Text("Error: \(err)")
+                Text("\(macLocalized("Error", language: self.language)): \(err)")
                     .foregroundStyle(.red)
             } else if let info = store.statusMessage {
-                Text(info)
+                Text(macWizardText(info, language: self.language) ?? info)
                     .foregroundStyle(.secondary)
             }
             if self.store.instances.isEmpty {
-                Text("No instances reported yet.")
+                Text(macLocalized("No instances reported yet.", language: self.language))
                     .foregroundStyle(.secondary)
             } else {
                 List(self.store.instances) { inst in
@@ -36,9 +40,9 @@ struct InstancesSettings: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Connected Instances")
+                Text(macLocalized("Connected Instances", language: self.language))
                     .font(.headline)
-                Text("Latest presence beacons from Maumau nodes. Updated periodically.")
+                Text(macLocalized("Latest presence beacons from Maumau nodes. Updated periodically.", language: self.language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -64,7 +68,7 @@ struct InstancesSettings: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(inst.host ?? "unknown host").font(.subheadline.bold())
+                    Text(inst.host ?? macLocalized("unknown host", language: self.language)).font(.subheadline.bold())
                     self.presenceIndicator(inst)
                     if let ip = inst.ip { Text("(") + Text(ip).monospaced() + Text(")") }
                 }
@@ -91,7 +95,7 @@ struct InstancesSettings: View {
                         self.label(icon: self.platformIcon(platform), text: prettyPlatform)
                     }
 
-                    if let mode = inst.mode { self.label(icon: "network", text: mode) }
+                    if let mode = inst.mode { self.label(icon: "network", text: self.localizedMode(mode)) }
                 }
                 .layoutPriority(1)
 
@@ -101,7 +105,7 @@ struct InstancesSettings: View {
 
                         // Last local input is helpful for interactive nodes, but noisy/meaningless for the gateway.
                         if let secs = inst.lastInputSeconds {
-                            self.label(icon: "clock", text: "\(secs)s ago")
+                            self.label(icon: "clock", text: age(from: Date().addingTimeInterval(-Double(secs))))
                         }
 
                         if let update = self.updateSummaryText(inst, isGateway: isGateway) {
@@ -114,9 +118,9 @@ struct InstancesSettings: View {
             }
         }
         .padding(.vertical, 6)
-        .help(inst.text)
+        .help(macWizardText(inst.text, language: self.language) ?? inst.text)
         .contextMenu {
-            Button("Copy Debug Summary") {
+            Button(macLocalized("Copy Debug Summary", language: self.language)) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(inst.text, forType: .string)
             }
@@ -150,16 +154,16 @@ struct InstancesSettings: View {
                 .foregroundStyle(.secondary)
         }
         .font(.caption)
-        .help("Presence updated \(inst.ageDescription).")
-        .accessibilityLabel("\(status.label) presence")
+        .help("\(macLocalized("Presence updated", language: self.language)) \(inst.ageDescription).")
+        .accessibilityLabel("\(status.label) \(macLocalized("presence", language: self.language))")
     }
 
     private func presenceStatus(for inst: InstanceInfo) -> (label: String, color: Color) {
         let nowMs = Date().timeIntervalSince1970 * 1000
         let ageSeconds = max(0, Int((nowMs - inst.ts) / 1000))
-        if ageSeconds <= 120 { return ("Active", .green) }
-        if ageSeconds <= 300 { return ("Idle", .yellow) }
-        return ("Stale", .gray)
+        if ageSeconds <= 120 { return (macLocalized("Active", language: self.language), .green) }
+        if ageSeconds <= 300 { return (macLocalized("Idle", language: self.language), .yellow) }
+        return (macLocalized("Stale", language: self.language), .gray)
     }
 
     @ViewBuilder
@@ -289,28 +293,41 @@ struct InstancesSettings: View {
         PlatformLabelFormatter.pretty(raw)
     }
 
+    private func localizedMode(_ raw: String) -> String {
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "local":
+            macLocalized("Local", language: self.language)
+        case "gateway":
+            macLocalized("Gateway", language: self.language)
+        case "node":
+            macLocalized("Device", language: self.language)
+        default:
+            raw
+        }
+    }
+
     private func presenceUpdateSourceShortText(_ reason: String) -> String? {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         switch trimmed {
         case "self":
-            return "Self"
+            return macLocalized("Self", language: self.language)
         case "connect":
-            return "Connect"
+            return macLocalized("Connect", language: self.language)
         case "disconnect":
-            return "Disconnect"
+            return macLocalized("Disconnect", language: self.language)
         case "node-connected":
-            return "Node connect"
+            return macLocalized("Node connect", language: self.language)
         case "node-disconnected":
-            return "Node disconnect"
+            return macLocalized("Node disconnect", language: self.language)
         case "launch":
-            return "Launch"
+            return macLocalized("Launch", language: self.language)
         case "periodic":
-            return "Heartbeat"
+            return macLocalized("Heartbeat", language: self.language)
         case "instances-refresh":
-            return "Instances"
+            return macLocalized("Instances", language: self.language)
         case "seq gap":
-            return "Resync"
+            return macLocalized("Resync", language: self.language)
         default:
             return trimmed
         }
@@ -335,9 +352,9 @@ struct InstancesSettings: View {
     private func presenceUpdateSourceHelp(_ reason: String) -> String {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return "Why this presence entry was last updated (debug marker)."
+            return macLocalized("Why this presence entry was last updated (debug marker).", language: self.language)
         }
-        return "Why this presence entry was last updated (debug marker). Raw: \(trimmed)"
+        return "\(macLocalized("Why this presence entry was last updated (debug marker). Raw:", language: self.language)) \(trimmed)"
     }
 }
 

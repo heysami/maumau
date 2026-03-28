@@ -5,6 +5,10 @@ struct PluginsSettings: View {
     @State private var model = PluginsSettingsModel()
     @State private var selectedPluginId: String?
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     init(model: PluginsSettingsModel = PluginsSettingsModel()) {
         self._model = State(initialValue: model)
     }
@@ -48,21 +52,21 @@ struct PluginsSettings: View {
                 self.summaryCard
 
                 if !self.loadedPlugins.isEmpty {
-                    self.sidebarSectionHeader("Loaded")
+                    self.sidebarSectionHeader(macLocalized("Loaded", language: self.language))
                     ForEach(self.loadedPlugins) { plugin in
                         self.sidebarRow(plugin)
                     }
                 }
 
                 if !self.disabledPlugins.isEmpty {
-                    self.sidebarSectionHeader("Disabled")
+                    self.sidebarSectionHeader(macLocalized("Disabled", language: self.language))
                     ForEach(self.disabledPlugins) { plugin in
                         self.sidebarRow(plugin)
                     }
                 }
 
                 if !self.errorPlugins.isEmpty {
-                    self.sidebarSectionHeader("Needs Attention")
+                    self.sidebarSectionHeader(macLocalized("Needs Attention", language: self.language))
                     ForEach(self.errorPlugins) { plugin in
                         self.sidebarRow(plugin)
                     }
@@ -86,9 +90,9 @@ struct PluginsSettings: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Plugins")
+                    Text(macLocalized("Plugins", language: self.language))
                         .font(.headline)
-                    Text("All discovered plugins, including ones that do not ship any Skills.")
+                    Text(macLocalized("All discovered plugins, including ones that do not ship any Skills.", language: self.language))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -110,12 +114,12 @@ struct PluginsSettings: View {
                     .truncationMode(.middle)
             }
 
-            Text("\(self.model.loadedCount)/\(self.model.plugins.count) loaded")
+            Text(macPluginsLoadedSummary(loaded: self.model.loadedCount, total: self.model.plugins.count, language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if !self.globalDiagnostics.isEmpty {
-                Text("\(self.globalDiagnostics.count) global diagnostic\(self.globalDiagnostics.count == 1 ? "" : "s")")
+                Text(macGlobalDiagnosticsSummary(count: self.globalDiagnostics.count, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -132,9 +136,9 @@ struct PluginsSettings: View {
 
     private var emptyDetail: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Plugins")
+            Text(macLocalized("Plugins", language: self.language))
                 .font(.title3.weight(.semibold))
-            Text("No plugins discovered yet.")
+            Text(macLocalized("No plugins discovered yet.", language: self.language))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -206,15 +210,15 @@ struct PluginsSettings: View {
     }
 
     private func packageSection(_ plugin: PluginStatusRecord) -> some View {
-        GroupBox("Package") {
+        GroupBox(macLocalized("Package", language: self.language)) {
             VStack(alignment: .leading, spacing: 10) {
-                self.infoRow("Version", plugin.version ?? "Unknown")
-                self.infoRow("Config", plugin.configStateLabel)
-                self.infoRow("Source", plugin.source, monospaced: true)
+                self.infoRow(macLocalized("Version", language: self.language), plugin.version ?? macLocalized("Unknown", language: self.language))
+                self.infoRow(macLocalized("Config", language: self.language), plugin.configStateLabel)
+                self.infoRow(macLocalized("Source", language: self.language), plugin.source, monospaced: true)
                 if let workspaceDir = plugin.workspaceDir,
                    !workspaceDir.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 {
-                    self.infoRow("Workspace", workspaceDir, monospaced: true)
+                    self.infoRow(macLocalized("Workspace", language: self.language), workspaceDir, monospaced: true)
                 }
             }
         }
@@ -223,9 +227,9 @@ struct PluginsSettings: View {
     @ViewBuilder
     private func capabilitiesSection(_ plugin: PluginStatusRecord) -> some View {
         let sections = self.capabilitySections(for: plugin)
-        GroupBox("Adds") {
+        GroupBox(macLocalized("Adds", language: self.language)) {
             if sections.isEmpty {
-                Text("No plugin capabilities or routes are registered.")
+                Text(macLocalized("No plugin capabilities or routes are registered.", language: self.language))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -247,20 +251,20 @@ struct PluginsSettings: View {
     }
 
     private func runtimeSection(_ plugin: PluginStatusRecord) -> some View {
-        GroupBox("Runtime") {
+        GroupBox(macLocalized("Runtime", language: self.language)) {
             VStack(alignment: .leading, spacing: 10) {
-                self.infoRow("Tools", "\(plugin.toolNames.count)")
-                self.infoRow("Hooks", "\(plugin.hookCount)")
-                self.infoRow("Commands", "\(plugin.commands.count)")
-                self.infoRow("CLI Commands", "\(plugin.cliCommands.count)")
-                self.infoRow("Services", "\(plugin.services.count)")
-                self.infoRow("Gateway Methods", "\(plugin.gatewayMethods.count)")
-                self.infoRow("HTTP Routes", "\(plugin.httpRoutes)")
-                self.infoRow("Config Schema", plugin.configSchema ? "Yes" : "No")
+                self.infoRow(macLocalized("Tools", language: self.language), "\(plugin.toolNames.count)")
+                self.infoRow(macLocalized("Hooks", language: self.language), "\(plugin.hookCount)")
+                self.infoRow(macLocalized("Commands", language: self.language), "\(plugin.commands.count)")
+                self.infoRow(macLocalized("CLI Commands", language: self.language), "\(plugin.cliCommands.count)")
+                self.infoRow(macLocalized("Services", language: self.language), "\(plugin.services.count)")
+                self.infoRow(macLocalized("Gateway Methods", language: self.language), "\(plugin.gatewayMethods.count)")
+                self.infoRow(macLocalized("HTTP Routes", language: self.language), "\(plugin.httpRoutes)")
+                self.infoRow(macLocalized("Config Schema", language: self.language), plugin.configSchema ? macLocalized("Yes", language: self.language) : macLocalized("No", language: self.language))
                 if let error = plugin.error,
                    !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 {
-                    self.infoRow("Load Error", error)
+                    self.infoRow(macLocalized("Load Error", language: self.language), error)
                 }
             }
         }
@@ -272,7 +276,7 @@ struct PluginsSettings: View {
         if let pluginError = plugin.error,
            !pluginError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !diagnostics.isEmpty
         {
-            GroupBox("Diagnostics") {
+            GroupBox(macLocalized("Diagnostics", language: self.language)) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let pluginError = plugin.error,
                        !pluginError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -397,18 +401,18 @@ struct PluginsSettings: View {
 
     private func capabilitySections(for plugin: PluginStatusRecord) -> [(title: String, values: [String])] {
         [
-            ("Channels", plugin.channelIds.sorted()),
-            ("Text Providers", plugin.providerIds.sorted()),
-            ("Speech Providers", plugin.speechProviderIds.sorted()),
-            ("Media Understanding", plugin.mediaUnderstandingProviderIds.sorted()),
-            ("Image Generation", plugin.imageGenerationProviderIds.sorted()),
-            ("Web Search", plugin.webSearchProviderIds.sorted()),
-            ("Bundle Capabilities", (plugin.bundleCapabilities ?? []).sorted()),
-            ("Commands", plugin.commands.sorted()),
-            ("CLI Commands", plugin.cliCommands.sorted()),
-            ("Gateway Methods", plugin.gatewayMethods.sorted()),
-            ("Services", plugin.services.sorted()),
-            ("Tools", plugin.toolNames.sorted()),
+            (macLocalized("Channels", language: self.language), plugin.channelIds.sorted()),
+            (macLocalized("Text Providers", language: self.language), plugin.providerIds.sorted()),
+            (macLocalized("Speech Providers", language: self.language), plugin.speechProviderIds.sorted()),
+            (macLocalized("Media Understanding", language: self.language), plugin.mediaUnderstandingProviderIds.sorted()),
+            (macLocalized("Image Generation", language: self.language), plugin.imageGenerationProviderIds.sorted()),
+            (macLocalized("Web Search", language: self.language), plugin.webSearchProviderIds.sorted()),
+            (macLocalized("Bundle Capabilities", language: self.language), (plugin.bundleCapabilities ?? []).sorted()),
+            (macLocalized("Commands", language: self.language), plugin.commands.sorted()),
+            (macLocalized("CLI Commands", language: self.language), plugin.cliCommands.sorted()),
+            (macLocalized("Gateway Methods", language: self.language), plugin.gatewayMethods.sorted()),
+            (macLocalized("Services", language: self.language), plugin.services.sorted()),
+            (macLocalized("Tools", language: self.language), plugin.toolNames.sorted()),
         ]
             .filter { !$0.1.isEmpty }
     }

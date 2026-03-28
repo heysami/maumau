@@ -73,12 +73,13 @@ enum PairingAlertSupport {
         messageText: String,
         informativeText: String)
     {
+        let language = macCurrentLanguage()
         alert.alertStyle = .warning
-        alert.messageText = messageText
-        alert.informativeText = informativeText
-        alert.addButton(withTitle: "Later")
-        alert.addButton(withTitle: "Approve")
-        alert.addButton(withTitle: "Reject")
+        alert.messageText = macLocalized(messageText, language: language)
+        alert.informativeText = macWizardText(informativeText, language: language) ?? informativeText
+        alert.addButton(withTitle: macLocalized("Later", language: language))
+        alert.addButton(withTitle: macLocalized("Approve", language: language))
+        alert.addButton(withTitle: macLocalized("Reject", language: language))
         if #available(macOS 11.0, *), alert.buttons.indices.contains(2) {
             alert.buttons[2].hasDestructiveAction = true
         }

@@ -20,8 +20,8 @@ struct PluginDiagnosticRecord: Codable, Identifiable, Hashable {
 
     var levelLabel: String {
         self.level.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Notice"
-            : self.level.capitalized
+            ? macLocalized("Notice")
+            : macLocalized(self.level.capitalized)
     }
 }
 
@@ -64,28 +64,28 @@ struct PluginStatusRecord: Codable, Identifiable, Hashable {
     var statusLabel: String {
         switch self.status {
         case "loaded":
-            "Loaded"
+            macLocalized("Loaded")
         case "disabled":
-            "Disabled"
+            macLocalized("Disabled")
         case "error":
-            "Error"
+            macLocalized("Error")
         default:
-            self.status.capitalized
+            macLocalized(self.status.capitalized)
         }
     }
 
     var originLabel: String {
         switch self.origin {
         case "bundled":
-            "Bundled"
+            macLocalized("Bundled")
         case "global":
-            "Installed"
+            macLocalized("Installed")
         case "workspace":
-            "Workspace"
+            macLocalized("Workspace")
         case "config":
-            "Config"
+            macLocalized("Config")
         default:
-            self.origin.capitalized
+            macLocalized(self.origin.capitalized)
         }
     }
 
@@ -103,6 +103,6 @@ struct PluginStatusRecord: Codable, Identifiable, Hashable {
     }
 
     var configStateLabel: String {
-        self.enabled ? "Enabled in config" : "Disabled in config"
+        self.enabled ? macLocalized("Enabled in config") : macLocalized("Disabled in config")
     }
 }

@@ -341,18 +341,28 @@ final class NodePairingApprovalPrompter {
     }
 
     private static func describe(_ req: PendingRequest) -> String {
+        let language = macCurrentLanguage()
         let name = req.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let platform = self.prettyPlatform(req.platform)
         let version = req.version?.trimmingCharacters(in: .whitespacesAndNewlines)
         let ip = self.prettyIP(req.remoteIp)
 
         var lines: [String] = []
-        lines.append("Name: \(name?.isEmpty == false ? name! : "Unknown")")
-        lines.append("Node ID: \(req.nodeId)")
-        if let platform, !platform.isEmpty { lines.append("Platform: \(platform)") }
-        if let version, !version.isEmpty { lines.append("App: \(version)") }
-        if let ip, !ip.isEmpty { lines.append("IP: \(ip)") }
-        if req.isRepair == true { lines.append("Note: Repair request (token will rotate).") }
+        lines.append(
+            "\(macLocalized("Name", language: language)): \(name?.isEmpty == false ? name! : macLocalized("Unknown", language: language))")
+        lines.append("\(macLocalized("Node ID", language: language)): \(req.nodeId)")
+        if let platform, !platform.isEmpty {
+            lines.append("\(macLocalized("Platform", language: language)): \(platform)")
+        }
+        if let version, !version.isEmpty {
+            lines.append("\(macLocalized("App", language: language)): \(version)")
+        }
+        if let ip, !ip.isEmpty {
+            lines.append("\(macLocalized("IP", language: language)): \(ip)")
+        }
+        if req.isRepair == true {
+            lines.append(macLocalized("Note: Repair request (token will rotate).", language: language))
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -381,7 +391,10 @@ final class NodePairingApprovalPrompter {
             return
         }
 
-        let title = resolution == .approved ? "Node pairing approved" : "Node pairing rejected"
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let title = resolution == .approved
+            ? macLocalized("Node pairing approved", language: language)
+            : macLocalized("Node pairing rejected", language: language)
         let name = request.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let device = name?.isEmpty == false ? name! : request.nodeId
         let body = "\(device)\n(via \(via))"

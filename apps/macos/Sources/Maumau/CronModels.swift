@@ -336,7 +336,12 @@ struct CronJob: Identifiable, Codable, Equatable {
     }
 
     var sessionTargetDisplayValue: String {
-        self.parsedSessionTarget.rawValue
+        switch self.parsedSessionTarget {
+        case let .predefined(target):
+            macLocalized(target.rawValue)
+        case let .session(id):
+            id
+        }
     }
 
     var transcriptSessionKey: String? {
@@ -361,7 +366,7 @@ struct CronJob: Identifiable, Codable, Equatable {
 
     var displayName: String {
         let trimmed = self.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Untitled job" : trimmed
+        return trimmed.isEmpty ? macLocalized("Untitled job") : trimmed
     }
 
     var nextRunDate: Date? {

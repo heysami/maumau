@@ -11,15 +11,18 @@ final class CLIInstallPrompter {
     func checkAndPromptIfNeeded(reason: String) {
         guard self.shouldPrompt() else { return }
         guard let version = Self.appVersion() else { return }
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
         self.isPrompting = true
         UserDefaults.standard.set(version, forKey: cliInstallPromptedVersionKey)
 
         let alert = NSAlert()
-        alert.messageText = "Install Maumau CLI?"
-        alert.informativeText = "Local mode needs the CLI so launchd can run the gateway."
-        alert.addButton(withTitle: "Install CLI")
-        alert.addButton(withTitle: "Not now")
-        alert.addButton(withTitle: "Open Settings")
+        alert.messageText = macLocalized("Install Maumau CLI?", language: language)
+        alert.informativeText = macLocalized(
+            "Local mode needs the CLI so launchd can run the gateway.",
+            language: language)
+        alert.addButton(withTitle: macLocalized("Install CLI", language: language))
+        alert.addButton(withTitle: macLocalized("Not now", language: language))
+        alert.addButton(withTitle: macLocalized("Open Settings", language: language))
         let response = alert.runModal()
 
         switch response {
@@ -51,9 +54,10 @@ final class CLIInstallPrompter {
             await status.set(message)
         }
         if let message = await status.get() {
+            let language = await MainActor.run { AppStateStore.shared.effectiveOnboardingLanguage }
             let alert = NSAlert()
-            alert.messageText = "CLI install finished"
-            alert.informativeText = message
+            alert.messageText = macLocalized("CLI install finished", language: language)
+            alert.informativeText = macWizardText(message, language: language) ?? message
             alert.runModal()
         }
     }

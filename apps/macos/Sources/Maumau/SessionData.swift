@@ -93,11 +93,16 @@ struct SessionRow: Identifiable {
     }
 
     var flagLabels: [String] {
+        let language = macCurrentLanguage()
         var flags: [String] = []
-        if let thinkingLevel { flags.append("think \(thinkingLevel)") }
-        if let verboseLevel { flags.append("verbose \(verboseLevel)") }
-        if self.systemSent { flags.append("system sent") }
-        if self.abortedLastRun { flags.append("aborted") }
+        if let thinkingLevel {
+            flags.append(language == .id ? "pikir \(thinkingLevel)" : "think \(thinkingLevel)")
+        }
+        if let verboseLevel {
+            flags.append(language == .id ? "verbose \(verboseLevel)" : "verbose \(verboseLevel)")
+        }
+        if self.systemSent { flags.append(macLocalized("system sent", language: language)) }
+        if self.abortedLastRun { flags.append(macLocalized("aborted", language: language)) }
         return flags
     }
 }
@@ -116,10 +121,10 @@ enum SessionKind {
 
     var label: String {
         switch self {
-        case .direct: "Direct"
-        case .group: "Group"
-        case .global: "Global"
-        case .unknown: "Unknown"
+        case .direct: macLocalized("Direct")
+        case .group: macLocalized("Group")
+        case .global: macLocalized("Global")
+        case .unknown: macLocalized("Unknown")
         }
     }
 
@@ -334,13 +339,6 @@ enum SessionLoader {
 }
 
 func relativeAge(from date: Date?) -> String {
-    guard let date else { return "unknown" }
-    let delta = Date().timeIntervalSince(date)
-    if delta < 60 { return "just now" }
-    let minutes = Int(round(delta / 60))
-    if minutes < 60 { return "\(minutes)m ago" }
-    let hours = Int(round(Double(minutes) / 60))
-    if hours < 48 { return "\(hours)h ago" }
-    let days = Int(round(Double(hours) / 24))
-    return "\(days)d ago"
+    guard let date else { return macLocalized("unknown") }
+    return age(from: date)
 }

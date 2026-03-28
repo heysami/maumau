@@ -5,7 +5,8 @@ enum SessionActions {
     static func patchSession(
         key: String,
         thinking: String?? = nil,
-        verbose: String?? = nil) async throws
+        verbose: String?? = nil,
+        replyLanguage: String?? = nil) async throws
     {
         var params: [String: AnyHashable] = ["key": AnyHashable(key)]
 
@@ -15,8 +16,33 @@ enum SessionActions {
         if let verbose {
             params["verboseLevel"] = verbose.map(AnyHashable.init) ?? AnyHashable(NSNull())
         }
+        if let replyLanguage {
+            params["replyLanguage"] = replyLanguage.map(AnyHashable.init) ?? AnyHashable(NSNull())
+        }
 
         _ = try await ControlChannel.shared.request(method: "sessions.patch", params: params)
+    }
+
+    static func syncReplyLanguagePreference(_ language: OnboardingLanguage) async {
+        var keys: [String] = []
+        var seen = Set<String>()
+
+        let activeSessionKey = await MainActor.run {
+            WebChatManager.shared.activeSessionKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let activeSessionKey, !activeSessionKey.isEmpty, seen.insert(activeSessionKey).inserted {
+            keys.append(activeSessionKey)
+        }
+
+        let mainSessionKey = await GatewayConnection.shared.mainSessionKey()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !mainSessionKey.isEmpty, seen.insert(mainSessionKey).inserted {
+            keys.append(mainSessionKey)
+        }
+
+        for key in keys {
+            try? await self.patchSession(key: key, replyLanguage: .some(.some(language.replyLanguageID)))
+        }
     }
 
     static func resetSession(key: String) async throws {
@@ -39,21 +65,24 @@ enum SessionActions {
 
     @MainActor
     static func confirmDestructiveAction(title: String, message: String, action: String) -> Bool {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: action)
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = macLocalized(title, language: language)
+        alert.informativeText = macWizardText(message, language: language) ?? message
+        alert.addButton(withTitle: macLocalized(action, language: language))
+        alert.addButton(withTitle: macLocalized("Cancel", language: language))
         alert.alertStyle = .warning
         return alert.runModal() == .alertFirstButtonReturn
     }
 
     @MainActor
     static func presentError(title: String, error: Error) {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        alert.addButton(withTitle: "OK")
+        alert.messageText = macLocalized(title, language: language)
+        let description = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        alert.informativeText = macWizardText(description, language: language) ?? description
+        alert.addButton(withTitle: macLocalized("OK", language: language))
         alert.alertStyle = .warning
         alert.runModal()
     }
@@ -72,8 +101,9 @@ enum SessionActions {
 
         let existing = candidates.first(where: { FileManager().fileExists(atPath: $0.path) })
         guard let url = existing else {
+            let language = AppStateStore.shared.effectiveOnboardingLanguage
             let alert = NSAlert()
-            alert.messageText = "Session log not found"
+            alert.messageText = macLocalized("Session log not found", language: language)
             alert.informativeText = sessionId
             alert.runModal()
             return

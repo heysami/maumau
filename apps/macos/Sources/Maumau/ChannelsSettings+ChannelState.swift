@@ -20,9 +20,9 @@ extension ChannelsSettings {
     }
 
     private func configuredChannelSummary(configured: Bool, running: Bool) -> String {
-        if !configured { return "Not configured" }
-        if running { return "Running" }
-        return "Configured"
+        if !configured { return self.loc("Not configured") }
+        if running { return self.loc("Running") }
+        return self.loc("Configured")
     }
 
     private func appendProbeDetails(
@@ -158,40 +158,40 @@ extension ChannelsSettings {
 
     var whatsAppSummary: String {
         guard let status = self.channelStatus("whatsapp", as: ChannelsStatusSnapshot.WhatsAppStatus.self)
-        else { return "Checking…" }
-        if !status.linked { return "Not linked" }
-        if status.connected { return "Connected" }
-        if status.running { return "Running" }
-        return "Linked"
+        else { return self.loc("Checking…") }
+        if !status.linked { return self.loc("Not linked") }
+        if status.connected { return self.loc("Connected") }
+        if status.running { return self.loc("Running") }
+        return self.loc("Linked")
     }
 
     var telegramSummary: String {
         guard let status = self.channelStatus("telegram", as: ChannelsStatusSnapshot.TelegramStatus.self)
-        else { return "Checking…" }
+        else { return self.loc("Checking…") }
         return self.configuredChannelSummary(configured: status.configured, running: status.running)
     }
 
     var discordSummary: String {
         guard let status = self.channelStatus("discord", as: ChannelsStatusSnapshot.DiscordStatus.self)
-        else { return "Checking…" }
+        else { return self.loc("Checking…") }
         return self.configuredChannelSummary(configured: status.configured, running: status.running)
     }
 
     var googlechatSummary: String {
         guard let status = self.channelStatus("googlechat", as: ChannelsStatusSnapshot.GoogleChatStatus.self)
-        else { return "Checking…" }
+        else { return self.loc("Checking…") }
         return self.configuredChannelSummary(configured: status.configured, running: status.running)
     }
 
     var signalSummary: String {
         guard let status = self.channelStatus("signal", as: ChannelsStatusSnapshot.SignalStatus.self)
-        else { return "Checking…" }
+        else { return self.loc("Checking…") }
         return self.configuredChannelSummary(configured: status.configured, running: status.running)
     }
 
     var imessageSummary: String {
         guard let status = self.channelStatus("imessage", as: ChannelsStatusSnapshot.IMessageStatus.self)
-        else { return "Checking…" }
+        else { return self.loc("Checking…") }
         return self.configuredChannelSummary(configured: status.configured, running: status.running)
     }
 

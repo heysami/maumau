@@ -20,62 +20,67 @@ struct SettingsRootView: View {
     }
 
     var body: some View {
+        let language = self.state.effectiveOnboardingLanguage
         VStack(alignment: .leading, spacing: 12) {
             if self.isNixMode {
                 self.nixManagedBanner
             }
             TabView(selection: self.$selectedTab) {
                 GeneralSettings(state: self.state)
-                    .tabItem { Label("General", systemImage: "gearshape") }
+                    .tabItem { Label(macLocalized("General", language: language), systemImage: "gearshape") }
                     .tag(SettingsTab.general)
 
+                ModelsSettings()
+                    .tabItem { Label(macLocalized("Models", language: language), systemImage: "brain.head.profile") }
+                    .tag(SettingsTab.models)
+
                 ChannelsSettings()
-                    .tabItem { Label("Channels", systemImage: "link") }
+                    .tabItem { Label(macLocalized("Channels", language: language), systemImage: "link") }
                     .tag(SettingsTab.channels)
 
                 VoiceWakeSettings(state: self.state, isActive: self.selectedTab == .voiceWake)
-                    .tabItem { Label("Voice Wake", systemImage: "waveform.circle") }
+                    .tabItem { Label(macLocalized("Voice Wake", language: language), systemImage: "waveform.circle") }
                     .tag(SettingsTab.voiceWake)
 
                 ConfigSettings()
-                    .tabItem { Label("Config", systemImage: "slider.horizontal.3") }
+                    .tabItem { Label(macLocalized("Config", language: language), systemImage: "slider.horizontal.3") }
                     .tag(SettingsTab.config)
 
                 InstancesSettings()
-                    .tabItem { Label("Instances", systemImage: "network") }
+                    .tabItem { Label(macLocalized("Instances", language: language), systemImage: "network") }
                     .tag(SettingsTab.instances)
 
                 SessionsSettings()
-                    .tabItem { Label("Sessions", systemImage: "clock.arrow.circlepath") }
+                    .tabItem { Label(macLocalized("Sessions", language: language), systemImage: "clock.arrow.circlepath") }
                     .tag(SettingsTab.sessions)
 
                 CronSettings()
-                    .tabItem { Label("Cron", systemImage: "calendar") }
+                    .tabItem { Label(macLocalized("Cron", language: language), systemImage: "calendar") }
                     .tag(SettingsTab.cron)
 
                 SkillsSettings(state: self.state)
-                    .tabItem { Label("Skills", systemImage: "sparkles") }
+                    .tabItem { Label(macLocalized("Skills", language: language), systemImage: "sparkles") }
                     .tag(SettingsTab.skills)
 
                 PluginsSettings()
-                    .tabItem { Label("Plugins", systemImage: "puzzlepiece") }
+                    .tabItem { Label(macLocalized("Plugins", language: language), systemImage: "puzzlepiece") }
                     .tag(SettingsTab.plugins)
 
                 PermissionsSettings(
                     status: self.permissionMonitor.status,
                     refresh: self.refreshPerms,
                     showOnboarding: { DebugActions.restartOnboarding() })
-                    .tabItem { Label("Permissions", systemImage: "lock.shield") }
+                    .tabItem { Label(macLocalized("Permissions", language: language), systemImage: "lock.shield") }
                     .tag(SettingsTab.permissions)
 
                 if self.state.debugPaneEnabled {
                     DebugSettings(state: self.state)
-                        .tabItem { Label("Debug", systemImage: "ant") }
+                        .tabItem { Label(macLocalized("Debug", language: language), systemImage: "ant") }
                         .tag(SettingsTab.debug)
                 }
 
                 AboutSettings(updater: self.updater)
-                    .tabItem { Label("About", systemImage: "info.circle") }
+                    .tabItem { Label(macLocalized("About", language: language), systemImage: "info.circle") }
                     .tag(SettingsTab.about)
             }
         }
@@ -142,14 +147,14 @@ struct SettingsRootView: View {
             HStack(spacing: 8) {
                 Image(systemName: "gearshape.2.fill")
                     .foregroundStyle(.secondary)
-                Text("Managed by Nix")
+                Text(macLocalized("Managed by Nix", language: self.state.effectiveOnboardingLanguage))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Config: \(configPath)")
-                Text("State:  \(stateDir)")
+                Text("\(macLocalized("Config", language: self.state.effectiveOnboardingLanguage)): \(configPath)")
+                Text("\(macLocalized("State", language: self.state.effectiveOnboardingLanguage)):  \(stateDir)")
             }
             .font(.caption.monospaced())
             .foregroundStyle(.secondary)
@@ -191,29 +196,31 @@ struct SettingsRootView: View {
 }
 
 enum SettingsTab: CaseIterable {
-    case general, channels, skills, plugins, sessions, cron, config, instances, voiceWake, permissions, debug, about
+    case general, models, channels, skills, plugins, sessions, cron, config, instances, voiceWake, permissions, debug, about
     static let windowWidth: CGFloat = 824 // wider
     static let windowHeight: CGFloat = 790 // +10% (more room)
-    var title: String {
+    func title(in language: OnboardingLanguage) -> String {
         switch self {
-        case .general: "General"
-        case .channels: "Channels"
-        case .skills: "Skills"
-        case .plugins: "Plugins"
-        case .sessions: "Sessions"
-        case .cron: "Cron"
-        case .config: "Config"
-        case .instances: "Instances"
-        case .voiceWake: "Voice Wake"
-        case .permissions: "Permissions"
-        case .debug: "Debug"
-        case .about: "About"
+        case .general: macLocalized("General", language: language)
+        case .models: macLocalized("Models", language: language)
+        case .channels: macLocalized("Channels", language: language)
+        case .skills: macLocalized("Skills", language: language)
+        case .plugins: macLocalized("Plugins", language: language)
+        case .sessions: macLocalized("Sessions", language: language)
+        case .cron: macLocalized("Cron", language: language)
+        case .config: macLocalized("Config", language: language)
+        case .instances: macLocalized("Instances", language: language)
+        case .voiceWake: macLocalized("Voice Wake", language: language)
+        case .permissions: macLocalized("Permissions", language: language)
+        case .debug: macLocalized("Debug", language: language)
+        case .about: macLocalized("About", language: language)
         }
     }
 
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .models: "brain.head.profile"
         case .channels: "link"
         case .skills: "sparkles"
         case .plugins: "puzzlepiece"
@@ -491,7 +498,7 @@ struct SettingsRootView_Previews: PreviewProvider {
     static var previews: some View {
         ForEach(SettingsTab.allCases, id: \.self) { tab in
             SettingsRootView(state: .preview, updater: DisabledUpdaterController(), initialTab: tab)
-                .previewDisplayName(tab.title)
+                .previewDisplayName(tab.title(in: .en))
                 .frame(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight)
         }
     }

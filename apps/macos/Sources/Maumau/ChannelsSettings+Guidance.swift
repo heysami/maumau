@@ -16,9 +16,10 @@ extension ChannelsSettings {
     }
 
     func channelGuidanceCopy(channelId: String) -> ChannelGuidanceCopy {
+        let copy: ChannelGuidanceCopy
         switch channelId {
         case "whatsapp":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A WhatsApp number or linked device becomes the agent identity.",
                 requirements: [
                     "A phone number or WhatsApp account that will belong to the agent.",
@@ -45,7 +46,7 @@ extension ChannelsSettings {
                         url: "https://faq.whatsapp.com/1317564962315842/"),
                 ])
         case "telegram":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A Telegram bot becomes the agent identity.",
                 requirements: [
                     "A normal Telegram account on the Telegram app, desktop app, or web app.",
@@ -70,7 +71,7 @@ extension ChannelsSettings {
                         url: "https://core.telegram.org/bots#how-do-i-create-a-bot"),
                 ])
         case "discord":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A Discord bot application becomes the agent identity.",
                 requirements: [
                     "A Discord account.",
@@ -96,7 +97,7 @@ extension ChannelsSettings {
                         url: "https://docs.discord.com/developers/docs/getting-started"),
                 ])
         case "googlechat":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A Google Chat app or webhook integration becomes the agent identity.",
                 requirements: [
                     "The Google Chat app or webhook credentials that belong to the space or app you want Maumau to use.",
@@ -112,7 +113,7 @@ extension ChannelsSettings {
                 usage: "People talk to the Google Chat app in DMs or spaces, and the agent replies there.",
                 quickLinks: [])
         case "slack":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A Slack app inside a workspace becomes the agent identity.",
                 requirements: [
                     "A Slack workspace where you can create and install apps.",
@@ -140,7 +141,7 @@ extension ChannelsSettings {
                         url: "https://docs.slack.dev/authentication/tokens/"),
                 ])
         case "signal":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A Signal number or linked device becomes the agent identity.",
                 requirements: [
                     "A Signal account the agent will use.",
@@ -156,7 +157,7 @@ extension ChannelsSettings {
                 usage: "People message that Signal account from normal Signal clients, and the agent replies there.",
                 quickLinks: [])
         case "imessage":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "The Messages account signed into this Mac becomes the agent identity.",
                 requirements: [
                     "A Mac where Messages works normally.",
@@ -181,7 +182,7 @@ extension ChannelsSettings {
                         url: "https://support.apple.com/guide/messages/set-up-messages-on-mac-ichte16154fb/mac"),
                 ])
         case "line":
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A LINE Messaging API bot becomes the agent identity.",
                 requirements: [
                     "A LINE Official Account and a Messaging API channel.",
@@ -212,7 +213,7 @@ extension ChannelsSettings {
                         url: "https://developers.line.biz/en/docs/messaging-api/verify-webhook-url/"),
                 ])
         default:
-            return ChannelGuidanceCopy(
+            copy = ChannelGuidanceCopy(
                 identity: "A connected bot, app, account, or device becomes the agent identity in that service.",
                 requirements: [
                     "The outside account, app, token, or device that Maumau should use in that service.",
@@ -228,6 +229,20 @@ extension ChannelsSettings {
                 usage: "People talk to that connected identity in the service itself, and the agent replies there.",
                 quickLinks: [])
         }
+        return self.localizedGuidanceCopy(copy)
+    }
+
+    private func localizedGuidanceCopy(_ copy: ChannelGuidanceCopy) -> ChannelGuidanceCopy {
+        guard self.language == .id else { return copy }
+        return ChannelGuidanceCopy(
+            identity: self.loc(copy.identity),
+            requirements: copy.requirements.map(self.loc),
+            setupSteps: copy.setupSteps.map(self.loc),
+            artifacts: copy.artifacts.map(self.loc),
+            usage: self.loc(copy.usage),
+            quickLinks: copy.quickLinks.map { link in
+                ChannelGuidanceLink(title: self.loc(link.title), url: link.url)
+            })
     }
 
     func channelRequirements(channelId: String) -> [String] {

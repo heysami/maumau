@@ -507,4 +507,98 @@ describe("gateway e2e", () => {
       }
     },
   );
+
+  it(
+    "starts the focused models-auth wizard with the selected auth choice",
+    { timeout: GATEWAY_E2E_TIMEOUT_MS },
+    async () => {
+      const envSnapshot = captureEnv([
+        "HOME",
+        "MAUMAU_STATE_DIR",
+        "MAUMAU_CONFIG_PATH",
+        "MAUMAU_GATEWAY_TOKEN",
+        "MAUMAU_SKIP_CHANNELS",
+        "MAUMAU_SKIP_GMAIL_WATCHER",
+        "MAUMAU_SKIP_CRON",
+        "MAUMAU_SKIP_CANVAS_HOST",
+        "MAUMAU_SKIP_BROWSER_CONTROL_SERVER",
+      ]);
+
+      process.env.MAUMAU_SKIP_CHANNELS = "1";
+      process.env.MAUMAU_SKIP_GMAIL_WATCHER = "1";
+      process.env.MAUMAU_SKIP_CRON = "1";
+      process.env.MAUMAU_SKIP_CANVAS_HOST = "1";
+      process.env.MAUMAU_SKIP_BROWSER_CONTROL_SERVER = "1";
+      delete process.env.MAUMAU_GATEWAY_TOKEN;
+
+      const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-model-auth-home-"));
+      process.env.HOME = tempHome;
+      delete process.env.MAUMAU_STATE_DIR;
+      delete process.env.MAUMAU_CONFIG_PATH;
+
+      const wizardToken = nextGatewayId("wiz-model-auth-token");
+      const port = await getFreeGatewayPort();
+      let receivedAuthChoice: string | undefined;
+      const server = await startGatewayServer(port, {
+        bind: "loopback",
+        auth: { mode: "token", token: wizardToken },
+        controlUiEnabled: false,
+        modelAuthWizardRunner: async (opts, _runtime, prompter) => {
+          receivedAuthChoice = opts.authChoice;
+          await prompter.note("Connect provider");
+        },
+      });
+
+      const client = await connectGatewayClient({
+        url: `ws://127.0.0.1:${port}`,
+        token: wizardToken,
+        clientDisplayName: "vitest-model-auth-wizard",
+      });
+
+      try {
+        const start = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+            message?: string;
+          };
+          error?: string;
+        }>("wizard.start", {
+          entrypoint: "models-auth",
+          authChoice: "openai-api-key",
+          embedded: true,
+          fresh: true,
+        });
+
+        expect(start.done).toBe(false);
+        expect(start.status).toBe("running");
+        expect(start.step?.type).toBe("note");
+        expect(start.step?.message).toBe("Connect provider");
+        expect(receivedAuthChoice).toBe("openai-api-key");
+
+        if (!start.sessionId || !start.step) {
+          throw new Error("models-auth wizard did not return a session and step");
+        }
+
+        const done = await client.request<{
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+        }>("wizard.next", {
+          sessionId: start.sessionId,
+          answer: { stepId: start.step.id, value: null },
+        });
+
+        expect(done.done).toBe(true);
+        expect(done.status).toBe("done");
+      } finally {
+        await disconnectGatewayClient(client);
+        await server.close({ reason: "model auth wizard e2e complete" });
+        await fs.rm(tempHome, { recursive: true, force: true });
+        envSnapshot.restore();
+      }
+    },
+  );
 });

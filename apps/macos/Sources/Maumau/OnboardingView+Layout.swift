@@ -3,7 +3,10 @@ import SwiftUI
 
 extension OnboardingView {
     private var showsHeaderProgress: Bool {
-        self.activePageIndex != 0 && self.activePageIndex != 9 && !self.progressHeaderSteps.isEmpty
+        self.activePageIndex != self.languagePageIndex &&
+            self.activePageIndex != 0 &&
+            self.activePageIndex != 9 &&
+            !self.progressHeaderSteps.isEmpty
     }
 
     private var progressHeaderSteps: [(stage: OnboardingHeaderStage, title: String, metaText: String?, pageID: Int)] {
@@ -101,7 +104,14 @@ extension OnboardingView {
         .frame(minHeight: Self.minimumWindowHeight)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
-            self.currentPage = 0
+            self.currentPage = Self.initialPageCursor(
+                hasSelectedOnboardingLanguage: self.state.hasSelectedOnboardingLanguage,
+                onboardingSeen: self.state.onboardingSeen)
+            self.maybeDefaultToLocalConnectionMode()
+            self.updateMonitoring(for: self.activePageIndex)
+        }
+        .onChange(of: self.state.onboardingLanguage) { _, newValue in
+            guard newValue != nil else { return }
             self.maybeDefaultToLocalConnectionMode()
             self.updateMonitoring(for: self.activePageIndex)
         }
@@ -176,7 +186,11 @@ extension OnboardingView {
                 VStack(spacing: 10) {
                     HStack(alignment: .center, spacing: 12) {
                         HStack(spacing: 12) {
-                            Button(self.onboardingWizard.canGoBack ? "Previous step" : "Back to workspace") {
+                            Button(
+                                self.onboardingWizard.canGoBack
+                                    ? self.strings.previousStepButtonTitle
+                                    : self.strings.backToWorkspaceButtonTitle)
+                            {
                                 if self.onboardingWizard.canGoBack {
                                     Task { await self.onboardingWizard.goBackOneStep() }
                                 } else {
@@ -189,7 +203,7 @@ extension OnboardingView {
                                     self.onboardingWizard.isRewinding ||
                                     self.onboardingWizard.isShowingProgressStep)
 
-                            Button("Set up later") {
+                            Button(self.strings.setUpLaterButtonTitle) {
                                 self.skipWizardForLater()
                             }
                             .buttonStyle(.bordered)
@@ -198,7 +212,10 @@ extension OnboardingView {
 
                         Spacer(minLength: 12)
 
-                        if showWizardPrimaryButton, let title = self.onboardingWizard.primaryActionTitle {
+                        if showWizardPrimaryButton,
+                           let title = self.onboardingWizard.primaryActionTitle(
+                               in: self.state.effectiveOnboardingLanguage)
+                        {
                             Button(title) {
                                 Task {
                                     await self.onboardingWizard.triggerPrimaryAction(
@@ -224,7 +241,7 @@ extension OnboardingView {
                 HStack(spacing: 20) {
                     ZStack(alignment: .leading) {
                         Button(action: {}, label: {
-                            Label("Back", systemImage: "chevron.left").labelStyle(.iconOnly)
+                            Label(self.strings.backButtonTitle, systemImage: "chevron.left").labelStyle(.iconOnly)
                         })
                         .buttonStyle(.plain)
                         .opacity(0)
@@ -232,7 +249,7 @@ extension OnboardingView {
 
                         if self.currentPage > 0 && !hideBackButton {
                             Button(action: self.handleBack, label: {
-                                Label("Back", systemImage: "chevron.left")
+                                Label(self.strings.backButtonTitle, systemImage: "chevron.left")
                                     .labelStyle(.iconOnly)
                             })
                             .buttonStyle(.plain)

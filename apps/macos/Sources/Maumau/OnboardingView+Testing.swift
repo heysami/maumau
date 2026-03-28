@@ -6,6 +6,7 @@ import SwiftUI
 extension OnboardingView {
     static func exerciseForTesting() {
         let state = AppState(preview: true)
+        state.onboardingLanguage = .en
         let discovery = GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName)
         discovery.statusText = "Searching..."
         let gateway = GatewayDiscoveryModel.DiscoveredGateway(
@@ -38,6 +39,7 @@ extension OnboardingView {
         view.workspacePath = "/tmp/maumau"
         view.workspaceStatus = "Saved workspace"
         view.state.connectionMode = .local
+        _ = view.languagePage()
         _ = view.welcomePage()
         _ = view.connectionPage()
         _ = view.wizardPage()
@@ -61,7 +63,9 @@ extension OnboardingView {
         view.state.connectionMode = .unconfigured
         _ = view.connectionPage()
 
-        view.currentPage = 0
+        view.currentPage = OnboardingView.initialPageCursor(
+            hasSelectedOnboardingLanguage: true,
+            onboardingSeen: true)
         view.handleNext()
         view.handleBack()
 

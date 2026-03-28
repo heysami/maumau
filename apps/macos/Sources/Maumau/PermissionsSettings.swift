@@ -8,12 +8,16 @@ struct PermissionsSettings: View {
     let refresh: () async -> Void
     let showOnboarding: () -> Void
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 SystemRunSettingsView()
 
-                Text("Allow these so Maumau can notify and capture when needed.")
+                Text(macLocalized("Allow these so Maumau can notify and capture when needed.", language: self.language))
                     .padding(.top, 4)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -23,7 +27,7 @@ struct PermissionsSettings: View {
 
                 LocationAccessSettings()
 
-                Button("Restart onboarding") { self.showOnboarding() }
+                Button(macLocalized("Restart onboarding", language: self.language)) { self.showOnboarding() }
                     .buttonStyle(.bordered)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -39,23 +43,27 @@ private struct LocationAccessSettings: View {
     @AppStorage(locationPreciseKey) private var locationPreciseEnabled: Bool = true
     @State private var lastLocationModeRaw: String = MaumauLocationMode.off.rawValue
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Location Access")
+            Text(macLocalized("Location Access", language: self.language))
                 .font(.body)
 
             Picker("", selection: self.$locationModeRaw) {
-                Text("Off").tag(MaumauLocationMode.off.rawValue)
-                Text("While Using").tag(MaumauLocationMode.whileUsing.rawValue)
-                Text("Always").tag(MaumauLocationMode.always.rawValue)
+                Text(macLocalized("Off", language: self.language)).tag(MaumauLocationMode.off.rawValue)
+                Text(macLocalized("While Using", language: self.language)).tag(MaumauLocationMode.whileUsing.rawValue)
+                Text(macLocalized("Always", language: self.language)).tag(MaumauLocationMode.always.rawValue)
             }
             .labelsHidden()
             .pickerStyle(.menu)
 
-            Toggle("Precise Location", isOn: self.$locationPreciseEnabled)
+            Toggle(macLocalized("Precise Location", language: self.language), isOn: self.$locationPreciseEnabled)
                 .disabled(self.locationMode == .off)
 
-            Text("Always may require System Settings to approve background location.")
+            Text(macLocalized("Always may require System Settings to approve background location.", language: self.language))
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -105,6 +113,10 @@ struct PermissionStatusList: View {
     let refresh: () async -> Void
     @State private var pendingCapability: Capability?
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Capability.allCases, id: \.self) { cap in
@@ -119,13 +131,13 @@ struct PermissionStatusList: View {
             Button {
                 Task { await self.refresh() }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(macLocalized("Refresh", language: self.language), systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
             .font(.footnote)
             .padding(.top, 2)
-            .help("Refresh status")
+            .help(macLocalized("Refresh status", language: self.language))
         }
     }
 
@@ -157,6 +169,10 @@ struct PermissionRow: View {
     let isPending: Bool
     let compact: Bool
     let action: () -> Void
+
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
 
     init(
         capability: Capability,
@@ -191,32 +207,32 @@ struct PermissionRow: View {
             .layoutPriority(1)
             VStack(alignment: .trailing, spacing: 4) {
                 if self.status {
-                    Label("Granted", systemImage: "checkmark.circle.fill")
+                    Label(macLocalized("Granted", language: self.language), systemImage: "checkmark.circle.fill")
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.green)
                         .font(.title3)
-                        .help("Granted")
+                        .help(macLocalized("Granted", language: self.language))
                 } else if self.isPending {
                     ProgressView()
                         .controlSize(.small)
                         .frame(width: 78)
                 } else {
-                    Button("Grant") { self.action() }
+                    Button(macLocalized("Grant", language: self.language)) { self.action() }
                         .buttonStyle(.bordered)
                         .controlSize(self.compact ? .small : .regular)
                         .frame(minWidth: self.compact ? 68 : 78, alignment: .trailing)
                 }
 
                 if self.status {
-                    Text("Granted")
+                    Text(macLocalized("Granted", language: self.language))
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.green)
                 } else if self.isPending {
-                    Text("Checking…")
+                    Text(macLocalized("Checking…", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Request access")
+                    Text(macLocalized("Request access", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -234,28 +250,35 @@ struct PermissionRow: View {
 
     private var title: String {
         switch self.capability {
-        case .appleScript: "Automation (AppleScript)"
-        case .notifications: "Notifications"
-        case .accessibility: "Accessibility"
-        case .screenRecording: "Screen Recording"
-        case .microphone: "Microphone"
-        case .speechRecognition: "Speech Recognition"
-        case .camera: "Camera"
-        case .location: "Location"
+        case .appleScript: macLocalized("Automation (AppleScript)", language: self.language)
+        case .notifications: macLocalized("Notifications", language: self.language)
+        case .accessibility: macLocalized("Accessibility", language: self.language)
+        case .screenRecording: macLocalized("Screen Recording", language: self.language)
+        case .microphone: macLocalized("Microphone", language: self.language)
+        case .speechRecognition: macLocalized("Speech Recognition", language: self.language)
+        case .camera: macLocalized("Camera", language: self.language)
+        case .location: macLocalized("Location", language: self.language)
         }
     }
 
     private var subtitle: String {
         switch self.capability {
         case .appleScript:
-            "Control other apps (e.g. Terminal) for automation actions"
-        case .notifications: "Show desktop alerts for agent activity"
-        case .accessibility: "Control UI elements when an action requires it"
-        case .screenRecording: "Capture the screen for context or screenshots"
-        case .microphone: "Allow Voice Wake and audio capture"
-        case .speechRecognition: "Transcribe Voice Wake trigger phrases on-device"
-        case .camera: "Capture photos and video from the camera"
-        case .location: "Share location when requested by the agent"
+            macLocalized("Control other apps (e.g. Terminal) for automation actions", language: self.language)
+        case .notifications:
+            macLocalized("Show desktop alerts for agent activity", language: self.language)
+        case .accessibility:
+            macLocalized("Control UI elements when an action requires it", language: self.language)
+        case .screenRecording:
+            macLocalized("Capture the screen for context or screenshots", language: self.language)
+        case .microphone:
+            macLocalized("Allow Voice Wake and audio capture", language: self.language)
+        case .speechRecognition:
+            macLocalized("Transcribe Voice Wake trigger phrases on-device", language: self.language)
+        case .camera:
+            macLocalized("Capture photos and video from the camera", language: self.language)
+        case .location:
+            macLocalized("Share location when requested by the agent", language: self.language)
         }
     }
 

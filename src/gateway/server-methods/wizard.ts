@@ -36,6 +36,10 @@ function buildWizardWarmupStep() {
   };
 }
 
+function isModelsAuthEntrypoint(entrypoint: unknown): boolean {
+  return typeof entrypoint === "string" && entrypoint.trim().toLowerCase() === "models-auth";
+}
+
 async function readWizardStartResult(params: {
   session: WizardSession;
   preferWarmupStep: boolean;
@@ -101,20 +105,30 @@ export const wizardHandlers: GatewayRequestHandlers = {
       }
     }
     const sessionId = randomUUID();
-    const opts = {
-      mode: params.mode,
-      flow: params.flow,
-      workspace: typeof params.workspace === "string" ? params.workspace : undefined,
-      acceptRisk: params.acceptRisk === true,
-      skipChannels: params.skipChannels === true,
-      skipSkills: params.skipSkills === true,
-      skipSearch: params.skipSearch === true,
-      skipUi: params.skipUi === true,
-      embedded: params.embedded === true,
-    };
-    const session = new WizardSession((prompter) =>
-      context.wizardRunner(opts, defaultRuntime, prompter),
-    );
+    const session = new WizardSession((prompter) => {
+      if (isModelsAuthEntrypoint(params.entrypoint)) {
+        return context.modelAuthWizardRunner(
+          {
+            authChoice: typeof params.authChoice === "string" ? params.authChoice : undefined,
+          },
+          defaultRuntime,
+          prompter,
+        );
+      }
+
+      const opts = {
+        mode: params.mode,
+        flow: params.flow,
+        workspace: typeof params.workspace === "string" ? params.workspace : undefined,
+        acceptRisk: params.acceptRisk === true,
+        skipChannels: params.skipChannels === true,
+        skipSkills: params.skipSkills === true,
+        skipSearch: params.skipSearch === true,
+        skipUi: params.skipUi === true,
+        embedded: params.embedded === true,
+      };
+      return context.wizardRunner(opts, defaultRuntime, prompter);
+    });
     context.wizardSessions.set(sessionId, session);
     const result = await readWizardStartResult({
       session,

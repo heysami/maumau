@@ -14,4 +14,12 @@ struct CronSettings: View {
         self.store = store
         self.channelsStore = channelsStore
     }
+
+    var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
+    func loc(_ english: String) -> String {
+        macLocalized(english, language: self.language)
+    }
 }

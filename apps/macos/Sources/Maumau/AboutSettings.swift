@@ -6,6 +6,10 @@ struct AboutSettings: View {
     @AppStorage("autoUpdateEnabled") private var autoCheckEnabled = true
     @State private var didLoadUpdaterState = false
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             let appIcon = NSApplication.shared.applicationIconImage ?? CritterIconRenderer.makeIcon(blink: 0)
@@ -31,14 +35,17 @@ struct AboutSettings: View {
             VStack(spacing: 3) {
                 Text("Maumau")
                     .font(.title3.bold())
-                Text("Version \(self.versionString)")
+                Text("\(macLocalized("Version", language: self.language)) \(self.versionString)")
                     .foregroundStyle(.secondary)
                 if let buildTimestamp {
-                    Text("Built \(buildTimestamp)\(self.buildSuffix)")
+                    Text("\(macLocalized("Built", language: self.language)) \(buildTimestamp)\(self.buildSuffix)")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Text("Menu bar companion for notifications, screenshots, and privileged agent actions.")
+                Text(
+                    macLocalized(
+                        "Menu bar companion for notifications, screenshots, and privileged agent actions.",
+                        language: self.language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -50,7 +57,7 @@ struct AboutSettings: View {
                     icon: "chevron.left.slash.chevron.right",
                     title: "GitHub",
                     url: "https://github.com/maumau/maumau")
-                AboutLinkRow(icon: "globe", title: "Website", url: "https://maumau.ai")
+                AboutLinkRow(icon: "globe", title: macLocalized("Website", language: self.language), url: "https://maumau.ai")
                 AboutLinkRow(icon: "bird", title: "Twitter", url: "https://twitter.com/steipete")
                 AboutLinkRow(icon: "envelope", title: "Email", url: "mailto:peter@steipete.me")
             }
@@ -64,14 +71,14 @@ struct AboutSettings: View {
 
                 if updater.isAvailable {
                     VStack(spacing: 10) {
-                        Toggle("Check for updates automatically", isOn: self.$autoCheckEnabled)
+                        Toggle(macLocalized("Check for updates automatically", language: self.language), isOn: self.$autoCheckEnabled)
                             .toggleStyle(.checkbox)
                             .frame(maxWidth: .infinity, alignment: .center)
 
-                        Button("Check for Updates…") { updater.checkForUpdates(nil) }
+                        Button(macLocalized("Check for Updates…", language: self.language)) { updater.checkForUpdates(nil) }
                     }
                 } else {
-                    Text("Updates unavailable in this build.")
+                    Text(macLocalized("Updates unavailable in this build.", language: self.language))
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
                 }

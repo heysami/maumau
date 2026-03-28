@@ -21,14 +21,23 @@ struct OnboardingWizardStepViewTests {
             placeholder: nil,
             sensitive: nil,
             executor: nil)
-        let view = OnboardingWizardStepView(step: step, wizard: wizard, isSubmitting: false)
+        let view = OnboardingWizardStepView(
+            step: step,
+            wizard: wizard,
+            isSubmitting: false,
+            language: .en)
         _ = view.body
     }
 
     @Test func `select step builds`() {
         let wizard = OnboardingWizardModel()
         let options: [[String: ProtoAnyCodable]] = [
-            ["value": ProtoAnyCodable("local"), "label": ProtoAnyCodable("Local"), "hint": ProtoAnyCodable("This Mac")],
+            [
+                "value": ProtoAnyCodable("local"),
+                "label": ProtoAnyCodable("Local"),
+                "hint": ProtoAnyCodable(
+                    "Best for: Using this Mac.\nWhat you need: Local access.\nHow to get it: Keep going.")
+            ],
             ["value": ProtoAnyCodable("remote"), "label": ProtoAnyCodable("Remote")],
         ]
         let step = WizardStep(
@@ -41,7 +50,11 @@ struct OnboardingWizardStepViewTests {
             placeholder: nil,
             sensitive: nil,
             executor: nil)
-        let view = OnboardingWizardStepView(step: step, wizard: wizard, isSubmitting: false)
+        let view = OnboardingWizardStepView(
+            step: step,
+            wizard: wizard,
+            isSubmitting: false,
+            language: .en)
         _ = view.body
     }
 
@@ -57,7 +70,11 @@ struct OnboardingWizardStepViewTests {
             placeholder: nil,
             sensitive: nil,
             executor: nil)
-        let view = OnboardingWizardStepView(step: step, wizard: wizard, isSubmitting: false)
+        let view = OnboardingWizardStepView(
+            step: step,
+            wizard: wizard,
+            isSubmitting: false,
+            language: .en)
         _ = view.body
 
         #expect(OnboardingWizardModel.isProgressStep(step))
@@ -84,7 +101,7 @@ struct OnboardingWizardStepViewTests {
         #expect(params["workspace"] == AnyCodable("/tmp/agent"))
         #expect(params["skipChannels"] == AnyCodable(true))
         #expect(params["skipSkills"] == AnyCodable(true))
-        #expect(params["skipSearch"] == AnyCodable(true))
+        #expect(params["skipSearch"] == nil)
         #expect(params["flow"] == nil)
         #expect(params["acceptRisk"] == nil)
         #expect(params["skipUi"] == nil)
@@ -240,6 +257,24 @@ struct OnboardingWizardStepViewTests {
                 AnyCodable([AnyCodable("__skip__")]))
     }
 
+    @Test func `client open url action steps auto-handle in onboarding`() {
+        let step = WizardStep(
+            id: "open-browser",
+            type: ProtoAnyCodable("action"),
+            title: "Open browser sign-in",
+            message: "Open the sign-in page in your browser.",
+            options: nil,
+            initialvalue: ProtoAnyCodable([
+                "action": ProtoAnyCodable("open_url"),
+                "url": ProtoAnyCodable("https://auth.openai.com/oauth/authorize?state=test"),
+            ]),
+            placeholder: nil,
+            sensitive: nil,
+            executor: ProtoAnyCodable("client"))
+
+        #expect(OnboardingWizardModel.shouldAutoHandleClientActionStep(step))
+    }
+
     @Test func `wizard step explanation recognizes brain selection`() {
         let step = WizardStep(
             id: "model-step",
@@ -252,7 +287,7 @@ struct OnboardingWizardStepViewTests {
             sensitive: nil,
             executor: nil)
 
-        let explanation = OnboardingWizardStepView.resolveStepExplanation(for: step)
+        let explanation = OnboardingWizardStepView.resolveStepExplanation(for: step, language: .en)
 
         #expect(explanation?.stage == .brain)
         #expect(explanation?.title == "Pick the brain")
@@ -270,11 +305,30 @@ struct OnboardingWizardStepViewTests {
             sensitive: true,
             executor: nil)
 
-        let explanation = OnboardingWizardStepView.resolveStepExplanation(for: step)
+        let explanation = OnboardingWizardStepView.resolveStepExplanation(for: step, language: .en)
 
         #expect(OnboardingWizardStepView.shouldShowStepExplanation(for: step))
         #expect(explanation?.stage == .brain)
         #expect(explanation?.title == "Connect the brain")
+    }
+
+    @Test func `wizard step explanation recognizes web search setup`() {
+        let step = WizardStep(
+            id: "search-step",
+            type: ProtoAnyCodable("select"),
+            title: "Web search",
+            message: "Search provider",
+            options: nil,
+            initialvalue: nil,
+            placeholder: nil,
+            sensitive: nil,
+            executor: nil)
+
+        let explanation = OnboardingWizardStepView.resolveStepExplanation(for: step, language: .en)
+
+        #expect(OnboardingWizardStepView.shouldShowStepExplanation(for: step))
+        #expect(explanation?.stage == .brain)
+        #expect(explanation?.title == "Add live search")
     }
 
     @Test func `wizard step explanation hides for model check notes`() {
@@ -290,6 +344,59 @@ struct OnboardingWizardStepViewTests {
             executor: nil)
 
         #expect(!OnboardingWizardStepView.shouldShowStepExplanation(for: step))
-        #expect(OnboardingWizardStepView.resolveStepExplanation(for: step)?.title == "Connect the brain")
+        #expect(OnboardingWizardStepView.resolveStepExplanation(for: step, language: .en)?.title == "Connect the brain")
+    }
+
+    @Test func `wizard localization translates onboarding auth templates in indonesian`() {
+        #expect(macLocalized("AI service", language: .id) == "Layanan AI")
+        #expect(
+            macLocalized("How do you want to connect OpenAI?", language: .id) ==
+                "Bagaimana Anda ingin menghubungkan OpenAI?")
+        #expect(
+            macLocalized("How do you want to connect Custom Provider?", language: .id) ==
+                "Bagaimana Anda ingin menghubungkan Provider kustom?")
+        #expect(
+            macLocalized("OpenAI API key", language: .id) ==
+                "API key OpenAI")
+        #expect(
+            macLocalized("Default model set to openai/gpt-5.4", language: .id) ==
+                "Model default diatur ke openai/gpt-5.4")
+        #expect(
+            macLocalized("Settings, logins, and chat sessions", language: .id) ==
+                "Pengaturan, login, dan sesi chat")
+        #expect(
+            macLocalized("Read what you need below each option before continuing.", language: .id) ==
+                "Baca apa yang Anda butuhkan di bawah setiap opsi sebelum melanjutkan.")
+        #expect(
+            macLocalized("Before you choose OpenAI", language: .id) ==
+                "Sebelum memilih OpenAI")
+        #expect(
+            macLocalized(
+                "Best for: The easiest OpenAI setup if you already use ChatGPT.",
+                language: .id) ==
+                "Cocok untuk: Pengaturan OpenAI termudah jika Anda sudah menggunakan ChatGPT.")
+        #expect(
+            macLocalized(
+                "What you need: A ChatGPT account and a browser sign-in. No API key.",
+                language: .id) ==
+                "Yang Anda butuhkan: Akun ChatGPT dan login lewat browser. Tidak perlu API key.")
+        #expect(
+            macLocalized(
+                "How to get it: Open the OpenAI Platform, add a payment method if needed, then create a secret key from the API keys page.",
+                language: .id) ==
+                "Cara mendapatkannya: Buka OpenAI Platform, tambahkan metode pembayaran jika perlu, lalu buat secret key dari halaman API keys.")
+    }
+
+    @Test func `wizard localization translates config refresh errors in indonesian`() {
+        let message =
+            """
+            ConfigRuntimeRefreshError: Config was written to /Users/example/.maumau/maumau.json, but runtime snapshot refresh failed: Environment variable "OPENAI_API_KEY" is missing or empty.
+            """
+
+        #expect(
+            macLocalized(message, language: .id) ==
+                """
+                Konfigurasi ditulis ke /Users/example/.maumau/maumau.json, tetapi refresh snapshot runtime gagal: Variabel lingkungan "OPENAI_API_KEY" tidak ada atau kosong.
+                """)
     }
 }

@@ -37,6 +37,7 @@ const BASE_METHODS = [
   "talk.speak",
   "talk.mode",
   "models.list",
+  "models.auth.choices",
   "plugins.status",
   "tools.catalog",
   "agents.list",

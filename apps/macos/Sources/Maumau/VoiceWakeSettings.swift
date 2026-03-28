@@ -26,6 +26,10 @@ struct VoiceWakeSettings: View {
     private let controlWidth: CGFloat = 240
     private let isPreview = ProcessInfo.processInfo.isPreview
 
+    private var language: OnboardingLanguage {
+        self.state.effectiveOnboardingLanguage
+    }
+
     private struct AudioInputDevice: Identifiable, Equatable {
         let uid: String
         let name: String
@@ -44,26 +48,29 @@ struct VoiceWakeSettings: View {
     }
 
     var body: some View {
+        let language = self.language
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsToggleRow(
-                    title: "Enable Voice Wake",
-                    subtitle: "Listen for a wake phrase (e.g. \"Claude\") before running voice commands. "
-                        + "Voice recognition runs fully on-device.",
+                    title: macLocalized("Enable Voice Wake", language: language),
+                    subtitle: macLocalized(
+                        "Listen for a wake phrase (e.g. \"Claude\") before running voice commands. Voice recognition runs fully on-device.",
+                        language: language),
                     binding: self.voiceWakeBinding)
                     .disabled(!voiceWakeSupported)
 
                 SettingsToggleRow(
-                    title: "Hold Right Option to talk",
-                    subtitle: """
-                    Push-to-talk mode that starts listening while you hold the key
-                    and shows the preview overlay.
-                    """,
+                    title: macLocalized("Hold Right Option to talk", language: language),
+                    subtitle: macLocalized(
+                        "Push-to-talk mode that starts listening while you hold the key and shows the preview overlay.",
+                        language: language),
                     binding: self.$state.voicePushToTalkEnabled)
                     .disabled(!voiceWakeSupported)
 
                 if !voiceWakeSupported {
-                    Label("Voice Wake requires macOS 26 or newer.", systemImage: "exclamationmark.triangle.fill")
+                    Label(
+                        macLocalized("Voice Wake requires macOS 26 or newer.", language: language),
+                        systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.yellow)
                         .padding(8)
@@ -78,6 +85,7 @@ struct VoiceWakeSettings: View {
                 VoiceWakeTestCard(
                     testState: self.$testState,
                     isTesting: self.$isTesting,
+                    language: language,
                     onToggle: self.toggleTest)
 
                 self.chimeSection
@@ -153,18 +161,18 @@ struct VoiceWakeSettings: View {
     private var triggerTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Trigger words")
+                Text(macLocalized("Trigger words", language: self.language))
                     .font(.callout.weight(.semibold))
                 Spacer()
                 Button {
                     self.addWord()
                 } label: {
-                    Label("Add word", systemImage: "plus")
+                    Label(macLocalized("Add word", language: self.language), systemImage: "plus")
                 }
                 .disabled(self.triggerEntries
                     .contains(where: { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
 
-                Button("Reset defaults") {
+                Button(macLocalized("Reset defaults", language: self.language)) {
                     self.triggerEntries = defaultVoiceWakeTriggers.map { TriggerEntry(id: UUID(), value: $0) }
                     self.syncTriggerEntriesToState()
                 }
@@ -173,7 +181,7 @@ struct VoiceWakeSettings: View {
             VStack(spacing: 0) {
                 ForEach(self.$triggerEntries) { $entry in
                     HStack(spacing: 8) {
-                        TextField("Wake word", text: $entry.value)
+                        TextField(macLocalized("Wake word", language: self.language), text: $entry.value)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit {
                                 self.syncTriggerEntriesToState()
@@ -185,7 +193,7 @@ struct VoiceWakeSettings: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
-                        .help("Remove trigger word")
+                        .help(macLocalized("Remove trigger word", language: self.language))
                         .frame(width: 24)
                     }
                     .padding(8)
@@ -203,8 +211,9 @@ struct VoiceWakeSettings: View {
                     .stroke(Color.secondary.opacity(0.25), lineWidth: 1))
 
             Text(
-                "Maumau reacts when any trigger appears in a transcription. "
-                    + "Keep them short to avoid false positives.")
+                macLocalized(
+                    "Maumau reacts when any trigger appears in a transcription. Keep them short to avoid false positives.",
+                    language: self.language))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -214,17 +223,17 @@ struct VoiceWakeSettings: View {
     private var chimeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Sounds")
+                Text(macLocalized("Sounds", language: self.language))
                     .font(.callout.weight(.semibold))
                 Spacer()
             }
 
             self.chimeRow(
-                title: "Trigger sound",
+                title: macLocalized("Trigger sound", language: self.language),
                 selection: self.$state.voiceWakeTriggerChime)
 
             self.chimeRow(
-                title: "Send sound",
+                title: macLocalized("Send sound", language: self.language),
                 selection: self.$state.voiceWakeSendChime)
         }
         .padding(.top, 4)
@@ -241,7 +250,7 @@ struct VoiceWakeSettings: View {
 
     private func toggleTest() {
         guard voiceWakeSupported else {
-            self.testState = .failed("Voice Wake requires macOS 26 or newer.")
+            self.testState = .failed(macLocalized("Voice Wake requires macOS 26 or newer.", language: self.language))
             return
         }
         if self.isTesting {
@@ -252,7 +261,7 @@ struct VoiceWakeSettings: View {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if self.testState == .finalizing {
                     self.tester.stop()
-                    self.testState = .failed("Stopped")
+                    self.testState = .failed(macLocalized("Stopped", language: self.language))
                 }
             }
             self.testTimeoutTask?.cancel()
@@ -290,14 +299,15 @@ struct VoiceWakeSettings: View {
                         {
                             self.testState = .detected(command)
                         } else {
-                            self.testState = .failed("Timeout: no trigger heard")
+                            self.testState = .failed(
+                                macLocalized("Timeout: no trigger heard", language: self.language))
                         }
                         self.isTesting = false
                     }
                 }
             } catch {
                 self.tester.stop()
-                self.testState = .failed(error.localizedDescription)
+                self.testState = .failed(macLocalized(error.localizedDescription, language: self.language))
                 self.isTesting = false
                 self.testTimeoutTask?.cancel()
             }
@@ -311,18 +321,18 @@ struct VoiceWakeSettings: View {
                 .frame(width: self.fieldLabelWidth, alignment: .leading)
 
             Menu {
-                Button("No Sound") { self.selectChime(.none, binding: selection) }
+                Button(macLocalized("No Sound", language: self.language)) { self.selectChime(.none, binding: selection) }
                 Divider()
                 ForEach(VoiceWakeChimeCatalog.systemOptions, id: \.self) { option in
-                    Button(VoiceWakeChimeCatalog.displayName(for: option)) {
+                    Button(macLocalized(VoiceWakeChimeCatalog.displayName(for: option), language: self.language)) {
                         self.selectChime(.system(name: option), binding: selection)
                     }
                 }
                 Divider()
-                Button("Choose file…") { self.chooseCustomChime(for: selection) }
+                Button(macLocalized("Choose file…", language: self.language)) { self.chooseCustomChime(for: selection) }
             } label: {
                 HStack(spacing: 6) {
-                    Text(selection.wrappedValue.displayLabel)
+                    Text(macLocalized(selection.wrappedValue.displayLabel, language: self.language))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
@@ -339,7 +349,7 @@ struct VoiceWakeSettings: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 
-            Button("Play") {
+            Button(macLocalized("Play", language: self.language)) {
                 VoiceWakeChimePlayer.play(selection.wrappedValue)
             }
             .keyboardShortcut(.space, modifiers: [.command])
@@ -388,13 +398,15 @@ struct VoiceWakeSettings: View {
     private var micPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Microphone")
+                Text(macLocalized("Microphone", language: self.language))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.fieldLabelWidth, alignment: .leading)
-                Picker("Microphone", selection: self.$state.voiceWakeMicID) {
-                    Text("System default").tag("")
+                Picker(macLocalized("Microphone", language: self.language), selection: self.$state.voiceWakeMicID) {
+                    Text(macLocalized("System default", language: self.language)).tag("")
                     if self.isSelectedMicUnavailable {
-                        Text(self.state.voiceWakeMicName.isEmpty ? "Unavailable" : self.state.voiceWakeMicName)
+                        Text(self.state.voiceWakeMicName.isEmpty
+                            ? macLocalized("Unavailable", language: self.language)
+                            : self.state.voiceWakeMicName)
                             .tag(self.state.voiceWakeMicID)
                     }
                     ForEach(self.availableMics) { mic in
@@ -407,7 +419,7 @@ struct VoiceWakeSettings: View {
             if self.isSelectedMicUnavailable {
                 HStack(spacing: 10) {
                     Color.clear.frame(width: self.fieldLabelWidth, height: 1)
-                    Text("Disconnected (using System default)")
+                    Text(macLocalized("Disconnected (using System default)", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -422,12 +434,16 @@ struct VoiceWakeSettings: View {
     private var localePicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Recognition language")
+                Text(macLocalized("Recognition language", language: self.language))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.fieldLabelWidth, alignment: .leading)
-                Picker("Language", selection: self.$state.voiceWakeLocaleID) {
+                Picker(macLocalized("Language", language: self.language), selection: self.$state.voiceWakeLocaleID) {
                     let current = Locale(identifier: Locale.current.identifier)
-                    Text("\(self.friendlyName(for: current)) (System)").tag(Locale.current.identifier)
+                    Text(macVoiceWakeLocaleLabel(
+                        self.friendlyName(for: current),
+                        isSystem: true,
+                        language: self.language))
+                        .tag(Locale.current.identifier)
                     ForEach(self.availableLocales.map(\.identifier), id: \.self) { id in
                         if id != Locale.current.identifier {
                             Text(self.friendlyName(for: Locale(identifier: id))).tag(id)
@@ -440,14 +456,14 @@ struct VoiceWakeSettings: View {
 
             if !self.state.voiceWakeAdditionalLocaleIDs.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Additional languages")
+                    Text(macLocalized("Additional languages", language: self.language))
                         .font(.footnote.weight(.semibold))
                     ForEach(
                         Array(self.state.voiceWakeAdditionalLocaleIDs.enumerated()),
                         id: \.offset)
                     { idx, localeID in
                         HStack(spacing: 8) {
-                            Picker("Extra \(idx + 1)", selection: Binding(
+                            Picker("\(macLocalized("Language", language: self.language)) \(idx + 1)", selection: Binding(
                                 get: { localeID },
                                 set: { newValue in
                                     guard self.state
@@ -471,7 +487,7 @@ struct VoiceWakeSettings: View {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
-                            .help("Remove language")
+                            .help(macLocalized("Remove language", language: self.language))
                         }
                     }
 
@@ -480,7 +496,7 @@ struct VoiceWakeSettings: View {
                             self.state.voiceWakeAdditionalLocaleIDs.append(first.identifier)
                         }
                     } label: {
-                        Label("Add language", systemImage: "plus")
+                        Label(macLocalized("Add language", language: self.language), systemImage: "plus")
                     }
                     .disabled(self.availableLocales.isEmpty)
                 }
@@ -491,14 +507,17 @@ struct VoiceWakeSettings: View {
                         self.state.voiceWakeAdditionalLocaleIDs.append(first.identifier)
                     }
                 } label: {
-                    Label("Add additional language", systemImage: "plus")
+                    Label(macLocalized("Add additional language", language: self.language), systemImage: "plus")
                 }
                 .buttonStyle(.link)
                 .disabled(self.availableLocales.isEmpty)
                 .padding(.top, 4)
             }
 
-            Text("Languages are tried in order. Models may need a first-use download on macOS 26.")
+            Text(
+                macLocalized(
+                    "Languages are tried in order. Models may need a first-use download on macOS 26.",
+                    language: self.language))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -563,26 +582,27 @@ struct VoiceWakeSettings: View {
     private func friendlyName(for locale: Locale) -> String {
         let cleanedID = normalizeLocaleIdentifier(locale.identifier)
         let cleanLocale = Locale(identifier: cleanedID)
+        let displayLocale = self.language == .id ? Locale(identifier: "id_ID") : Locale.current
 
         if let langCode = cleanLocale.language.languageCode?.identifier,
-           let lang = cleanLocale.localizedString(forLanguageCode: langCode),
+           let lang = displayLocale.localizedString(forLanguageCode: langCode),
            let regionCode = cleanLocale.region?.identifier,
-           let region = cleanLocale.localizedString(forRegionCode: regionCode)
+           let region = displayLocale.localizedString(forRegionCode: regionCode)
         {
             return "\(lang) (\(region))"
         }
         if let langCode = cleanLocale.language.languageCode?.identifier,
-           let lang = cleanLocale.localizedString(forLanguageCode: langCode)
+           let lang = displayLocale.localizedString(forLanguageCode: langCode)
         {
             return lang
         }
-        return cleanLocale.localizedString(forIdentifier: cleanedID) ?? cleanedID
+        return displayLocale.localizedString(forIdentifier: cleanedID) ?? cleanedID
     }
 
     private var levelMeter: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
-                Text("Live level")
+                Text(macLocalized("Live level", language: self.language))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.fieldLabelWidth, alignment: .leading)
                 MicLevelBar(level: self.meterLevel)
@@ -593,7 +613,7 @@ struct VoiceWakeSettings: View {
                     .frame(width: 60, alignment: .trailing)
             }
             if let meterError {
-                Text(meterError)
+                Text(macVoiceWakeFailureText(meterError, language: self.language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -638,6 +658,7 @@ extension VoiceWakeSettings {
         state.voicePushToTalkEnabled = true
         state.swabbleTriggerWords = ["Claude", "Hey"]
 
+        state.onboardingLanguage = .id
         let view = VoiceWakeSettings(state: state, isActive: true)
         view.availableMics = [AudioInputDevice(uid: "mic-1", name: "Built-in")]
         view.availableLocales = [Locale(identifier: "en_US")]

@@ -4,15 +4,19 @@ struct SettingsRefreshButton: View {
     let isLoading: Bool
     let action: () -> Void
 
+    private var language: OnboardingLanguage {
+        macCurrentLanguage()
+    }
+
     var body: some View {
         if self.isLoading {
             ProgressView()
         } else {
             Button(action: self.action) {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(macLocalized("Refresh", language: self.language), systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
-            .help("Refresh")
+            .help(macLocalized("Refresh", language: self.language))
         }
     }
 }

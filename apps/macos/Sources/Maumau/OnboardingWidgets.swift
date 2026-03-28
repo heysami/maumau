@@ -8,26 +8,12 @@ enum OnboardingStepBadge: String, CaseIterable, Identifiable {
 
     var id: String { self.rawValue }
 
-    var title: String {
-        switch self {
-        case .required:
-            "Required"
-        case .optional:
-            "Optional"
-        case .needsPrep:
-            "Needs prep elsewhere"
-        }
+    func title(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).badgeTitle(self)
     }
 
-    var compactTitle: String {
-        switch self {
-        case .required:
-            "Required"
-        case .optional:
-            "Optional"
-        case .needsPrep:
-            "Needs prep"
-        }
+    func compactTitle(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).badgeTitle(self, compact: true)
     }
 
     var tint: Color {
@@ -52,72 +38,20 @@ enum OnboardingHeaderStage: String, CaseIterable, Identifiable {
 
     var id: String { self.rawValue }
 
-    var title: String {
-        switch self {
-        case .home:
-            "Gateway"
-        case .brain:
-            "Brain"
-        case .chat:
-            "Channel"
-        case .access:
-            "Private access"
-        case .permissions:
-            "Permissions"
-        case .tools:
-            "Tools"
-        }
+    func title(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).stageTitle(self)
     }
 
-    var headerSubtitle: String {
-        switch self {
-        case .home:
-            "Maumau's home"
-        case .brain:
-            "AI service"
-        case .chat:
-            "Where people text it"
-        case .access:
-            "Private driveway"
-        case .permissions:
-            "What Maumau can do on this Mac"
-        case .tools:
-            "Included tools"
-        }
+    func headerSubtitle(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).stageHeaderSubtitle(self)
     }
 
-    var explainerTitle: String {
-        switch self {
-        case .home:
-            "Gateway"
-        case .brain:
-            "Brain"
-        case .chat:
-            "Channel"
-        case .access:
-            "Private access"
-        case .permissions:
-            "Mac access"
-        case .tools:
-            "Included tools"
-        }
+    func explainerTitle(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).stageExplainerTitle(self)
     }
 
-    var explainerBody: String {
-        switch self {
-        case .home:
-            "Gateway means Maumau's home. It keeps its tools here and does its work from here."
-        case .brain:
-            "Brain means the AI service. You are choosing what does the thinking and writing."
-        case .chat:
-            "Channel means where people can reach Maumau. Think of it like giving it a phone line or inbox."
-        case .access:
-            "This gives Maumau's home a private driveway. It lets your phone, laptop, or browser reach Maumau privately without putting it on the public internet."
-        case .permissions:
-            "This is where you decide what Maumau can do on this Mac, like work with apps or see the screen."
-        case .tools:
-            "This is a quick look at the main tools Maumau already has, so you know what comes with it."
-        }
+    func explainerBody(in language: OnboardingLanguage) -> String {
+        OnboardingStrings(language: language).stageExplainerBody(self)
     }
 
     var systemImage: String {
@@ -193,19 +127,22 @@ struct OnboardingMeaningCard: View {
     let bodyText: String
     let badges: [OnboardingStepBadge]
     let detailNote: String?
+    let language: OnboardingLanguage
 
     init(
         stage: OnboardingHeaderStage,
         title: String,
         bodyText: String,
         badges: [OnboardingStepBadge] = [],
-        detailNote: String? = nil)
+        detailNote: String? = nil,
+        language: OnboardingLanguage = .fallback)
     {
         self.stage = stage
         self.title = title
         self.bodyText = bodyText
         self.badges = badges
         self.detailNote = detailNote
+        self.language = language
     }
 
     var body: some View {
@@ -227,7 +164,7 @@ struct OnboardingMeaningCard: View {
                 if !self.badges.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(self.badges) { badge in
-                            StatusPill(text: badge.title, tint: badge.tint)
+                            StatusPill(text: badge.title(in: self.language), tint: badge.tint)
                         }
                     }
                 }
@@ -296,7 +233,7 @@ private struct OnboardingHeaderStageCard: View {
         .opacity(self.step.isLocked ? 0.45 : 1)
         .buttonStyle(.plain)
         .disabled(self.step.isLocked)
-        .accessibilityLabel("\(self.step.title). \(self.step.stage.headerSubtitle)")
+        .accessibilityLabel(self.step.title)
     }
 
     private var circleFill: Color {

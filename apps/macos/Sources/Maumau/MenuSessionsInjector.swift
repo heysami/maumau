@@ -39,6 +39,10 @@ final class MenuSessionsInjector: NSObject, NSMenuDelegate {
     private var testControlChannelConnected: Bool?
     #endif
 
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
     func install(into statusItem: NSStatusItem) {
         self.statusItem = statusItem
         guard let menu = statusItem.menu else { return }
@@ -217,7 +221,10 @@ extension MenuSessionsInjector {
 
             if rows.isEmpty {
                 menu.insertItem(
-                    self.makeMessageItem(text: "No active sessions", symbolName: "minus", width: width),
+                    self.makeMessageItem(
+                        text: macLocalized("No active sessions", language: self.language),
+                        symbolName: "minus",
+                        width: width),
                     at: cursor)
                 cursor += 1
             } else {
@@ -239,7 +246,7 @@ extension MenuSessionsInjector {
             headerItem.tag = self.tag
             headerItem.isEnabled = false
             let statusText = isConnected
-                ? (self.cachedErrorText ?? "Loading sessions…")
+                ? (self.cachedErrorText ?? macLocalized("Loading sessions…", language: self.language))
                 : self.controlChannelStatusText(for: channelState)
             let hosted = self.makeHostedView(
                 rootView: AnyView(MenuSessionsHeaderView(
@@ -255,7 +262,7 @@ extension MenuSessionsInjector {
             if !isConnected {
                 menu.insertItem(
                     self.makeMessageItem(
-                        text: "Connect the gateway to see sessions",
+                        text: macLocalized("Connect the gateway to see sessions", language: self.language),
                         symbolName: "bolt.slash",
                         width: width),
                     at: cursor)
@@ -295,7 +302,10 @@ extension MenuSessionsInjector {
 
         if case .connecting = ControlChannel.shared.state {
             menu.insertItem(
-                self.makeMessageItem(text: "Connecting…", symbolName: "circle.dashed", width: width),
+                self.makeMessageItem(
+                    text: macLocalized("Connecting…", language: self.language),
+                    symbolName: "circle.dashed",
+                    width: width),
                 at: cursor)
             cursor += 1
             return
@@ -306,7 +316,7 @@ extension MenuSessionsInjector {
         if let error = self.nodesStore.lastError?.nonEmpty {
             menu.insertItem(
                 self.makeMessageItem(
-                    text: "Error: \(error)",
+                    text: "\(macLocalized("Error", language: self.language)): \(error)",
                     symbolName: "exclamationmark.triangle",
                     width: width),
                 at: cursor)
@@ -319,7 +329,9 @@ extension MenuSessionsInjector {
         }
 
         if entries.isEmpty {
-            let title = self.nodesStore.isLoading ? "Loading devices..." : "No devices yet"
+            let title = self.nodesStore.isLoading
+                ? macLocalized("Loading devices...", language: self.language)
+                : macLocalized("No devices yet", language: self.language)
             menu.insertItem(
                 self.makeMessageItem(text: title, symbolName: "circle.dashed", width: width),
                 at: cursor)
@@ -334,7 +346,7 @@ extension MenuSessionsInjector {
             if entries.count > 8 {
                 let moreItem = NSMenuItem()
                 moreItem.tag = self.nodesTag
-                moreItem.title = "More Devices..."
+                moreItem.title = macLocalized("More Devices...", language: self.language)
                 moreItem.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: nil)
                 let overflow = Array(entries.dropFirst(8))
                 moreItem.submenu = self.buildNodesOverflowMenu(entries: overflow, width: width)
@@ -421,7 +433,10 @@ extension MenuSessionsInjector {
             cursor += 1
         }
 
-        let item = NSMenuItem(title: "Usage cost (30 days)", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(
+            title: macLocalized("Usage cost (30 days)", language: self.language),
+            action: nil,
+            keyEquivalent: "")
         item.tag = self.tag
         item.isEnabled = true
         item.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: nil)
@@ -472,13 +487,13 @@ extension MenuSessionsInjector {
     private func controlChannelStatusText(for state: ControlChannel.ConnectionState) -> String {
         switch state {
         case .connected:
-            "Loading sessions…"
+            macLocalized("Loading sessions…", language: self.language)
         case .connecting:
-            "Connecting…"
+            macLocalized("Connecting…", language: self.language)
         case let .degraded(message):
-            message.nonEmpty ?? "Gateway disconnected"
+            message.nonEmpty ?? macLocalized("Gateway disconnected", language: self.language)
         case .disconnected:
-            "Gateway disconnected"
+            macLocalized("Gateway disconnected", language: self.language)
         }
     }
 
@@ -551,7 +566,7 @@ extension MenuSessionsInjector {
 
         return NodeInfo(
             nodeId: "gateway",
-            displayName: "Gateway",
+            displayName: macLocalized("Gateway", language: self.language),
             platform: platform,
             version: nil,
             coreVersion: nil,
@@ -677,7 +692,9 @@ extension MenuSessionsInjector {
 
         guard self.isControlChannelConnected else {
             if self.cachedSnapshot != nil {
-                self.cachedErrorText = "Gateway disconnected (showing cached)"
+                self.cachedErrorText = self.language == .id
+                    ? "Gateway terputus (menampilkan cache)"
+                    : "Gateway disconnected (showing cached)"
             } else {
                 self.cachedErrorText = nil
             }
@@ -743,7 +760,7 @@ extension MenuSessionsInjector {
 
     private func compactUsageError(_ error: Error) -> String {
         let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        if message.isEmpty { return "Usage unavailable" }
+        if message.isEmpty { return self.language == .id ? "Penggunaan tidak tersedia" : "Usage unavailable" }
         if message.count > 90 { return "\(message.prefix(87))…" }
         return message
     }
@@ -752,12 +769,12 @@ extension MenuSessionsInjector {
         if let loadError = error as? SessionLoadError {
             switch loadError {
             case .gatewayUnavailable:
-                return "No connection to gateway"
+                return self.language == .id ? "Tidak ada koneksi ke gateway" : "No connection to gateway"
             case .decodeFailed:
-                return "Sessions unavailable"
+                return self.language == .id ? "Sesi tidak tersedia" : "Sessions unavailable"
             }
         }
-        return "Sessions unavailable"
+        return self.language == .id ? "Sesi tidak tersedia" : "Sessions unavailable"
     }
 }
 
@@ -1027,9 +1044,12 @@ extension MenuSessionsInjector {
     private func resetSession(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         Task { @MainActor in
+            let message = self.language == .id
+                ? "Memulai ID sesi baru untuk “\(key)”."
+                : "Starts a new session id for “\(key)”."
             guard SessionActions.confirmDestructiveAction(
                 title: "Reset session?",
-                message: "Starts a new session id for “\(key)”.",
+                message: message,
                 action: "Reset")
             else { return }
 
@@ -1048,7 +1068,9 @@ extension MenuSessionsInjector {
         Task { @MainActor in
             guard SessionActions.confirmDestructiveAction(
                 title: "Compact session log?",
-                message: "Keeps the last 400 lines; archives the old file.",
+                message: self.language == .id
+                    ? "Menyimpan 400 baris terakhir; file lama diarsipkan."
+                    : "Keeps the last 400 lines; archives the old file.",
                 action: "Compact")
             else { return }
 
@@ -1065,9 +1087,12 @@ extension MenuSessionsInjector {
     private func deleteSession(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         Task { @MainActor in
+            let message = self.language == .id
+                ? "Menghapus entri “\(key)” dan mengarsipkan transkripnya."
+                : "Deletes the “\(key)” entry and archives its transcript."
             guard SessionActions.confirmDestructiveAction(
                 title: "Delete session?",
-                message: "Deletes the “\(key)” entry and archives its transcript.",
+                message: message,
                 action: "Delete")
             else { return }
 

@@ -28,61 +28,78 @@ struct GeneralSettings: View {
         88
     }
 
+    private var languageBinding: Binding<OnboardingLanguage> {
+        Binding(
+            get: { self.state.onboardingLanguage ?? .fallback },
+            set: { self.state.onboardingLanguage = $0 })
+    }
+
     var body: some View {
+        let language = self.state.effectiveOnboardingLanguage
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggleRow(
-                        title: "Maumau active",
-                        subtitle: "Pause to stop the Maumau gateway; no messages will be processed.",
+                        title: macLocalized("Maumau active", language: language),
+                        subtitle: macLocalized(
+                            "Pause to stop the Maumau gateway; no messages will be processed.",
+                            language: language),
                         binding: self.activeBinding)
 
                     self.connectionSection
 
+                    self.languageSection
+
                     Divider()
 
                     SettingsToggleRow(
-                        title: "Launch at login",
-                        subtitle: "Automatically start Maumau after you sign in.",
+                        title: macLocalized("Launch at login", language: language),
+                        subtitle: macLocalized("Automatically start Maumau after you sign in.", language: language),
                         binding: self.$state.launchAtLogin)
 
                     SettingsToggleRow(
-                        title: "Show Dock icon",
-                        subtitle: "Keep Maumau visible in the Dock instead of menu-bar-only mode.",
+                        title: macLocalized("Show Dock icon", language: language),
+                        subtitle: macLocalized(
+                            "Keep Maumau visible in the Dock instead of menu-bar-only mode.",
+                            language: language),
                         binding: self.$state.showDockIcon)
 
                     SettingsToggleRow(
-                        title: "Play menu bar icon animations",
-                        subtitle: "Enable idle blinks and wiggles on the status icon.",
+                        title: macLocalized("Play menu bar icon animations", language: language),
+                        subtitle: macLocalized("Enable idle blinks and wiggles on the status icon.", language: language),
                         binding: self.$state.iconAnimationsEnabled)
 
                     SettingsToggleRow(
-                        title: "Allow Canvas",
-                        subtitle: "Allow the agent to show and control the Canvas panel.",
+                        title: macLocalized("Allow Canvas", language: language),
+                        subtitle: macLocalized("Allow the agent to show and control the Canvas panel.", language: language),
                         binding: self.$state.canvasEnabled)
 
                     SettingsToggleRow(
-                        title: "Allow Camera",
-                        subtitle: "Allow the agent to capture a photo or short video via the built-in camera.",
+                        title: macLocalized("Allow Camera", language: language),
+                        subtitle: macLocalized(
+                            "Allow the agent to capture a photo or short video via the built-in camera.",
+                            language: language),
                         binding: self.$cameraEnabled)
 
                     if PeekabooBridgeHostCoordinator.isAvailable {
                         SettingsToggleRow(
-                            title: "Enable Peekaboo Bridge",
-                            subtitle: "Allow signed tools (e.g. `peekaboo`) to drive UI automation via PeekabooBridge.",
+                            title: macLocalized("Enable Peekaboo Bridge", language: language),
+                            subtitle: macLocalized(
+                                "Allow signed tools (e.g. `peekaboo`) to drive UI automation via PeekabooBridge.",
+                                language: language),
                             binding: self.$state.peekabooBridgeEnabled)
                     }
 
                     SettingsToggleRow(
-                        title: "Enable debug tools",
-                        subtitle: "Show the Debug tab with development utilities.",
+                        title: macLocalized("Enable debug tools", language: language),
+                        subtitle: macLocalized("Show the Debug tab with development utilities.", language: language),
                         binding: self.$state.debugPaneEnabled)
                 }
 
                 Spacer(minLength: 12)
                 HStack {
                     Spacer()
-                    Button("Quit Maumau") { NSApp.terminate(nil) }
+                    Button(macLocalized("Quit Maumau", language: language)) { NSApp.terminate(nil) }
                         .buttonStyle(.borderedProminent)
                 }
             }
@@ -101,6 +118,10 @@ struct GeneralSettings: View {
             guard !self.isPreview else { return }
             self.refreshGatewayStatus()
         }
+        .onChange(of: self.state.onboardingLanguage) { _, newValue in
+            guard !self.isPreview, let newValue else { return }
+            Task { await SessionActions.syncReplyLanguagePreference(newValue) }
+        }
         .onChange(of: self.state.canvasEnabled) { _, enabled in
             if !enabled {
                 CanvasManager.shared.hideAll()
@@ -115,22 +136,23 @@ struct GeneralSettings: View {
     }
 
     private var connectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Maumau runs")
+        let language = self.state.effectiveOnboardingLanguage
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(macLocalized("Maumau runs", language: language))
                 .font(.title3.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Picker("Mode", selection: self.$state.connectionMode) {
-                Text("Not configured").tag(AppState.ConnectionMode.unconfigured)
-                Text("Local (this Mac)").tag(AppState.ConnectionMode.local)
-                Text("Remote (another host)").tag(AppState.ConnectionMode.remote)
+                Text(macLocalized("Not configured", language: language)).tag(AppState.ConnectionMode.unconfigured)
+                Text(macLocalized("Local (this Mac)", language: language)).tag(AppState.ConnectionMode.local)
+                Text(macLocalized("Remote (another host)", language: language)).tag(AppState.ConnectionMode.remote)
             }
             .pickerStyle(.menu)
             .labelsHidden()
             .frame(width: 260, alignment: .leading)
 
             if self.state.connectionMode == .unconfigured {
-                Text("Pick Local or Remote to start the Gateway.")
+                Text(macLocalized("Pick Local or Remote to start the Gateway.", language: language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -153,8 +175,38 @@ struct GeneralSettings: View {
         }
     }
 
+    private var languageSection: some View {
+        let language = self.state.effectiveOnboardingLanguage
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(macLocalized("Language", language: language))
+                    .font(.callout.weight(.semibold))
+                    .frame(width: self.remoteLabelWidth, alignment: .leading)
+
+                Picker(macLocalized("Language", language: language), selection: self.languageBinding) {
+                    ForEach(OnboardingLanguage.allCases, id: \.rawValue) { option in
+                        Text(option.nativeName).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 260, alignment: .leading)
+            }
+
+            HStack(spacing: 10) {
+                Color.clear.frame(width: self.remoteLabelWidth, height: 1)
+                Text(macLocalized(
+                    "Use the same language for the Maumau app and chat replies.",
+                    language: language))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private var remoteCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let language = self.state.effectiveOnboardingLanguage
+        return VStack(alignment: .leading, spacing: 10) {
             self.remoteTransportRow
 
             if self.state.remoteTransport == .ssh {
@@ -180,17 +232,17 @@ struct GeneralSettings: View {
             if self.state.remoteTransport == .ssh {
                 DisclosureGroup(isExpanded: self.$showRemoteAdvanced) {
                     VStack(alignment: .leading, spacing: 8) {
-                        LabeledContent("Identity file") {
+                        LabeledContent(macLocalized("Identity file", language: language)) {
                             TextField("/Users/you/.ssh/id_ed25519", text: self.$state.remoteIdentity)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 280)
                         }
-                        LabeledContent("Project root") {
+                        LabeledContent(macLocalized("Project root", language: language)) {
                             TextField("/home/you/Projects/maumau", text: self.$state.remoteProjectRoot)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 280)
                         }
-                        LabeledContent("CLI path") {
+                        LabeledContent(macLocalized("CLI path", language: language)) {
                             TextField("/Applications/Maumau.app/.../maumau", text: self.$state.remoteCliPath)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 280)
@@ -198,14 +250,14 @@ struct GeneralSettings: View {
                     }
                     .padding(.top, 4)
                 } label: {
-                    Text("Advanced")
+                    Text(macLocalized("Advanced", language: language))
                         .font(.callout.weight(.semibold))
                 }
             }
 
             // Diagnostics
             VStack(alignment: .leading, spacing: 4) {
-                Text("Control channel")
+                Text(macLocalized("Control channel", language: language))
                     .font(.caption.weight(.semibold))
                 if !self.isControlStatusDuplicate || ControlChannel.shared.lastPingMs != nil {
                     let status = self.isControlStatusDuplicate ? nil : self.controlStatusLine
@@ -219,7 +271,7 @@ struct GeneralSettings: View {
                 }
                 if let hb = HeartbeatStore.shared.lastEvent {
                     let ageText = age(from: Date(timeIntervalSince1970: hb.ts / 1000))
-                    Text("Last heartbeat: \(hb.status) · \(ageText)")
+                    Text("\(macLocalized("Last heartbeat", language: language)): \(hb.status) · \(ageText)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -231,12 +283,12 @@ struct GeneralSettings: View {
             }
 
             if self.state.remoteTransport == .ssh {
-                Text("Tip: enable Tailscale for stable remote access.")
+                Text(macLocalized("Tip: enable Tailscale for stable remote access.", language: language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
-                Text("Tip: use Tailscale Serve so the gateway has a valid HTTPS cert.")
+                Text(macLocalized("Tip: use Tailscale Serve so the gateway has a valid HTTPS cert.", language: language))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -249,12 +301,14 @@ struct GeneralSettings: View {
 
     private var remoteTransportRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text("Transport")
+            Text(macLocalized("Transport", language: self.state.effectiveOnboardingLanguage))
                 .font(.callout.weight(.semibold))
                 .frame(width: self.remoteLabelWidth, alignment: .leading)
             Picker("Transport", selection: self.$state.remoteTransport) {
-                Text("SSH tunnel").tag(AppState.RemoteTransport.ssh)
-                Text("Direct (ws/wss)").tag(AppState.RemoteTransport.direct)
+                Text(macLocalized("SSH tunnel", language: self.state.effectiveOnboardingLanguage))
+                    .tag(AppState.RemoteTransport.ssh)
+                Text(macLocalized("Direct (ws/wss)", language: self.state.effectiveOnboardingLanguage))
+                    .tag(AppState.RemoteTransport.direct)
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 320)
@@ -268,7 +322,7 @@ struct GeneralSettings: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center, spacing: 10) {
-                Text("SSH target")
+                Text(macLocalized("SSH target", language: self.state.effectiveOnboardingLanguage))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.remoteLabelWidth, alignment: .leading)
                 TextField("user@host[:22]", text: self.$state.remoteTarget)
@@ -288,7 +342,7 @@ struct GeneralSettings: View {
     private var remoteDirectRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
-                Text("Gateway")
+                Text(macLocalized("Gateway", language: self.state.effectiveOnboardingLanguage))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.remoteLabelWidth, alignment: .leading)
                 TextField("wss://gateway.example.ts.net", text: self.$state.remoteUrl)
@@ -298,7 +352,9 @@ struct GeneralSettings: View {
                     disabled: self.state.remoteUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             Text(
-                "Direct mode requires wss:// for remote hosts. ws:// is only allowed for localhost/127.0.0.1.")
+                self.state.effectiveOnboardingLanguage == .en
+                    ? "Direct mode requires wss:// for remote hosts. ws:// is only allowed for localhost/127.0.0.1."
+                    : "Mode langsung memerlukan wss:// untuk host remote. ws:// hanya diizinkan untuk localhost/127.0.0.1.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, self.remoteLabelWidth + 10)
@@ -308,20 +364,22 @@ struct GeneralSettings: View {
     private var remoteTokenRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
-                Text("Gateway token")
+                Text(macLocalized("Gateway token", language: self.state.effectiveOnboardingLanguage))
                     .font(.callout.weight(.semibold))
                     .frame(width: self.remoteLabelWidth, alignment: .leading)
                 SecureField("remote gateway auth token (gateway.remote.token)", text: self.$state.remoteToken)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: .infinity)
             }
-            Text("Used when the remote gateway requires token auth.")
+            Text(macLocalized("Used when the remote gateway requires token auth.", language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, self.remoteLabelWidth + 10)
             if self.state.remoteTokenUnsupported {
                 Text(
-                    "The current gateway.remote.token value is not plain text. Maumau for macOS cannot use it directly; enter a plaintext token here to replace it.")
+                    macLocalized(
+                        "The current gateway.remote.token value is not plain text. Maumau for macOS cannot use it directly; enter a plaintext token here to replace it.",
+                        language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .padding(.leading, self.remoteLabelWidth + 10)
@@ -336,7 +394,7 @@ struct GeneralSettings: View {
             if self.remoteStatus == .checking {
                 ProgressView().controlSize(.small)
             } else {
-                Text("Test remote")
+                Text(macLocalized("Test remote", language: self.state.effectiveOnboardingLanguage))
             }
         }
         .buttonStyle(.borderedProminent)
@@ -345,9 +403,9 @@ struct GeneralSettings: View {
 
     private var controlStatusLine: String {
         switch ControlChannel.shared.state {
-        case .connected: "Connected"
-        case .connecting: "Connecting…"
-        case .disconnected: "Disconnected"
+        case .connected: macLocalized("Connected", language: self.state.effectiveOnboardingLanguage)
+        case .connecting: macLocalized("Connecting…", language: self.state.effectiveOnboardingLanguage)
+        case .disconnected: macLocalized("Disconnected", language: self.state.effectiveOnboardingLanguage)
         case let .degraded(msg): msg
         }
     }
@@ -358,15 +416,17 @@ struct GeneralSettings: View {
         case .idle:
             EmptyView()
         case .checking:
-            Text("Testing…")
+            Text(macLocalized("Testing…", language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case let .ok(success):
             VStack(alignment: .leading, spacing: 2) {
-                Label(success.title, systemImage: "checkmark.circle.fill")
+                Label(
+                    macGatewayStatusTitle(success.title, language: self.state.effectiveOnboardingLanguage),
+                    systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
-                if let detail = success.detail {
+                if let detail = macGatewayStatusDetail(success.detail, language: self.state.effectiveOnboardingLanguage) {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -401,11 +461,14 @@ struct GeneralSettings: View {
                let required = self.gatewayStatus.requiredGateway,
                gatewayVersion != required
             {
-                Text("Installed: \(gatewayVersion) · Required: \(required)")
+                Text(macInstalledRequired(
+                    installed: gatewayVersion,
+                    required: required,
+                    language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if let gatewayVersion = self.gatewayStatus.gatewayVersion {
-                Text("Gateway \(gatewayVersion) detected")
+                Text(macGatewayDetected(version: gatewayVersion, language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -417,13 +480,13 @@ struct GeneralSettings: View {
             }
 
             if case let .attachedExisting(details) = self.gatewayManager.status {
-                Text(details ?? "Using existing gateway instance")
+                Text(details ?? macLocalized("Using existing gateway instance", language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let failure = self.gatewayManager.lastFailureReason {
-                Text("Last failure: \(failure)")
+                Text(macLastFailure(failure, language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -434,7 +497,7 @@ struct GeneralSettings: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let cliInstallLocation {
-                Text("CLI installed at \(cliInstallLocation)")
+                Text(macCliInstalledAt(cliInstallLocation, language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -459,12 +522,14 @@ struct GeneralSettings: View {
                     .disabled(self.installingCLI)
                 }
 
-                Button("Recheck") { self.refreshGatewayStatus() }
+                Button(macLocalized("Recheck", language: self.state.effectiveOnboardingLanguage)) {
+                    self.refreshGatewayStatus()
+                }
                     .buttonStyle(.bordered)
                     .disabled(self.installingCLI)
             }
 
-            Text("Gateway auto-starts in local mode via launchd (\(gatewayLaunchdLabel)).")
+            Text(macLaunchdAutostart(gatewayLaunchdLabel, language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -502,7 +567,9 @@ struct GeneralSettings: View {
     }
 
     private var cliInstallButtonTitle: String {
-        self.cliInstallLocation == nil ? "Install CLI" : "Reinstall CLI"
+        self.cliInstallLocation == nil
+            ? macLocalized("Install CLI", language: self.state.effectiveOnboardingLanguage)
+            : macLocalized("Reinstall CLI", language: self.state.effectiveOnboardingLanguage)
     }
 
     private static func shouldAutoInstallCLIForLocalMode(
@@ -581,21 +648,30 @@ struct GeneralSettings: View {
                     linkId?.capitalized ??
                     "Link channel"
                 let linkAge = linkId.flatMap { snap.channels[$0]?.authAgeMs }
-                Text("\(linkLabel) auth age: \(healthAgeString(linkAge))")
+                Text(macHealthAuthAge(
+                    label: linkLabel,
+                    age: healthAgeString(linkAge),
+                    language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Session store: \(snap.sessions.path) (\(snap.sessions.count) entries)")
+                Text(macSessionStoreStatus(
+                    path: snap.sessions.path,
+                    count: snap.sessions.count,
+                    language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let recent = snap.sessions.recent.first {
                     let lastActivity = recent.updatedAt != nil
                         ? relativeAge(from: Date(timeIntervalSince1970: (recent.updatedAt ?? 0) / 1000))
                         : "unknown"
-                    Text("Last activity: \(recent.key) \(lastActivity)")
+                    Text(macLastActivity(
+                        key: recent.key,
+                        age: lastActivity,
+                        language: self.state.effectiveOnboardingLanguage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("Last check: \(relativeAge(from: self.healthStore.lastSuccess))")
+                Text("\(macLocalized("Last check", language: self.state.effectiveOnboardingLanguage)): \(relativeAge(from: self.healthStore.lastSuccess))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if let error = self.healthStore.lastError {
@@ -603,7 +679,7 @@ struct GeneralSettings: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             } else {
-                Text("Health check pending…")
+                Text(macLocalized("Health check pending…", language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -615,7 +691,9 @@ struct GeneralSettings: View {
                     if self.healthStore.isRefreshing {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("Run Health Check", systemImage: "arrow.clockwise")
+                        Label(
+                            macLocalized("Run Health Check", language: self.state.effectiveOnboardingLanguage),
+                            systemImage: "arrow.clockwise")
                     }
                 }
                 .disabled(self.healthStore.isRefreshing)
@@ -625,7 +703,9 @@ struct GeneralSettings: View {
                 Button {
                     self.revealLogs()
                 } label: {
-                    Label("Reveal Logs", systemImage: "doc.text.magnifyingglass")
+                    Label(
+                        macLocalized("Reveal Logs", language: self.state.effectiveOnboardingLanguage),
+                        systemImage: "doc.text.magnifyingglass")
                 }
             }
         }
@@ -654,7 +734,9 @@ extension GeneralSettings {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Text("Checks that the Gateway responds and that your linked channel still looks signed in.")
+            Text(macLocalized(
+                "Checks that the Gateway responds and that your linked channel still looks signed in.",
+                language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -667,12 +749,14 @@ extension GeneralSettings {
             }
 
             HStack(spacing: 10) {
-                Button("Check now") {
+                Button(macLocalized("Check now", language: self.state.effectiveOnboardingLanguage)) {
                     Task { await HealthStore.shared.refresh(onDemand: true) }
                 }
                 .disabled(self.healthStore.isRefreshing)
 
-                Button("Open logs") { self.revealLogs() }
+                Button(macLocalized("Open logs", language: self.state.effectiveOnboardingLanguage)) {
+                    self.revealLogs()
+                }
                     .buttonStyle(.link)
                     .foregroundStyle(.secondary)
             }
@@ -687,9 +771,10 @@ extension GeneralSettings {
         case let .ready(success):
             self.remoteStatus = .ok(success)
         case let .authIssue(issue):
-            self.remoteStatus = .failed(issue.statusMessage)
+            self.remoteStatus = .failed(
+                macAuthIssueText(issue.statusMessage, language: self.state.effectiveOnboardingLanguage))
         case let .failed(message):
-            self.remoteStatus = .failed(message)
+            self.remoteStatus = .failed(macLocalized(message, language: self.state.effectiveOnboardingLanguage))
         }
     }
 
@@ -704,13 +789,15 @@ extension GeneralSettings {
         }
 
         let alert = NSAlert()
-        alert.messageText = "Log file not found"
-        alert.informativeText = """
-        Looked for maumau logs in /tmp/maumau/.
-        Run a health check or send a message to generate activity, then try again.
-        """
+        alert.messageText = macLocalized("Log file not found", language: self.state.effectiveOnboardingLanguage)
+        alert.informativeText = macLocalized(
+            """
+            Looked for maumau logs in /tmp/maumau/.
+            Run a health check or send a message to generate activity, then try again.
+            """,
+            language: self.state.effectiveOnboardingLanguage)
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: macLocalized("OK", language: self.state.effectiveOnboardingLanguage))
         alert.runModal()
     }
 

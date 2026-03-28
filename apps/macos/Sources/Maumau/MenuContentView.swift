@@ -39,23 +39,28 @@ struct MenuContent: View {
     }
 
     var body: some View {
+        let language = self.state.effectiveOnboardingLanguage
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: self.activeBinding) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(self.connectionLabel)
                     self.statusLine(label: self.healthStatus.label, color: self.healthStatus.color)
                     if self.pairingPrompter.pendingCount > 0 {
-                        let repairCount = self.pairingPrompter.pendingRepairCount
-                        let repairSuffix = repairCount > 0 ? " · \(repairCount) repair" : ""
                         self.statusLine(
-                            label: "Pairing approval pending (\(self.pairingPrompter.pendingCount))\(repairSuffix)",
+                            label: macPairingPendingText(
+                                count: self.pairingPrompter.pendingCount,
+                                repairCount: self.pairingPrompter.pendingRepairCount,
+                                device: false,
+                                language: language),
                             color: .orange)
                     }
                     if self.devicePairingPrompter.pendingCount > 0 {
-                        let repairCount = self.devicePairingPrompter.pendingRepairCount
-                        let repairSuffix = repairCount > 0 ? " · \(repairCount) repair" : ""
                         self.statusLine(
-                            label: "Device pairing pending (\(self.devicePairingPrompter.pendingCount))\(repairSuffix)",
+                            label: macPairingPendingText(
+                                count: self.devicePairingPrompter.pendingCount,
+                                repairCount: self.devicePairingPrompter.pendingRepairCount,
+                                device: true,
+                                language: language),
                             color: .orange)
                     }
                 }
@@ -65,7 +70,7 @@ struct MenuContent: View {
             Divider()
             Toggle(isOn: self.heartbeatsBinding) {
                 HStack(spacing: 8) {
-                    Label("Send Heartbeats", systemImage: "waveform.path.ecg")
+                    Label(macLocalized("Send Heartbeats", language: language), systemImage: "waveform.path.ecg")
                     Spacer(minLength: 0)
                     self.statusLine(label: self.heartbeatStatus.label, color: self.heartbeatStatus.color)
                 }
@@ -77,20 +82,20 @@ struct MenuContent: View {
                         self.browserControlEnabled = enabled
                         Task { await self.saveBrowserControlEnabled(enabled) }
                     })) {
-                Label("Browser Control", systemImage: "globe")
+                Label(macLocalized("Browser Control", language: language), systemImage: "globe")
             }
             Toggle(isOn: self.$cameraEnabled) {
-                Label("Allow Camera", systemImage: "camera")
+                Label(macLocalized("Allow Camera", language: language), systemImage: "camera")
             }
             Picker(selection: self.execApprovalModeBinding) {
                 ForEach(ExecApprovalQuickMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+                    Text(macLocalized(mode.title, language: language)).tag(mode)
                 }
             } label: {
-                Label("Exec Approvals", systemImage: "terminal")
+                Label(macLocalized("Exec Approvals", language: language), systemImage: "terminal")
             }
             Toggle(isOn: Binding(get: { self.state.canvasEnabled }, set: { self.state.canvasEnabled = $0 })) {
-                Label("Allow Canvas", systemImage: "rectangle.and.pencil.and.ellipsis")
+                Label(macLocalized("Allow Canvas", language: language), systemImage: "rectangle.and.pencil.and.ellipsis")
             }
             .onChange(of: self.state.canvasEnabled) { _, enabled in
                 if !enabled {
@@ -98,7 +103,7 @@ struct MenuContent: View {
                 }
             }
             Toggle(isOn: self.voiceWakeBinding) {
-                Label("Voice Wake", systemImage: "mic.fill")
+                Label(macLocalized("Voice Wake", language: language), systemImage: "mic.fill")
             }
             .disabled(!voiceWakeSupported)
             .opacity(voiceWakeSupported ? 1 : 0.5)
@@ -111,7 +116,7 @@ struct MenuContent: View {
                     await self.openDashboard()
                 }
             } label: {
-                Label("Open Dashboard", systemImage: "gauge")
+                Label(macLocalized("Open Dashboard", language: language), systemImage: "gauge")
             }
             Button {
                 Task { @MainActor in
@@ -119,7 +124,7 @@ struct MenuContent: View {
                     WebChatManager.shared.show(sessionKey: sessionKey)
                 }
             } label: {
-                Label("Open Chat", systemImage: "bubble.left.and.bubble.right")
+                Label(macLocalized("Open Chat", language: language), systemImage: "bubble.left.and.bubble.right")
             }
             if self.state.canvasEnabled {
                 Button {
@@ -134,26 +139,32 @@ struct MenuContent: View {
                     }
                 } label: {
                     Label(
-                        self.state.canvasPanelVisible ? "Close Canvas" : "Open Canvas",
+                        self.state.canvasPanelVisible
+                            ? macLocalized("Close Canvas", language: language)
+                            : macLocalized("Open Canvas", language: language),
                         systemImage: "rectangle.inset.filled.on.rectangle")
                 }
             }
             Button {
                 Task { await self.state.setTalkEnabled(!self.state.talkEnabled) }
             } label: {
-                Label(self.state.talkEnabled ? "Stop Talk Mode" : "Talk Mode", systemImage: "waveform.circle.fill")
+                Label(
+                    self.state.talkEnabled
+                        ? macLocalized("Stop Talk Mode", language: language)
+                        : macLocalized("Talk Mode", language: language),
+                    systemImage: "waveform.circle.fill")
             }
             .disabled(!voiceWakeSupported)
             .opacity(voiceWakeSupported ? 1 : 0.5)
             Divider()
-            Button("Settings…") { self.open(tab: .general) }
+            Button(macLocalized("Settings…", language: language)) { self.open(tab: .general) }
                 .keyboardShortcut(",", modifiers: [.command])
             self.debugMenu
-            Button("About Maumau") { self.open(tab: .about) }
+            Button(macLocalized("About Maumau", language: language)) { self.open(tab: .about) }
             if let updater, updater.isAvailable, self.updateStatus.isUpdateReady {
-                Button("Update ready, restart now?") { updater.checkForUpdates(nil) }
+                Button(macLocalized("Update ready, restart now?", language: language)) { updater.checkForUpdates(nil) }
             }
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            Button(macLocalized("Quit", language: language)) { NSApplication.shared.terminate(nil) }
         }
         .task(id: self.state.swabbleEnabled) {
             if self.state.swabbleEnabled {
@@ -189,11 +200,11 @@ struct MenuContent: View {
     private var connectionLabel: String {
         switch self.state.connectionMode {
         case .unconfigured:
-            "Maumau Not Configured"
+            macLocalized("Maumau Not Configured", language: self.state.effectiveOnboardingLanguage)
         case .remote:
-            "Remote Maumau Active"
+            macLocalized("Remote Maumau Active", language: self.state.effectiveOnboardingLanguage)
         case .local:
-            "Maumau Active"
+            macLocalized("Maumau Active", language: self.state.effectiveOnboardingLanguage)
         }
     }
 
@@ -229,30 +240,31 @@ struct MenuContent: View {
     @ViewBuilder
     private var debugMenu: some View {
         if self.state.debugPaneEnabled {
-            Menu("Debug") {
+            let language = self.state.effectiveOnboardingLanguage
+            Menu(macLocalized("Debug", language: language)) {
                 Button {
                     DebugActions.openConfigFolder()
                 } label: {
-                    Label("Open Config Folder", systemImage: "folder")
+                    Label(macLocalized("Open Config Folder", language: language), systemImage: "folder")
                 }
                 Button {
                     Task { await DebugActions.runHealthCheckNow() }
                 } label: {
-                    Label("Run Health Check Now", systemImage: "stethoscope")
+                    Label(macLocalized("Run Health Check Now", language: language), systemImage: "stethoscope")
                 }
                 Button {
                     Task { _ = await DebugActions.sendTestHeartbeat() }
                 } label: {
-                    Label("Send Test Heartbeat", systemImage: "waveform.path.ecg")
+                    Label(macLocalized("Send Test Heartbeat", language: language), systemImage: "waveform.path.ecg")
                 }
                 if self.state.connectionMode == .remote {
                     Button {
                         Task { @MainActor in
                             let result = await DebugActions.resetGatewayTunnel()
-                            self.presentDebugResult(result, title: "Remote Tunnel")
+                            self.presentDebugResult(result, title: macLocalized("Remote Tunnel", language: language))
                         }
                     } label: {
-                        Label("Reset Remote Tunnel", systemImage: "arrow.triangle.2.circlepath")
+                        Label(macLocalized("Reset Remote Tunnel", language: language), systemImage: "arrow.triangle.2.circlepath")
                     }
                 }
                 Button {
@@ -260,69 +272,69 @@ struct MenuContent: View {
                 } label: {
                     Label(
                         DebugActions.verboseLoggingEnabledMain
-                            ? "Verbose Logging (Main): On"
-                            : "Verbose Logging (Main): Off",
+                            ? macLocalized("Verbose Logging (Main): On", language: language)
+                            : macLocalized("Verbose Logging (Main): Off", language: language),
                         systemImage: "text.alignleft")
                 }
                 Menu {
-                    Picker("Verbosity", selection: self.$appLogLevelRaw) {
+                    Picker(macLocalized("Verbosity", language: language), selection: self.$appLogLevelRaw) {
                         ForEach(AppLogLevel.allCases) { level in
-                            Text(level.title).tag(level.rawValue)
+                            Text(macLocalized(level.title, language: language)).tag(level.rawValue)
                         }
                     }
                     Toggle(isOn: self.$appFileLoggingEnabled) {
                         Label(
                             self.appFileLoggingEnabled
-                                ? "File Logging: On"
-                                : "File Logging: Off",
+                                ? macLocalized("File Logging: On", language: language)
+                                : macLocalized("File Logging: Off", language: language),
                             systemImage: "doc.text.magnifyingglass")
                     }
                 } label: {
-                    Label("App Logging", systemImage: "doc.text")
+                    Label(macLocalized("App Logging", language: language), systemImage: "doc.text")
                 }
                 Button {
                     DebugActions.openSessionStore()
                 } label: {
-                    Label("Open Session Store", systemImage: "externaldrive")
+                    Label(macLocalized("Open Session Store", language: language), systemImage: "externaldrive")
                 }
                 Divider()
                 Button {
                     DebugActions.openAgentEventsWindow()
                 } label: {
-                    Label("Open Agent Events…", systemImage: "bolt.horizontal.circle")
+                    Label(macLocalized("Open Agent Events…", language: language), systemImage: "bolt.horizontal.circle")
                 }
                 Button {
                     DebugActions.openLog()
                 } label: {
-                    Label("Open Log", systemImage: "doc.text.magnifyingglass")
+                    Label(macLocalized("Open Log", language: language), systemImage: "doc.text.magnifyingglass")
                 }
                 Button {
                     Task { _ = await DebugActions.sendDebugVoice() }
                 } label: {
-                    Label("Send Debug Voice Text", systemImage: "waveform.circle")
+                    Label(macLocalized("Send Debug Voice Text", language: language), systemImage: "waveform.circle")
                 }
                 Button {
                     Task { await DebugActions.sendTestNotification() }
                 } label: {
-                    Label("Send Test Notification", systemImage: "bell")
+                    Label(macLocalized("Send Test Notification", language: language), systemImage: "bell")
                 }
                 Divider()
                 if self.state.connectionMode == .local {
                     Button {
                         DebugActions.restartGateway()
                     } label: {
-                        Label("Restart Gateway", systemImage: "arrow.clockwise")
+                        Label(macLocalized("Restart Gateway", language: language), systemImage: "arrow.clockwise")
                     }
                 }
                 Button {
                     DebugActions.restartOnboarding()
                 } label: {
-                    Label("Restart Onboarding", systemImage: "arrow.counterclockwise")
+                    Label(macLocalized("Restart onboarding", language: language), systemImage: "arrow.counterclockwise")
                 }
                 Button {
                     DebugActions.restartApp()
                 } label: {
-                    Label("Restart App", systemImage: "arrow.triangle.2.circlepath")
+                    Label(macLocalized("Restart App", language: language), systemImage: "arrow.triangle.2.circlepath")
                 }
             }
         }
@@ -345,7 +357,7 @@ struct MenuContent: View {
             NSWorkspace.shared.open(url)
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Dashboard unavailable"
+            alert.messageText = macLocalized("Dashboard unavailable", language: self.state.effectiveOnboardingLanguage)
             alert.informativeText = error.localizedDescription
             alert.runModal()
         }
@@ -354,7 +366,9 @@ struct MenuContent: View {
     private var healthStatus: (label: String, color: Color) {
         if let activity = self.activityStore.current {
             let color: Color = activity.role == .main ? .accentColor : .gray
-            let roleLabel = activity.role == .main ? "Main" : "Other"
+            let roleLabel = activity.role == .main
+                ? macLocalized("Main", language: self.state.effectiveOnboardingLanguage)
+                : macLocalized("Other", language: self.state.effectiveOnboardingLanguage)
             let text = "\(roleLabel) · \(activity.label)"
             return (text, color)
         }
@@ -364,43 +378,43 @@ struct MenuContent: View {
         let lastAge = self.healthStore.lastSuccess.map { age(from: $0) }
 
         if isRefreshing {
-            return ("Health check running…", health.tint)
+            return (macLocalized("Health check running…", language: self.state.effectiveOnboardingLanguage), health.tint)
         }
 
         switch health {
         case .ok:
-            let ageText = lastAge.map { " · checked \($0)" } ?? ""
-            return ("Health ok\(ageText)", .green)
+            let ageText = lastAge.map { " · \(macLocalized("checked", language: self.state.effectiveOnboardingLanguage)) \($0)" } ?? ""
+            return ("\(macLocalized("Health ok", language: self.state.effectiveOnboardingLanguage))\(ageText)", .green)
         case .linkingNeeded:
-            return ("Health: login required", .red)
+            return (macLocalized("Health: login required", language: self.state.effectiveOnboardingLanguage), .red)
         case let .degraded(reason):
             let detail = HealthStore.shared.degradedSummary ?? reason
-            let ageText = lastAge.map { " · checked \($0)" } ?? ""
+            let ageText = lastAge.map { " · \(macLocalized("checked", language: self.state.effectiveOnboardingLanguage)) \($0)" } ?? ""
             return ("\(detail)\(ageText)", .orange)
         case .unknown:
-            return ("Health pending", .secondary)
+            return (macLocalized("Health pending", language: self.state.effectiveOnboardingLanguage), .secondary)
         }
     }
 
     private var heartbeatStatus: (label: String, color: Color) {
         if case .degraded = self.controlChannel.state {
-            return ("Control channel disconnected", .red)
+            return (macLocalized("Control channel disconnected", language: self.state.effectiveOnboardingLanguage), .red)
         } else if let evt = self.heartbeatStore.lastEvent {
             let ageText = age(from: Date(timeIntervalSince1970: evt.ts / 1000))
             switch evt.status {
             case "sent":
-                return ("Last heartbeat sent · \(ageText)", .blue)
+                return ("\(macLocalized("Last heartbeat sent", language: self.state.effectiveOnboardingLanguage)) · \(ageText)", .blue)
             case "ok-empty", "ok-token":
-                return ("Heartbeat ok · \(ageText)", .green)
+                return ("\(macLocalized("Heartbeat ok", language: self.state.effectiveOnboardingLanguage)) · \(ageText)", .green)
             case "skipped":
-                return ("Heartbeat skipped · \(ageText)", .secondary)
+                return ("\(macLocalized("Heartbeat skipped", language: self.state.effectiveOnboardingLanguage)) · \(ageText)", .secondary)
             case "failed":
-                return ("Heartbeat failed · \(ageText)", .red)
+                return ("\(macLocalized("Heartbeat failed", language: self.state.effectiveOnboardingLanguage)) · \(ageText)", .red)
             default:
-                return ("Heartbeat · \(ageText)", .secondary)
+                return ("\(macLocalized("Heartbeat", language: self.state.effectiveOnboardingLanguage)) · \(ageText)", .secondary)
             }
         } else {
-            return ("No heartbeat yet", .secondary)
+            return (macLocalized("No heartbeat yet", language: self.state.effectiveOnboardingLanguage), .secondary)
         }
     }
 
@@ -442,14 +456,16 @@ struct MenuContent: View {
 
             if self.loadingMics {
                 Divider()
-                Label("Refreshing microphones…", systemImage: "arrow.triangle.2.circlepath")
+                Label(
+                    macLocalized("Refreshing microphones…", language: self.state.effectiveOnboardingLanguage),
+                    systemImage: "arrow.triangle.2.circlepath")
                     .labelStyle(.titleOnly)
                     .foregroundStyle(.secondary)
                     .disabled(true)
             }
         } label: {
             HStack {
-                Text("Microphone")
+                Text(macLocalized("Microphone", language: self.state.effectiveOnboardingLanguage))
                 Spacer()
                 Text(self.selectedMicLabel)
                     .foregroundStyle(.secondary)
@@ -464,13 +480,15 @@ struct MenuContent: View {
             return match.name
         }
         if !self.state.voiceWakeMicName.isEmpty { return self.state.voiceWakeMicName }
-        return "Unavailable"
+        return macLocalized("Unavailable", language: self.state.effectiveOnboardingLanguage)
     }
 
     private var microphoneMenuItems: some View {
         Group {
             if self.isSelectedMicUnavailable {
-                Label("Disconnected (using System default)", systemImage: "exclamationmark.triangle")
+                Label(
+                    macLocalized("Disconnected (using System default)", language: self.state.effectiveOnboardingLanguage),
+                    systemImage: "exclamationmark.triangle")
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(.secondary)
                     .disabled(true)
@@ -506,9 +524,12 @@ struct MenuContent: View {
 
     private var defaultMicLabel: String {
         if let host = Host.current().localizedName, !host.isEmpty {
+            if self.state.effectiveOnboardingLanguage == .id {
+                return "Deteksi otomatis (\(host))"
+            }
             return "Auto-detect (\(host))"
         }
-        return "System default"
+        return macLocalized("System default", language: self.state.effectiveOnboardingLanguage)
     }
 
     @MainActor

@@ -16,4 +16,12 @@ struct ChannelsSettings: View {
     init(store: ChannelsStore = .shared) {
         self.store = store
     }
+
+    var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
+    func loc(_ english: String) -> String {
+        macLocalized(english, language: self.language)
+    }
 }

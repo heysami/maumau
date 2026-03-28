@@ -4,8 +4,11 @@ import AppKit
 /// Shows the Dock icon while any windows are visible, regardless of user preference.
 final class DockIconManager: NSObject, @unchecked Sendable {
     static let shared = DockIconManager()
+    private static let transientDockVisibilityHold = Duration.seconds(3)
 
     private var windowsObservation: NSKeyValueObservation?
+    private var forceDockVisibleUntil: Date?
+    private var holdReleaseTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "ai.maumau", category: "DockIconManager")
 
     override private init() {
@@ -17,8 +20,17 @@ final class DockIconManager: NSObject, @unchecked Sendable {
     }
 
     deinit {
+        self.holdReleaseTask?.cancel()
         self.windowsObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    static func shouldUseRegularActivationPolicy(
+        userWantsDockHidden: Bool,
+        hasVisibleWindows: Bool,
+        forceDockVisible: Bool) -> Bool
+    {
+        forceDockVisible || !userWantsDockHidden || hasVisibleWindows
     }
 
     func updateDockVisibility() {
@@ -39,7 +51,18 @@ final class DockIconManager: NSObject, @unchecked Sendable {
             } ?? []
 
             let hasVisibleWindows = !visibleWindows.isEmpty
-            if !userWantsDockHidden || hasVisibleWindows {
+            let forceDockVisible = self.forceDockVisibleUntil.map { $0 > Date() } ?? false
+            if hasVisibleWindows {
+                self.forceDockVisibleUntil = nil
+                self.holdReleaseTask?.cancel()
+                self.holdReleaseTask = nil
+            }
+
+            if Self.shouldUseRegularActivationPolicy(
+                userWantsDockHidden: userWantsDockHidden,
+                hasVisibleWindows: hasVisibleWindows,
+                forceDockVisible: forceDockVisible)
+            {
                 NSApp?.setActivationPolicy(.regular)
             } else {
                 NSApp?.setActivationPolicy(.accessory)
@@ -47,14 +70,23 @@ final class DockIconManager: NSObject, @unchecked Sendable {
         }
     }
 
+    @MainActor
     func temporarilyShowDock() {
-        Task { @MainActor in
-            guard NSApp != nil else {
-                self.logger.warning("NSApp not ready, cannot show Dock icon")
-                return
-            }
-            NSApp.setActivationPolicy(.regular)
+        guard NSApp != nil else {
+            self.logger.warning("NSApp not ready, cannot show Dock icon")
+            return
         }
+        self.forceDockVisibleUntil = Date().addingTimeInterval(3)
+        self.holdReleaseTask?.cancel()
+        self.holdReleaseTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.transientDockVisibilityHold)
+            guard let self else { return }
+            if let until = self.forceDockVisibleUntil, until <= Date() {
+                self.forceDockVisibleUntil = nil
+            }
+            self.updateDockVisibility()
+        }
+        NSApp.setActivationPolicy(.regular)
     }
 
     private func setupObservers() {

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import MaumauKit
@@ -27,11 +28,42 @@ private func bridgeToLocal(_ value: ProtocolAnyCodable?) -> AnyCodable? {
     value.map(bridgeToLocal)
 }
 
+private struct WizardClientActionPayload {
+    let action: String
+    let url: String
+}
+
+private func wizardStepExecutor(_ step: WizardStep?) -> String? {
+    (step?.executor?.value as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+}
+
+private func wizardClientActionPayload(_ step: WizardStep?) -> WizardClientActionPayload? {
+    guard let raw = step?.initialvalue?.value as? [String: ProtocolAnyCodable] else {
+        return nil
+    }
+    let action = (raw["action"]?.value as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased() ?? ""
+    let url = (raw["url"]?.value as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !action.isEmpty, !url.isEmpty else {
+        return nil
+    }
+    return WizardClientActionPayload(action: action, url: url)
+}
+
 @MainActor
 @Observable
 final class OnboardingWizardModel {
     private struct CompletedStep {
         let value: AnyCodable?
+    }
+
+    private enum StartRoute: Equatable {
+        case onboarding(mode: AppState.ConnectionMode, workspace: String?)
+        case modelAuth(authChoice: String?)
     }
 
     typealias WizardStartParams = [String: AnyCodable]
@@ -50,15 +82,19 @@ final class OnboardingWizardModel {
     var isStarting = false
     var isSubmitting = false
     var isRewinding = false
-    private var lastStartMode: AppState.ConnectionMode?
-    private var lastStartWorkspace: String?
+    private var lastStartRoute: StartRoute?
     private var restartAttempts = 0
     private let maxRestartAttempts = 1
     private var completedSteps: [CompletedStep] = []
     private var usingLegacyGatewayCompatibility = false
     private var autoAdvancedCompatibilityStepIDs: Set<String> = []
+    private var autoHandledClientActionStepIDs: Set<String> = []
     private var progressPollingTask: Task<Void, Never>?
     private var progressPollingSessionId: String?
+
+    private var language: OnboardingLanguage {
+        AppStateStore.shared.effectiveOnboardingLanguage
+    }
 
     var isComplete: Bool {
         self.status == "done"
@@ -80,10 +116,19 @@ final class OnboardingWizardModel {
     }
 
     var primaryActionTitle: String? {
-        if self.errorMessage != nil { return "Retry" }
+        self.primaryActionTitle(in: .en)
+    }
+
+    func primaryActionTitle(in language: OnboardingLanguage) -> String? {
+        if self.errorMessage != nil { return macLocalized("Retry", language: language) }
         guard let step = self.currentStep else { return nil }
         if Self.isProgressStep(step) { return nil }
-        return wizardStepType(step) == "action" ? "Run" : "Continue"
+        if let payload = wizardClientActionPayload(step), payload.action == "open_url" {
+            return macLocalized("Open browser", language: language)
+        }
+        return macLocalized(
+            wizardStepType(step) == "action" ? "Run" : "Continue",
+            language: language)
     }
 
     var isPrimaryActionDisabled: Bool {
@@ -117,44 +162,51 @@ final class OnboardingWizardModel {
         self.isSubmitting = false
         self.isRewinding = false
         self.restartAttempts = 0
-        self.lastStartMode = nil
-        self.lastStartWorkspace = nil
+        self.lastStartRoute = nil
         self.completedSteps = []
         self.usingLegacyGatewayCompatibility = false
         self.autoAdvancedCompatibilityStepIDs = []
+        self.autoHandledClientActionStepIDs = []
     }
 
     func startIfNeeded(mode: AppState.ConnectionMode, workspace: String? = nil) async {
+        await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
+    }
+
+    func startModelAuthIfNeeded(authChoice: String? = nil) async {
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
+    }
+
+    private func startIfNeeded(route: StartRoute) async {
         guard self.sessionId == nil, !self.isStarting, self.status == nil else { return }
-        guard mode == .local || mode == .remote else { return }
-        if self.shouldSkipWizard(for: mode) {
+        if case let .onboarding(mode, _) = route {
+            guard mode == .local || mode == .remote else { return }
+        }
+        if self.shouldSkipWizard(for: route) {
             self.markCompleteFromPersistedSetup()
             return
         }
         self.isStarting = true
         self.errorMessage = nil
         self.stepErrorMessage = nil
-        self.lastStartMode = mode
-        self.lastStartWorkspace = workspace
+        self.lastStartRoute = route
         defer { self.isStarting = false }
 
         do {
-            if mode == .local {
+            if case let .onboarding(mode, _) = route, mode == .local {
                 try await self.ensureLocalGatewayReady()
             }
             self.autoAdvancedCompatibilityStepIDs = []
+            self.autoHandledClientActionStepIDs = []
             let res: WizardStartResult
             do {
                 self.usingLegacyGatewayCompatibility = false
                 res = try await self.resolveStartResult(
                     try await GatewayConnection.shared.requestDecoded(
                         method: .wizardStart,
-                        params: Self.startParams(
-                            mode: mode,
-                            workspace: workspace,
-                            useEmbeddedProtocol: true)))
+                        params: Self.startParams(route: route, useEmbeddedProtocol: true)))
             } catch {
-                guard Self.shouldRetryLegacyStart(for: error) else {
+                guard Self.shouldRetryLegacyStart(for: error, route: route) else {
                     throw error
                 }
                 onboardingWizardLogger.notice("wizard.start retrying with legacy params")
@@ -162,15 +214,12 @@ final class OnboardingWizardModel {
                 res = try await self.resolveStartResult(
                     try await GatewayConnection.shared.requestDecoded(
                         method: .wizardStart,
-                        params: Self.startParams(
-                            mode: mode,
-                            workspace: workspace,
-                            useEmbeddedProtocol: false)))
+                        params: Self.startParams(route: route, useEmbeddedProtocol: false)))
             }
             self.applyStartResult(res)
         } catch {
             self.status = "error"
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
             onboardingWizardLogger.error("start failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -294,22 +343,21 @@ final class OnboardingWizardModel {
                 return
             }
             self.status = "error"
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
             onboardingWizardLogger.error("submit failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     func goBackOneStep() async {
         guard self.canGoBack else { return }
-        guard let mode = self.lastStartMode else { return }
-        let workspace = self.lastStartWorkspace
+        guard let route = self.lastStartRoute else { return }
         let replaySteps = Array(self.completedSteps.dropLast())
         self.isRewinding = true
         defer { self.isRewinding = false }
 
         await self.cancelIfRunning()
         self.reset()
-        await self.startIfNeeded(mode: mode, workspace: workspace)
+        await self.startIfNeeded(route: route)
         guard self.errorMessage == nil else { return }
 
         for replay in replaySteps {
@@ -341,7 +389,7 @@ final class OnboardingWizardModel {
                 return
             }
             self.status = "error"
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
             onboardingWizardLogger.error("cancel failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -349,7 +397,13 @@ final class OnboardingWizardModel {
     func retry(mode: AppState.ConnectionMode, workspace: String? = nil) async {
         await self.cancelIfRunning()
         self.reset()
-        await self.startIfNeeded(mode: mode, workspace: workspace)
+        await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
+    }
+
+    func retryModelAuth(authChoice: String? = nil) async {
+        await self.cancelIfRunning()
+        self.reset()
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
     }
 
     func skipForNow() async {
@@ -369,6 +423,7 @@ final class OnboardingWizardModel {
         self.restartAttempts = 0
         self.usingLegacyGatewayCompatibility = false
         self.autoAdvancedCompatibilityStepIDs = []
+        self.autoHandledClientActionStepIDs = []
     }
 
     func triggerPrimaryAction(mode: AppState.ConnectionMode, workspace: String? = nil) async {
@@ -377,19 +432,32 @@ final class OnboardingWizardModel {
             return
         }
         guard let step = self.currentStep else { return }
-        await self.submit(step: step, value: self.draftValue(for: step))
+        let value = await self.submissionValue(for: step)
+        await self.submit(step: step, value: value)
+    }
+
+    func triggerModelAuthPrimaryAction(authChoice: String? = nil) async {
+        if self.errorMessage != nil {
+            await self.retryModelAuth(authChoice: authChoice)
+            return
+        }
+        guard let step = self.currentStep else { return }
+        let value = await self.submissionValue(for: step)
+        await self.submit(step: step, value: value)
     }
 
     private func applyStartResult(_ res: WizardStartResult) {
         self.sessionId = res.sessionid
         self.status = wizardStatusString(res.status) ?? (res.done ? "done" : "running")
-        self.errorMessage = res.error
+        self.errorMessage = macWizardText(res.error, language: self.language)
         self.stepErrorMessage = nil
         if let rawStep = res.step {
             guard let decoded = decodeWizardStep(rawStep) else {
                 self.currentStep = nil
                 self.status = "error"
-                self.errorMessage = "Wizard returned a step the app could not read. Retry setup."
+                self.errorMessage = macLocalized(
+                    "Wizard returned a step the app could not read. Retry setup.",
+                    language: self.language)
                 onboardingWizardLogger.error("wizard.start step decode failed")
                 return
             }
@@ -401,19 +469,22 @@ final class OnboardingWizardModel {
         self.syncDraftWithCurrentStep()
         self.restartAttempts = 0
         self.maybeAutoAdvanceCompatibilityStep()
+        self.maybeAutoHandleClientActionStep()
         self.updateProgressPollingState()
     }
 
     private func applyNextResult(_ res: WizardNextResult) {
         let status = wizardStatusString(res.status)
         self.status = status ?? self.status
-        self.errorMessage = res.error
+        self.errorMessage = macWizardText(res.error, language: self.language)
         self.stepErrorMessage = nil
         if let rawStep = res.step {
             guard let decoded = decodeWizardStep(rawStep) else {
                 self.currentStep = nil
                 self.status = "error"
-                self.errorMessage = "Wizard returned a step the app could not read. Retry setup."
+                self.errorMessage = macLocalized(
+                    "Wizard returned a step the app could not read. Retry setup.",
+                    language: self.language)
                 onboardingWizardLogger.error("wizard.next step decode failed")
                 return
             }
@@ -427,12 +498,13 @@ final class OnboardingWizardModel {
             self.sessionId = nil
         }
         self.maybeAutoAdvanceCompatibilityStep()
+        self.maybeAutoHandleClientActionStep()
         self.updateProgressPollingState()
     }
 
     private func applyStatusResult(_ res: WizardStatusResult) {
         self.status = wizardStatusString(res.status) ?? "unknown"
-        self.errorMessage = res.error
+        self.errorMessage = macWizardText(res.error, language: self.language)
         self.stepErrorMessage = nil
         self.currentStep = nil
         self.sessionId = nil
@@ -456,15 +528,32 @@ final class OnboardingWizardModel {
         Task { await self.submit(step: step, value: value) }
     }
 
+    private func maybeAutoHandleClientActionStep() {
+        guard let step = self.currentStep,
+              !self.isSubmitting,
+              !self.isRewinding,
+              !self.autoHandledClientActionStepIDs.contains(step.id),
+              Self.shouldAutoHandleClientActionStep(step)
+        else {
+            return
+        }
+
+        self.autoHandledClientActionStepIDs.insert(step.id)
+        Task {
+            let value = await self.submissionValue(for: step)
+            await self.submit(step: step, value: value)
+        }
+    }
+
     private func restartIfSessionLost(error: Error) -> Bool {
         guard let gatewayError = error as? GatewayResponseError else { return false }
         guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
         let message = gatewayError.message.lowercased()
         guard message.contains("wizard not found") || message.contains("wizard not running") else { return false }
-        guard let mode = self.lastStartMode else {
+        guard let route = self.lastStartRoute else {
             return false
         }
-        if self.shouldSkipWizard(for: mode) {
+        if self.shouldSkipWizard(for: route) {
             onboardingWizardLogger.notice("wizard session lost after persisted setup; marking complete")
             self.markCompleteFromPersistedSetup()
             return true
@@ -477,8 +566,8 @@ final class OnboardingWizardModel {
         self.sessionId = nil
         self.currentStep = nil
         self.status = nil
-        self.errorMessage = "Wizard session lost. Restarting…"
-        Task { await self.startIfNeeded(mode: mode, workspace: self.lastStartWorkspace) }
+        self.errorMessage = macLocalized("Wizard session lost. Restarting…", language: self.language)
+        Task { await self.startIfNeeded(route: route) }
         return true
     }
 
@@ -493,7 +582,8 @@ final class OnboardingWizardModel {
         self.syncDraftWithCurrentStep()
     }
 
-    private func shouldSkipWizard(for mode: AppState.ConnectionMode) -> Bool {
+    private func shouldSkipWizard(for route: StartRoute) -> Bool {
+        guard case let .onboarding(mode, _) = route else { return false }
         guard mode == .local else { return false }
         return Self.shouldTreatPersistedSetupAsComplete(MaumauConfigFile.loadDict())
     }
@@ -517,7 +607,7 @@ final class OnboardingWizardModel {
         guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
         let message = gatewayError.message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.lowercased().contains("wizard") else { return false }
-        self.stepErrorMessage = Self.cleanWizardErrorMessage(message)
+        self.stepErrorMessage = macLocalized(Self.cleanWizardErrorMessage(message), language: self.language)
         return true
     }
 
@@ -532,26 +622,49 @@ final class OnboardingWizardModel {
     static func startParams(
         mode: AppState.ConnectionMode,
         workspace: String?,
-        useEmbeddedProtocol: Bool) -> WizardStartParams
-    {
-        var params: WizardStartParams = ["mode": AnyCodable(mode.rawValue)]
-        if useEmbeddedProtocol {
-            params["flow"] = AnyCodable(mode == .local ? "quickstart" : "advanced")
-            params["acceptRisk"] = AnyCodable(true)
-            params["skipUi"] = AnyCodable(true)
-            params["embedded"] = AnyCodable(true)
-            params["fresh"] = AnyCodable(true)
+        useEmbeddedProtocol: Bool
+    ) -> WizardStartParams {
+        self.startParams(
+            route: .onboarding(mode: mode, workspace: workspace),
+            useEmbeddedProtocol: useEmbeddedProtocol)
+    }
+
+    private static func startParams(route: StartRoute, useEmbeddedProtocol: Bool) -> WizardStartParams {
+        switch route {
+        case let .onboarding(mode, workspace):
+            var params: WizardStartParams = ["mode": AnyCodable(mode.rawValue)]
+            if useEmbeddedProtocol {
+                params["flow"] = AnyCodable(mode == .local ? "quickstart" : "advanced")
+                params["acceptRisk"] = AnyCodable(true)
+                params["skipUi"] = AnyCodable(true)
+                params["embedded"] = AnyCodable(true)
+                params["fresh"] = AnyCodable(true)
+            }
+            if let workspace, !workspace.isEmpty {
+                params["workspace"] = AnyCodable(workspace)
+            }
+            params["skipChannels"] = AnyCodable(true)
+            params["skipSkills"] = AnyCodable(true)
+            return params
+        case let .modelAuth(authChoice):
+            var params: WizardStartParams = [
+                "entrypoint": AnyCodable("models-auth"),
+                "embedded": AnyCodable(true),
+                "fresh": AnyCodable(true),
+            ]
+            if let authChoice, !authChoice.isEmpty {
+                params["authChoice"] = AnyCodable(authChoice)
+            }
+            return params
         }
-        if let workspace, !workspace.isEmpty {
-            params["workspace"] = AnyCodable(workspace)
-        }
-        params["skipChannels"] = AnyCodable(true)
-        params["skipSkills"] = AnyCodable(true)
-        params["skipSearch"] = AnyCodable(true)
-        return params
     }
 
     static func shouldRetryLegacyStart(for error: Error) -> Bool {
+        self.shouldRetryLegacyStart(for: error, route: .onboarding(mode: .local, workspace: nil))
+    }
+
+    private static func shouldRetryLegacyStart(for error: Error, route: StartRoute) -> Bool {
+        guard case .onboarding = route else { return false }
         guard let gatewayError = error as? GatewayResponseError,
               gatewayError.method == GatewayConnection.Method.wizardStart.rawValue,
               gatewayError.code == ErrorCode.invalidRequest.rawValue
@@ -567,6 +680,13 @@ final class OnboardingWizardModel {
     static func isProgressStep(_ step: WizardStep?) -> Bool {
         guard let step else { return false }
         return wizardStepType(step) == "progress"
+    }
+
+    static func shouldAutoHandleClientActionStep(_ step: WizardStep) -> Bool {
+        guard wizardStepType(step) == "action" else { return false }
+        guard wizardStepExecutor(step) == "client" else { return false }
+        guard let payload = wizardClientActionPayload(step) else { return false }
+        return payload.action == "open_url"
     }
 
     static func shouldAutoAdvanceLegacyCompatibilityStep(_ step: WizardStep) -> Bool {
@@ -765,7 +885,7 @@ final class OnboardingWizardModel {
                     break
                 }
                 self.status = "error"
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
                 onboardingWizardLogger.error(
                     "progress poll failed: \(error.localizedDescription, privacy: .public)")
                 break
@@ -802,6 +922,28 @@ final class OnboardingWizardModel {
         }
     }
 
+    private func submissionValue(for step: WizardStep) async -> AnyCodable? {
+        guard Self.shouldAutoHandleClientActionStep(step),
+              let payload = wizardClientActionPayload(step)
+        else {
+            return self.draftValue(for: step)
+        }
+
+        guard payload.action == "open_url" else {
+            return AnyCodable(false)
+        }
+        guard let url = URL(string: payload.url) else {
+            onboardingWizardLogger.error("invalid client action URL: \(payload.url, privacy: .public)")
+            return AnyCodable(false)
+        }
+
+        let opened = NSWorkspace.shared.open(url)
+        if !opened {
+            onboardingWizardLogger.notice("client browser open failed for \(payload.url, privacy: .public)")
+        }
+        return AnyCodable(opened)
+    }
+
 }
 
 struct OnboardingWizardStepView: View {
@@ -817,10 +959,21 @@ struct OnboardingWizardStepView: View {
 
     private let optionItems: [WizardOptionItem]
 
-    init(step: WizardStep, wizard: OnboardingWizardModel, isSubmitting: Bool) {
+    let language: OnboardingLanguage
+    let showStepExplanation: Bool
+
+    init(
+        step: WizardStep,
+        wizard: OnboardingWizardModel,
+        isSubmitting: Bool,
+        language: OnboardingLanguage,
+        showStepExplanation: Bool = true)
+    {
         self.step = step
         self.wizard = wizard
         self.isSubmitting = isSubmitting
+        self.language = language
+        self.showStepExplanation = showStepExplanation
         let options = parseWizardOptions(step.options).enumerated().map { index, option in
             WizardOptionItem(index: index, option: option)
         }
@@ -828,21 +981,23 @@ struct OnboardingWizardStepView: View {
     }
 
     private var stepExplanation: StepExplanation? {
-        Self.resolveStepExplanation(for: self.step)
+        Self.resolveStepExplanation(for: self.step, language: self.language)
     }
 
     private var showsStepExplanation: Bool {
-        Self.shouldShowStepExplanation(for: self.step)
+        self.showStepExplanation && Self.shouldShowStepExplanation(for: self.step)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            let hasTitle = !(step.title?.isEmpty ?? true)
-            if let title = step.title, !title.isEmpty {
+            let localizedTitle = macWizardText(self.step.title, language: self.language)
+            let localizedMessage = macWizardText(self.step.message, language: self.language)
+            let hasTitle = !(localizedTitle?.isEmpty ?? true)
+            if let title = localizedTitle, !title.isEmpty {
                 Text(title)
                     .font(.title2.weight(.semibold))
             }
-            if let message = step.message, !message.isEmpty {
+            if let message = localizedMessage, !message.isEmpty {
                 Text(message)
                     .font(hasTitle ? .body : .headline)
                     .foregroundStyle(hasTitle ? .secondary : .primary)
@@ -853,7 +1008,8 @@ struct OnboardingWizardStepView: View {
                 OnboardingMeaningCard(
                     stage: explanation.stage,
                     title: explanation.title,
-                    bodyText: explanation.bodyText)
+                    bodyText: explanation.bodyText,
+                    language: self.language)
             }
 
             switch wizardStepType(self.step) {
@@ -874,7 +1030,7 @@ struct OnboardingWizardStepView: View {
             case "action":
                 EmptyView()
             default:
-                Text("Unsupported step type")
+                Text(macLocalized("Unsupported step type", language: self.language))
                     .foregroundStyle(.secondary)
             }
         }
@@ -884,12 +1040,13 @@ struct OnboardingWizardStepView: View {
     @ViewBuilder
     private var textField: some View {
         let isSensitive = self.step.sensitive == true
+        let placeholder = macWizardText(self.step.placeholder, language: self.language) ?? ""
         if isSensitive {
-            SecureField(self.step.placeholder ?? "", text: self.$wizard.textDraft)
+            SecureField(placeholder, text: self.$wizard.textDraft)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 360)
         } else {
-            TextField(self.step.placeholder ?? "", text: self.$wizard.textDraft)
+            TextField(placeholder, text: self.$wizard.textDraft)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 360)
         }
@@ -897,6 +1054,12 @@ struct OnboardingWizardStepView: View {
 
     private var selectOptions: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if self.optionItems.contains(where: { Self.isDetailedHint($0.option.hint) }) {
+                Text(macLocalized("Read what you need below each option before continuing.", language: self.language))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             ForEach(self.optionItems, id: \.index) { item in
                 self.selectOptionRow(item)
             }
@@ -919,12 +1082,13 @@ struct OnboardingWizardStepView: View {
                 Image(systemName: self.wizard.selectedIndexDraft == item.index ? "largecircle.fill.circle" : "circle")
                     .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.option.label)
+                    Text(macWizardText(item.option.label, language: self.language) ?? item.option.label)
                         .foregroundStyle(.primary)
                     if let hint = item.option.hint, !hint.isEmpty {
-                        Text(hint)
-                            .font(.caption)
+                        Text(macWizardText(hint, language: self.language) ?? hint)
+                            .font(Self.isDetailedHint(hint) ? .footnote : .caption)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -935,11 +1099,12 @@ struct OnboardingWizardStepView: View {
     private func multiselectOptionRow(_ item: WizardOptionItem) -> some View {
         Toggle(isOn: self.bindingForOption(item)) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.option.label)
+                Text(macWizardText(item.option.label, language: self.language) ?? item.option.label)
                 if let hint = item.option.hint, !hint.isEmpty {
-                    Text(hint)
-                        .font(.caption)
+                    Text(macWizardText(hint, language: self.language) ?? hint)
+                        .font(Self.isDetailedHint(hint) ? .footnote : .caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -957,7 +1122,12 @@ struct OnboardingWizardStepView: View {
         })
     }
 
-    static func resolveStepExplanation(for step: WizardStep) -> StepExplanation? {
+    private static func isDetailedHint(_ hint: String?) -> Bool {
+        guard let hint else { return false }
+        return hint.contains("\n")
+    }
+
+    static func resolveStepExplanation(for step: WizardStep, language: OnboardingLanguage) -> StepExplanation? {
         let title = step.title?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let message = step.message?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let combined = "\(title)\n\(message)"
@@ -965,15 +1135,19 @@ struct OnboardingWizardStepView: View {
         if combined.contains("setup mode") {
             return StepExplanation(
                 stage: .home,
-                title: "Simple or custom",
-                bodyText: "This is Maumau asking how much of the setup work you want it to handle for you.")
+                title: language == .en ? "Simple or custom" : "Sederhana atau khusus",
+                bodyText: language == .en
+                    ? "This is Maumau asking how much of the setup work you want it to handle for you."
+                    : "Di sini Maumau menanyakan seberapa banyak pekerjaan pengaturan yang ingin Anda serahkan kepadanya.")
         }
 
         if combined.contains("existing setup") || combined.contains("existing config") {
             return StepExplanation(
                 stage: .home,
-                title: "Keep or reset",
-                bodyText: "Maumau found an older home setup and wants to know whether to reuse it or start fresh.")
+                title: language == .en ? "Keep or reset" : "Pakai atau reset",
+                bodyText: language == .en
+                    ? "Maumau found an older home setup and wants to know whether to reuse it or start fresh."
+                    : "Maumau menemukan pengaturan lama dan ingin tahu apakah harus memakainya lagi atau mulai dari awal.")
         }
 
         if combined.contains("default model") || combined.contains("choose a default model") ||
@@ -981,8 +1155,21 @@ struct OnboardingWizardStepView: View {
         {
             return StepExplanation(
                 stage: .brain,
-                title: "Pick the brain",
-                bodyText: "You are choosing which AI service or model does the thinking for Maumau.")
+                title: language == .en ? "Pick the brain" : "Pilih brain",
+                bodyText: language == .en
+                    ? "You are choosing which AI service or model does the thinking for Maumau."
+                    : "Anda sedang memilih layanan AI atau model mana yang akan berpikir untuk Maumau.")
+        }
+
+        if combined.contains("web search") || combined.contains("search provider") ||
+            combined.contains("look things up online")
+        {
+            return StepExplanation(
+                stage: .brain,
+                title: language == .en ? "Add live search" : "Tambah pencarian live",
+                bodyText: language == .en
+                    ? "This optional step lets Maumau look up current information on the web when it needs it."
+                    : "Langkah opsional ini memungkinkan Maumau mencari informasi terbaru di web saat membutuhkannya.")
         }
 
         if combined.contains("api key") || combined.contains("oauth") || combined.contains("sign in") ||
@@ -990,22 +1177,28 @@ struct OnboardingWizardStepView: View {
         {
             return StepExplanation(
                 stage: .brain,
-                title: "Connect the brain",
-                bodyText: "This is the sign-in step so Maumau can actually talk to the AI service you picked.")
+                title: language == .en ? "Connect the brain" : "Hubungkan brain",
+                bodyText: language == .en
+                    ? "This is the sign-in step so Maumau can actually talk to the AI service you picked."
+                    : "Ini adalah langkah masuk agar Maumau benar-benar bisa berbicara dengan layanan AI yang Anda pilih.")
         }
 
         if combined.contains("workspace") {
             return StepExplanation(
                 stage: .home,
-                title: "Pick Maumau’s room",
-                bodyText: "This is the folder where Maumau keeps notes, reads instructions, and makes files.")
+                title: language == .en ? "Pick Maumau’s room" : "Pilih ruang Maumau",
+                bodyText: language == .en
+                    ? "This is the folder where Maumau keeps notes, reads instructions, and makes files."
+                    : "Ini adalah folder tempat Maumau menyimpan catatan, membaca instruksi, dan membuat file.")
         }
 
         if combined.contains("preparing setup") || combined.contains("starting wizard") {
             return StepExplanation(
                 stage: .brain,
-                title: "A quick setup moment",
-                bodyText: "Maumau is just getting the next brain setup step ready for you.")
+                title: language == .en ? "A quick setup moment" : "Sebentar menyiapkan",
+                bodyText: language == .en
+                    ? "Maumau is just getting the next brain setup step ready for you."
+                    : "Maumau sedang menyiapkan langkah pengaturan brain berikutnya untuk Anda.")
         }
 
         return nil

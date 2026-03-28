@@ -31,17 +31,33 @@ struct LowCoverageViewSmokeTests {
         let stateBinding = Binding(get: { state }, set: { state = $0 })
         let testingBinding = Binding(get: { isTesting }, set: { isTesting = $0 })
 
-        _ = VoiceWakeTestCard(testState: stateBinding, isTesting: testingBinding, onToggle: {}).body
+        _ = VoiceWakeTestCard(
+            testState: stateBinding,
+            isTesting: testingBinding,
+            language: .en,
+            onToggle: {}).body
 
         state = .hearing("hello")
-        _ = VoiceWakeTestCard(testState: stateBinding, isTesting: testingBinding, onToggle: {}).body
+        _ = VoiceWakeTestCard(
+            testState: stateBinding,
+            isTesting: testingBinding,
+            language: .id,
+            onToggle: {}).body
 
         state = .detected("command")
         isTesting = true
-        _ = VoiceWakeTestCard(testState: stateBinding, isTesting: testingBinding, onToggle: {}).body
+        _ = VoiceWakeTestCard(
+            testState: stateBinding,
+            isTesting: testingBinding,
+            language: .id,
+            onToggle: {}).body
 
         state = .failed("No mic")
-        _ = VoiceWakeTestCard(testState: stateBinding, isTesting: testingBinding, onToggle: {}).body
+        _ = VoiceWakeTestCard(
+            testState: stateBinding,
+            isTesting: testingBinding,
+            language: .id,
+            onToggle: {}).body
     }
 
     @Test func `agent events window builds body with event`() {
@@ -92,9 +108,19 @@ struct LowCoverageViewSmokeTests {
 
     @Test func `dock icon manager updates visibility`() {
         _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
         UserDefaults.standard.set(false, forKey: showDockIconKey)
+        #expect(DockIconManager.shouldUseRegularActivationPolicy(
+            userWantsDockHidden: true,
+            hasVisibleWindows: false,
+            forceDockVisible: false) == false)
+        #expect(DockIconManager.shouldUseRegularActivationPolicy(
+            userWantsDockHidden: true,
+            hasVisibleWindows: false,
+            forceDockVisible: true))
         DockIconManager.shared.updateDockVisibility()
         DockIconManager.shared.temporarilyShowDock()
+        #expect(NSApp.activationPolicy() == .regular)
     }
 
     @Test func `voice wake settings exercises helpers`() {

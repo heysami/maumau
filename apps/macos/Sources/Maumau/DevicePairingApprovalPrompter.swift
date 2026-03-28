@@ -233,22 +233,23 @@ final class DevicePairingApprovalPrompter {
     }
 
     private static func describe(_ req: PendingRequest) -> String {
+        let language = macCurrentLanguage()
         var lines: [String] = []
-        lines.append("Device: \(req.displayName ?? req.deviceId)")
+        lines.append("\(macLocalized("Device", language: language)): \(req.displayName ?? req.deviceId)")
         if let platform = req.platform {
-            lines.append("Platform: \(platform)")
+            lines.append("\(macLocalized("Platform", language: language)): \(platform)")
         }
         if let role = req.role {
-            lines.append("Role: \(role)")
+            lines.append("\(macLocalized("Role", language: language)): \(role)")
         }
         if let scopes = req.scopes, !scopes.isEmpty {
-            lines.append("Scopes: \(scopes.joined(separator: ", "))")
+            lines.append("\(macLocalized("Scopes", language: language)): \(scopes.joined(separator: ", "))")
         }
         if let remoteIp = req.remoteIp {
-            lines.append("IP: \(remoteIp)")
+            lines.append("\(macLocalized("IP", language: language)): \(remoteIp)")
         }
         if req.isRepair == true {
-            lines.append("Repair: yes")
+            lines.append("\(macLocalized("Repair", language: language)): \(macLocalized("yes", language: language))")
         }
         return lines.joined(separator: "\n")
     }

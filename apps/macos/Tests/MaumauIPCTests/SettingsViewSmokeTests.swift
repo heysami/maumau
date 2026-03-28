@@ -145,6 +145,18 @@ struct SettingsViewSmokeTests {
         _ = view.body
     }
 
+    @Test func `models settings builds body`() {
+        let view = ModelsSettings()
+        _ = view.body
+    }
+
+    @Test func `model provider connect sheet mounts in window`() {
+        let controller = NSHostingController(rootView: ModelProviderConnectSheetHarness())
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
     @Test func `debug settings builds body`() {
         let view = DebugSettings()
         _ = view.body
@@ -243,6 +255,14 @@ struct SettingsViewSmokeTests {
     @Test func `settings root mounts cron tab in window`() {
         let state = AppState(preview: true)
         let controller = NSHostingController(rootView: SettingsRootView(state: state, updater: nil, initialTab: .cron))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
+    @Test func `settings root mounts models tab in window`() {
+        let state = AppState(preview: true)
+        let controller = NSHostingController(rootView: SettingsRootView(state: state, updater: nil, initialTab: .models))
         let window = NSWindow(contentViewController: controller)
         window.contentView?.layoutSubtreeIfNeeded()
         #expect(window.contentViewController === controller)
@@ -403,6 +423,15 @@ struct SettingsViewSmokeTests {
         _ = view.body
     }
 
+    @Test func `settings root mounts with indonesian locale selected`() {
+        let state = AppState(preview: true)
+        state.onboardingLanguage = .id
+        let controller = NSHostingController(rootView: SettingsRootView(state: state, updater: nil, initialTab: .voiceWake))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
     @Test func `skills settings builds body`() {
         let view = SkillsSettings(state: .preview)
         _ = view.body
@@ -411,5 +440,43 @@ struct SettingsViewSmokeTests {
     @Test func `plugins settings builds body`() {
         let view = PluginsSettings(model: PluginsSettingsModel.previewModel())
         _ = view.body
+    }
+}
+
+private struct ModelProviderConnectSheetHarness: View {
+    @State private var selectedGroupId = "openai"
+    @State private var selectedChoiceId = "openai-codex"
+    @State private var wizard = OnboardingWizardModel()
+
+    var body: some View {
+        ModelProviderConnectSheet(
+            wizard: self.wizard,
+            language: .en,
+            groups: [
+                ModelAuthChoiceGroup(
+                    id: "openai",
+                    label: "OpenAI",
+                    hint: "ChatGPT sign-in or API key",
+                    options: [
+                        ModelAuthChoiceOption(
+                            id: "openai-codex",
+                            label: "OpenAI Codex (ChatGPT OAuth)",
+                            hint: "Browser sign-in",
+                            providerId: "openai-codex"),
+                        ModelAuthChoiceOption(
+                            id: "openai-api-key",
+                            label: "OpenAI API key",
+                            hint: nil,
+                            providerId: "openai"),
+                    ]),
+            ],
+            connectedProviderIds: ["openai-codex"],
+            isLoadingChoices: false,
+            choicesError: nil,
+            selectedGroupId: self.$selectedGroupId,
+            selectedChoiceId: self.$selectedChoiceId,
+            retryChoices: {},
+            startSelectedChoice: {},
+            cancel: {})
     }
 }

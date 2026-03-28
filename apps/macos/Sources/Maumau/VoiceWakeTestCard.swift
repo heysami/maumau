@@ -3,17 +3,20 @@ import SwiftUI
 struct VoiceWakeTestCard: View {
     @Binding var testState: VoiceWakeTestState
     @Binding var isTesting: Bool
+    let language: OnboardingLanguage
     let onToggle: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Test Voice Wake")
+                Text(macLocalized("Test Voice Wake", language: self.language))
                     .font(.callout.weight(.semibold))
                 Spacer()
                 Button(action: self.onToggle) {
                     Label(
-                        self.isTesting ? "Stop" : "Start test",
+                        self.isTesting
+                            ? macLocalized("Stop", language: self.language)
+                            : macLocalized("Start test", language: self.language),
                         systemImage: self.isTesting ? "stop.circle.fill" : "play.circle")
                 }
                 .buttonStyle(.borderedProminent)
@@ -27,7 +30,7 @@ struct VoiceWakeTestCard: View {
                         .font(.subheadline)
                         .frame(maxHeight: 22, alignment: .center)
                     if case let .detected(text) = testState {
-                        Text("Heard: \(text)")
+                        Text(macVoiceWakeHeard(text, language: self.language))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
@@ -71,25 +74,25 @@ struct VoiceWakeTestCard: View {
     private var statusText: String {
         switch self.testState {
         case .idle:
-            "Press start, say a trigger word, and wait for detection."
+            macLocalized("Press start, say a trigger word, and wait for detection.", language: self.language)
 
         case .requesting:
-            "Requesting mic & speech permission…"
+            macLocalized("Requesting mic & speech permission…", language: self.language)
 
         case .listening:
-            "Listening… say your trigger word."
+            macLocalized("Listening… say your trigger word.", language: self.language)
 
         case let .hearing(text):
-            "Heard: \(text)"
+            macVoiceWakeHeard(text, language: self.language)
 
         case .finalizing:
-            "Finalizing…"
+            macLocalized("Finalizing…", language: self.language)
 
         case .detected:
-            "Voice wake detected!"
+            macLocalized("Voice wake detected!", language: self.language)
 
         case let .failed(reason):
-            reason
+            macVoiceWakeFailureText(reason, language: self.language)
         }
     }
 }

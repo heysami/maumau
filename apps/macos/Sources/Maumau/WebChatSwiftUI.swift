@@ -107,12 +107,16 @@ struct MacGatewayChatTransport: MaumauChatTransport {
         idempotencyKey: String,
         attachments: [MaumauChatAttachmentPayload]) async throws -> MaumauChatSendResponse
     {
-        try await GatewayConnection.shared.chatSend(
+        let replyLanguage = await MainActor.run {
+            AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID
+        }
+        return try await GatewayConnection.shared.chatSend(
             sessionKey: sessionKey,
             message: message,
             thinking: thinking,
             idempotencyKey: idempotencyKey,
-            attachments: attachments)
+            attachments: attachments,
+            replyLanguage: replyLanguage)
     }
 
     func requestHealth(timeoutMs: Int) async throws -> Bool {

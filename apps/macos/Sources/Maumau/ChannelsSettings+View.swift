@@ -21,14 +21,14 @@ extension ChannelsSettings {
         SettingsSidebarScroll {
             LazyVStack(alignment: .leading, spacing: 8) {
                 if !self.enabledChannels.isEmpty {
-                    self.sidebarSectionHeader("Configured")
+                    self.sidebarSectionHeader(self.loc("Configured"))
                     ForEach(self.enabledChannels) { channel in
                         self.sidebarRow(channel)
                     }
                 }
 
                 if !self.availableChannels.isEmpty {
-                    self.sidebarSectionHeader("Available")
+                    self.sidebarSectionHeader(self.loc("Available"))
                     ForEach(self.availableChannels) { channel in
                         self.sidebarRow(channel)
                     }
@@ -50,9 +50,9 @@ extension ChannelsSettings {
 
     private var emptyDetail: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Channels")
+            Text(self.loc("Channels"))
                 .font(.title3.weight(.semibold))
-            Text("Select a channel to view status and settings.")
+            Text(self.loc("Select a channel to view status and settings."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -125,11 +125,11 @@ extension ChannelsSettings {
             }
 
             HStack(spacing: 10) {
-                Text("Last check \(self.channelLastCheckText(channel))")
+                Text("\(self.loc("Last check")) \(self.channelLastCheckText(channel))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if self.channelHasError(channel) {
-                    Text("Error")
+                    Text(self.loc("Error"))
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)

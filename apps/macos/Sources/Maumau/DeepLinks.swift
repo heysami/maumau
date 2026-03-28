@@ -16,7 +16,7 @@ enum DeepLinkAgentPolicy {
         var errorDescription: String? {
             switch self {
             case let .messageTooLongForConfirmation(max, actual):
-                "Message is too long to confirm safely (\(actual) chars; max \(max) without key)."
+                macDeepLinkMessageTooLong(max: max, actual: actual, language: macCurrentLanguage())
             }
         }
     }
@@ -60,7 +60,9 @@ final class DeepLinkHandler {
             return
         }
         guard !AppStateStore.shared.isPaused else {
-            self.presentAlert(title: "Maumau is paused", message: "Unpause Maumau to run agent actions.")
+            self.presentAlert(
+                title: "Maumau is paused",
+                message: "Unpause Maumau to run agent actions.")
             return
         }
 
@@ -97,8 +99,10 @@ final class DeepLinkHandler {
 
             let urlText = originalURL.absoluteString
             let urlPreview = urlText.count > 500 ? "\(urlText.prefix(500))…" : urlText
-            let body =
-                "Run the agent with this message?\n\n\(messagePreview)\n\nURL:\n\(urlPreview)"
+            let body = macDeepLinkRunBody(
+                messagePreview: messagePreview,
+                urlPreview: urlPreview,
+                language: AppStateStore.shared.effectiveOnboardingLanguage)
             guard self.confirm(title: "Run Maumau agent?", message: body) else { return }
         }
 
@@ -179,20 +183,22 @@ final class DeepLinkHandler {
     // MARK: - UI
 
     private func confirm(title: String, message: String) -> Bool {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: "Run")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = macLocalized(title, language: language)
+        alert.informativeText = macWizardText(message, language: language) ?? message
+        alert.addButton(withTitle: macLocalized("Run", language: language))
+        alert.addButton(withTitle: macLocalized("Cancel", language: language))
         alert.alertStyle = .warning
         return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func presentAlert(title: String, message: String) {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.messageText = macLocalized(title, language: language)
+        alert.informativeText = macWizardText(message, language: language) ?? message
+        alert.addButton(withTitle: macLocalized("OK", language: language))
         alert.alertStyle = .informational
         alert.runModal()
     }

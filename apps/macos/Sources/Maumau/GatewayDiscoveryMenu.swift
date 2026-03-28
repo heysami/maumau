@@ -9,19 +9,23 @@ struct GatewayDiscoveryInlineList: View {
     var onSelect: (GatewayDiscoveryModel.DiscoveredGateway) -> Void
     @State private var hoveredGatewayID: GatewayDiscoveryModel.DiscoveredGateway.ID?
 
+    private var language: OnboardingLanguage {
+        macCurrentLanguage()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(self.discovery.statusText)
+                Text(macDiscoveryStatus(self.discovery.statusText, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if self.discovery.gateways.isEmpty {
-                Text("No gateways found yet.")
+                Text(macLocalized("No gateways found yet.", language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -69,8 +73,8 @@ struct GatewayDiscoveryInlineList: View {
             }
         }
         .help(self.transport == .direct
-            ? "Click a discovered gateway to fill the gateway URL."
-            : "Click a discovered gateway to fill the SSH target.")
+            ? macLocalized("Click a discovered gateway to fill the gateway URL.", language: self.language)
+            : macLocalized("Click a discovered gateway to fill the SSH target.", language: self.language))
     }
 
     private func displayInfo(
@@ -79,12 +83,12 @@ struct GatewayDiscoveryInlineList: View {
         switch self.transport {
         case .direct:
             let url = GatewayDiscoveryHelpers.directUrl(for: gateway)
-            let label = url ?? "Gateway pairing only"
+            let label = url ?? macLocalized("Gateway pairing only", language: self.language)
             let selected = url != nil && self.trimmed(self.currentUrl) == url
             return (label, selected)
         case .ssh:
             let target = GatewayDiscoveryHelpers.sshTarget(for: gateway)
-            let label = target ?? "Gateway pairing only"
+            let label = target ?? macLocalized("Gateway pairing only", language: self.language)
             let selected = target != nil && self.trimmed(self.currentTarget) == target
             return (label, selected)
         }
@@ -99,10 +103,14 @@ struct GatewayDiscoveryMenu: View {
     var discovery: GatewayDiscoveryModel
     var onSelect: (GatewayDiscoveryModel.DiscoveredGateway) -> Void
 
+    private var language: OnboardingLanguage {
+        macCurrentLanguage()
+    }
+
     var body: some View {
         Menu {
             if self.discovery.gateways.isEmpty {
-                Button(self.discovery.statusText) {}
+                Button(macDiscoveryStatus(self.discovery.statusText, language: self.language)) {}
                     .disabled(true)
             } else {
                 ForEach(self.discovery.gateways) { gateway in
@@ -112,6 +120,6 @@ struct GatewayDiscoveryMenu: View {
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
         }
-        .help("Discover Maumau gateways on your LAN")
+        .help(macLocalized("Discover Maumau gateways on your LAN", language: self.language))
     }
 }

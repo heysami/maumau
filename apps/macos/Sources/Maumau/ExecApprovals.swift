@@ -14,9 +14,9 @@ enum ExecSecurity: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .deny: "Deny"
-        case .allowlist: "Allowlist"
-        case .full: "Always Allow"
+        case .deny: macLocalized("Deny")
+        case .allowlist: macLocalized("Allowlist")
+        case .full: macLocalized("Always Allow")
         }
     }
 }
@@ -32,9 +32,9 @@ enum ExecApprovalQuickMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .deny: "Deny"
-        case .ask: "Always Ask"
-        case .allow: "Always Allow"
+        case .deny: macLocalized("Deny")
+        case .ask: macLocalized("Always Ask")
+        case .allow: macLocalized("Always Allow")
         }
     }
 
@@ -77,9 +77,9 @@ enum ExecAsk: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .off: "Never Ask"
-        case .onMiss: "Ask on Allowlist Miss"
-        case .always: "Always Ask"
+        case .off: macLocalized("Never Ask")
+        case .onMiss: macLocalized("Ask on Allowlist Miss")
+        case .always: macLocalized("Always Ask")
         }
     }
 }
@@ -97,9 +97,9 @@ enum ExecAllowlistPatternValidationReason: String, Codable, Equatable {
     var message: String {
         switch self {
         case .empty:
-            "Pattern cannot be empty."
+            macLocalized("Pattern cannot be empty.")
         case .missingPathComponent:
-            "Path patterns only. Include '/', '~', or '\\\\'."
+            macLocalized("Path patterns only. Include '/', '~', or '\\\\'.")
         }
     }
 }

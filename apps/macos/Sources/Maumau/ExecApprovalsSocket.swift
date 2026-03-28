@@ -231,13 +231,13 @@ enum ExecApprovalsPromptPresenter {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Allow this command?"
-        alert.informativeText = "Review the command details before allowing."
+        alert.messageText = macLocalized("Allow this command?")
+        alert.informativeText = macLocalized("Review the command details before allowing.")
         alert.accessoryView = self.buildAccessoryView(request)
 
-        alert.addButton(withTitle: "Allow Once")
-        alert.addButton(withTitle: "Always Allow")
-        alert.addButton(withTitle: "Don't Allow")
+        alert.addButton(withTitle: macLocalized("Allow Once"))
+        alert.addButton(withTitle: macLocalized("Always Allow"))
+        alert.addButton(withTitle: macLocalized("Don't Allow"))
         if #available(macOS 11.0, *), alert.buttons.indices.contains(2) {
             alert.buttons[2].hasDestructiveAction = true
         }
@@ -261,7 +261,7 @@ enum ExecApprovalsPromptPresenter {
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.widthAnchor.constraint(greaterThanOrEqualToConstant: 380).isActive = true
 
-        let commandTitle = NSTextField(labelWithString: "Command")
+        let commandTitle = NSTextField(labelWithString: macLocalized("Command"))
         commandTitle.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
         stack.addArrangedSubview(commandTitle)
 
@@ -291,7 +291,7 @@ enum ExecApprovalsPromptPresenter {
         commandScroll.heightAnchor.constraint(lessThanOrEqualToConstant: 120).isActive = true
         stack.addArrangedSubview(commandScroll)
 
-        let contextTitle = NSTextField(labelWithString: "Context")
+        let contextTitle = NSTextField(labelWithString: macLocalized("Context"))
         contextTitle.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
         stack.addArrangedSubview(contextTitle)
 
@@ -302,29 +302,35 @@ enum ExecApprovalsPromptPresenter {
 
         let trimmedCwd = request.cwd?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedCwd.isEmpty {
-            self.addDetailRow(title: "Working directory", value: trimmedCwd, to: contextStack)
+            self.addDetailRow(title: macLocalized("Working directory"), value: trimmedCwd, to: contextStack)
         }
         let trimmedAgent = request.agentId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedAgent.isEmpty {
-            self.addDetailRow(title: "Agent", value: trimmedAgent, to: contextStack)
+            self.addDetailRow(title: macLocalized("Agent"), value: trimmedAgent, to: contextStack)
         }
         let trimmedPath = request.resolvedPath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedPath.isEmpty {
-            self.addDetailRow(title: "Executable", value: trimmedPath, to: contextStack)
+            self.addDetailRow(title: macLocalized("Executable"), value: trimmedPath, to: contextStack)
         }
         let trimmedHost = request.host?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedHost.isEmpty {
-            self.addDetailRow(title: "Host", value: trimmedHost, to: contextStack)
+            self.addDetailRow(title: macLocalized("Host"), value: trimmedHost, to: contextStack)
         }
         if let security = request.security?.trimmingCharacters(in: .whitespacesAndNewlines), !security.isEmpty {
-            self.addDetailRow(title: "Security", value: security, to: contextStack)
+            self.addDetailRow(
+                title: macLocalized("Security"),
+                value: self.localizedSecurityValue(security),
+                to: contextStack)
         }
         if let ask = request.ask?.trimmingCharacters(in: .whitespacesAndNewlines), !ask.isEmpty {
-            self.addDetailRow(title: "Ask mode", value: ask, to: contextStack)
+            self.addDetailRow(
+                title: macLocalized("Ask mode"),
+                value: self.localizedAskValue(ask),
+                to: contextStack)
         }
 
         if contextStack.arrangedSubviews.isEmpty {
-            let empty = NSTextField(labelWithString: "No additional context provided.")
+            let empty = NSTextField(labelWithString: macLocalized("No additional context provided."))
             empty.textColor = NSColor.secondaryLabelColor
             empty.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
             contextStack.addArrangedSubview(empty)
@@ -332,7 +338,7 @@ enum ExecApprovalsPromptPresenter {
 
         stack.addArrangedSubview(contextStack)
 
-        let footer = NSTextField(labelWithString: "This runs on this machine.")
+        let footer = NSTextField(labelWithString: macLocalized("This runs on this machine."))
         footer.textColor = NSColor.secondaryLabelColor
         footer.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         stack.addArrangedSubview(footer)
@@ -359,6 +365,34 @@ enum ExecApprovalsPromptPresenter {
         row.addArrangedSubview(titleLabel)
         row.addArrangedSubview(valueLabel)
         stack.addArrangedSubview(row)
+    }
+
+    @MainActor
+    private static func localizedSecurityValue(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "deny":
+            macLocalized("Deny")
+        case "allowlist":
+            macLocalized("Allowlist")
+        case "full":
+            macLocalized("Always Allow")
+        default:
+            raw
+        }
+    }
+
+    @MainActor
+    private static func localizedAskValue(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "off":
+            macLocalized("Never Ask")
+        case "on-miss":
+            macLocalized("Ask on Allowlist Miss")
+        case "always":
+            macLocalized("Always Ask")
+        default:
+            raw
+        }
     }
 }
 

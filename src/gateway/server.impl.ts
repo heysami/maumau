@@ -176,10 +176,16 @@ const gatewayRuntime = runtimeForLogger(log);
 const canvasRuntime = runtimeForLogger(logCanvas);
 
 type RunSetupWizard = typeof import("../wizard/setup.runtime.js").runSetupWizard;
+type RunModelAuthWizard = typeof import("../wizard/model-auth.runtime.js").runModelAuthWizard;
 
 const runSetupWizardRuntime: RunSetupWizard = async (...args) => {
   const runtime = await import("../wizard/setup.runtime.js");
   return runtime.runSetupWizard(...args);
+};
+
+const runModelAuthWizardRuntime: RunModelAuthWizard = async (...args) => {
+  const runtime = await import("../wizard/model-auth.runtime.js");
+  return runtime.runModelAuthWizard(...args);
 };
 
 type AuthRateLimitConfig = Parameters<typeof createAuthRateLimiter>[0];
@@ -360,6 +366,16 @@ export type GatewayServerOptions = {
    */
   wizardRunner?: (
     opts: import("../commands/onboard-types.js").OnboardOptions,
+    runtime: import("../runtime.js").RuntimeEnv,
+    prompter: import("../wizard/prompts.js").WizardPrompter,
+  ) => Promise<void>;
+  /**
+   * Test-only: override the focused model-auth wizard runner.
+   */
+  modelAuthWizardRunner?: (
+    opts: {
+      authChoice?: string;
+    },
     runtime: import("../runtime.js").RuntimeEnv,
     prompter: import("../wizard/prompts.js").WizardPrompter,
   ) => Promise<void>;
@@ -658,6 +674,7 @@ export async function startGatewayServer(
   }
 
   const wizardRunner = opts.wizardRunner ?? runSetupWizardRuntime;
+  const modelAuthWizardRunner = opts.modelAuthWizardRunner ?? runModelAuthWizardRuntime;
   const { wizardSessions, findRunningWizard, purgeWizardSession } = createWizardSessionTracker();
   setPreRestartDeferralCheck(
     () =>
@@ -1133,6 +1150,7 @@ export async function startGatewayServer(
     stopChannel,
     markChannelLoggedOut,
     wizardRunner,
+    modelAuthWizardRunner,
     broadcastVoiceWakeChanged,
   };
 

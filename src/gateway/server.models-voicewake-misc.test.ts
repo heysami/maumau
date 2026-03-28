@@ -92,6 +92,18 @@ type ModelCatalogRpcEntry = {
   contextWindow?: number;
 };
 
+type ModelAuthChoiceGroupRpc = {
+  value: string;
+  label: string;
+  hint?: string;
+  options: Array<{
+    value: string;
+    label: string;
+    hint?: string;
+    providerId?: string;
+  }>;
+};
+
 type PiCatalogFixtureEntry = {
   id: string;
   provider: string;
@@ -149,6 +161,8 @@ const expectedSortedCatalog = (): ModelCatalogRpcEntry[] => [
 
 describe("gateway server models + voicewake", () => {
   const listModels = async () => rpcReq<{ models: ModelCatalogRpcEntry[] }>(ws, "models.list");
+  const listModelAuthChoices = async () =>
+    rpcReq<{ groups: ModelAuthChoiceGroupRpc[] }>(ws, "models.auth.choices");
 
   const seedPiCatalog = () => {
     piSdkMock.enabled = true;
@@ -365,6 +379,29 @@ describe("gateway server models + voicewake", () => {
     const res = await rpcReq(ws, "models.list", { extra: true });
     expect(res.ok).toBe(false);
     expect(res.error?.message ?? "").toMatch(/invalid models\.list params/i);
+  });
+
+  test("models.auth.choices returns grouped provider auth options", async () => {
+    const res = await listModelAuthChoices();
+    expect(res.ok).toBe(true);
+
+    const chutes = res.payload?.groups.find((group) =>
+      group.options.some((option) => option.value === "chutes"),
+    );
+    expect(chutes).toBeDefined();
+    expect(chutes?.label).toBeTruthy();
+    expect(chutes?.options.map((option) => option.value)).toEqual(
+      expect.arrayContaining(["chutes"]),
+    );
+    expect(chutes?.options.map((option) => option.providerId)).toEqual(
+      expect.arrayContaining(["chutes"]),
+    );
+  });
+
+  test("models.auth.choices rejects unknown params", async () => {
+    const res = await rpcReq(ws, "models.auth.choices", { extra: true });
+    expect(res.ok).toBe(false);
+    expect(res.error?.message).toContain("invalid models.auth.choices params");
   });
 });
 

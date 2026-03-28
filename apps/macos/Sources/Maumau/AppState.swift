@@ -46,6 +46,18 @@ final class AppState {
         }
     }
 
+    var onboardingLanguage: OnboardingLanguage? {
+        didSet {
+            self.ifNotPreview {
+                if let onboardingLanguage {
+                    UserDefaults.standard.set(onboardingLanguage.rawValue, forKey: onboardingLanguageKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: onboardingLanguageKey)
+                }
+            }
+        }
+    }
+
     var debugPaneEnabled: Bool {
         didSet {
             self.ifNotPreview { UserDefaults.standard.set(self.debugPaneEnabled, forKey: debugPaneEnabledKey) }
@@ -238,6 +250,14 @@ final class AppState {
         didSet { self.ifNotPreview { UserDefaults.standard.set(self.remoteCliPath, forKey: remoteCliPathKey) } }
     }
 
+    var effectiveOnboardingLanguage: OnboardingLanguage {
+        self.onboardingLanguage ?? .fallback
+    }
+
+    var hasSelectedOnboardingLanguage: Bool {
+        self.onboardingLanguage != nil
+    }
+
     private var earBoostTask: Task<Void, Never>?
 
     init(preview: Bool = false) {
@@ -250,6 +270,8 @@ final class AppState {
         self.isPaused = UserDefaults.standard.bool(forKey: pauseDefaultsKey)
         self.launchAtLogin = false
         self.onboardingSeen = onboardingSeen
+        self.onboardingLanguage = OnboardingLanguage.loadSelection(
+            from: UserDefaults.standard.string(forKey: onboardingLanguageKey))
         self.debugPaneEnabled = UserDefaults.standard.bool(forKey: debugPaneEnabledKey)
         let savedVoiceWake = UserDefaults.standard.bool(forKey: swabbleEnabledKey)
         self.swabbleEnabled = voiceWakeSupported ? savedVoiceWake : false
@@ -745,6 +767,7 @@ extension AppState {
         state.isPaused = false
         state.launchAtLogin = true
         state.onboardingSeen = true
+        state.onboardingLanguage = .en
         state.debugPaneEnabled = true
         state.swabbleEnabled = true
         state.swabbleTriggerWords = ["Claude", "Computer", "Jarvis"]

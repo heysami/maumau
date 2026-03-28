@@ -66,34 +66,61 @@ func configSchemaFallbackLabel(for path: ConfigPath) -> String? {
     return humanizeConfigSchemaKey(trimmed)
 }
 
-func configSchemaDynamicEntriesHeading(hasFixedProperties: Bool) -> String? {
-    hasFixedProperties ? "Extra entries" : nil
+private func singularConfigSchemaLabel(_ label: String) -> String {
+    if label.hasSuffix("ies") {
+        return String(label.dropLast(3)) + "y"
+    }
+    if label.hasSuffix("s"), !label.hasSuffix("ss") {
+        return String(label.dropLast())
+    }
+    return label
 }
 
-func configSchemaDynamicEntriesEmptyText(parentLabel: String?, hasFixedProperties: Bool) -> String {
-    guard !hasFixedProperties, let parentLabel, !parentLabel.isEmpty else {
-        return "No extra entries yet."
-    }
-    return "No \(parentLabel.lowercased()) yet."
+func configSchemaDynamicEntriesHeading(
+    hasFixedProperties: Bool,
+    language: OnboardingLanguage = macCurrentLanguage()) -> String?
+{
+    hasFixedProperties ? macLocalized("Extra entries", language: language) : nil
 }
 
-func configSchemaDynamicEntriesAddButtonTitle(parentLabel: String?, hasFixedProperties: Bool) -> String {
+func configSchemaDynamicEntriesEmptyText(
+    parentLabel: String?,
+    hasFixedProperties: Bool,
+    language: OnboardingLanguage = macCurrentLanguage()) -> String
+{
     guard !hasFixedProperties, let parentLabel, !parentLabel.isEmpty else {
-        return "Add"
+        return macLocalized("No extra entries yet.", language: language)
     }
-    if parentLabel.hasSuffix("ies") {
-        return "Add \(String(parentLabel.dropLast(3)))y"
+    let translatedLabel = macLocalized(parentLabel, language: language).lowercased()
+    if language == .id {
+        return "Belum ada \(translatedLabel)."
     }
-    if parentLabel.hasSuffix("s"), !parentLabel.hasSuffix("ss") {
-        return "Add \(String(parentLabel.dropLast()))"
+    return "No \(translatedLabel) yet."
+}
+
+func configSchemaDynamicEntriesAddButtonTitle(
+    parentLabel: String?,
+    hasFixedProperties: Bool,
+    language: OnboardingLanguage = macCurrentLanguage()) -> String
+{
+    guard !hasFixedProperties, let parentLabel, !parentLabel.isEmpty else {
+        return macLocalized("Add", language: language)
     }
-    return "Add \(parentLabel)"
+    let singular = singularConfigSchemaLabel(parentLabel)
+    if language == .id {
+        return "Tambah \(macLocalized(singular, language: language).lowercased())"
+    }
+    return "Add \(singular)"
 }
 
 struct ConfigSchemaForm: View {
     @Bindable var store: ChannelsStore
     let schema: ConfigSchemaNode
     let path: ConfigPath
+
+    private var language: OnboardingLanguage {
+        macCurrentLanguage()
+    }
 
     var body: some View {
         self.renderNode(self.schema, path: self.path)
@@ -115,9 +142,11 @@ struct ConfigSchemaForm: View {
             if !literals.isEmpty, literals.count == nonNull.count {
                 return AnyView(
                     VStack(alignment: .leading, spacing: 6) {
-                        if let label { Text(label).font(.callout.weight(.semibold)) }
+                        if let label {
+                            Text(macLocalized(label, language: self.language)).font(.callout.weight(.semibold))
+                        }
                         if let help {
-                            Text(help)
+                            Text(macLocalized(help, language: self.language))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -128,7 +157,7 @@ struct ConfigSchemaForm: View {
                                 options: literals,
                                 defaultValue: schema.explicitDefault))
                         {
-                            Text("Select…").tag(-1)
+                            Text(macLocalized("Select…", language: self.language)).tag(-1)
                             ForEach(literals.indices, id: \ .self) { index in
                                 Text(String(describing: literals[index])).tag(index)
                             }
@@ -152,11 +181,11 @@ struct ConfigSchemaForm: View {
             return AnyView(
                 VStack(alignment: .leading, spacing: 12) {
                     if let label {
-                        Text(label)
+                        Text(macLocalized(label, language: self.language))
                             .font(.callout.weight(.semibold))
                     }
                     if let help {
-                        Text(help)
+                        Text(macLocalized(help, language: self.language))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -166,7 +195,7 @@ struct ConfigSchemaForm: View {
                         }
                     }
                     if !advancedKeys.isEmpty {
-                        DisclosureGroup("Advanced settings") {
+                        DisclosureGroup(macLocalized("Advanced settings", language: self.language)) {
                             VStack(alignment: .leading, spacing: 12) {
                                 ForEach(advancedKeys, id: \ .self) { key in
                                     if let child = properties[key] {
@@ -186,9 +215,13 @@ struct ConfigSchemaForm: View {
         case "boolean":
             return AnyView(
                 Toggle(isOn: self.boolBinding(path, defaultValue: schema.explicitDefault as? Bool)) {
-                    if let label { Text(label) } else { Text("Enabled") }
+                    if let label {
+                        Text(macLocalized(label, language: self.language))
+                    } else {
+                        Text(macLocalized("Enabled", language: self.language))
+                    }
                 }
-                .help(help ?? ""))
+                .help(help.map { macLocalized($0, language: self.language) } ?? ""))
         case "number", "integer":
             return AnyView(self.renderNumberField(schema, path: path, label: label, help: help))
         case "string":
@@ -196,8 +229,10 @@ struct ConfigSchemaForm: View {
         default:
             return AnyView(
                 VStack(alignment: .leading, spacing: 6) {
-                    if let label { Text(label).font(.callout.weight(.semibold)) }
-                    Text("Unsupported field type.")
+                    if let label {
+                        Text(macLocalized(label, language: self.language)).font(.callout.weight(.semibold))
+                    }
+                    Text(macLocalized("Unsupported field type.", language: self.language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 })
@@ -213,28 +248,29 @@ struct ConfigSchemaForm: View {
     {
         let hint = hintForPath(path, hints: store.configUiHints)
         let placeholder = hint?.placeholder ?? ""
+        let localizedPlaceholder = macLocalized(placeholder, language: self.language)
         let sensitive = hint?.sensitive ?? isSensitivePath(path)
         let defaultValue = schema.explicitDefault as? String
         VStack(alignment: .leading, spacing: 6) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label { Text(macLocalized(label, language: self.language)).font(.callout.weight(.semibold)) }
             if let help {
-                Text(help)
+                Text(macLocalized(help, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             if let options = schema.enumValues {
                 Picker("", selection: self.enumBinding(path, options: options, defaultValue: schema.explicitDefault)) {
-                    Text("Select…").tag(-1)
+                    Text(macLocalized("Select…", language: self.language)).tag(-1)
                     ForEach(options.indices, id: \ .self) { index in
                         Text(String(describing: options[index])).tag(index)
                     }
                 }
                 .pickerStyle(.menu)
             } else if sensitive {
-                SecureField(placeholder, text: self.stringBinding(path, defaultValue: defaultValue))
+                SecureField(localizedPlaceholder, text: self.stringBinding(path, defaultValue: defaultValue))
                     .textFieldStyle(.roundedBorder)
             } else {
-                TextField(placeholder, text: self.stringBinding(path, defaultValue: defaultValue))
+                TextField(localizedPlaceholder, text: self.stringBinding(path, defaultValue: defaultValue))
                     .textFieldStyle(.roundedBorder)
             }
         }
@@ -250,9 +286,9 @@ struct ConfigSchemaForm: View {
         let defaultValue = (schema.explicitDefault as? Double)
             ?? (schema.explicitDefault as? Int).map(Double.init)
         VStack(alignment: .leading, spacing: 6) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label { Text(macLocalized(label, language: self.language)).font(.callout.weight(.semibold)) }
             if let help {
-                Text(help)
+                Text(macLocalized(help, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -277,9 +313,9 @@ struct ConfigSchemaForm: View {
         let items = value as? [Any] ?? []
         let itemSchema = schema.items
         VStack(alignment: .leading, spacing: 10) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label { Text(macLocalized(label, language: self.language)).font(.callout.weight(.semibold)) }
             if let help {
-                Text(help)
+                Text(macLocalized(help, language: self.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -290,7 +326,7 @@ struct ConfigSchemaForm: View {
                     } else {
                         Text(String(describing: items[index]))
                     }
-                    Button("Remove") {
+                    Button(macLocalized("Remove", language: self.language)) {
                         var next = items
                         next.remove(at: index)
                         self.store.updateConfigValue(path: path, value: next)
@@ -299,7 +335,7 @@ struct ConfigSchemaForm: View {
                     .controlSize(.small)
                 }
             }
-            Button("Add") {
+            Button(macLocalized("Add", language: self.language)) {
                 var next = items
                 if let itemSchema {
                     next.append(itemSchema.defaultValue)
@@ -325,13 +361,17 @@ struct ConfigSchemaForm: View {
             let reserved = Set(schema.properties.keys)
             let extras = dict.keys.filter { !reserved.contains($0) }.sorted()
             let hasFixedProperties = !schema.properties.isEmpty
-            let heading = configSchemaDynamicEntriesHeading(hasFixedProperties: hasFixedProperties)
+            let heading = configSchemaDynamicEntriesHeading(
+                hasFixedProperties: hasFixedProperties,
+                language: self.language)
             let emptyText = configSchemaDynamicEntriesEmptyText(
                 parentLabel: parentLabel,
-                hasFixedProperties: hasFixedProperties)
+                hasFixedProperties: hasFixedProperties,
+                language: self.language)
             let addButtonTitle = configSchemaDynamicEntriesAddButtonTitle(
                 parentLabel: parentLabel,
-                hasFixedProperties: hasFixedProperties)
+                hasFixedProperties: hasFixedProperties,
+                language: self.language)
 
             VStack(alignment: .leading, spacing: 8) {
                 if let heading {
@@ -346,11 +386,11 @@ struct ConfigSchemaForm: View {
                     ForEach(extras, id: \ .self) { key in
                         let itemPath: ConfigPath = path + [.key(key)]
                         HStack(alignment: .top, spacing: 8) {
-                            TextField("Key", text: self.mapKeyBinding(path: path, key: key))
+                            TextField(macLocalized("Key", language: self.language), text: self.mapKeyBinding(path: path, key: key))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 160)
                             self.renderNode(additionalSchema, path: itemPath)
-                            Button("Remove") {
+                            Button(macLocalized("Remove", language: self.language)) {
                                 var next = dict
                                 next.removeValue(forKey: key)
                                 self.store.updateConfigValue(path: path, value: next)
@@ -493,7 +533,7 @@ struct ChannelConfigForm: View {
         } else if let schema = store.channelConfigSchema(for: channelId) {
             ConfigSchemaForm(store: self.store, schema: schema, path: [.key("channels"), .key(self.channelId)])
         } else {
-            Text("Schema unavailable for this channel.")
+            Text(macLocalized("Schema unavailable for this channel.", language: macCurrentLanguage()))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -20,6 +20,8 @@ extension OnboardingView {
     func pageView(for pageIndex: Int) -> some View {
         Group {
             switch pageIndex {
+            case self.languagePageIndex:
+                self.languagePage()
             case 0:
                 self.welcomePage()
             case 1:
@@ -49,15 +51,13 @@ extension OnboardingView {
         .id("onboarding-page-\(pageIndex)")
     }
 
-    func welcomePage() -> some View {
-        let introText = self.state.connectionMode == .remote
-            ? "Setup is simpler than it looks: set up the Gateway, then pick a Channel for messages."
-            : "Setup is simpler than it looks: set up the Gateway, choose the brain, pick a Channel, then review Mac access and the included tools."
-        return self.onboardingPage(pageID: 0) {
+    func languagePage() -> some View {
+        self.onboardingPage(pageID: self.languagePageIndex) {
             VStack(spacing: 22) {
-                Text("Welcome to Maumau")
+                Text(self.strings.languagePageTitle)
                     .font(.largeTitle.weight(.semibold))
-                Text(introText)
+
+                Text(self.strings.languagePageSubtitle)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -65,7 +65,54 @@ extension OnboardingView {
                     .fixedSize(horizontal: false, vertical: true)
 
                 self.onboardingCard(spacing: 12, padding: 16) {
-                    Text("Here’s what the next steps mean")
+                    ForEach(OnboardingLanguage.allCases, id: \.rawValue) { language in
+                        Button {
+                            self.state.onboardingLanguage = language
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(language.nativeName)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text(language.displayName)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                SelectionStateIndicator(
+                                    selected: self.state.onboardingLanguage == language)
+                            }
+                            .maumauSelectableRowChrome(selected: self.state.onboardingLanguage == language)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: 420)
+
+                Text(self.strings.languagePageFootnote)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
+            }
+            .padding(.top, 24)
+        }
+    }
+
+    func welcomePage() -> some View {
+        return self.onboardingPage(pageID: 0) {
+            VStack(spacing: 22) {
+                Text(self.strings.windowTitle)
+                    .font(.largeTitle.weight(.semibold))
+                Text(self.strings.welcomeIntro(mode: self.state.connectionMode))
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 560)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                self.onboardingCard(spacing: 12, padding: 16) {
+                    Text(self.strings.nextStepsMeaningTitle)
                         .font(.headline)
 
                     ForEach(Array(self.setupStepDefinitions.enumerated()), id: \.element.pageID) { index, step in
@@ -77,12 +124,13 @@ extension OnboardingView {
                             title: step.title,
                             bodyText: step.bodyText,
                             badges: step.badges,
-                            detailNote: step.preparationNote)
+                            detailNote: step.preparationNote,
+                            language: self.state.effectiveOnboardingLanguage)
                     }
 
                     Divider()
 
-                    Text("Required steps are marked Required. Optional steps can be done later. Needs prep means you may need another app, account, or device ready for that step.")
+                    Text(self.strings.setupLegend)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -98,11 +146,9 @@ extension OnboardingView {
                             .padding(.top, 1)
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Security notice")
+                            Text(self.strings.securityNoticeTitle)
                                 .font(.headline)
-                            Text(
-                                "Maumau can do real things on your Mac if you turn them on, like run commands, read or change files, and take screenshots.\n\n" +
-                                    "Only continue if that makes sense to you and you trust the AI and tools you connect.")
+                            Text(self.strings.securityNoticeBody)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -117,11 +163,9 @@ extension OnboardingView {
 
     func connectionPage() -> some View {
         self.onboardingPage(pageID: 1) {
-            Text("Set up the Gateway")
+            Text(self.strings.connectionTitle)
                 .font(.largeTitle.weight(.semibold))
-            Text(
-                "Gateway means Maumau's home. Most people choose This Mac, which means this computer keeps the tools and does the work here."
-            )
+            Text(self.strings.connectionIntro)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -131,16 +175,17 @@ extension OnboardingView {
             self.onboardingCard(spacing: 12, padding: 16) {
                 OnboardingMeaningCard(
                     stage: .home,
-                    title: OnboardingHeaderStage.home.explainerTitle,
-                    bodyText: OnboardingHeaderStage.home.explainerBody,
+                    title: OnboardingHeaderStage.home.explainerTitle(in: self.state.effectiveOnboardingLanguage),
+                    bodyText: OnboardingHeaderStage.home.explainerBody(in: self.state.effectiveOnboardingLanguage),
                     badges: self.setupStepDefinition(for: self.connectionPageIndex)?.badges ?? [],
-                    detailNote: self.setupStepDefinition(for: self.connectionPageIndex)?.preparationNote)
+                    detailNote: self.setupStepDefinition(for: self.connectionPageIndex)?.preparationNote,
+                    language: self.state.effectiveOnboardingLanguage)
             }
 
             self.onboardingCard(spacing: 12, padding: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     self.featureRow(
-                        title: "This Mac",
+                        title: self.state.effectiveOnboardingLanguage == .en ? "This Mac" : "Mac ini",
                         subtitle: self.localGatewaySubtitle,
                         systemImage: "desktopcomputer")
 
@@ -168,29 +213,50 @@ extension OnboardingView {
 
     private var localGatewaySubtitle: String {
         if self.installingCLI {
-            return "Getting this Mac ready so Maumau can live and work here…"
+            return self.state.effectiveOnboardingLanguage == .en
+                ? "Getting this Mac ready so Maumau can live and work here…"
+                : "Menyiapkan Mac ini agar Maumau bisa tinggal dan bekerja di sini…"
         }
         if self.isCheckingLocalGatewaySetup {
-            return "Checking whether this Mac already has the helper tools Maumau needs…"
+            return self.state.effectiveOnboardingLanguage == .en
+                ? "Checking whether this Mac already has the helper tools Maumau needs…"
+                : "Memeriksa apakah Mac ini sudah memiliki tool bantu yang dibutuhkan Maumau…"
         }
         if self.localGatewaySetupAvailable {
             if let probe = self.localGatewayProbe {
                 let base = probe.expected
-                    ? "Existing local gateway detected"
-                    : "Port \(probe.port) already in use"
+                    ? (self.state.effectiveOnboardingLanguage == .en
+                        ? "Existing local gateway detected"
+                        : "Gateway lokal yang ada terdeteksi")
+                    : (self.state.effectiveOnboardingLanguage == .en
+                        ? "Port \(probe.port) already in use"
+                        : "Port \(probe.port) sudah digunakan")
                 let command = probe.command.isEmpty ? "" : " (\(probe.command) pid \(probe.pid))"
-                return "\(base)\(command). Maumau will attach automatically."
+                let suffix = self.state.effectiveOnboardingLanguage == .en
+                    ? "Maumau will attach automatically."
+                    : "Maumau akan terhubung otomatis."
+                return "\(base)\(command). \(suffix)"
             }
-            return "Recommended. Maumau can use this Mac as its home and finish setup for you."
+            return self.state.effectiveOnboardingLanguage == .en
+                ? "Recommended. Maumau can use this Mac as its home and finish setup for you."
+                : "Direkomendasikan. Maumau bisa memakai Mac ini sebagai rumahnya dan menyelesaikan pengaturan untuk Anda."
         }
         guard let probe = self.localGatewayProbe else {
-            return "Recommended. Maumau will install what it needs and make this Mac its home automatically."
+            return self.state.effectiveOnboardingLanguage == .en
+                ? "Recommended. Maumau will install what it needs and make this Mac its home automatically."
+                : "Direkomendasikan. Maumau akan memasang yang dibutuhkannya dan menjadikan Mac ini rumahnya secara otomatis."
         }
         let base = probe.expected
-            ? "Existing gateway detected"
-            : "Port \(probe.port) already in use"
+            ? (self.state.effectiveOnboardingLanguage == .en
+                ? "Existing gateway detected"
+                : "Gateway yang ada terdeteksi")
+            : (self.state.effectiveOnboardingLanguage == .en
+                ? "Port \(probe.port) already in use"
+                : "Port \(probe.port) sudah digunakan")
         let command = probe.command.isEmpty ? "" : " (\(probe.command) pid \(probe.pid))"
-        return "\(base)\(command). Will attach."
+        return self.state.effectiveOnboardingLanguage == .en
+            ? "\(base)\(command). Will attach."
+            : "\(base)\(command). Akan terhubung."
     }
 
     @ViewBuilder
@@ -200,7 +266,7 @@ extension OnboardingView {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Preparing this Mac…")
+                    Text(self.strings.preparingThisMacLabel)
                         .font(.caption.weight(.semibold))
                 }
                 if let cliStatus, !cliStatus.isEmpty {
@@ -213,15 +279,15 @@ extension OnboardingView {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Checking the helper tools this Mac needs…")
+                    Text(self.strings.checkingHelperToolsLabel)
                         .font(.caption.weight(.semibold))
                 }
-                Text("If Node 22+ is already here, Maumau can keep going without reinstalling anything.")
+                Text(self.strings.runtimeAlreadyAvailableHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if !self.localGatewaySetupAvailable {
-                Text("Maumau is getting this Mac ready before the next step.")
+                Text(self.strings.localSetupRunningHint)
                     .font(.caption.weight(.semibold))
                 if let cliStatus, !cliStatus.isEmpty {
                     Text(cliStatus)
@@ -229,17 +295,17 @@ extension OnboardingView {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Button("Retry local setup") {
+                Button(self.strings.retryLocalSetupButtonTitle) {
                     Task { await self.installCLI() }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else if let cliInstallLocation, !cliInstallLocation.isEmpty {
-                Label("Local CLI ready at \(cliInstallLocation)", systemImage: "checkmark.circle.fill")
+                Label(self.strings.localCliReadyLabel(location: cliInstallLocation), systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
             } else {
-                Text("This Mac is ready. Continue to the brain setup.")
+                Text(self.strings.localSetupReadyHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -253,28 +319,33 @@ extension OnboardingView {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(self.gatewayDiscovery.statusText)
+            Text(macDiscoveryStatus(
+                self.gatewayDiscovery.statusText,
+                language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if self.gatewayDiscovery.gateways.isEmpty {
                 ProgressView().controlSize(.small)
-                Button("Refresh") {
+                Button(macLocalized("Refresh", language: self.state.effectiveOnboardingLanguage)) {
                     self.gatewayDiscovery.refreshRemoteFallbackNow(timeoutSeconds: 5.0)
                 }
                 .buttonStyle(.link)
-                .help("Retry remote discovery (Tailscale DNS-SD + Serve probe).")
+                .help(
+                    macLocalized(
+                        "Retry remote discovery (Tailscale DNS-SD + Serve probe).",
+                        language: self.state.effectiveOnboardingLanguage))
             }
             Spacer(minLength: 0)
         }
 
         if self.gatewayDiscovery.gateways.isEmpty {
-            Text("Searching for nearby gateways…")
+            Text(self.strings.searchingNearbyGatewaysLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Nearby gateways")
+                Text(self.strings.nearbyGatewaysLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 4)
@@ -302,7 +373,7 @@ extension OnboardingView {
             ? (self.showAdvancedConnection ? "Hide advanced remote fields" : "Advanced remote fields")
             : "Connect to an existing gateway instead"
 
-        Button(buttonTitle) {
+        Button(macLocalized(buttonTitle, language: self.state.effectiveOnboardingLanguage)) {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                 self.showAdvancedConnection.toggle()
             }
@@ -319,19 +390,21 @@ extension OnboardingView {
             VStack(alignment: .leading, spacing: 10) {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                     GridRow {
-                        Text("Transport")
+                        Text(macLocalized("Transport", language: self.state.effectiveOnboardingLanguage))
                             .font(.callout.weight(.semibold))
                             .frame(width: labelWidth, alignment: .leading)
-                        Picker("Transport", selection: self.$state.remoteTransport) {
-                            Text("SSH tunnel").tag(AppState.RemoteTransport.ssh)
-                            Text("Direct (ws/wss)").tag(AppState.RemoteTransport.direct)
+                        Picker(macLocalized("Transport", language: self.state.effectiveOnboardingLanguage), selection: self.$state.remoteTransport) {
+                            Text(macLocalized("SSH tunnel", language: self.state.effectiveOnboardingLanguage))
+                                .tag(AppState.RemoteTransport.ssh)
+                            Text(macLocalized("Direct (ws/wss)", language: self.state.effectiveOnboardingLanguage))
+                                .tag(AppState.RemoteTransport.direct)
                         }
                         .pickerStyle(.segmented)
                         .frame(width: fieldWidth)
                     }
                     if self.state.remoteTransport == .direct {
                         GridRow {
-                            Text("Gateway URL")
+                            Text(macLocalized("Gateway URL", language: self.state.effectiveOnboardingLanguage))
                                 .font(.callout.weight(.semibold))
                                 .frame(width: labelWidth, alignment: .leading)
                             TextField("wss://gateway.example.ts.net", text: self.$state.remoteUrl)
@@ -341,7 +414,7 @@ extension OnboardingView {
                     }
                     if self.state.remoteTransport == .ssh {
                         GridRow {
-                            Text("SSH target")
+                            Text(macLocalized("SSH target", language: self.state.effectiveOnboardingLanguage))
                                 .font(.callout.weight(.semibold))
                                 .frame(width: labelWidth, alignment: .leading)
                             TextField("user@host[:port]", text: self.$state.remoteTarget)
@@ -361,7 +434,7 @@ extension OnboardingView {
                             }
                         }
                         GridRow {
-                            Text("Identity file")
+                            Text(macLocalized("Identity file", language: self.state.effectiveOnboardingLanguage))
                                 .font(.callout.weight(.semibold))
                                 .frame(width: labelWidth, alignment: .leading)
                             TextField("/Users/you/.ssh/id_ed25519", text: self.$state.remoteIdentity)
@@ -369,7 +442,7 @@ extension OnboardingView {
                                 .frame(width: fieldWidth)
                         }
                         GridRow {
-                            Text("Project root")
+                            Text(macLocalized("Project root", language: self.state.effectiveOnboardingLanguage))
                                 .font(.callout.weight(.semibold))
                                 .frame(width: labelWidth, alignment: .leading)
                             TextField("/home/you/Projects/maumau", text: self.$state.remoteProjectRoot)
@@ -377,7 +450,7 @@ extension OnboardingView {
                                 .frame(width: fieldWidth)
                         }
                         GridRow {
-                            Text("CLI path")
+                            Text(macLocalized("CLI path", language: self.state.effectiveOnboardingLanguage))
                                 .font(.callout.weight(.semibold))
                                 .frame(width: labelWidth, alignment: .leading)
                             TextField(
@@ -389,9 +462,12 @@ extension OnboardingView {
                     }
                 }
 
-                Text(self.state.remoteTransport == .direct
-                    ? "Tip: use Tailscale Serve so the gateway has a valid HTTPS cert."
-                    : "Tip: keep Tailscale enabled so your gateway stays reachable.")
+                Text(
+                    macLocalized(
+                        self.state.remoteTransport == .direct
+                            ? "Tip: use Tailscale Serve so the gateway has a valid HTTPS cert."
+                            : "Tip: keep Tailscale enabled so your gateway stays reachable.",
+                        language: self.state.effectiveOnboardingLanguage))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -426,16 +502,22 @@ extension OnboardingView {
         case .direct:
             let trimmedUrl = self.state.remoteUrl.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedUrl.isEmpty {
-                return "Select a nearby gateway or open Advanced to enter a gateway URL."
+                return macLocalized(
+                    "Select a nearby gateway or open Advanced to enter a gateway URL.",
+                    language: self.state.effectiveOnboardingLanguage)
             }
             if GatewayRemoteConfig.normalizeGatewayUrl(trimmedUrl) == nil {
-                return "Gateway URL must use wss:// for remote hosts (ws:// only for localhost)."
+                return macLocalized(
+                    "Gateway URL must use wss:// for remote hosts (ws:// only for localhost).",
+                    language: self.state.effectiveOnboardingLanguage)
             }
             return nil
         case .ssh:
             let trimmedTarget = self.state.remoteTarget.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedTarget.isEmpty {
-                return "Select a nearby gateway or open Advanced to enter an SSH target."
+                return macLocalized(
+                    "Select a nearby gateway or open Advanced to enter an SSH target.",
+                    language: self.state.effectiveOnboardingLanguage)
             }
             return CommandResolver.sshTargetValidationMessage(trimmedTarget)
         }
@@ -449,9 +531,12 @@ extension OnboardingView {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Remote connection")
+                    Text(macLocalized("Remote connection", language: self.state.effectiveOnboardingLanguage))
                         .font(.callout.weight(.semibold))
-                    Text("Checks the real remote websocket and auth handshake.")
+                    Text(
+                        macLocalized(
+                            "Checks the real remote websocket and auth handshake.",
+                            language: self.state.effectiveOnboardingLanguage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -464,7 +549,7 @@ extension OnboardingView {
                             .controlSize(.small)
                             .frame(minWidth: 120)
                     } else {
-                        Text("Check connection")
+                        Text(macLocalized("Check connection", language: self.state.effectiveOnboardingLanguage))
                             .frame(minWidth: 120)
                     }
                 }
@@ -494,19 +579,21 @@ extension OnboardingView {
     private func remoteTokenField() -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 12) {
-                Text("Gateway token")
+                Text(macLocalized("Gateway token", language: self.state.effectiveOnboardingLanguage))
                     .font(.callout.weight(.semibold))
                     .frame(width: 110, alignment: .leading)
                 SecureField("remote gateway auth token (gateway.remote.token)", text: self.$state.remoteToken)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 320)
             }
-            Text("Used when the remote gateway requires token auth.")
+            Text(macLocalized("Used when the remote gateway requires token auth.", language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if self.state.remoteTokenUnsupported {
                 Text(
-                    "The current gateway.remote.token value is not plain text. Maumau for macOS cannot use it directly; enter a plaintext token here to replace it.")
+                    macLocalized(
+                        "The current gateway.remote.token value is not plain text. Maumau for macOS cannot use it directly; enter a plaintext token here to replace it.",
+                        language: self.state.effectiveOnboardingLanguage))
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -520,15 +607,17 @@ extension OnboardingView {
         case .idle:
             EmptyView()
         case .checking:
-            Text("Checking remote gateway…")
+            Text(macLocalized("Checking remote gateway…", language: self.state.effectiveOnboardingLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         case let .ok(success):
             VStack(alignment: .leading, spacing: 2) {
-                Label(success.title, systemImage: "checkmark.circle.fill")
+                Label(
+                    macGatewayStatusTitle(success.title, language: self.state.effectiveOnboardingLanguage),
+                    systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
-                if let detail = success.detail {
+                if let detail = macGatewayStatusDetail(success.detail, language: self.state.effectiveOnboardingLanguage) {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -554,14 +643,14 @@ extension OnboardingView {
                 .frame(width: 16, alignment: .center)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 4) {
-                Text(issue.title)
+                Text(macAuthIssueText(issue.title, language: self.state.effectiveOnboardingLanguage))
                     .font(.caption.weight(.semibold))
-                Text(.init(issue.body))
+                Text(.init(macAuthIssueText(issue.body, language: self.state.effectiveOnboardingLanguage)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let footnote = issue.footnote {
-                    Text(.init(footnote))
+                    Text(.init(macAuthIssueText(footnote, language: self.state.effectiveOnboardingLanguage)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -593,9 +682,10 @@ extension OnboardingView {
             self.remoteProbeState = .ok(success)
         case let .authIssue(issue):
             self.remoteAuthIssue = issue
-            self.remoteProbeState = .failed(issue.statusMessage)
+            self.remoteProbeState = .failed(
+                macAuthIssueText(issue.statusMessage, language: self.state.effectiveOnboardingLanguage))
         case let .failed(message):
-            self.remoteProbeState = .failed(message)
+            self.remoteProbeState = .failed(macLocalized(message, language: self.state.effectiveOnboardingLanguage))
         }
     }
 
@@ -645,7 +735,8 @@ extension OnboardingView {
 
     func gatewaySubtitle(for gateway: GatewayDiscoveryModel.DiscoveredGateway) -> String? {
         if self.state.remoteTransport == .direct {
-            return GatewayDiscoveryHelpers.directUrl(for: gateway) ?? "Gateway pairing only"
+            return GatewayDiscoveryHelpers.directUrl(for: gateway)
+                ?? macLocalized("Gateway pairing only", language: self.state.effectiveOnboardingLanguage)
         }
         if let target = GatewayDiscoveryHelpers.sshTarget(for: gateway),
            let parsed = CommandResolver.parseSSHTarget(target)
@@ -653,7 +744,7 @@ extension OnboardingView {
             let portSuffix = parsed.port != 22 ? " · ssh \(parsed.port)" : ""
             return "\(parsed.host)\(portSuffix)"
         }
-        return "Gateway pairing only"
+        return macLocalized("Gateway pairing only", language: self.state.effectiveOnboardingLanguage)
     }
 
     func isSelectedGateway(_ gateway: GatewayDiscoveryModel.DiscoveredGateway) -> Bool {
@@ -698,11 +789,9 @@ extension OnboardingView {
     func permissionsPage() -> some View {
         self.onboardingPage(pageID: 5) {
             VStack(spacing: 16) {
-                Text("Allow Mac access")
+                Text(self.strings.permissionsTitle)
                     .font(.largeTitle.weight(.semibold))
-                Text(
-                    "These are the main Mac permissions Maumau uses when it helps with apps, windows, or screenshots. Turn on only the ones you want."
-                )
+                Text(self.strings.permissionsIntro)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -732,13 +821,13 @@ extension OnboardingView {
                         Button {
                             Task { await self.refreshPerms() }
                         } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
+                            Label(self.strings.refreshButtonTitle, systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .help("Refresh status")
+                        .help(self.strings.refreshButtonTitle)
 
-                        Button("Open full Permissions settings") {
+                        Button(self.strings.openPermissionsSettingsButtonTitle) {
                             self.openSettings(tab: .permissions)
                         }
                         .buttonStyle(.bordered)
@@ -761,11 +850,9 @@ extension OnboardingView {
                             .padding(.top, 1)
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Optional later")
+                            Text(self.strings.optionalLaterTitle)
                                 .font(.headline)
-                            Text(
-                                "Voice Wake, camera, and location stay out of the way here. If you want those later, you can turn them on in Settings."
-                            )
+                            Text(self.strings.optionalLaterBody)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -778,9 +865,12 @@ extension OnboardingView {
 
     func cliPage() -> some View {
         self.onboardingPage(pageID: 6) {
-            Text("Install the CLI")
+            Text(macLocalized("Install the CLI", language: self.state.effectiveOnboardingLanguage))
                 .font(.largeTitle.weight(.semibold))
-            Text("This is the small helper app Maumau uses behind the scenes when it lives on this Mac.")
+            Text(
+                macLocalized(
+                    "This is the small helper app Maumau uses behind the scenes when it lives on this Mac.",
+                    language: self.state.effectiveOnboardingLanguage))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -794,7 +884,7 @@ extension OnboardingView {
                     } label: {
                         let title = self.cliInstalled ? "Reinstall CLI" : "Install CLI"
                         ZStack {
-                            Text(title)
+                            Text(macLocalized(title, language: self.state.effectiveOnboardingLanguage))
                                 .opacity(self.installingCLI ? 0 : 1)
                             if self.installingCLI {
                                 ProgressView()
@@ -806,13 +896,21 @@ extension OnboardingView {
                     .buttonStyle(.borderedProminent)
                     .disabled(self.installingCLI)
 
-                    Button(self.copied ? "Copied" : "Copy install command") {
+                    Button(
+                        self.copied
+                            ? macLocalized("Copied", language: self.state.effectiveOnboardingLanguage)
+                            : macLocalized("Copy install command", language: self.state.effectiveOnboardingLanguage))
+                    {
                         self.copyToPasteboard(self.devLinkCommand)
                     }
                     .disabled(self.installingCLI)
 
                     if self.cliInstalled, let loc = self.cliInstallLocation {
-                        Label("Installed at \(loc)", systemImage: "checkmark.circle.fill")
+                        Label(
+                            self.state.effectiveOnboardingLanguage == .id
+                                ? "Terpasang di \(loc)"
+                                : "Installed at \(loc)",
+                            systemImage: "checkmark.circle.fill")
                             .font(.footnote)
                             .foregroundStyle(.green)
                     }
@@ -824,11 +922,13 @@ extension OnboardingView {
                         .foregroundStyle(.secondary)
                 } else if !self.cliInstalled, self.cliInstallLocation == nil {
                     Text(
-                        """
-                        Maumau normally does this for you the first time you choose This Mac.
-                        It installs the helper pieces it needs in your user account.
-                        Use Install CLI if you want to retry or reinstall.
-                        """)
+                        macLocalized(
+                            """
+                            Maumau normally does this for you the first time you choose This Mac.
+                            It installs the helper pieces it needs in your user account.
+                            Use Install CLI if you want to retry or reinstall.
+                            """,
+                            language: self.state.effectiveOnboardingLanguage))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -838,10 +938,12 @@ extension OnboardingView {
 
     func workspacePage() -> some View {
         self.onboardingPage(pageID: 7) {
-            Text("Agent workspace")
+            Text(macLocalized("Agent workspace", language: self.state.effectiveOnboardingLanguage))
                 .font(.largeTitle.weight(.semibold))
             Text(
-                "Think of this as Maumau’s room. It is the folder where it keeps notes, reads instructions, and makes files.")
+                macLocalized(
+                    "Think of this as Maumau’s room. It is the folder where it keeps notes, reads instructions, and makes files.",
+                    language: self.state.effectiveOnboardingLanguage))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -851,34 +953,41 @@ extension OnboardingView {
             self.onboardingCard(spacing: 10) {
                 if self.state.connectionMode == .remote {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Remote gateway detected")
+                        Text(macLocalized("Remote gateway detected", language: self.state.effectiveOnboardingLanguage))
                             .font(.headline)
                         Text(
-                            "Choose the remote workspace path now. The gateway wizard will use it, " +
-                                "and you can copy a bootstrap command if you want to seed files manually.")
+                            macLocalized(
+                                "Choose the remote workspace path now. The gateway wizard will use it, and you can copy a bootstrap command if you want to seed files manually.",
+                                language: self.state.effectiveOnboardingLanguage))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        Text("Workspace folder")
+                        Text(macLocalized("Workspace folder", language: self.state.effectiveOnboardingLanguage))
                             .font(.headline)
                         TextField("~/.maumau/workspace", text: self.$workspacePath)
                             .textFieldStyle(.roundedBorder)
 
                         HStack(spacing: 12) {
-                            Button("Save in config") {
+                            Button(macLocalized("Save in config", language: self.state.effectiveOnboardingLanguage)) {
                                 Task {
                                     let url = AgentWorkspace.resolveWorkspaceURL(from: self.workspacePath)
                                     let saved = await self.saveAgentWorkspace(AgentWorkspace.displayPath(for: url))
                                     if saved {
                                         self.workspaceStatus =
-                                            "Saved workspace path to the remote gateway config."
+                                            macLocalized(
+                                                "Saved workspace path to the remote gateway config.",
+                                                language: self.state.effectiveOnboardingLanguage)
                                     }
                                 }
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(self.workspaceApplying)
 
-                            Button(self.copied ? "Copied" : "Copy setup command") {
+                            Button(
+                                self.copied
+                                    ? macLocalized("Copied", language: self.state.effectiveOnboardingLanguage)
+                                    : macLocalized("Copy setup command", language: self.state.effectiveOnboardingLanguage))
+                            {
                                 self.copyToPasteboard(self.workspaceBootstrapCommand)
                             }
                             .buttonStyle(.bordered)
@@ -887,7 +996,7 @@ extension OnboardingView {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Workspace folder")
+                        Text(macLocalized("Workspace folder", language: self.state.effectiveOnboardingLanguage))
                             .font(.headline)
                         TextField(
                             AgentWorkspace.displayPath(for: MaumauConfigFile.defaultWorkspaceURL()),
@@ -901,26 +1010,28 @@ extension OnboardingView {
                                 if self.workspaceApplying {
                                     ProgressView()
                                 } else {
-                                    Text("Create workspace")
+                                    Text(macLocalized("Create workspace", language: self.state.effectiveOnboardingLanguage))
                                 }
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(self.workspaceApplying)
 
-                            Button("Open folder") {
+                            Button(macLocalized("Open folder", language: self.state.effectiveOnboardingLanguage)) {
                                 let url = AgentWorkspace.resolveWorkspaceURL(from: self.workspacePath)
                                 NSWorkspace.shared.open(url)
                             }
                             .buttonStyle(.bordered)
                             .disabled(self.workspaceApplying)
 
-                            Button("Save in config") {
+                            Button(macLocalized("Save in config", language: self.state.effectiveOnboardingLanguage)) {
                                 Task {
                                     let url = AgentWorkspace.resolveWorkspaceURL(from: self.workspacePath)
                                     let saved = await self.saveAgentWorkspace(AgentWorkspace.displayPath(for: url))
                                     if saved {
                                         self.workspaceStatus =
-                                            "Saved to ~/.maumau/maumau.json (agents.defaults.workspace)"
+                                            macLocalized(
+                                                "Saved to ~/.maumau/maumau.json (agents.defaults.workspace)",
+                                                language: self.state.effectiveOnboardingLanguage)
                                     }
                                 }
                             }
@@ -930,7 +1041,9 @@ extension OnboardingView {
                     }
 
                     Text(
-                        "Maumau will use this folder during setup. If it doesn’t exist yet, the setup wizard can create it and seed the bootstrap files."
+                        macLocalized(
+                            "Maumau will use this folder during setup. If it doesn’t exist yet, the setup wizard can create it and seed the bootstrap files.",
+                            language: self.state.effectiveOnboardingLanguage)
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -949,9 +1062,9 @@ extension OnboardingView {
                         .fixedSize(horizontal: false, vertical: true)
                 } else if self.state.connectionMode != .remote {
                     Text(
-                        "Tip: edit AGENTS.md in this folder to shape the assistant’s behavior. " +
-                            "For backup, make the workspace a private git repo so your agent’s " +
-                            "“memory” is versioned.")
+                        macLocalized(
+                            "Tip: edit AGENTS.md in this folder to shape the assistant’s behavior. For backup, make the workspace a private git repo so your agent’s “memory” is versioned.",
+                            language: self.state.effectiveOnboardingLanguage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -962,11 +1075,12 @@ extension OnboardingView {
 
     func onboardingChatPage() -> some View {
         VStack(spacing: 16) {
-            Text("Meet your agent")
+            Text(macLocalized("Meet your agent", language: self.state.effectiveOnboardingLanguage))
                 .font(.largeTitle.weight(.semibold))
             Text(
-                "This is a dedicated onboarding chat. Your agent will introduce itself, " +
-                    "learn who you are, and help you connect WhatsApp or Telegram if you want.")
+                macLocalized(
+                    "This is a dedicated onboarding chat. Your agent will introduce itself, learn who you are, and help you connect WhatsApp or Telegram if you want.",
+                    language: self.state.effectiveOnboardingLanguage))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -988,11 +1102,9 @@ extension OnboardingView {
     func channelsSetupPage() -> some View {
         self.onboardingPage(pageID: self.channelsSetupPageIndex) {
             VStack(spacing: 16) {
-                Text("Pick a Channel")
+                Text(self.strings.channelsTitle)
                     .font(.largeTitle.weight(.semibold))
-                Text(
-                    "Channel means the app where people text Maumau. Think of it like giving Maumau a phone line or inbox. Pick one now, and you can add more later."
-                )
+                Text(self.strings.channelsIntro)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1002,10 +1114,11 @@ extension OnboardingView {
                 self.onboardingCard(spacing: 12, padding: 16) {
                     OnboardingMeaningCard(
                         stage: .chat,
-                        title: OnboardingHeaderStage.chat.explainerTitle,
-                        bodyText: OnboardingHeaderStage.chat.explainerBody,
+                        title: OnboardingHeaderStage.chat.explainerTitle(in: self.state.effectiveOnboardingLanguage),
+                        bodyText: OnboardingHeaderStage.chat.explainerBody(in: self.state.effectiveOnboardingLanguage),
                         badges: self.setupStepDefinition(for: self.channelsSetupPageIndex)?.badges ?? [],
-                        detailNote: self.setupStepDefinition(for: self.channelsSetupPageIndex)?.preparationNote)
+                        detailNote: self.setupStepDefinition(for: self.channelsSetupPageIndex)?.preparationNote,
+                        language: self.state.effectiveOnboardingLanguage)
                 }
 
                 self.onboardingCard(spacing: 14, padding: 18) {
@@ -1014,7 +1127,8 @@ extension OnboardingView {
                         openFullChannelsSettings: { self.openSettings(tab: .channels) },
                         isActive: Self.shouldActivateOnboardingPageSideEffects(
                             activePageIndex: self.activePageIndex,
-                            pageIndex: self.channelsSetupPageIndex))
+                            pageIndex: self.channelsSetupPageIndex),
+                        language: self.state.effectiveOnboardingLanguage)
                 }
             }
         }
@@ -1023,11 +1137,9 @@ extension OnboardingView {
     func privateAccessPage() -> some View {
         self.onboardingPage(pageID: self.privateAccessPageIndex) {
             VStack(spacing: 16) {
-                Text("Private access from your devices")
+                Text(self.strings.privateAccessTitle)
                     .font(.largeTitle.weight(.semibold))
-                Text(
-                    "This gives Maumau's home a private driveway. It lets your phone, laptop, or browser reach Maumau privately without putting Maumau on the public internet."
-                )
+                Text(self.strings.privateAccessIntro)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1037,33 +1149,34 @@ extension OnboardingView {
                 self.onboardingCard(spacing: 12, padding: 16) {
                     OnboardingMeaningCard(
                         stage: .access,
-                        title: OnboardingHeaderStage.access.explainerTitle,
-                        bodyText: OnboardingHeaderStage.access.explainerBody,
+                        title: OnboardingHeaderStage.access.explainerTitle(in: self.state.effectiveOnboardingLanguage),
+                        bodyText: OnboardingHeaderStage.access.explainerBody(in: self.state.effectiveOnboardingLanguage),
                         badges: self.setupStepDefinition(for: self.privateAccessPageIndex)?.badges ?? [],
-                        detailNote: self.setupStepDefinition(for: self.privateAccessPageIndex)?.preparationNote)
+                        detailNote: self.setupStepDefinition(for: self.privateAccessPageIndex)?.preparationNote,
+                        language: self.state.effectiveOnboardingLanguage)
                 }
 
                 self.onboardingCard(spacing: 10, padding: 14) {
                     self.featureRow(
-                        title: "This Mac, now",
-                        subtitle: "Use Install on this Mac below. Maumau downloads the official Tailscale installer here, macOS asks for your administrator password, then you sign in here.",
+                        title: self.strings.privateAccessThisMacTitle,
+                        subtitle: self.strings.privateAccessThisMacSubtitle,
                         systemImage: "desktopcomputer")
                     Divider()
                     self.featureRow(
-                        title: "Other devices, later",
-                        subtitle: "When you want to open Maumau from your phone or another laptop, install Tailscale on that device later and sign in to the same private network there.",
+                        title: self.strings.privateAccessOtherDevicesTitle,
+                        subtitle: self.strings.privateAccessOtherDevicesSubtitle,
                         systemImage: "iphone")
                     Divider()
                     self.featureRow(
-                        title: "Private by default",
-                        subtitle: "Private mode keeps Maumau off the public internet. Only devices you add to the same private Tailscale network can open the private link.",
+                        title: self.strings.privateAccessDefaultPrivacyTitle,
+                        subtitle: self.strings.privateAccessDefaultPrivacySubtitle,
                         systemImage: "lock.shield")
                 }
 
                 self.onboardingCard(spacing: 10, padding: 14) {
                     self.featureRow(
-                        title: "How Maumau checks this safely",
-                        subtitle: "In private mode, Maumau accepts only Tailscale's verified private-network identity for the dashboard and live connection. If you want an extra lock, require a Maumau password too.",
+                        title: self.strings.privateAccessSafetyTitle,
+                        subtitle: self.strings.privateAccessSafetySubtitle,
                         systemImage: "checkmark.shield")
                 }
 
@@ -1074,10 +1187,10 @@ extension OnboardingView {
 
                 self.onboardingCard {
                     self.featureActionRow(
-                        title: "Come back to this later",
-                        subtitle: "The same guide stays in Settings → General, so you can run the install here later, sign in later, or add password protection later if you skip this for now.",
+                        title: self.strings.privateAccessLaterTitle,
+                        subtitle: self.strings.privateAccessLaterSubtitle,
                         systemImage: "gearshape",
-                        buttonTitle: "Open Settings → General")
+                        buttonTitle: self.strings.privateAccessLaterButtonTitle)
                     {
                         self.openSettings(tab: .general)
                     }
@@ -1089,11 +1202,9 @@ extension OnboardingView {
     func skillsSetupPage() -> some View {
         self.onboardingPage(pageID: self.skillsSetupPageIndex) {
             VStack(spacing: 16) {
-                Text("Review included tools")
+                Text(self.strings.skillsTitle)
                     .font(.largeTitle.weight(.semibold))
-                Text(
-                    "This is the short version of the core tools Maumau already comes with on this Mac. On first-time local setup, Maumau also installs nano-pdf, OpenAI Whisper, and summarize automatically when they are missing, while bundled setup guides like Clawd Cursor help you turn on extra capabilities later."
-                )
+                Text(self.strings.skillsIntro)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1109,7 +1220,7 @@ extension OnboardingView {
                         Divider()
                     }
 
-                    ForEach(Array(Self.includedToolHighlights().enumerated()), id: \.element.id) { index, highlight in
+                    ForEach(Array(self.strings.includedToolHighlights().enumerated()), id: \.element.id) { index, highlight in
                         if index > 0 {
                             Divider()
                         }
@@ -1122,12 +1233,12 @@ extension OnboardingView {
 
                 self.onboardingCard(spacing: 10, padding: 14) {
                     HStack(spacing: 10) {
-                        Text("Daily-life helpers enabled by default")
+                        Text(self.strings.dailyLifeHelpersTitle)
                             .font(.headline)
                         Spacer(minLength: 0)
                     }
 
-                    ForEach(Array(Self.includedHelperHighlights().enumerated()), id: \.element.id) { index, highlight in
+                    ForEach(Array(self.strings.includedHelperHighlights().enumerated()), id: \.element.id) { index, highlight in
                         if index > 0 {
                             Divider()
                         }
@@ -1140,17 +1251,17 @@ extension OnboardingView {
 
                 self.onboardingCard(spacing: 10, padding: 14) {
                     self.featureRow(
-                        title: "Long-term memory, when you want it",
-                        subtitle: "Add a memory backend later if you want Maumau to retain preferences, facts, and past decisions across sessions instead of starting fresh each time.",
+                        title: self.strings.memoryTitle,
+                        subtitle: self.strings.memorySubtitle,
                         systemImage: "brain.head.profile")
                 }
 
                 self.onboardingCard {
                     self.featureActionRow(
-                        title: "Open the full Skills list",
-                        subtitle: "See everything that is available, including the bundled Clawd Cursor setup guide, Cursor-compatible bundles, and extra tools you can turn on or off later.",
+                        title: self.strings.openFullSkillsTitle,
+                        subtitle: self.strings.openFullSkillsSubtitle,
                         systemImage: "sparkles",
-                        buttonTitle: "Open Settings → Skills")
+                        buttonTitle: self.strings.openFullSkillsButtonTitle)
                     {
                         self.openSettings(tab: .skills)
                     }
@@ -1178,7 +1289,9 @@ extension OnboardingView {
                 if !step.badges.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(step.badges) { badge in
-                            StatusPill(text: badge.title, tint: badge.tint)
+                            StatusPill(
+                                text: badge.title(in: self.state.effectiveOnboardingLanguage),
+                                tint: badge.tint)
                         }
                     }
                 }
@@ -1195,12 +1308,12 @@ extension OnboardingView {
 
     func readyPage() -> some View {
         self.onboardingPage(pageID: 9) {
-            Text("All set")
+            Text(self.strings.readyTitle)
                 .font(.largeTitle.weight(.semibold))
             self.onboardingCard {
-                Text("Maumau now has a home, a brain, and a place people can reach it.")
+                Text(self.strings.readyHeadline)
                     .font(.headline)
-                Text("You can keep things simple for now and fine-tune the rest later in Settings.")
+                Text(self.strings.readyBody)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1210,28 +1323,36 @@ extension OnboardingView {
 
                 if self.state.connectionMode == .unconfigured {
                     self.featureRow(
-                        title: "Configure later",
-                        subtitle: "Pick Local or Remote in Settings → General whenever you’re ready.",
+                        title: self.strings.configureLaterTitle,
+                        subtitle: self.strings.configureLaterSubtitle,
                         systemImage: "gearshape")
                     Divider()
                         .padding(.vertical, 6)
                 }
                 if self.state.connectionMode == .local {
                     self.featureActionRow(
-                        title: "Change Mac access or tools later",
-                        subtitle: "Permissions and the full Skills list stay available in Settings whenever you want to fine-tune things.",
+                        title: macLocalized("Change Mac access or tools later", language: self.state.effectiveOnboardingLanguage),
+                        subtitle: macLocalized(
+                            "Permissions and the full Skills list stay available in Settings whenever you want to fine-tune things.",
+                            language: self.state.effectiveOnboardingLanguage),
                         systemImage: "lock.shield",
-                        buttonTitle: "Open Settings → Permissions")
+                        buttonTitle: macLocalized(
+                            "Open Settings → Permissions",
+                            language: self.state.effectiveOnboardingLanguage))
                     {
                         self.openSettings(tab: .permissions)
                     }
                     Divider()
                         .padding(.vertical, 6)
                     self.featureActionRow(
-                        title: "Manage private access later",
-                        subtitle: "Open Settings → General any time to install Tailscale on this Mac, sign this Mac in, turn private access on, or revisit the steps for adding your phone later.",
+                        title: macLocalized("Manage private access later", language: self.state.effectiveOnboardingLanguage),
+                        subtitle: macLocalized(
+                            "Open Settings → General any time to install Tailscale on this Mac, sign this Mac in, turn private access on, or revisit the steps for adding your phone later.",
+                            language: self.state.effectiveOnboardingLanguage),
                         systemImage: "point.3.connected.trianglepath.dotted",
-                        buttonTitle: "Open Settings → General")
+                        buttonTitle: macLocalized(
+                            "Open Settings → General",
+                            language: self.state.effectiveOnboardingLanguage))
                     {
                         self.openSettings(tab: .general)
                     }
@@ -1240,29 +1361,30 @@ extension OnboardingView {
                 }
                 if self.state.connectionMode == .remote {
                     self.featureRow(
-                        title: "Remote gateway checklist",
-                        subtitle: """
-                        On your gateway host: install/update the `maumau` package and make sure credentials exist
-                        (typically `~/.maumau/credentials/oauth.json`). Then connect again if needed.
-                        """,
+                        title: macLocalized("Remote gateway checklist", language: self.state.effectiveOnboardingLanguage),
+                        subtitle: macLocalized(
+                            """
+                            On your gateway host: install/update the `maumau` package and make sure credentials exist
+                            (typically `~/.maumau/credentials/oauth.json`). Then connect again if needed.
+                            """,
+                            language: self.state.effectiveOnboardingLanguage),
                         systemImage: "network")
                     Divider()
                         .padding(.vertical, 6)
                 }
                 self.featureRow(
-                    title: "Open the menu bar panel",
-                    subtitle: "Click the Maumau menu bar icon for quick chat and status.",
+                    title: self.strings.menuBarPanelTitle,
+                    subtitle: self.strings.menuBarPanelSubtitle,
                     systemImage: "bubble.left.and.bubble.right")
                 self.featureRow(
-                    title: "Try Voice Wake",
-                    subtitle: "Enable Voice Wake in Settings for hands-free commands with a live transcript overlay.",
+                    title: self.strings.voiceWakeTitle,
+                    subtitle: self.strings.voiceWakeSubtitle,
                     systemImage: "waveform.circle")
                 self.featureRow(
-                    title: "Use the panel + Canvas",
-                    subtitle: "Open the menu bar panel for quick chat; the agent can show previews " +
-                        "and richer visuals in Canvas.",
+                    title: self.strings.panelCanvasTitle,
+                    subtitle: self.strings.panelCanvasSubtitle,
                     systemImage: "rectangle.inset.filled.and.person.filled")
-                Toggle("Launch at login", isOn: self.$state.launchAtLogin)
+                Toggle(self.strings.launchAtLoginTitle, isOn: self.$state.launchAtLogin)
                     .onChange(of: self.state.launchAtLogin) { _, newValue in
                         AppStateStore.updateLaunchAtLogin(enabled: newValue)
                     }
@@ -1309,14 +1431,14 @@ extension OnboardingView {
                 .padding(.vertical, 6)
 
             HStack(spacing: 10) {
-                Text("Included skills on this Mac")
+                Text(self.strings.includedSkillsTitle)
                     .font(.headline)
                 Spacer(minLength: 0)
                 if self.onboardingSkillsModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 } else {
-                    Button("Refresh") {
+                    Button(self.strings.refreshButtonTitle) {
                         Task {
                             await self.onboardingSkillsModel.refresh()
                             await self.maybeAutoInstallDefaultSkills()
@@ -1328,16 +1450,23 @@ extension OnboardingView {
 
             if let error = self.onboardingSkillsModel.error {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Couldn’t check the included skills yet.")
+                    Text(
+                        self.state.effectiveOnboardingLanguage == .en
+                            ? "Couldn’t check the included skills yet."
+                            : "Belum bisa memeriksa skill bawaan.")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.orange)
                     Text(
-                        "Make sure the Gateway is running and connected, " +
-                            "then hit Refresh or open Settings → Skills.")
+                        self.state.effectiveOnboardingLanguage == .en
+                            ? "Make sure the Gateway is running and connected, then hit Refresh or open Settings → Skills."
+                            : "Pastikan Gateway sedang berjalan dan terhubung, lalu tekan Segarkan atau buka Pengaturan → Skill.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Details: \(error)")
+                    Text(
+                        self.state.effectiveOnboardingLanguage == .en
+                            ? "Details: \(error)"
+                            : "Detail: \(error)")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1354,23 +1483,31 @@ extension OnboardingView {
                     }
 
                     if self.onboardingSkillsModel.skills.isEmpty {
-                        Text("Checking which included skills are available here…")
+                        Text(self.strings.checkingIncludedSkillsTitle)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
                         Text(
-                            self.readyOnboardingSkillCount == 1
-                                ? "1 included skill is ready on this Mac right now."
-                                : "\(self.readyOnboardingSkillCount) included skills are ready on this Mac right now.")
+                            self.state.effectiveOnboardingLanguage == .en
+                                ? (self.readyOnboardingSkillCount == 1
+                                    ? "1 included skill is ready on this Mac right now."
+                                    : "\(self.readyOnboardingSkillCount) included skills are ready on this Mac right now.")
+                                : (self.readyOnboardingSkillCount == 1
+                                    ? "1 skill bawaan siap di Mac ini sekarang."
+                                    : "\(self.readyOnboardingSkillCount) skill bawaan siap di Mac ini sekarang."))
                             .font(.footnote.weight(.semibold))
                         Text(
-                            "First-time local setup auto-installs nano-pdf, OpenAI Whisper, and summarize when they are missing. Skill Creator is already bundled and ready."
+                            self.state.effectiveOnboardingLanguage == .en
+                                ? "First-time local setup auto-installs nano-pdf, OpenAI Whisper, and summarize when they are missing. Skill Creator is already bundled and ready."
+                                : "Pengaturan lokal pertama akan memasang nano-pdf, OpenAI Whisper, dan summarize secara otomatis jika belum ada. Skill Creator sudah dibundel dan siap."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         Text(
-                            "Browser control, the core Mac tools above, and the default daily-life helpers stay separate from the longer Skills list, so the detailed inventory stays in Settings → Skills."
+                            self.state.effectiveOnboardingLanguage == .en
+                                ? "Browser control, the core Mac tools above, and the default daily-life helpers stay separate from the longer Skills list, so the detailed inventory stays in Settings → Skills."
+                                : "Kontrol browser, tool inti Mac di atas, dan helper harian default tetap terpisah dari daftar Skill yang lebih panjang, jadi inventaris detailnya tetap ada di Pengaturan → Skill."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -1390,50 +1527,12 @@ extension OnboardingView {
         }.count
     }
 
-    static func includedToolHighlights() -> [OnboardingToolHighlight] {
-        [
-            OnboardingToolHighlight(
-                title: "Files and folders",
-                subtitle: "Read, organize, and change things on this Mac when you allow it.",
-                systemImage: "folder"),
-            OnboardingToolHighlight(
-                title: "Apps and screen context",
-                subtitle: "Work with Mac apps and screenshots when the matching permissions are on.",
-                systemImage: "macwindow.on.rectangle"),
-            OnboardingToolHighlight(
-                title: "Browser control",
-                subtitle: "Open websites, follow links, and work through everyday web tasks in a browser.",
-                systemImage: "globe"),
-            OnboardingToolHighlight(
-                title: "Commands",
-                subtitle: "Run Terminal commands when you approve them or allow them.",
-                systemImage: "terminal"),
-            OnboardingToolHighlight(
-                title: "Messages and connected services",
-                subtitle: "Reply in the Channel you picked and use any extra services you connect later.",
-                systemImage: "bubble.left.and.bubble.right"),
-        ]
+    static func includedToolHighlights(language: OnboardingLanguage = .en) -> [OnboardingToolHighlight] {
+        OnboardingStrings(language: language).includedToolHighlights()
     }
 
-    static func includedHelperHighlights() -> [OnboardingToolHighlight] {
-        [
-            OnboardingToolHighlight(
-                title: "Clawd Cursor",
-                subtitle: "Includes a bundled Skill that helps you set up the upstream clawdcursor helper for native desktop control across apps. The helper itself is installed separately.",
-                systemImage: "desktopcomputer"),
-            OnboardingToolHighlight(
-                title: "Maumau Guardrails",
-                subtitle: "Keeps prompts, tool calls, and outgoing replies inside your policy once you connect a guardrails sidecar.",
-                systemImage: "checkmark.shield"),
-            OnboardingToolHighlight(
-                title: "Lobster workflows",
-                subtitle: "Automates repeatable, multi-step tasks with resumable approvals instead of making the agent improvise every step.",
-                systemImage: "point.3.connected.trianglepath.dotted"),
-            OnboardingToolHighlight(
-                title: "Structured AI tasks",
-                subtitle: "Uses LLM Task for clean JSON output, which helps with forms, extraction, handoffs, and workflow steps.",
-                systemImage: "curlybraces.square"),
-        ]
+    static func includedHelperHighlights(language: OnboardingLanguage = .en) -> [OnboardingToolHighlight] {
+        OnboardingStrings(language: language).includedHelperHighlights()
     }
 }
 
@@ -1441,12 +1540,19 @@ private struct OnboardingChannelsSetupView: View {
     @Bindable var store: ChannelsStore
     let openFullChannelsSettings: () -> Void
     let isActive: Bool
+    let language: OnboardingLanguage
     @State private var selectedChannelID: String?
 
-    init(store: ChannelsStore, openFullChannelsSettings: @escaping () -> Void, isActive: Bool) {
+    init(
+        store: ChannelsStore,
+        openFullChannelsSettings: @escaping () -> Void,
+        isActive: Bool,
+        language: OnboardingLanguage)
+    {
         self.store = store
         self.openFullChannelsSettings = openFullChannelsSettings
         self.isActive = isActive
+        self.language = language
     }
 
     private var settingsView: ChannelsSettings {
@@ -1455,6 +1561,10 @@ private struct OnboardingChannelsSetupView: View {
 
     private var channels: [ChannelsSettings.ChannelItem] {
         self.settingsView.onboardingOrderedChannels
+    }
+
+    private var strings: OnboardingStrings {
+        OnboardingStrings(language: self.language)
     }
 
     private var channelIDs: [String] {
@@ -1475,14 +1585,14 @@ private struct OnboardingChannelsSetupView: View {
 
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 10) {
-                Label("Available chat apps", systemImage: "bubble.left.and.bubble.right")
+                Label(self.strings.availableChatAppsTitle, systemImage: "bubble.left.and.bubble.right")
                     .font(.headline)
                 Spacer(minLength: 0)
                 if self.store.isRefreshing && self.store.snapshot == nil {
                     ProgressView()
                         .controlSize(.small)
                 } else {
-                    Button("Refresh") {
+                    Button(self.strings.refreshButtonTitle) {
                         Task {
                             await self.store.refresh(probe: true)
                             await self.store.loadConfigSchema()
@@ -1529,7 +1639,10 @@ private struct OnboardingChannelsSetupView: View {
             }
 
             if let lastError = self.store.lastError, !lastError.isEmpty {
-                Text("Gateway status warning: \(lastError)")
+                Text(
+                    self.language == .en
+                        ? "Gateway status warning: \(lastError)"
+                        : "Peringatan status Gateway: \(lastError)")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1556,7 +1669,7 @@ private struct OnboardingChannelsSetupView: View {
         settingsView: ChannelsSettings) -> some View
     {
         let alreadyConnected = settingsView.channelEnabled(channel)
-        GroupBox("Finish in Settings") {
+        GroupBox(self.strings.finishInSettingsTitle) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(self.settingsHandoffMessage(for: channel, alreadyConnected: alreadyConnected))
                     .font(.caption)
@@ -1582,16 +1695,27 @@ private struct OnboardingChannelsSetupView: View {
         alreadyConnected: Bool) -> String
     {
         if channel.id == "whatsapp" {
-            return alreadyConnected
-                ? "WhatsApp is ready. Maumau is already using the recommended defaults, and you can change advanced routing or access rules later in full Settings → Channels."
-                : "If you want to change approved numbers, routing, or other advanced WhatsApp behavior later, use full Settings → Channels. Maumau keeps the recommended defaults unless you change them."
+            switch (self.language, alreadyConnected) {
+            case (.en, true):
+                return "WhatsApp is ready. Maumau is already using the recommended defaults, and you can change advanced routing or access rules later in full Settings → Channels."
+            case (.en, false):
+                return "If you want to change approved numbers, routing, or other advanced WhatsApp behavior later, use full Settings → Channels. Maumau keeps the recommended defaults unless you change them."
+            case (.id, true):
+                return "WhatsApp sudah siap. Maumau sudah menggunakan default yang direkomendasikan, dan Anda bisa mengubah routing lanjutan atau aturan akses nanti di Pengaturan lengkap → Channel."
+            case (.id, false):
+                return "Jika nanti Anda ingin mengubah nomor yang diizinkan, routing, atau perilaku WhatsApp lanjutan lainnya, gunakan Pengaturan lengkap → Channel. Maumau akan tetap memakai default yang direkomendasikan sampai Anda mengubahnya."
+            }
         }
 
         if alreadyConnected {
-            return "\(channel.title) is already connected. Maumau is using the recommended defaults, and you can review or override them later in full Settings → Channels."
+            return self.language == .en
+                ? "\(channel.title) is already connected. Maumau is using the recommended defaults, and you can review or override them later in full Settings → Channels."
+                : "\(channel.title) sudah terhubung. Maumau menggunakan default yang direkomendasikan, dan Anda bisa meninjaunya atau menggantinya nanti di Pengaturan lengkap → Channel."
         }
 
-        return "Onboarding is only showing the key setup details for \(channel.title). When you are ready, open full Settings → Channels to paste the token or finish the account/device connection. Maumau will use the recommended defaults automatically for the rest."
+        return self.language == .en
+            ? "Onboarding is only showing the key setup details for \(channel.title). When you are ready, open full Settings → Channels to paste the token or finish the account/device connection. Maumau will use the recommended defaults automatically for the rest."
+            : "Onboarding hanya menampilkan detail pengaturan utama untuk \(channel.title). Saat Anda siap, buka Pengaturan lengkap → Channel untuk menempelkan token atau menyelesaikan koneksi akun/perangkat. Maumau akan memakai default yang direkomendasikan secara otomatis untuk sisanya."
     }
 
     private func settingsHandoffButtonTitle(
@@ -1599,26 +1723,28 @@ private struct OnboardingChannelsSetupView: View {
         alreadyConnected: Bool) -> String
     {
         if alreadyConnected {
-            return "Review \(channel.title) in Settings"
+            return self.language == .en
+                ? "Review \(channel.title) in Settings"
+                : "Tinjau \(channel.title) di Pengaturan"
         }
 
         switch channel.id {
         case "discord":
-            return "Open Settings for Discord bot"
+            return self.language == .en ? "Open Settings for Discord bot" : "Buka Pengaturan untuk bot Discord"
         case "googlechat":
-            return "Open Settings for Google Chat"
+            return self.language == .en ? "Open Settings for Google Chat" : "Buka Pengaturan untuk Google Chat"
         case "imessage":
-            return "Open Settings for Messages"
+            return self.language == .en ? "Open Settings for Messages" : "Buka Pengaturan untuk Messages"
         case "line":
-            return "Open Settings for LINE bot"
+            return self.language == .en ? "Open Settings for LINE bot" : "Buka Pengaturan untuk bot LINE"
         case "slack":
-            return "Open Settings for Slack app"
+            return self.language == .en ? "Open Settings for Slack app" : "Buka Pengaturan untuk aplikasi Slack"
         case "telegram":
-            return "Open Settings for Telegram bot"
+            return self.language == .en ? "Open Settings for Telegram bot" : "Buka Pengaturan untuk bot Telegram"
         case "whatsapp":
-            return "Open full WhatsApp settings"
+            return self.language == .en ? "Open full WhatsApp settings" : "Buka pengaturan WhatsApp lengkap"
         default:
-            return "Open Settings → Channels"
+            return self.language == .en ? "Open Settings → Channels" : "Buka Pengaturan → Channel"
         }
     }
 
@@ -1640,11 +1766,11 @@ private struct OnboardingChannelsSetupView: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .foregroundStyle(.secondary)
                 }
-                Text("Loading chat apps from the Gateway…")
+                Text(self.strings.loadingChatAppsTitle)
                     .font(.callout.weight(.medium))
             }
 
-            Text("If this stays empty, make sure the Gateway is running, then hit Refresh.")
+            Text(self.strings.loadingChatAppsHint)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

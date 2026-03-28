@@ -6,6 +6,7 @@ let launchdLabel = "ai.maumau.mac"
 let gatewayLaunchdLabel = "ai.maumau.gateway"
 let onboardingVersionKey = "maumau.onboardingVersion"
 let onboardingSeenKey = "maumau.onboardingSeen"
+let onboardingLanguageKey = "maumau.onboardingLanguage"
 let currentOnboardingVersion = 7
 let pauseDefaultsKey = "maumau.pauseEnabled"
 let iconAnimationsEnabledKey = "maumau.iconAnimationsEnabled"

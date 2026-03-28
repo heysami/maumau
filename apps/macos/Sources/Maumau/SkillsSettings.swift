@@ -37,9 +37,12 @@ struct SkillsSettings: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Skills")
+                Text(macLocalized("Skills", language: self.state.effectiveOnboardingLanguage))
                     .font(.headline)
-                Text("Skills are enabled when requirements are met (binaries, env, config). This is not a full plugin list.")
+                Text(
+                    macLocalized(
+                        "Skills are enabled when requirements are met (binaries, env, config). This is not a full plugin list.",
+                        language: self.state.effectiveOnboardingLanguage))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -50,10 +53,10 @@ struct SkillsSettings: View {
                 Button {
                     Task { await self.model.refresh() }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label(macLocalized("Refresh", language: self.state.effectiveOnboardingLanguage), systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
-                .help("Refresh")
+                .help(macLocalized("Refresh", language: self.state.effectiveOnboardingLanguage))
             }
             self.headerFilter
         }
@@ -66,7 +69,7 @@ struct SkillsSettings: View {
                 .font(.footnote)
                 .foregroundStyle(.orange)
         } else if let message = self.model.statusMessage {
-            Text(message)
+            Text(macWizardText(message, language: self.state.effectiveOnboardingLanguage) ?? message)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -75,7 +78,7 @@ struct SkillsSettings: View {
     @ViewBuilder
     private var skillsList: some View {
         if self.model.skills.isEmpty {
-            Text("No skills reported yet.")
+            Text(macLocalized("No skills reported yet.", language: self.state.effectiveOnboardingLanguage))
                 .foregroundStyle(.secondary)
         } else {
             List {
@@ -100,7 +103,7 @@ struct SkillsSettings: View {
                         })
                 }
                 if !self.model.skills.isEmpty, self.filteredSkills.isEmpty {
-                    Text("No skills match this filter.")
+                    Text(macLocalized("No skills match this filter.", language: self.state.effectiveOnboardingLanguage))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -110,7 +113,7 @@ struct SkillsSettings: View {
     }
 
     private var headerFilter: some View {
-        Picker("Filter", selection: self.$filter) {
+        Picker(macLocalized("Filter", language: self.state.effectiveOnboardingLanguage), selection: self.$filter) {
             ForEach(SkillsFilter.allCases) { filter in
                 Text(filter.title)
                     .tag(filter)
@@ -150,13 +153,13 @@ private enum SkillsFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            "All"
+            macLocalized("All")
         case .ready:
-            "Ready"
+            macLocalized("Ready")
         case .needsSetup:
-            "Needs Setup"
+            macLocalized("Needs Setup")
         case .disabled:
-            "Disabled"
+            macLocalized("Disabled")
         }
     }
 }
@@ -207,7 +210,7 @@ private struct SkillRow: View {
                 self.metaRow
 
                 if self.skill.disabled {
-                    Text("Disabled in config")
+                    Text(macLocalized("Disabled in config"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if !self.requirementsMet, self.shouldShowMissingSummary {
@@ -233,15 +236,15 @@ private struct SkillRow: View {
     private var sourceLabel: String {
         switch self.skill.source {
         case "maumau-bundled":
-            "Bundled"
+            macLocalized("Bundled")
         case "maumau-managed":
-            "Managed"
+            macLocalized("Managed")
         case "maumau-workspace":
-            "Workspace"
+            macLocalized("Workspace")
         case "maumau-extra":
-            "Extra"
+            macLocalized("Extra")
         case "maumau-plugin":
-            "Plugin"
+            macLocalized("Plugin")
         default:
             self.skill.source
         }
@@ -252,7 +255,7 @@ private struct SkillRow: View {
             SkillTag(text: self.sourceLabel)
             if let url = self.homepageUrl {
                 Link(destination: url) {
-                    Label("Website", systemImage: "link")
+                    Label(macLocalized("Website"), systemImage: "link")
                         .font(.caption2.weight(.semibold))
                 }
                 .buttonStyle(.link)
@@ -282,17 +285,17 @@ private struct SkillRow: View {
     private var missingSummary: some View {
         VStack(alignment: .leading, spacing: 4) {
             if self.shouldShowMissingBins {
-                Text("Missing binaries: \(self.missingBins.joined(separator: ", "))")
+                Text("\(macLocalized("Missing binaries:")) \(self.missingBins.joined(separator: ", "))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             if !self.missingEnv.isEmpty {
-                Text("Missing env: \(self.missingEnv.joined(separator: ", "))")
+                Text("\(macLocalized("Missing env:")) \(self.missingEnv.joined(separator: ", "))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             if !self.missingConfig.isEmpty {
-                Text("Requires config: \(self.missingConfig.joined(separator: ", "))")
+                Text("\(macLocalized("Requires config:")) \(self.missingConfig.joined(separator: ", "))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -319,7 +322,7 @@ private struct SkillRow: View {
         HStack(spacing: 8) {
             ForEach(self.missingEnv, id: \.self) { envKey in
                 let isPrimary = envKey == self.skill.primaryEnv
-                Button(isPrimary ? "Set API Key" : "Set \(envKey)") {
+                Button(isPrimary ? macLocalized("Set API Key") : "\(macLocalized("Set")) \(envKey)") {
                     self.onSetEnv(envKey, isPrimary)
                 }
                 .buttonStyle(.bordered)
@@ -335,25 +338,25 @@ private struct SkillRow: View {
                 ForEach(self.installOptions, id: \.id) { (option: SkillInstallOption) in
                     HStack(spacing: 6) {
                         if self.showGatewayInstall {
-                            Button("Install on Gateway") { self.onInstall(option, .gateway) }
+                            Button(macLocalized("Install on Gateway")) { self.onInstall(option, .gateway) }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(self.isBusy)
                         }
                         if self.showGatewayInstall {
-                            Button("Install on This Mac") { self.onInstall(option, .local) }
+                            Button(macLocalized("Install on This Mac")) { self.onInstall(option, .local) }
                                 .buttonStyle(.bordered)
                                 .disabled(self.isBusy)
                                 .help(
                                     self.localInstallNeedsSwitch
-                                        ? "Switches to Local mode to install on this Mac."
+                                        ? macLocalized("Switches to Local mode to install on this Mac.")
                                         : "")
                         } else {
-                            Button("Install on This Mac") { self.onInstall(option, .local) }
+                            Button(macLocalized("Install on This Mac")) { self.onInstall(option, .local) }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(self.isBusy)
                                 .help(
                                     self.localInstallNeedsSwitch
-                                        ? "Switches to Local mode to install on this Mac."
+                                        ? macLocalized("Switches to Local mode to install on this Mac.")
                                         : "")
                         }
                     }
@@ -460,18 +463,18 @@ private struct EnvEditorView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if let homepageUrl = self.homepageUrl {
-                Link("Get your key →", destination: homepageUrl)
+                Link(macLocalized("Get your key →"), destination: homepageUrl)
                     .font(.caption)
             }
             SecureField(self.editor.envKey, text: self.$value)
                 .textFieldStyle(.roundedBorder)
-            Text("Saved to maumau.json under skills.entries.\(self.editor.skillKey)")
+            Text("\(macLocalized("Saved to maumau.json under skills.entries."))\(self.editor.skillKey)")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             HStack {
-                Button("Cancel") { self.dismiss() }
+                Button(macLocalized("Cancel")) { self.dismiss() }
                 Spacer()
-                Button("Save") {
+                Button(macLocalized("Save")) {
                     self.onSave(self.value)
                     self.dismiss()
                 }
@@ -496,11 +499,11 @@ private struct EnvEditorView: View {
     }
 
     private var title: String {
-        self.editor.isPrimary ? "Set API Key" : "Set Environment Variable"
+        self.editor.isPrimary ? macLocalized("Set API Key") : macLocalized("Set Environment Variable")
     }
 
     private var subtitle: String {
-        "Skill: \(self.editor.skillName)"
+        "\(macLocalized("Skill")): \(self.editor.skillName)"
     }
 }
 
@@ -564,7 +567,9 @@ final class SkillsSettingsModel {
                 .map(\.name)
                 .sorted()
             if !readyDefaults.isEmpty {
-                self.statusMessage = "Default skills already ready: \(readyDefaults.joined(separator: ", "))"
+                self.statusMessage = macDefaultSkillsReady(
+                    readyDefaults.joined(separator: ", "),
+                    language: AppStateStore.shared.effectiveOnboardingLanguage)
             }
             return
         }
@@ -575,7 +580,7 @@ final class SkillsSettingsModel {
 
         var installedNames: [String] = []
         var failedNames: [String] = []
-        self.statusMessage = "Installing default skills on this Mac..."
+        self.statusMessage = macInstallingDefaultSkills(language: AppStateStore.shared.effectiveOnboardingLanguage)
 
         for candidate in candidates {
             await self.withBusy(candidate.skillKey) {
@@ -597,11 +602,19 @@ final class SkillsSettingsModel {
         }
 
         if !installedNames.isEmpty && failedNames.isEmpty {
-            self.statusMessage = "Installed default skills: \(installedNames.joined(separator: ", "))"
+            self.statusMessage = macInstalledDefaultSkills(
+                installedNames.joined(separator: ", "),
+                retry: nil,
+                language: AppStateStore.shared.effectiveOnboardingLanguage)
         } else if !installedNames.isEmpty {
-            self.statusMessage = "Installed default skills: \(installedNames.joined(separator: ", ")); retry later for \(failedNames.joined(separator: ", "))"
+            self.statusMessage = macInstalledDefaultSkills(
+                installedNames.joined(separator: ", "),
+                retry: failedNames.joined(separator: ", "),
+                language: AppStateStore.shared.effectiveOnboardingLanguage)
         } else if !failedNames.isEmpty {
-            self.statusMessage = "Couldn’t auto-install default skills yet: \(failedNames.joined(separator: ", "))"
+            self.statusMessage = macAutoInstallDefaultSkillsFailed(
+                failedNames.joined(separator: ", "),
+                language: AppStateStore.shared.effectiveOnboardingLanguage)
         }
     }
 
@@ -610,13 +623,16 @@ final class SkillsSettingsModel {
             do {
                 if target == .local, AppStateStore.shared.connectionMode != .local {
                     AppStateStore.shared.connectionMode = .local
-                    self.statusMessage = "Switched to Local mode to install on this Mac"
+                    self.statusMessage = macSwitchedToLocalModeForInstall(
+                        language: AppStateStore.shared.effectiveOnboardingLanguage)
                 }
                 let result = try await GatewayConnection.shared.skillsInstall(
                     name: skill.name,
                     installId: option.id,
                     timeoutMs: 300_000)
-                self.statusMessage = result.message
+                self.statusMessage = macLocalized(
+                    result.message,
+                    language: AppStateStore.shared.effectiveOnboardingLanguage)
             } catch {
                 self.statusMessage = error.localizedDescription
             }
@@ -630,7 +646,9 @@ final class SkillsSettingsModel {
                 _ = try await GatewayConnection.shared.skillsUpdate(
                     skillKey: skillKey,
                     enabled: enabled)
-                self.statusMessage = enabled ? "Skill enabled" : "Skill disabled"
+                self.statusMessage = macSkillEnabledChanged(
+                    enabled: enabled,
+                    language: AppStateStore.shared.effectiveOnboardingLanguage)
             } catch {
                 self.statusMessage = error.localizedDescription
             }
@@ -645,12 +663,17 @@ final class SkillsSettingsModel {
                     _ = try await GatewayConnection.shared.skillsUpdate(
                         skillKey: skillKey,
                         apiKey: value)
-                    self.statusMessage = "Saved API key — stored in maumau.json (skills.entries.\(skillKey))"
+                    self.statusMessage = macSavedApiKeyStatus(
+                        skillKey: skillKey,
+                        language: AppStateStore.shared.effectiveOnboardingLanguage)
                 } else {
                     _ = try await GatewayConnection.shared.skillsUpdate(
                         skillKey: skillKey,
                         env: [envKey: value])
-                    self.statusMessage = "Saved \(envKey) — stored in maumau.json (skills.entries.\(skillKey).env)"
+                    self.statusMessage = macSavedEnvStatus(
+                        envKey: envKey,
+                        skillKey: skillKey,
+                        language: AppStateStore.shared.effectiveOnboardingLanguage)
                 }
             } catch {
                 self.statusMessage = error.localizedDescription

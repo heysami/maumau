@@ -30,4 +30,16 @@ struct ChannelConfigFormTests {
             configSchemaDynamicEntriesAddButtonTitle(parentLabel: "WhatsApp", hasFixedProperties: true) ==
                 "Add")
     }
+
+    @Test func `dynamic entry copy localizes indonesian strings`() {
+        #expect(
+            configSchemaDynamicEntriesHeading(hasFixedProperties: true, language: .id) ==
+                "Entri tambahan")
+        #expect(
+            configSchemaDynamicEntriesEmptyText(parentLabel: "Accounts", hasFixedProperties: false, language: .id) ==
+                "Belum ada akun.")
+        #expect(
+            configSchemaDynamicEntriesAddButtonTitle(parentLabel: "Accounts", hasFixedProperties: false, language: .id) ==
+                "Tambah akun")
+    }
 }

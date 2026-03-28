@@ -5,10 +5,6 @@ import MaumauDiscovery
 import MaumauIPC
 import SwiftUI
 
-enum UIStrings {
-    static let welcomeTitle = "Welcome to Maumau"
-}
-
 enum RemoteOnboardingProbeState: Equatable {
     case idle
     case checking
@@ -29,15 +25,33 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         self.window?.isVisible == true
     }
 
-    private func present(_ window: NSWindow, recenter: Bool) {
-        if recenter {
-            window.center()
-        }
-        DockIconManager.shared.temporarilyShowDock()
+    private func activateAndFocus(_ window: NSWindow) {
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
         window.makeMain()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func present(_ window: NSWindow, recenter: Bool) {
+        if recenter {
+            window.center()
+        }
+        let originalLevel = window.level
+        window.level = .floating
+        window.collectionBehavior.formUnion([.moveToActiveSpace, .fullScreenAuxiliary])
+        DockIconManager.shared.temporarilyShowDock()
+        self.activateAndFocus(window)
+        // Menu bar launches can report the window as visible before AppKit actually makes it key.
+        // Retry once after the activation handoff so onboarding does not end up on a hidden Space.
+        Task { @MainActor [weak self, weak window] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard let self, let window, window.isVisible else { return }
+            if !window.isKeyWindow || !window.isMainWindow {
+                self.activateAndFocus(window)
+            }
+            window.level = originalLevel
+        }
     }
 
     func show() {
@@ -60,7 +74,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         }
         let hosting = NSHostingController(rootView: OnboardingView().environment(TailscaleService.shared))
         let window = NSWindow(contentViewController: hosting)
-        window.title = UIStrings.welcomeTitle
+        window.title = OnboardingStrings(
+            language: AppStateStore.shared.effectiveOnboardingLanguage).windowTitle
         window.setContentSize(NSSize(width: OnboardingView.windowWidth, height: OnboardingView.windowHeight))
         window.minSize = NSSize(width: OnboardingView.windowWidth, height: OnboardingView.minimumWindowHeight)
         window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]
@@ -102,11 +117,7 @@ struct OnboardingView: View {
         let bodyText: String
         let badges: [OnboardingStepBadge]
         let preparationNote: String?
-
-        var headerMetaText: String? {
-            let text = self.badges.map(\.compactTitle).joined(separator: " · ")
-            return text.isEmpty ? nil : text
-        }
+        let headerMetaText: String?
     }
 
     @Environment(\.openSettings) var openSettings
@@ -151,6 +162,7 @@ struct OnboardingView: View {
         Self.headerHeight + Self.navigationHeight + Self.minimumContentHeight
 
     @State var pageWidth: CGFloat = Self.windowWidth
+    let languagePageIndex = -1
     let connectionPageIndex = 1
     let cliPageIndex = 6
     let workspacePageIndex = 7
@@ -184,7 +196,8 @@ struct OnboardingView: View {
     }
 
     var pageOrder: [Int] {
-        Self.pageOrder(for: self.state.connectionMode, showOnboardingChat: self.showOnboardingChat)
+        [self.languagePageIndex]
+            + Self.pageOrder(for: self.state.connectionMode, showOnboardingChat: self.showOnboardingChat)
     }
 
     var pageCount: Int {
@@ -197,71 +210,79 @@ struct OnboardingView: View {
             [
                 SetupStepDefinition(
                     stage: .home,
-                    title: "Set up the Gateway",
-                    progressTitle: "Set up Gateway",
+                    title: self.strings.connectionTitle,
+                    progressTitle: self.strings.connectionTitle,
                     pageID: self.connectionPageIndex,
-                    bodyText: "Gateway is Maumau's home. Choose which machine it lives on and works from.",
+                    bodyText: self.strings.stageExplainerBody(.home),
                     badges: [.required],
-                    preparationNote: nil),
+                    preparationNote: nil,
+                    headerMetaText: self.headerMetaText(for: [.required])),
                 SetupStepDefinition(
                     stage: .chat,
-                    title: "Pick a Channel",
-                    progressTitle: "Pick Channel",
+                    title: self.strings.channelsTitle,
+                    progressTitle: self.strings.channelsTitle,
                     pageID: self.channelsSetupPageIndex,
-                    bodyText: "Channel means the app where people can message Maumau and get replies back.",
+                    bodyText: self.strings.stageExplainerBody(.chat),
                     badges: [.optional, .needsPrep],
-                    preparationNote: "Needs setup in the chat app you choose, like signing in, connecting a bot, or pairing a bridge."),
+                    preparationNote: self.preparationNote(for: self.channelsSetupPageIndex),
+                    headerMetaText: self.headerMetaText(for: [.optional, .needsPrep])),
             ]
         case .unconfigured, .local:
             [
                 SetupStepDefinition(
                     stage: .home,
-                    title: "Set up the Gateway",
-                    progressTitle: "Set up Gateway",
+                    title: self.strings.connectionTitle,
+                    progressTitle: self.strings.connectionTitle,
                     pageID: self.connectionPageIndex,
-                    bodyText: "Gateway is Maumau's home. Choose which machine it lives on and works from.",
+                    bodyText: self.strings.stageExplainerBody(.home),
                     badges: [.required],
-                    preparationNote: nil),
+                    preparationNote: nil,
+                    headerMetaText: self.headerMetaText(for: [.required])),
                 SetupStepDefinition(
                     stage: .brain,
-                    title: "Choose the brain",
-                    progressTitle: "Choose brain",
+                    title: self.strings.wizardTitle,
+                    progressTitle: self.strings.wizardTitle,
                     pageID: self.wizardPageIndex,
-                    bodyText: "Brain means the AI service that does the thinking and writing.",
+                    bodyText: self.strings.stageExplainerBody(.brain),
                     badges: [.required, .needsPrep],
-                    preparationNote: "Needs a provider account, sign-in, or API key from the AI service you choose."),
+                    preparationNote: self.preparationNote(for: self.wizardPageIndex),
+                    headerMetaText: self.headerMetaText(for: [.required, .needsPrep])),
                 SetupStepDefinition(
                     stage: .chat,
-                    title: "Pick a Channel",
-                    progressTitle: "Pick Channel",
+                    title: self.strings.channelsTitle,
+                    progressTitle: self.strings.channelsTitle,
                     pageID: self.channelsSetupPageIndex,
-                    bodyText: "Channel means the app where people can message Maumau and get replies back.",
+                    bodyText: self.strings.stageExplainerBody(.chat),
                     badges: [.optional, .needsPrep],
-                    preparationNote: "Needs setup in the chat app you choose, like signing in, connecting a bot, or pairing a bridge."),
+                    preparationNote: self.preparationNote(for: self.channelsSetupPageIndex),
+                    headerMetaText: self.headerMetaText(for: [.optional, .needsPrep])),
                 SetupStepDefinition(
                     stage: .access,
-                    title: "Private access",
-                    progressTitle: "Private access",
+                    title: self.strings.privateAccessTitle,
+                    progressTitle: self.strings.privateAccessTitle,
                     pageID: self.privateAccessPageIndex,
-                    bodyText: "This gives Maumau's home a private driveway so your own devices can reach it privately later.",
+                    bodyText: self.strings.stageExplainerBody(.access),
                     badges: [.optional, .needsPrep],
-                    preparationNote: "Needs Tailscale on this Mac now, and on any other phone or laptop later if you want to open Maumau there."),
+                    preparationNote: self.preparationNote(for: self.privateAccessPageIndex),
+                    headerMetaText: self.headerMetaText(for: [.optional, .needsPrep])),
                 SetupStepDefinition(
                     stage: .permissions,
-                    title: "Allow Mac access",
-                    progressTitle: "Allow access",
+                    title: self.strings.permissionsTitle,
+                    progressTitle: self.strings.permissionsTitle,
                     pageID: self.permissionsPageIndex,
-                    bodyText: "This is where you choose what Maumau is allowed to do on this Mac, like work with apps or look at the screen.",
+                    bodyText: self.strings.stageExplainerBody(.permissions),
                     badges: [.optional],
-                    preparationNote: nil),
+                    preparationNote: nil,
+                    headerMetaText: self.headerMetaText(for: [.optional])),
                 SetupStepDefinition(
                     stage: .tools,
-                    title: "Review included tools",
-                    progressTitle: "Review tools",
+                    title: self.strings.skillsTitle,
+                    progressTitle: self.strings.skillsTitle,
                     pageID: self.skillsSetupPageIndex,
-                    bodyText: "This is a quick look at the main tools Maumau already comes with, so you know what is ready to use.",
+                    bodyText: self.strings.stageExplainerBody(.tools),
                     badges: [.optional],
-                    preparationNote: nil),
+                    preparationNote: nil,
+                    headerMetaText: self.headerMetaText(for: [.optional])),
             ]
         }
     }
@@ -275,7 +296,11 @@ struct OnboardingView: View {
     }
 
     var buttonTitle: String {
-        self.currentPage == self.pageCount - 1 ? "Finish" : "Next"
+        self.currentPage == self.pageCount - 1 ? self.strings.finishButtonTitle : self.strings.nextButtonTitle
+    }
+
+    var strings: OnboardingStrings {
+        OnboardingStrings(language: self.state.effectiveOnboardingLanguage)
     }
 
     var wizardPageOrderIndex: Int? {
@@ -298,7 +323,10 @@ struct OnboardingView: View {
     }
 
     var canAdvance: Bool {
-        !self.isWizardBlocking && !self.isCLIBlocking && !self.isWorkspaceBlocking
+        (self.activePageIndex != self.languagePageIndex || self.state.hasSelectedOnboardingLanguage)
+            && !self.isWizardBlocking
+            && !self.isCLIBlocking
+            && !self.isWorkspaceBlocking
     }
 
     var isCheckingLocalGatewaySetup: Bool {
@@ -331,10 +359,15 @@ struct OnboardingView: View {
     static func shouldDefaultToLocalConnectionMode(
         connectionMode: AppState.ConnectionMode,
         onboardingSeen: Bool,
-        remoteUrl: String) -> Bool
+        remoteUrl: String,
+        hasSelectedOnboardingLanguage: Bool) -> Bool
     {
         let _ = remoteUrl
-        return connectionMode != .local && !onboardingSeen
+        return hasSelectedOnboardingLanguage && connectionMode != .local && !onboardingSeen
+    }
+
+    static func initialPageCursor(hasSelectedOnboardingLanguage: Bool, onboardingSeen: Bool) -> Int {
+        hasSelectedOnboardingLanguage && onboardingSeen ? 1 : 0
     }
 
     static func shouldAutoInstallCLI(
@@ -419,5 +452,40 @@ struct OnboardingView: View {
             initialValue: MaumauChatViewModel(
                 sessionKey: "onboarding",
                 transport: MacGatewayChatTransport()))
+    }
+
+    func preparationNote(for pageID: Int) -> String? {
+        switch pageID {
+        case self.wizardPageIndex:
+            switch self.state.effectiveOnboardingLanguage {
+            case .en:
+                return "Needs a provider account, sign-in, or API key from the AI service you choose."
+            case .id:
+                return "Perlu akun penyedia, login, atau API key dari layanan AI yang Anda pilih."
+            }
+        case self.channelsSetupPageIndex:
+            switch self.state.effectiveOnboardingLanguage {
+            case .en:
+                return "Needs setup in the chat app you choose, like signing in, connecting a bot, or pairing a bridge."
+            case .id:
+                return "Perlu pengaturan di aplikasi chat yang Anda pilih, seperti login, menghubungkan bot, atau memasangkan bridge."
+            }
+        case self.privateAccessPageIndex:
+            switch self.state.effectiveOnboardingLanguage {
+            case .en:
+                return "Needs Tailscale on this Mac now, and on any other phone or laptop later if you want to open Maumau there."
+            case .id:
+                return "Perlu Tailscale di Mac ini sekarang, dan di ponsel atau laptop lain nanti jika Anda ingin membuka Maumau di sana."
+            }
+        default:
+            return nil
+        }
+    }
+
+    private func headerMetaText(for badges: [OnboardingStepBadge]) -> String? {
+        let text = badges
+            .map { $0.compactTitle(in: self.state.effectiveOnboardingLanguage) }
+            .joined(separator: " · ")
+        return text.isEmpty ? nil : text
     }
 }
