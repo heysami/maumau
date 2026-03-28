@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { generatePkceVerifierChallenge, toFormUrlEncoded } from "./runtime-api.js";
+import {
+  generatePkceVerifierChallenge,
+  openAuthUrlWithManualFallback,
+  toFormUrlEncoded,
+} from "./runtime-api.js";
 
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai";
 const QWEN_OAUTH_DEVICE_CODE_ENDPOINT = `${QWEN_OAUTH_BASE_URL}/api/v1/oauth2/device/code`;
@@ -127,7 +131,7 @@ async function pollDeviceToken(params: {
 }
 
 export async function loginQwenPortalOAuth(params: {
-  openUrl: (url: string) => Promise<void>;
+  openUrl: (url: string) => Promise<unknown>;
   note: (message: string, title?: string) => Promise<void>;
   progress: { update: (message: string) => void; stop: (message?: string) => void };
 }): Promise<QwenOAuthToken> {
@@ -137,17 +141,27 @@ export async function loginQwenPortalOAuth(params: {
 
   await params.note(
     [
-      `Open ${verificationUrl} to approve access.`,
+      "Press Continue and Maumau will try to open the Qwen approval page in your browser.",
+      `Approval URL: ${verificationUrl}`,
       `If prompted, enter the code ${device.user_code}.`,
+      "If the browser does not open, Maumau will show the URL and code again.",
+      "Return here and keep this wizard open while approval completes.",
     ].join("\n"),
     "Qwen OAuth",
   );
 
-  try {
-    await params.openUrl(verificationUrl);
-  } catch {
-    // Fall back to manual copy/paste if browser open fails.
-  }
+  await openAuthUrlWithManualFallback({
+    url: verificationUrl,
+    openUrl: params.openUrl,
+    note: params.note,
+    noteTitle: "Qwen OAuth",
+    noteLines: [
+      "Browser did not open automatically.",
+      `Open ${verificationUrl} to approve access.`,
+      `If prompted, enter the code ${device.user_code}.`,
+      "Return to Maumau and keep this wizard open while approval completes.",
+    ],
+  });
 
   const start = Date.now();
   let pollIntervalMs = device.interval ? device.interval * 1000 : 2000;

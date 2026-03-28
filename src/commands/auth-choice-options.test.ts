@@ -435,4 +435,42 @@ describe("buildAuthChoiceOptions", () => {
     expect(options.some((option) => option.value === "fal-api-key")).toBe(false);
     expect(options.some((option) => option.value === "local-image-runtime")).toBe(false);
   });
+
+  it("hides GitHub Copilot from embedded onboarding only", () => {
+    resolveManifestProviderAuthChoices.mockReturnValue([
+      {
+        pluginId: "github-copilot",
+        providerId: "github-copilot",
+        methodId: "device",
+        choiceId: "github-copilot",
+        choiceLabel: "GitHub Copilot",
+        groupId: "copilot",
+        groupLabel: "Copilot",
+      },
+      {
+        pluginId: "openai",
+        providerId: "openai",
+        methodId: "api-key",
+        choiceId: "openai-api-key",
+        choiceLabel: "OpenAI API key",
+        groupId: "openai",
+        groupLabel: "OpenAI",
+      },
+    ]);
+
+    const embeddedOptions = buildAuthChoiceOptions({
+      store: EMPTY_STORE,
+      includeSkip: false,
+      embedded: true,
+    });
+    const normalOptions = buildAuthChoiceOptions({
+      store: EMPTY_STORE,
+      includeSkip: false,
+      embedded: false,
+    });
+
+    expect(embeddedOptions.some((option) => option.value === "github-copilot")).toBe(false);
+    expect(embeddedOptions.some((option) => option.value === "openai-api-key")).toBe(true);
+    expect(normalOptions.some((option) => option.value === "github-copilot")).toBe(true);
+  });
 });

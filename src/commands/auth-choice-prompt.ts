@@ -14,6 +14,7 @@ export async function promptAuthChoiceGrouped(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   includeRuntimeFallbackProviders?: boolean;
+  embedded?: boolean;
 }): Promise<AuthChoice> {
   const resolveCatalog = (
     includeRuntimeFallbackProviders = params.includeRuntimeFallbackProviders,

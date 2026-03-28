@@ -10,6 +10,7 @@ import {
 import type { MaumauConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { WizardCancelledError, type WizardPrompter } from "../wizard/prompts.js";
+import { openAuthUrlWithManualFallback } from "./provider-oauth-flow.js";
 import { applyAgentDefaultModelPrimary } from "./provider-onboarding-config.js";
 import { isRemoteEnvironment, openUrl } from "./setup-browser.js";
 import type { ProviderAuthOptionBag } from "./types.js";
@@ -80,6 +81,42 @@ async function checkOllamaCloudAuth(baseUrl: string): Promise<OllamaCloudAuthRes
     // doesn't silently skip auth; the caller handles the fallback.
     return { signedIn: false };
   }
+}
+
+async function openOllamaCloudSignIn(params: {
+  signInUrl: string;
+  prompter: WizardPrompter;
+}): Promise<void> {
+  await params.prompter.note(
+    [
+      "Press Continue and Maumau will try to open Ollama Cloud sign-in in your browser.",
+      `Sign-in URL: ${params.signInUrl}`,
+      "If the browser does not open, Maumau will show this URL again.",
+      "After signing in, return here and confirm to continue.",
+    ].join("\n"),
+    "Ollama Cloud",
+  );
+
+  await openAuthUrlWithManualFallback({
+    url: params.signInUrl,
+    openUrl: async (url) => {
+      if (typeof params.prompter.openUrl === "function") {
+        return await params.prompter.openUrl(url, {
+          title: "Open Ollama Cloud sign-in",
+          message: "Open the Ollama Cloud sign-in page in your browser.",
+        });
+      }
+      return await openUrl(url);
+    },
+    note: params.prompter.note,
+    noteTitle: "Ollama Cloud",
+    noteLines: [
+      "Browser did not open automatically.",
+      "Sign in to Ollama Cloud by opening this URL in your browser:",
+      params.signInUrl,
+      "Return to Maumau after you finish signing in.",
+    ],
+  });
 }
 
 type OllamaPullChunk = {
@@ -344,12 +381,21 @@ export async function promptAndConfigureOllama(params: {
     if (!authResult.signedIn) {
       if (authResult.signinUrl) {
         if (!isRemoteEnvironment()) {
-          await openUrl(authResult.signinUrl);
+          await openOllamaCloudSignIn({
+            signInUrl: authResult.signinUrl,
+            prompter,
+          });
+        } else {
+          await prompter.note(
+            [
+              "You are running in a remote/VPS environment.",
+              "Open this URL in your LOCAL browser to sign in to Ollama Cloud:",
+              authResult.signinUrl,
+              "Return here after you finish signing in.",
+            ].join("\n"),
+            "Ollama Cloud",
+          );
         }
-        await prompter.note(
-          ["Sign in to Ollama Cloud:", authResult.signinUrl].join("\n"),
-          "Ollama Cloud",
-        );
         const confirmed = await prompter.confirm({
           message: "Have you signed in?",
         });

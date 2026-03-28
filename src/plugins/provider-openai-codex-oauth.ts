@@ -14,7 +14,7 @@ export async function loginOpenAICodexOAuth(params: {
   prompter: WizardPrompter;
   runtime: RuntimeEnv;
   isRemote: boolean;
-  openUrl: (url: string) => Promise<void>;
+  openUrl: (url: string) => Promise<unknown>;
   localBrowserMessage?: string;
 }): Promise<OAuthCredentials | null> {
   const { prompter, runtime, isRemote, openUrl, localBrowserMessage } = params;
@@ -39,8 +39,8 @@ export async function loginOpenAICodexOAuth(params: {
           "After signing in, paste the redirect URL back here.",
         ].join("\n")
       : [
-          "Browser will open for OpenAI authentication.",
-          "If the callback doesn't auto-complete, paste the redirect URL.",
+          "Press Continue and Maumau will open your browser for OpenAI authentication.",
+          "If the callback doesn't auto-complete, Maumau will show a URL you can open manually.",
           "OpenAI OAuth uses localhost:1455 for the callback.",
         ].join("\n"),
     "OpenAI Codex OAuth",

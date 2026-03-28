@@ -12,6 +12,32 @@ import { exchangeCodeForTokens } from "./oauth.token.js";
 export { clearCredentialsCache, extractGeminiCliCredentials };
 export type { GeminiCliOAuthContext, GeminiCliOAuthCredentials };
 
+async function openLocalAuthUrlWithFallback(params: {
+  authUrl: string;
+  ctx: GeminiCliOAuthContext;
+}) {
+  let opened = false;
+  try {
+    const openResult = (await params.ctx.openUrl(params.authUrl)) as unknown;
+    opened = openResult !== false;
+  } catch {
+    opened = false;
+  }
+  if (opened) {
+    return;
+  }
+
+  params.ctx.log(`\nOpen this URL in your browser:\n\n${params.authUrl}\n`);
+  await params.ctx.note(
+    [
+      "Browser did not open automatically.",
+      "Open this URL in your LOCAL browser to continue:",
+      params.authUrl,
+    ].join("\n"),
+    "Open browser sign-in",
+  );
+}
+
 export async function loginGeminiCliOAuth(
   ctx: GeminiCliOAuthContext,
 ): Promise<GeminiCliOAuthCredentials> {
@@ -24,7 +50,7 @@ export async function loginGeminiCliOAuth(
           "After signing in, copy the redirect URL and paste it back here.",
         ].join("\n")
       : [
-          "Browser will open for Google authentication.",
+          "Press Continue and Maumau will open your browser for Google authentication.",
           "Sign in with your Google account for Gemini CLI access.",
           "The callback will be captured automatically on localhost:8085.",
         ].join("\n"),
@@ -51,11 +77,7 @@ export async function loginGeminiCliOAuth(
   }
 
   ctx.progress.update("Complete sign-in in browser...");
-  try {
-    await ctx.openUrl(authUrl);
-  } catch {
-    ctx.log(`\nOpen this URL in your browser:\n\n${authUrl}\n`);
-  }
+  await openLocalAuthUrlWithFallback({ authUrl, ctx });
 
   try {
     const { code } = await waitForLocalCallback({

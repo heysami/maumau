@@ -115,6 +115,24 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
     return false;
   }
 
+  const wizardLastRunAt =
+    typeof config.wizard?.lastRunAt === "string" ? config.wizard.lastRunAt.trim() : "";
+  const wizardLastRunCommand =
+    typeof config.wizard?.lastRunCommand === "string"
+      ? config.wizard.lastRunCommand.trim().toLowerCase()
+      : "";
+  const wizardLastRunMode =
+    typeof config.wizard?.lastRunMode === "string"
+      ? config.wizard.lastRunMode.trim().toLowerCase()
+      : "";
+
+  // Embedded onboarding can persist partial local setup before the final
+  // completion metadata is written. If that session later retries, treat that
+  // incomplete wizard marker as fresh setup instead of "existing config".
+  if (!wizardLastRunAt && wizardLastRunCommand === "onboard" && wizardLastRunMode === "local") {
+    return true;
+  }
+
   const rootKeys = Object.keys(config).filter((key) => key !== "commands" && key !== "meta");
   if (rootKeys.length !== 1 || rootKeys[0] !== "gateway") {
     return false;
@@ -152,6 +170,31 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
   }
 
   return hasToken !== hasPassword;
+}
+
+function applyEmbeddedLocalWizardInProgressMetadata(
+  opts: OnboardOptions,
+  mode: OnboardMode,
+  config: MaumauConfig,
+): MaumauConfig {
+  if (!opts.embedded || mode !== "local") {
+    return config;
+  }
+
+  const wizardLastRunAt =
+    typeof config.wizard?.lastRunAt === "string" ? config.wizard.lastRunAt.trim() : "";
+  if (wizardLastRunAt) {
+    return config;
+  }
+
+  return {
+    ...config,
+    wizard: {
+      ...config.wizard,
+      lastRunCommand: "onboard",
+      lastRunMode: "local",
+    },
+  };
 }
 
 async function resolveRetainedGatewaySettings(params: {
@@ -324,30 +367,33 @@ export async function runSetupWizard(
     if (action === "reset") {
       const workspaceDefault =
         baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE;
+      const resetOptions = [
+        {
+          value: "config",
+          label: "Settings only",
+          hint: "Remove saved config, but keep API keys, channel logins, chat sessions, and workspace files.",
+        },
+        {
+          value: "config+creds+sessions",
+          label: "Settings, logins, and chat sessions",
+          hint: "Remove config, saved credentials, and session history, but keep workspace files.",
+        },
+        {
+          value: "full",
+          label: "Everything, including workspace files",
+          hint: "Remove config, saved credentials, sessions, and the workspace used by the agent.",
+        },
+      ];
+      if (!opts.embedded) {
+        resetOptions.push({
+          value: "clean",
+          label: "Clean local reset",
+          hint: "Remove the local gateway service, app-managed CLI, saved setup, chats, and workspace files on this Mac.",
+        });
+      }
       const resetScope = (await prompter.select({
         message: "How much of the existing Maumau setup should be erased?",
-        options: [
-          {
-            value: "config",
-            label: "Settings only",
-            hint: "Remove saved config, but keep API keys, channel logins, chat sessions, and workspace files.",
-          },
-          {
-            value: "config+creds+sessions",
-            label: "Settings, logins, and chat sessions",
-            hint: "Remove config, saved credentials, and session history, but keep workspace files.",
-          },
-          {
-            value: "full",
-            label: "Everything, including workspace files",
-            hint: "Remove config, saved credentials, sessions, and the workspace used by the agent.",
-          },
-          {
-            value: "clean",
-            label: "Clean local reset",
-            hint: "Remove the local gateway service, app-managed CLI, saved setup, chats, and workspace files on this Mac.",
-          },
-        ],
+        options: resetOptions,
       })) as ResetScope;
       await onboardHelpers.handleReset(resetScope, resolveUserPath(workspaceDefault), runtime);
       baseConfig = {};
@@ -606,6 +652,12 @@ export async function runSetupWizard(
   let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir);
   let settings: GatewayWizardSettings;
   const { logConfigUpdated } = await import("../config/logging.js");
+  const writeLocalSetupProgressConfig = async (config: MaumauConfig): Promise<MaumauConfig> => {
+    const configWithProgress = applyEmbeddedLocalWizardInProgressMetadata(opts, mode, config);
+    await writeConfigFile(configWithProgress);
+    logConfigUpdated(runtime);
+    return configWithProgress;
+  };
 
   async function repairRetainedDefaultModelIfNeeded(config: MaumauConfig): Promise<MaumauConfig> {
     if (resolveAgentModelPrimaryValue(config.agents?.defaults?.model)) {
@@ -621,8 +673,7 @@ export async function runSetupWizard(
     });
 
     if (resolveAgentModelPrimaryValue(repaired.agents?.defaults?.model)) {
-      await writeConfigFile(repaired);
-      logConfigUpdated(runtime);
+      return await writeLocalSetupProgressConfig(repaired);
     }
 
     return repaired;
@@ -653,6 +704,7 @@ export async function runSetupWizard(
         prompter,
         store: authStore,
         includeSkip: true,
+        embedded: opts.embedded,
         includeRuntimeFallbackProviders: !opts.embedded,
         config: nextConfig,
         workspaceDir,
@@ -760,8 +812,7 @@ export async function runSetupWizard(
       });
     }
 
-    await writeConfigFile(nextConfig);
-    logConfigUpdated(runtime);
+    nextConfig = await writeLocalSetupProgressConfig(nextConfig);
   }
 
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {

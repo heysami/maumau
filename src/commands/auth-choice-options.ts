@@ -11,6 +11,7 @@ import {
 import type { AuthChoice, AuthChoiceGroupId } from "./onboard-types.js";
 
 const DEFAULT_AUTH_CHOICE_ONBOARDING_SCOPE = "text-inference" as const;
+const EMBEDDED_UNSUPPORTED_AUTH_CHOICES = new Set<AuthChoice>(["github-copilot"]);
 
 function includesOnboardingScope(
   onboardingScopes: readonly ("text-inference" | "image-generation")[] | undefined,
@@ -27,6 +28,13 @@ function compareOptionLabels(a: AuthChoiceOption, b: AuthChoiceOption): number {
 
 function compareGroupLabels(a: AuthChoiceGroup, b: AuthChoiceGroup): number {
   return a.label.localeCompare(b.label);
+}
+
+function shouldHideAuthChoiceInEmbeddedOnboarding(
+  authChoice: AuthChoice,
+  embedded: boolean | undefined,
+): boolean {
+  return embedded === true && EMBEDDED_UNSUPPORTED_AUTH_CHOICES.has(authChoice);
 }
 
 function resolveManifestProviderChoiceOptions(params?: {
@@ -89,6 +97,7 @@ export function buildAuthChoiceOptions(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   includeRuntimeFallbackProviders?: boolean;
+  embedded?: boolean;
 }): AuthChoiceOption[] {
   void params.store;
   const optionByValue = new Map<AuthChoice, AuthChoiceOption>();
@@ -115,9 +124,9 @@ export function buildAuthChoiceOptions(params: {
     }
   }
 
-  const options: AuthChoiceOption[] = Array.from(optionByValue.values()).toSorted(
-    compareOptionLabels,
-  );
+  const options: AuthChoiceOption[] = Array.from(optionByValue.values())
+    .filter((option) => !shouldHideAuthChoiceInEmbeddedOnboarding(option.value, params.embedded))
+    .toSorted(compareOptionLabels);
 
   if (params.includeSkip) {
     options.push({ value: "skip", label: "Skip for now" });
@@ -133,6 +142,7 @@ export function buildAuthChoiceGroups(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   includeRuntimeFallbackProviders?: boolean;
+  embedded?: boolean;
 }): {
   groups: AuthChoiceGroup[];
   skipOption?: AuthChoiceOption;

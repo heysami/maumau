@@ -39,24 +39,27 @@ describe("promptAuthChoiceGrouped", () => {
         store: EMPTY_STORE,
         includeSkip: false,
         includeRuntimeFallbackProviders: false,
+        embedded: true,
       }),
     ).resolves.toBe("openai-api-key");
 
     expect(buildAuthChoiceGroups).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
+        embedded: true,
         includeRuntimeFallbackProviders: false,
       }),
     );
     expect(buildAuthChoiceGroups).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        embedded: true,
         includeRuntimeFallbackProviders: true,
       }),
     );
     expect(prompter.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "Model/auth provider",
+        message: "AI service",
       }),
     );
   });

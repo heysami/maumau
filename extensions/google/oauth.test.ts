@@ -281,7 +281,7 @@ describe("loginGeminiCliOAuth", () => {
 
   type LoginGeminiCliOAuthFn = (options: {
     isRemote: boolean;
-    openUrl: () => Promise<void>;
+    openUrl: (url: string) => Promise<unknown>;
     log: (msg: string) => void;
     note: () => Promise<void>;
     prompt: () => Promise<string>;
@@ -428,5 +428,54 @@ describe("loginGeminiCliOAuth", () => {
     await runRemoteLoginExpectingProjectId(loginGeminiCliOAuth, "env-project");
     expect(requests.filter((url) => url.includes("v1internal:loadCodeAssist"))).toHaveLength(3);
     expect(requests.some((url) => url.includes("v1internal:onboardUser"))).toBe(false);
+  });
+
+  it("shows the auth URL when local browser launch fails", async () => {
+    vi.resetModules();
+
+    const oauthFlow = await import("./oauth.flow.js");
+    const oauthToken = await import("./oauth.token.js");
+    vi.spyOn(oauthFlow, "generatePkce").mockReturnValue({
+      verifier: "state-123",
+      challenge: "challenge-123",
+    });
+    const authUrl =
+      "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&response_type=code&state=state-123";
+    vi.spyOn(oauthFlow, "buildAuthUrl").mockReturnValue(authUrl);
+    vi.spyOn(oauthFlow, "waitForLocalCallback").mockResolvedValue({
+      code: "oauth-code",
+      state: "state-123",
+    });
+    vi.spyOn(oauthToken, "exchangeCodeForTokens").mockResolvedValue({
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: Date.now() + 60_000,
+      email: "lobster@maumau.ai",
+      projectId: "local-project",
+    });
+
+    const note = vi.fn(async () => {});
+    const openUrl = vi.fn(async () => false);
+    const { loginGeminiCliOAuth } = await import("./oauth.js");
+
+    const result = await loginGeminiCliOAuth({
+      isRemote: false,
+      openUrl: openUrl as unknown as (url: string) => Promise<unknown>,
+      log: vi.fn(),
+      note,
+      prompt: async () => "",
+      progress: { update: () => {}, stop: () => {} },
+    });
+
+    expect(result.projectId).toBe("local-project");
+    expect(openUrl).toHaveBeenCalledWith(authUrl);
+    expect(note).toHaveBeenCalledWith(
+      [
+        "Browser did not open automatically.",
+        "Open this URL in your LOCAL browser to continue:",
+        authUrl,
+      ].join("\n"),
+      "Open browser sign-in",
+    );
   });
 });

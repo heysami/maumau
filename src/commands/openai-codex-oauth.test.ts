@@ -47,7 +47,7 @@ function createRuntime(): RuntimeEnv {
 
 async function runCodexOAuth(params: {
   isRemote: boolean;
-  openUrl?: (url: string) => Promise<void>;
+  openUrl?: (url: string) => Promise<unknown>;
 }) {
   const { prompter, spin } = createPrompter();
   const runtime = createRuntime();
@@ -110,6 +110,39 @@ describe("loginOpenAICodexOAuth", () => {
     );
     expect(runtime.log).toHaveBeenCalledWith(
       "Open: https://auth.openai.com/oauth/authorize?scope=openid+profile+email+offline_access&state=abc",
+    );
+  });
+
+  it("shows the authorize URL when the browser cannot be opened locally", async () => {
+    const creds = {
+      provider: "openai-codex" as const,
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: Date.now() + 60_000,
+      email: "user@example.com",
+    };
+    const authUrl = "https://auth.openai.com/oauth/authorize?scope=openid+profile+email&state=abc";
+    mocks.loginOpenAICodex.mockImplementation(
+      async (opts: { onAuth: (event: { url: string }) => Promise<void> }) => {
+        await opts.onAuth({ url: authUrl });
+        return creds;
+      },
+    );
+
+    const openUrl = vi.fn(async () => false);
+    const { prompter } = await runCodexOAuth({
+      isRemote: false,
+      openUrl: openUrl as unknown as (url: string) => Promise<unknown>,
+    });
+
+    expect(openUrl).toHaveBeenCalledWith(authUrl);
+    expect(prompter.note).toHaveBeenCalledWith(
+      [
+        "Browser did not open automatically.",
+        "Open this URL in your browser to continue:",
+        authUrl,
+      ].join("\n"),
+      "Open browser sign-in",
     );
   });
 

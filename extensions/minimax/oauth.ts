@@ -1,6 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { ensureGlobalUndiciEnvProxyDispatcher } from "maumau/plugin-sdk/infra-runtime";
-import { generatePkceVerifierChallenge, toFormUrlEncoded } from "maumau/plugin-sdk/provider-auth";
+import {
+  generatePkceVerifierChallenge,
+  openAuthUrlWithManualFallback,
+  toFormUrlEncoded,
+} from "maumau/plugin-sdk/provider-auth";
 
 export type MiniMaxRegion = "cn" | "global";
 
@@ -180,7 +184,7 @@ async function pollOAuthToken(params: {
 }
 
 export async function loginMiniMaxPortalOAuth(params: {
-  openUrl: (url: string) => Promise<void>;
+  openUrl: (url: string) => Promise<unknown>;
   note: (message: string, title?: string) => Promise<void>;
   progress: { update: (message: string) => void; stop: (message?: string) => void };
   region?: MiniMaxRegion;
@@ -194,17 +198,28 @@ export async function loginMiniMaxPortalOAuth(params: {
   const verificationUrl = oauth.verification_uri;
 
   const noteLines = [
-    `Open ${verificationUrl} to approve access.`,
+    "Press Continue and Maumau will try to open the MiniMax approval page in your browser.",
+    `Approval URL: ${verificationUrl}`,
     `If prompted, enter the code ${oauth.user_code}.`,
-    `Interval: ${oauth.interval ?? "default (2000ms)"}, Expires at: ${oauth.expired_in} unix timestamp`,
+    `Polling interval: ${oauth.interval ?? "default (2000ms)"} ms`,
+    `Approval expires at: ${oauth.expired_in}`,
+    "If the browser does not open, Maumau will show the URL and code again.",
+    "Return here and keep this wizard open while approval completes.",
   ];
   await params.note(noteLines.join("\n"), "MiniMax OAuth");
 
-  try {
-    await params.openUrl(verificationUrl);
-  } catch {
-    // Fall back to manual copy/paste if browser open fails.
-  }
+  await openAuthUrlWithManualFallback({
+    url: verificationUrl,
+    openUrl: params.openUrl,
+    note: params.note,
+    noteTitle: "MiniMax OAuth",
+    noteLines: [
+      "Browser did not open automatically.",
+      `Open ${verificationUrl} to approve access.`,
+      `If prompted, enter the code ${oauth.user_code}.`,
+      "Return to Maumau and keep this wizard open while approval completes.",
+    ],
+  });
 
   let pollIntervalMs = oauth.interval ? oauth.interval : 2000;
   const expireTimeMs = oauth.expired_in;

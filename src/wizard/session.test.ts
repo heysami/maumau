@@ -39,6 +39,37 @@ describe("WizardSession", () => {
     expect(done.status).toBe("done");
   });
 
+  test("openUrl emits a client action step and returns the client result", async () => {
+    const session = new WizardSession(async (prompter) => {
+      await expect(
+        prompter.openUrl?.("https://auth.openai.com/oauth/authorize?state=test", {
+          title: "Open browser sign-in",
+          message: "Open the sign-in page in your browser.",
+        }),
+      ).resolves.toBe(true);
+    });
+
+    const first = await session.next();
+    expect(first.done).toBe(false);
+    expect(first.step?.type).toBe("action");
+    expect(first.step?.title).toBe("Open browser sign-in");
+    expect(first.step?.message).toBe("Open the sign-in page in your browser.");
+    expect(first.step?.executor).toBe("client");
+    expect(first.step?.initialValue).toEqual({
+      action: "open_url",
+      url: "https://auth.openai.com/oauth/authorize?state=test",
+    });
+
+    if (!first.step) {
+      throw new Error("expected openUrl step");
+    }
+    await session.answer(first.step.id, true);
+
+    const done = await session.next();
+    expect(done.done).toBe(true);
+    expect(done.status).toBe("done");
+  });
+
   test("steps progress in order", async () => {
     const session = noteRunner();
 

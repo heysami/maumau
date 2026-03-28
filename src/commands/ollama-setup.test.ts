@@ -159,6 +159,36 @@ describe("ollama setup", () => {
     expect(openUrlMock).not.toHaveBeenCalled();
   });
 
+  it("cloud+local mode prefers the wizard browser opener and shows a manual URL when it fails", async () => {
+    const wizardOpenUrl = vi.fn(async () => false);
+    const note = vi.fn(async () => undefined);
+    const prompter = {
+      text: vi.fn().mockResolvedValueOnce("http://127.0.0.1:11434"),
+      select: vi.fn().mockResolvedValueOnce("remote"),
+      confirm: vi.fn().mockResolvedValueOnce(true),
+      note,
+      openUrl: wizardOpenUrl,
+    } as unknown as WizardPrompter;
+    const fetchMock = createSignedOutRemoteFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await promptAndConfigureOllama({ cfg: {}, prompter });
+
+    expect(wizardOpenUrl).toHaveBeenCalledWith("https://ollama.com/signin", {
+      title: "Open Ollama Cloud sign-in",
+      message: "Open the Ollama Cloud sign-in page in your browser.",
+    });
+    expect(openUrlMock).not.toHaveBeenCalled();
+    expect(
+      note.mock.calls.some(
+        (call) =>
+          call[1] === "Ollama Cloud" &&
+          String(call[0]).includes("Browser did not open automatically.") &&
+          String(call[0]).includes("https://ollama.com/signin"),
+      ),
+    ).toBe(true);
+  });
+
   it("local mode does not trigger cloud auth", async () => {
     const prompter = createModePrompter("local");
 

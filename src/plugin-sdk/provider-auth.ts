@@ -21,6 +21,7 @@ export {
   normalizeApiKeyInput,
   validateApiKeyInput,
 } from "../plugins/provider-auth-input.js";
+export { openAuthUrlWithManualFallback } from "../plugins/provider-oauth-flow.js";
 export {
   ensureApiKeyFromOptionEnvOrPrompt,
   normalizeSecretInputModeInput,

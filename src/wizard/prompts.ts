@@ -38,6 +38,13 @@ export type WizardPrompter = {
   intro: (title: string) => Promise<void>;
   outro: (message: string) => Promise<void>;
   note: (message: string, title?: string) => Promise<void>;
+  openUrl?: (
+    url: string,
+    options?: {
+      title?: string;
+      message?: string;
+    },
+  ) => Promise<boolean>;
   select: <T>(params: WizardSelectParams<T>) => Promise<T>;
   multiselect: <T>(params: WizardMultiSelectParams<T>) => Promise<T[]>;
   text: (params: WizardTextParams) => Promise<string>;

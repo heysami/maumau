@@ -42,7 +42,7 @@ async function runChutesOAuth(ctx: ProviderAuthContext): Promise<ProviderAuthRes
           `Redirect URI: ${redirectUri}`,
         ].join("\n")
       : [
-          "Browser will open for Chutes authentication.",
+          "Press Continue and Maumau will open your browser for Chutes authentication.",
           "If the callback doesn't auto-complete, paste the redirect URL.",
           "",
           `Redirect URI: ${redirectUri}`,

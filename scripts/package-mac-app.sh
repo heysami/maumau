@@ -66,6 +66,26 @@ workspace_deps_ready() {
   [[ -e "$ROOT_DIR/node_modules/.bin/tsdown" ]] || return 1
 }
 
+ensure_control_ui_assets() {
+  local control_ui_src="$ROOT_DIR/dist/control-ui"
+  if [[ -d "$control_ui_src" && -f "$control_ui_src/index.html" ]]; then
+    return 0
+  fi
+
+  if [[ "${SKIP_UI_BUILD:-0}" == "1" ]]; then
+    echo "ERROR: Control UI assets missing at $control_ui_src and SKIP_UI_BUILD=1. Run pnpm ui:build first or unset SKIP_UI_BUILD." >&2
+    exit 1
+  fi
+
+  echo "🖥  Control UI assets missing at copy time; rebuilding (ui:build)"
+  (cd "$ROOT_DIR" && node scripts/ui.js build)
+
+  if [[ ! -d "$control_ui_src" || ! -f "$control_ui_src/index.html" ]]; then
+    echo "ERROR: Control UI assets still missing at $control_ui_src after ui:build." >&2
+    exit 1
+  fi
+}
+
 has_codesigning_identity() {
   security find-identity -p codesigning -v 2>/dev/null | grep -Eq '"'
 }
@@ -379,13 +399,9 @@ fi
 echo "📦 Copying Control UI assets"
 CONTROL_UI_SRC="$ROOT_DIR/dist/control-ui"
 CONTROL_UI_DEST="$APP_ROOT/Contents/Resources/control-ui"
-if [ -d "$CONTROL_UI_SRC" ] && [ -f "$CONTROL_UI_SRC/index.html" ]; then
-  rm -rf "$CONTROL_UI_DEST"
-  cp -R "$CONTROL_UI_SRC" "$CONTROL_UI_DEST"
-else
-  echo "ERROR: Control UI assets missing at $CONTROL_UI_SRC. Run pnpm ui:build first." >&2
-  exit 1
-fi
+ensure_control_ui_assets
+rm -rf "$CONTROL_UI_DEST"
+cp -R "$CONTROL_UI_SRC" "$CONTROL_UI_DEST"
 
 echo "📦 Copying MaumauKit resources"
 MAUMAUKIT_BUNDLE="$(build_path_for_arch "$PRIMARY_ARCH")/$BUILD_CONFIG/MaumauKit_MaumauKit.bundle"

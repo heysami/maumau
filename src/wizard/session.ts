@@ -19,6 +19,13 @@ export type WizardStep = {
   executor?: "gateway" | "client";
 };
 
+type WizardClientActionPayload =
+  | {
+      action: "open_url";
+      url: string;
+    }
+  | Record<string, unknown>;
+
 export type WizardSessionStatus = "running" | "done" | "cancelled" | "error";
 
 export type WizardNextResult = {
@@ -67,6 +74,26 @@ class WizardSessionPrompter implements WizardPrompter {
 
   async note(message: string, title?: string): Promise<void> {
     await this.prompt({ type: "note", title, message, executor: "client" });
+  }
+
+  async openUrl(
+    url: string,
+    options?: {
+      title?: string;
+      message?: string;
+    },
+  ): Promise<boolean> {
+    const result = await this.prompt({
+      type: "action",
+      title: options?.title ?? "Open browser sign-in",
+      message: options?.message ?? "Open the sign-in page in your browser.",
+      initialValue: {
+        action: "open_url",
+        url,
+      } satisfies WizardClientActionPayload,
+      executor: "client",
+    });
+    return result !== false;
   }
 
   async select<T>(params: {

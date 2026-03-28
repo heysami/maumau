@@ -521,6 +521,183 @@ describe("runSetupWizard", () => {
     expect(select).not.toHaveBeenCalled();
   });
 
+  it("treats embedded local in-progress wizard config as fresh setup", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: "{}",
+      parsed: {},
+      resolved: {
+        wizard: {
+          lastRunCommand: "onboard",
+          lastRunMode: "local",
+        },
+        agents: {
+          defaults: {
+            workspace: "/tmp/maumau-workspace",
+            model: "openai/gpt-5.4",
+          },
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      },
+      valid: true,
+      config: {
+        wizard: {
+          lastRunCommand: "onboard",
+          lastRunMode: "local",
+        },
+        agents: {
+          defaults: {
+            workspace: "/tmp/maumau-workspace",
+            model: "openai/gpt-5.4",
+          },
+        },
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "bootstrap-token",
+          },
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const note = vi.fn(async () => {});
+    const select = vi.fn(
+      async (_params: WizardSelectParams<unknown>) => "keep",
+    ) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ note, select });
+    const runtime = createRuntime({ throwsOnExit: true });
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(note).not.toHaveBeenCalledWith("summary", "Existing config detected");
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("omits clean local reset from embedded onboarding reset choices", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.maumau/maumau.json",
+      exists: true,
+      raw: "{}",
+      parsed: {},
+      resolved: {
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "saved-token",
+          },
+        },
+      },
+      valid: true,
+      config: {
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+            token: "saved-token",
+          },
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
+      if (String(opts.message).includes("existing setup on this Mac")) {
+        return "reset";
+      }
+      if (String(opts.message).includes("should be erased")) {
+        expect(opts.options.map((option) => option.value)).toEqual([
+          "config",
+          "config+creds+sessions",
+          "full",
+        ]);
+        return "config";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+  });
+
+  it("marks embedded local setup writes as in progress before completion", async () => {
+    writeConfigFile.mockClear();
+
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wizard: expect.objectContaining({
+          lastRunCommand: "onboard",
+          lastRunMode: "local",
+        }),
+      }),
+    );
+  });
+
   async function runTuiHatchTest(params: {
     writeBootstrapFile: boolean;
     expectedMessage: string | undefined;
@@ -661,6 +838,7 @@ describe("runSetupWizard", () => {
 
     expect(promptAuthChoiceGrouped).toHaveBeenCalledWith(
       expect.objectContaining({
+        embedded: true,
         includeRuntimeFallbackProviders: false,
       }),
     );
