@@ -942,13 +942,16 @@ public actor GatewayChannelActor {
         kind: String) throws -> (id: String, data: Data)
     {
         let id = UUID().uuidString
-        // Encode request using the generated models to avoid JSONSerialization/ObjC bridging pitfalls.
-        let paramsObject: ProtoAnyCodable? = params.map { entries in
-            let dict = entries.reduce(into: [String: ProtoAnyCodable]()) { dict, entry in
+        // Encode request using the generated models to avoid JSONSerialization/ObjC bridging
+        // pitfalls. For "no-arg" RPCs, send `{}` instead of omitting `params`, because the
+        // gateway validates many of those methods against a strict empty-object schema.
+        let paramsEntries = params ?? [:]
+        let paramsObject: ProtoAnyCodable = {
+            let dict = paramsEntries.reduce(into: [String: ProtoAnyCodable]()) { dict, entry in
                 dict[entry.key] = ProtoAnyCodable(entry.value.value)
             }
             return ProtoAnyCodable(dict)
-        }
+        }()
         let frame = RequestFrame(
             type: "req",
             id: id,

@@ -15,9 +15,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2026.3.28-beta.3</string>
+    <string>2026.3.29-beta.1</string>
     <key>CFBundleVersion</key>
-    <string>2026032803</string>
+    <string>2026032901</string>
     <key>CFBundleIconFile</key>
     <string>Maumau</string>
     <key>CFBundleURLTypes</key>

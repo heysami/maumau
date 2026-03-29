@@ -512,6 +512,12 @@ actor GatewayConnection {
 
     private func handle(push: GatewayPush) {
         self.broadcast(push)
+        if case .snapshot = push {
+            Task { @MainActor in
+                let authSource = await self.authSource()
+                ControlChannel.shared.noteSharedConnectionConnected(authSource: authSource)
+            }
+        }
     }
 
     private static func defaultConfigProvider() async throws -> Config {

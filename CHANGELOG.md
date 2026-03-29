@@ -10,6 +10,16 @@ Docs: https://docs.maumau.ai
 
 ### Fixes
 
+## 2026.3.29-beta.1
+
+### Breaking
+
+### Changes
+
+### Fixes
+
+- macOS/gateway local mode: keep retrying local control-channel recovery after the gateway restarts, refresh the shared auth endpoint when local auth changes, and send empty-object params for no-arg gateway RPCs so clean installs stop getting stuck on endless loading spinners while the app claims the gateway is connected.
+
 ## 2026.3.28-beta.3
 
 ### Breaking

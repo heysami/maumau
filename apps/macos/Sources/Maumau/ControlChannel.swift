@@ -56,6 +56,23 @@ final class ControlChannel {
         case degraded(String)
     }
 
+    static func shouldKeepRecovering(
+        state: ConnectionState,
+        mode: AppState.ConnectionMode) -> Bool
+    {
+        mode != .unconfigured && state != .connected
+    }
+
+    static func recoveryDelayBeforeAttemptMs(_ attempt: Int) -> UInt64 {
+        switch attempt {
+        case ...0: 0
+        case 1: 1_000
+        case 2: 2_000
+        case 3: 5_000
+        default: 10_000
+        }
+    }
+
     static func shouldRefreshHealthAfterRecovery(
         from oldState: ConnectionState,
         to newState: ConnectionState,
@@ -73,6 +90,7 @@ final class ControlChannel {
             guard oldValue != self.state else { return }
             switch self.state {
             case .connected:
+                self.pendingRecoveryReason = nil
                 self.logger.info("control channel state -> connected")
             case .connecting:
                 self.logger.info("control channel state -> connecting")
@@ -103,7 +121,7 @@ final class ControlChannel {
 
     private var eventTask: Task<Void, Never>?
     private var recoveryTask: Task<Void, Never>?
-    private var lastRecoveryAt: Date?
+    private var pendingRecoveryReason: String?
 
     private init() {
         self.startEventStream()
@@ -147,11 +165,22 @@ final class ControlChannel {
         }
     }
 
+    func noteSharedConnectionConnected(authSource: GatewayAuthSource?) {
+        let isRemote = CommandResolver.connectionModeIsRemote()
+        self.authSourceLabel = Self.formatAuthSource(authSource, isRemote: isRemote)
+        if self.state != .connected {
+            self.state = .connected
+        }
+    }
+
     func disconnect() async {
+        self.recoveryTask?.cancel()
+        self.recoveryTask = nil
         await GatewayConnection.shared.shutdown()
         self.state = .disconnected
         self.lastPingMs = nil
         self.authSourceLabel = nil
+        self.pendingRecoveryReason = nil
     }
 
     func health(timeout: TimeInterval? = nil, probe: Bool = false) async throws -> Data {
@@ -283,44 +312,65 @@ final class ControlChannel {
     }
 
     private func scheduleRecovery(reason: String) {
-        let now = Date()
-        if let last = self.lastRecoveryAt, now.timeIntervalSince(last) < 10 { return }
+        self.pendingRecoveryReason = reason
         guard self.recoveryTask == nil else { return }
-        self.lastRecoveryAt = now
 
-        self.recoveryTask = Task { [weak self] in
+        self.recoveryTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let mode = await MainActor.run { AppStateStore.shared.connectionMode }
-            guard mode != .unconfigured else {
-                self.recoveryTask = nil
-                return
-            }
+            defer { self.recoveryTask = nil }
 
-            let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-            let reasonText = trimmedReason.isEmpty ? "unknown" : trimmedReason
-            self.logger.info(
-                "control channel recovery starting mode=\(String(describing: mode), privacy: .public) reason=\(reasonText, privacy: .public)")
-            if mode == .local {
-                GatewayProcessManager.shared.setActive(true)
-            }
-            if mode == .remote {
-                do {
-                    let port = try await GatewayEndpointStore.shared.ensureRemoteControlTunnel()
-                    self.logger.info("control channel recovery ensured SSH tunnel port=\(port, privacy: .public)")
-                } catch {
-                    self.logger.error(
-                        "control channel recovery tunnel failed \(error.localizedDescription, privacy: .public)")
+            var attempt = 0
+            while !Task.isCancelled {
+                let mode = AppStateStore.shared.connectionMode
+                guard Self.shouldKeepRecovering(state: self.state, mode: mode) else { return }
+
+                let delayMs = Self.recoveryDelayBeforeAttemptMs(attempt)
+                if delayMs > 0 {
+                    self.logger.info(
+                        "control channel recovery waiting attempt=\(attempt + 1, privacy: .public) delayMs=\(delayMs, privacy: .public)")
+                    do {
+                        try await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                    } catch {
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    guard Self.shouldKeepRecovering(state: self.state, mode: AppStateStore.shared.connectionMode) else {
+                        return
+                    }
                 }
-            }
 
-            await self.refreshEndpoint(reason: "recovery:\(reasonText)")
-            if case .connected = self.state {
-                self.logger.info("control channel recovery finished")
-            } else if case let .degraded(message) = self.state {
-                self.logger.error("control channel recovery failed \(message, privacy: .public)")
-            }
+                let trimmedReason = self.pendingRecoveryReason?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let reasonText = trimmedReason.isEmpty ? "unknown" : trimmedReason
+                self.logger.info(
+                    "control channel recovery starting attempt=\(attempt + 1, privacy: .public) mode=\(String(describing: mode), privacy: .public) reason=\(reasonText, privacy: .public)")
+                if mode == .local {
+                    GatewayProcessManager.shared.setActive(true)
+                }
+                if mode == .remote {
+                    do {
+                        let port = try await GatewayEndpointStore.shared.ensureRemoteControlTunnel()
+                        self.logger.info("control channel recovery ensured SSH tunnel port=\(port, privacy: .public)")
+                    } catch {
+                        self.logger.error(
+                            "control channel recovery tunnel failed \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
-            self.recoveryTask = nil
+                await self.refreshEndpoint(reason: "recovery:\(reasonText)")
+                if case .connected = self.state {
+                    self.logger.info("control channel recovery finished")
+                    return
+                }
+                if case let .degraded(message) = self.state {
+                    self.pendingRecoveryReason = message
+                    self.logger.error("control channel recovery failed \(message, privacy: .public)")
+                } else if case .disconnected = self.state {
+                    self.pendingRecoveryReason = "disconnected"
+                    self.logger.error("control channel recovery failed disconnected")
+                }
+                attempt += 1
+            }
         }
     }
 

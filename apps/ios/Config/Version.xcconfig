@@ -1,8 +1,8 @@
 // Shared iOS version defaults.
 // Generated overrides live in build/Version.xcconfig (git-ignored).
 
-MAUMAU_GATEWAY_VERSION = 2026.3.28-beta.3
-MAUMAU_MARKETING_VERSION = 2026.3.28-beta.3
-MAUMAU_BUILD_VERSION = 2026032803
+MAUMAU_GATEWAY_VERSION = 2026.3.29-beta.1
+MAUMAU_MARKETING_VERSION = 2026.3.29-beta.1
+MAUMAU_BUILD_VERSION = 2026032901
 
 #include? "../build/Version.xcconfig"
