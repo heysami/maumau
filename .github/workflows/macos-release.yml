@@ -84,6 +84,43 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Free runner disk after Xcode selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected_developer_dir="$(xcode-select -p)"
+          selected_xcode_app="$(cd "${selected_developer_dir}/../.." && pwd)"
+
+          echo "Selected Xcode: ${selected_xcode_app}"
+          echo "Disk before cleanup:"
+          df -h /
+
+          while IFS= read -r app; do
+            if [[ "${app}" == "${selected_xcode_app}" ]]; then
+              continue
+            fi
+            echo "Removing unused Xcode: ${app}"
+            sudo rm -rf "${app}"
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' | sort)
+
+          for path in \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/.cache/Cypress" \
+            "/Applications/Android Studio.app" \
+            "/Applications/Google Chrome.app" \
+            "/Applications/Microsoft Edge.app" \
+            "/Applications/Firefox.app" \
+            "/Users/runner/hostedtoolcache/CodeQL"
+          do
+            if [[ -e "${path}" ]]; then
+              echo "Removing ${path}"
+              sudo rm -rf "${path}"
+            fi
+          done
+
+          echo "Disk after cleanup:"
+          df -h /
+
       - name: Validate release tag and package metadata
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}

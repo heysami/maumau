@@ -10,6 +10,16 @@ Docs: https://docs.maumau.ai
 
 ### Fixes
 
+## 2026.3.29-beta.2
+
+### Breaking
+
+### Changes
+
+### Fixes
+
+- macOS/release packaging: free unused GitHub runner disk after selecting Xcode so tagged macOS prerelease builds can finish packaging and publish desktop artifacts again.
+
 ## 2026.3.29-beta.1
 
 ### Breaking
