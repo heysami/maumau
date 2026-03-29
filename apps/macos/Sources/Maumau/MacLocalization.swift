@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 private let indonesianMacStrings: [String: String] = [
     "General": "Umum",
@@ -650,6 +651,28 @@ private let indonesianMacStrings: [String: String] = [
     "No Optional Automations": "Tidak ada otomasi opsional",
     "Automations enabled": "Otomasi diaktifkan",
     "OpenAI Codex OAuth": "OpenAI Codex OAuth",
+    "Press Continue and Maumau will open your browser for OpenAI authentication.":
+        "Tekan Lanjutkan dan Maumau akan membuka browser Anda untuk autentikasi OpenAI.",
+    "If the callback doesn't auto-complete, Maumau will show a URL you can open manually.":
+        "Jika callback tidak selesai otomatis, Maumau akan menampilkan URL yang bisa Anda buka secara manual.",
+    "OpenAI OAuth uses localhost:1455 for the callback.":
+        "OpenAI OAuth memakai localhost:1455 untuk callback.",
+    "You are running in a remote/VPS environment.":
+        "Anda sedang menjalankan di lingkungan remote/VPS.",
+    "A URL will be shown for you to open in your LOCAL browser.":
+        "Sebuah URL akan ditampilkan agar Anda membukanya di browser LOKAL Anda.",
+    "After signing in, paste the redirect URL back here.":
+        "Setelah masuk, tempel URL redirect kembali ke sini.",
+    "Starting OAuth flow…": "Memulai alur OAuth…",
+    "Complete sign-in in browser…": "Selesaikan login di browser…",
+    "OpenAI OAuth complete": "OpenAI OAuth selesai",
+    "OpenAI OAuth failed": "OpenAI OAuth gagal",
+    "Trouble with OAuth? See https://docs.maumau.ai/start/faq":
+        "Ada masalah dengan OAuth? Lihat https://docs.maumau.ai/start/faq",
+    "Browser did not open automatically.": "Browser tidak terbuka secara otomatis.",
+    "Open this URL in your browser to continue:":
+        "Buka URL ini di browser Anda untuk melanjutkan:",
+    "Paste the redirect URL": "Tempel URL redirect",
     """
     Browser will open for OpenAI authentication.
     If the callback doesn't auto-complete, paste the redirect URL.
@@ -669,16 +692,73 @@ private let indonesianMacStrings: [String: String] = [
     "Provider notes": "Catatan provider",
     "No auth methods available for that provider.":
         "Tidak ada metode auth yang tersedia untuk provider itu.",
+    "Web search": "Pencarian web",
+    "Web search lets your agent look things up online.":
+        "Pencarian web memungkinkan agen Anda mencari informasi di internet.",
+    "Web search lets your agent look things up online using the `web_search` tool.":
+        "Pencarian web memungkinkan agen Anda mencari informasi di internet dengan tool `web_search`.",
+    "Choose a provider. Some providers need an API key, and some work key-free.":
+        "Pilih provider. Beberapa provider memerlukan API key, dan beberapa bisa dipakai tanpa key.",
+    "Search provider": "Provider pencarian",
+    "Choose web search provider": "Pilih provider pencarian web",
+    "No web search providers are currently available under this plugin policy.":
+        "Belum ada provider pencarian web yang tersedia di kebijakan plugin saat ini.",
+    "Enable plugins or remove deny rules, then run setup again.":
+        "Aktifkan plugin atau hapus aturan deny, lalu jalankan setup lagi.",
+    "Enable plugins or remove deny rules, then rerun configure.":
+        "Aktifkan plugin atau hapus aturan deny, lalu jalankan configure lagi.",
+    "Maumau will enable the plugin and use it as your web_search provider.":
+        "Maumau akan mengaktifkan plugin itu dan memakainya sebagai provider web_search Anda.",
+    "Maumau enabled the plugin and selected it as your web_search provider.":
+        "Maumau mengaktifkan plugin itu dan memilihnya sebagai provider web_search Anda.",
+    "Secret references enabled — Maumau will store a reference instead of the API key.":
+        "Referensi secret diaktifkan — Maumau akan menyimpan referensi alih-alih API key.",
+    "No key stored yet — web_search won't work until a key is available.":
+        "Belum ada key yang tersimpan — web_search tidak akan berfungsi sampai ada key yang tersedia.",
+    "web_search will not work until the provider is re-enabled or a different provider is selected.":
+        "web_search tidak akan berfungsi sampai provider diaktifkan lagi atau provider lain dipilih.",
+    "Web search is enabled, so your agent can look things up online when needed.":
+        "Pencarian web aktif, jadi agen Anda bisa mencari informasi di internet saat diperlukan.",
+    "web_search will not work until a key is added.":
+        "web_search tidak akan berfungsi sampai sebuah key ditambahkan.",
+    "Web search was skipped. You can enable it later:":
+        "Pencarian web dilewati. Anda bisa mengaktifkannya nanti:",
+    "Configure later with maumau configure --section web":
+        "Atur nanti dengan maumau configure --section web",
+    "Leave blank to keep current": "Biarkan kosong untuk mempertahankan yang sekarang",
     "Review what you need before continuing.":
         "Tinjau apa yang Anda butuhkan sebelum melanjutkan.",
     "Read what you need below each option before continuing.":
         "Baca apa yang Anda butuhkan di bawah setiap opsi sebelum melanjutkan.",
     "Browser sign-in": "Login lewat browser",
+    "Browser sign-in or API key": "Login lewat browser atau API key",
     "ChatGPT sign-in or API key": "Login ChatGPT atau API key",
     "API key or Claude setup-token": "API key atau setup-token Claude",
     "Gemini API key or CLI sign-in": "Gemini API key atau login CLI",
     "Run local models on this Mac": "Jalankan model lokal di Mac ini",
     "One API for many model brands": "Satu API untuk banyak merek model",
+    "Alibaba-hosted Qwen + more": "Qwen yang di-host Alibaba + lainnya",
+    "Global or China API / OAuth": "API / OAuth global atau China",
+    "Kimi platform API key": "API key platform Kimi",
+    "Dedicated Kimi coding endpoint": "Endpoint coding Kimi khusus",
+    "Direct API key": "API key langsung",
+    "Grok API key": "API key Grok",
+    "HF token": "Token HF",
+    "BytePlus ModelArk API key": "API key BytePlus ModelArk",
+    "Volcano Engine / Doubao API key": "API key Volcano Engine / Doubao",
+    "Baidu Qianfan API key": "API key Baidu Qianfan",
+    "Global, Coding Plan, or China key": "Key Global, Coding Plan, atau China",
+    "MiMo API key": "API key MiMo",
+    "Anthropic-compatible gateway": "Gateway yang kompatibel dengan Anthropic",
+    "Zen or Go catalogs": "Katalog Zen atau Go",
+    "Unified LLM gateway": "Gateway LLM terpadu",
+    "Bring your own endpoint": "Gunakan endpoint Anda sendiri",
+    "Account ID + Gateway ID + key": "ID Akun + ID Gateway + key",
+    "Vercel gateway API key": "API key gateway Vercel",
+    "OpenRouter-compatible key": "Key yang kompatibel dengan OpenRouter",
+    "Local proxy only in this app": "Hanya proxy lokal di aplikasi ini",
+    "Self-hosted server": "Server yang di-host sendiri",
+    "Self-hosted OpenAI-compatible server": "Server yang di-host sendiri dan kompatibel dengan OpenAI",
     "Custom Provider": "Provider kustom",
     "Any OpenAI or Anthropic compatible endpoint":
         "Endpoint apa pun yang kompatibel dengan OpenAI atau Anthropic",
@@ -705,6 +785,20 @@ private let indonesianMacStrings: [String: String] = [
         "Akun OpenAI Platform dengan billing yang sudah diaktifkan.",
     "Open the OpenAI Platform, add a payment method if needed, then create a secret key from the API keys page.":
         "Buka OpenAI Platform, tambahkan metode pembayaran jika perlu, lalu buat secret key dari halaman API keys.",
+    "No API key. Sign in with ChatGPT in your browser.":
+        "Tidak perlu API key. Masuk dengan ChatGPT di browser Anda.",
+    "Requires OpenAI Platform billing and an API key.":
+        "Memerlukan billing OpenAI Platform dan sebuah API key.",
+    "Requires an Anthropic Console API key.":
+        "Memerlukan API key Anthropic Console.",
+    "Use a Claude subscription setup-token from Claude Code.":
+        "Gunakan setup-token langganan Claude dari Claude Code.",
+    "Requires a Gemini API key from Google AI Studio.":
+        "Memerlukan Gemini API key dari Google AI Studio.",
+    "Browser sign-in, but only after Gemini CLI OAuth is set up.":
+        "Login lewat browser, tetapi hanya setelah OAuth Gemini CLI disiapkan.",
+    "Local setup. Install Ollama and pull a model first.":
+        "Setup lokal. Pasang Ollama dan pull sebuah model terlebih dahulu.",
     "Standard Claude API usage and the smoothest Anthropic setup in Maumau.":
         "Penggunaan Claude API standar dan setup Anthropic yang paling mulus di Maumau.",
     "An Anthropic Console account and API billing access.":
@@ -781,6 +875,23 @@ private let indonesianMacStrings: [String: String] = [
         "Buka pengaturan API Perplexity, buat key, lalu tempelkan ke Maumau.",
     "Great for quick answer-style search results with citations.":
         "Bagus untuk hasil pencarian bergaya jawaban cepat dengan sitasi.",
+    "Neural search with content extraction":
+        "Pencarian neural dengan ekstraksi konten",
+    "Search plus scraping-friendly structured results":
+        "Pencarian plus hasil terstruktur yang ramah scraping",
+    "Search tuned for LLM/RAG workflows":
+        "Pencarian yang disetel untuk workflow LLM/RAG",
+    "xAI web-grounded responses":
+        "Respons xAI yang berlandaskan web",
+    "Kimi web search": "Pencarian web Kimi",
+    "OpenAI OAuth prerequisites check failed due to a network error before the browser flow.":
+        "Pemeriksaan prasyarat OpenAI OAuth gagal karena kesalahan jaringan sebelum alur browser dimulai.",
+    "OpenAI OAuth prerequisites check failed: Node/OpenSSL cannot validate TLS certificates.":
+        "Pemeriksaan prasyarat OpenAI OAuth gagal: Node/OpenSSL tidak bisa memvalidasi sertifikat TLS.",
+    "Verify DNS/firewall/proxy access to auth.openai.com and retry.":
+        "Verifikasi akses DNS/firewall/proxy ke auth.openai.com lalu coba lagi.",
+    "Fix (Homebrew Node/OpenSSL):":
+        "Perbaikan (Homebrew Node/OpenSSL):",
     "Copilot Proxy": "Proxy Copilot",
     "Gateway did not become ready. Check that it is running.":
         "Gateway tidak menjadi siap. Periksa apakah gateway sedang berjalan.",
@@ -1122,6 +1233,45 @@ private let indonesianMacStrings: [String: String] = [
         "Temukan gateway Maumau di LAN Anda",
 ]
 
+private let onboardingLocalizationLogger = Logger(
+    subsystem: "ai.maumau",
+    category: "onboarding.i18n")
+
+private let onboardingLocalizationEnglishMarkers = [
+    "best for:",
+    "what you need:",
+    "how to get it:",
+    "quality / caveat:",
+    "web search",
+    "search provider",
+    "browser",
+    "oauth",
+    "provider",
+    "api key",
+    "model",
+    "setup",
+    "sign in",
+    "sign-in",
+    "choose ",
+    "continue",
+    "configured",
+    "disabled",
+    "available",
+    "docs:",
+    "official:",
+]
+
+private func macShouldWarnAboutUntranslatedWizardText(_ text: String, language: OnboardingLanguage) -> Bool {
+    guard language == .id else { return false }
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return false }
+    if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+        return false
+    }
+    let lowered = trimmed.lowercased()
+    return onboardingLocalizationEnglishMarkers.contains(where: lowered.contains)
+}
+
 func macLocalized(_ english: String, language: OnboardingLanguage) -> String {
     guard language == .id else { return english }
     return macLocalizedIndonesian(english)
@@ -1137,7 +1287,12 @@ func macLocalized(_ english: String) -> String {
 }
 
 func macWizardText(_ raw: String?, language: OnboardingLanguage) -> String? {
-    raw.map { macLocalized($0, language: language) }
+    guard let raw else { return nil }
+    let localized = macLocalized(raw, language: language)
+    if localized == raw, macShouldWarnAboutUntranslatedWizardText(raw, language: language) {
+        onboardingLocalizationLogger.warning("missing onboarding localization: \(raw, privacy: .public)")
+    }
+    return localized
 }
 
 func macSessionSubtitle(count: Int, language: OnboardingLanguage) -> String {
@@ -1467,6 +1622,107 @@ private func macLocalizedIndonesian(_ english: String) -> String {
         return "Variabel lingkungan \"\(envVar)\" tidak ada atau kosong."
     }
 
+    if let provider = english.stripPrefix("Web search provider ")?
+        .stripSuffix(" is selected but unavailable under the current plugin policy.")
+    {
+        return "Provider pencarian web \(provider) dipilih tetapi tidak tersedia di kebijakan plugin saat ini."
+    }
+
+    if let provider = english.stripSuffix(" works without an API key.") {
+        return "\(provider) bekerja tanpa API key."
+    }
+
+    if let credential = english.stripPrefix("No ")?
+        .stripSuffix(" stored — web_search won't work until a key is available.")
+    {
+        return "Belum ada \(credential) yang tersimpan — web_search tidak akan berfungsi sampai ada key yang tersedia."
+    }
+
+    if let url = english.stripPrefix("Get your key at: ") {
+        return "Ambil key Anda di: \(url)"
+    }
+
+    if let url = english.stripPrefix("Get your API key at: ") {
+        return "Ambil API key Anda di: \(url)"
+    }
+
+    if let env = english.stripPrefix("Env var: ") {
+        return "Variabel env: \(env)"
+    }
+
+    if let envVar = english.stripPrefix("Set ")?
+        .stripSuffix(" in the Gateway environment.")
+    {
+        return "Setel \(envVar) di lingkungan Gateway."
+    }
+
+    if let range = english.range(of: " here or set "),
+       english.hasPrefix("Store your "),
+       english.hasSuffix(" in the Gateway environment.")
+    {
+        let start = english.index(english.startIndex, offsetBy: "Store your ".count)
+        let credential = String(english[start..<range.lowerBound])
+        let env = String(english[range.upperBound..<english.endIndex])
+            .stripSuffix(" in the Gateway environment.") ?? ""
+        return "Simpan \(credential) Anda di sini atau setel \(env) di lingkungan Gateway."
+    }
+
+    if let provider = english.stripPrefix("Provider ")?
+        .stripSuffix(" is selected but no API key was found.")
+    {
+        return "Provider \(provider) dipilih tetapi tidak ditemukan API key."
+    }
+
+    if let provider = english.stripPrefix("Web search (")?
+        .stripSuffix(") is configured but disabled.")
+    {
+        return "Pencarian web (\(provider)) sudah dikonfigurasi tetapi dinonaktifkan."
+    }
+
+    if let provider = english.stripPrefix("Web search is available via ")?
+        .stripSuffix(" (auto-detected).")
+    {
+        return "Pencarian web tersedia melalui \(provider) (terdeteksi otomatis)."
+    }
+
+    if let command = english.stripPrefix("Re-enable: ") {
+        return "Aktifkan lagi: \(command)"
+    }
+
+    if let source = english.stripPrefix("API key: provided via ")?
+        .stripSuffix(" env var.")
+    {
+        return "API key: disediakan melalui variabel env \(source)."
+    }
+
+    if let credential = english.stripSuffix(" (leave blank to keep current)") {
+        return "\(macLocalizedIndonesian(credential)) (biarkan kosong untuk mempertahankan yang sekarang)"
+    }
+
+    if let credential = english.stripSuffix(" (leave blank to use env var)") {
+        return "\(macLocalizedIndonesian(credential)) (biarkan kosong untuk memakai variabel env)"
+    }
+
+    if let range = english.range(of: " (leave blank to keep current or use "),
+       english.hasSuffix(")")
+    {
+        let credential = String(english[..<range.lowerBound])
+        let envStart = range.upperBound
+        let envEnd = english.index(before: english.endIndex)
+        let env = String(english[envStart..<envEnd])
+        return "\(macLocalizedIndonesian(credential)) (biarkan kosong untuk mempertahankan yang sekarang atau gunakan \(env))"
+    }
+
+    if let range = english.range(of: " (paste it here; leave blank to use "),
+       english.hasSuffix(")")
+    {
+        let credential = String(english[..<range.lowerBound])
+        let envStart = range.upperBound
+        let envEnd = english.index(before: english.endIndex)
+        let env = String(english[envStart..<envEnd])
+        return "\(macLocalizedIndonesian(credential)) (tempelkan di sini; biarkan kosong untuk memakai \(env))"
+    }
+
     if let detail = english.stripPrefix("Config was written to "),
        let separator = detail.range(of: ", but runtime snapshot refresh failed: ")
     {
@@ -1477,6 +1733,26 @@ private func macLocalizedIndonesian(_ english: String) -> String {
 
     if let provider = english.stripSuffix(" API key") {
         return "API key \(provider)"
+    }
+
+    if let hint = english.stripSuffix(" · configured") {
+        return "\(macLocalizedIndonesian(hint)) · dikonfigurasi"
+    }
+
+    if let hint = english.stripSuffix(" · key-free") {
+        return "\(macLocalizedIndonesian(hint)) · tanpa key"
+    }
+
+    if let detail = english.stripPrefix("Cause: ") {
+        return "Penyebab: \(detail)"
+    }
+
+    if let path = english.stripPrefix("- Verify cert bundle exists: ") {
+        return "- Verifikasi bahwa bundel sertifikat ada: \(path)"
+    }
+
+    if english == "- Retry the OAuth login flow." {
+        return "- Coba lagi alur login OAuth."
     }
 
     return english

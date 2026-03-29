@@ -75,6 +75,10 @@ final class ControlChannel {
         return true
     }
 
+    static func shouldApplyRefreshResult(attempt: UInt64, latestAttempt: UInt64) -> Bool {
+        attempt == latestAttempt
+    }
+
     private(set) var state: ConnectionState = .disconnected {
         didSet {
             CanvasManager.shared.refreshDebugStatus()
@@ -112,6 +116,7 @@ final class ControlChannel {
     private var eventTask: Task<Void, Never>?
     private var recoveryTask: Task<Void, Never>?
     private var lastRecoveryAt: Date?
+    private var refreshAttempt: UInt64 = 0
 
     private init() {
         self.startEventStream()
@@ -143,19 +148,29 @@ final class ControlChannel {
     }
 
     func refreshEndpoint(reason: String) async {
-        self.logger.info("control channel refresh endpoint reason=\(reason, privacy: .public)")
-        self.state = .connecting
+        let attempt = self.beginRefreshAttempt(reason: reason)
         do {
             try await self.establishGatewayConnection()
+            guard Self.shouldApplyRefreshResult(attempt: attempt, latestAttempt: self.refreshAttempt) else {
+                self.logger.debug(
+                    "control channel ignoring stale refresh success attempt=\(attempt, privacy: .public) latest=\(self.refreshAttempt, privacy: .public)")
+                return
+            }
             self.state = .connected
             PresenceReporter.shared.sendImmediate(reason: "connect")
         } catch {
             let message = self.friendlyGatewayMessage(error)
+            guard Self.shouldApplyRefreshResult(attempt: attempt, latestAttempt: self.refreshAttempt) else {
+                self.logger.debug(
+                    "control channel ignoring stale refresh failure attempt=\(attempt, privacy: .public) latest=\(self.refreshAttempt, privacy: .public) message=\(message, privacy: .public)")
+                return
+            }
             self.state = .degraded(message)
         }
     }
 
     func disconnect() async {
+        self.refreshAttempt &+= 1
         await GatewayConnection.shared.shutdown()
         self.state = .disconnected
         self.lastPingMs = nil
@@ -342,6 +357,15 @@ final class ControlChannel {
                 userInfo: [NSLocalizedDescriptionKey: "gateway health not ok"])
         }
         await self.refreshAuthSourceLabel()
+    }
+
+    private func beginRefreshAttempt(reason: String) -> UInt64 {
+        self.refreshAttempt &+= 1
+        let attempt = self.refreshAttempt
+        self.logger.info(
+            "control channel refresh endpoint reason=\(reason, privacy: .public) attempt=\(attempt, privacy: .public)")
+        self.state = .connecting
+        return attempt
     }
 
     private func refreshAuthSourceLabel() async {

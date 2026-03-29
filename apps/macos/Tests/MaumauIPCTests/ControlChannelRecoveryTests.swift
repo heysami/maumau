@@ -3,6 +3,14 @@ import Testing
 
 @MainActor
 struct ControlChannelRecoveryTests {
+    @Test func `stale refresh results do not overwrite the latest attempt`() {
+        #expect(!ControlChannel.shouldApplyRefreshResult(attempt: 1, latestAttempt: 2))
+    }
+
+    @Test func `latest refresh result still applies`() {
+        #expect(ControlChannel.shouldApplyRefreshResult(attempt: 2, latestAttempt: 2))
+    }
+
     @Test func `schedules health refresh when control channel recovers with a stale health error`() {
         #expect(ControlChannel.shouldRefreshHealthAfterRecovery(
             from: .degraded("Cannot reach gateway at localhost:18789; ensure the gateway is running."),

@@ -495,6 +495,10 @@ final class AppState {
     private func applyConfigFromDisk() {
         let root = MaumauConfigFile.loadDict()
         self.applyConfigOverrides(root)
+        // Gateway auth can rotate during onboarding/config saves. Refresh the resolved
+        // endpoint so the connectivity coordinator can reconnect with the new token/url
+        // instead of waiting for some unrelated request path to notice the change.
+        Task { await GatewayEndpointStore.shared.refresh() }
     }
 
     private func applyConfigOverrides(_ root: [String: Any]) {

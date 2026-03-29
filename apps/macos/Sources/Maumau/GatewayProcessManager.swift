@@ -49,6 +49,7 @@ final class GatewayProcessManager {
     private var environmentRefreshTask: Task<Void, Never>?
     private var lastEnvironmentRefresh: Date?
     private var logRefreshTask: Task<Void, Never>?
+    private var readinessWait: (id: UUID, deadline: Date, task: Task<Bool, Never>)?
     #if DEBUG
     private var testingConnection: GatewayConnection?
     #endif
@@ -69,6 +70,16 @@ final class GatewayProcessManager {
             return true
         }
         return false
+    }
+
+    static func shouldRefreshControlChannel(
+        state: ControlChannel.ConnectionState)
+        -> Bool
+    {
+        if case .connected = state {
+            return false
+        }
+        return true
     }
 
     func setActive(_ active: Bool) {
@@ -145,6 +156,8 @@ final class GatewayProcessManager {
         self.desiredActive = false
         self.existingGatewayDetails = nil
         self.lastFailureReason = nil
+        self.readinessWait?.task.cancel()
+        self.readinessWait = nil
         self.status = .stopped
         self.logger.info("gateway stop requested")
         if CommandResolver.connectionModeIsRemote() {
@@ -441,21 +454,51 @@ final class GatewayProcessManager {
     }
 
     private func refreshControlChannelIfNeeded(reason: String) {
-        switch ControlChannel.shared.state {
-        case .connected, .connecting:
+        let state = ControlChannel.shared.state
+        guard Self.shouldRefreshControlChannel(state: state) else {
             return
-        case .disconnected, .degraded:
-            break
         }
+        // A restart-time refresh can already be mid-flight when the gateway becomes ready.
+        // Kick one more refresh here so the ready signal can supersede any stale "connecting"
+        // attempt that started against the previous socket/token.
         self.appendLog("[gateway] refreshing control channel (\(reason))\n")
         self.logger.debug("gateway control channel refresh reason=\(reason)")
         Task { await ControlChannel.shared.configure() }
     }
 
     func waitForGatewayReady(timeout: TimeInterval = GatewayProcessManager.localGatewayStartupTimeout) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        let requestedDeadline = Date().addingTimeInterval(timeout)
+        if var wait = self.readinessWait {
+            if requestedDeadline > wait.deadline {
+                wait.deadline = requestedDeadline
+                self.readinessWait = wait
+            }
+            return await wait.task.value
+        }
+
+        let id = UUID()
+        let task = Task { [weak self] in
+            guard let self else { return false }
+            return await self.performSharedReadinessWait(id: id)
+        }
+        self.readinessWait = (id: id, deadline: requestedDeadline, task: task)
+        let ready = await task.value
+        if self.readinessWait?.id == id {
+            self.readinessWait = nil
+        }
+        return ready
+    }
+
+    private func performSharedReadinessWait(id: UUID) async -> Bool {
+        while true {
             if !self.desiredActive { return false }
+            guard let wait = self.readinessWait, wait.id == id else { return false }
+            if Date() >= wait.deadline {
+                self.appendLog("[gateway] readiness wait timed out\n")
+                self.logger.warning("gateway readiness wait timed out")
+                return false
+            }
+
             do {
                 _ = try await self.connection.requestRawWithoutRecovery(
                     method: .health,
@@ -463,12 +506,13 @@ final class GatewayProcessManager {
                 await self.markGatewayReady(reason: "gateway became ready")
                 return true
             } catch {
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: 300_000_000)
+                } catch {
+                    return false
+                }
             }
         }
-        self.appendLog("[gateway] readiness wait timed out\n")
-        self.logger.warning("gateway readiness wait timed out")
-        return false
     }
 
     func clearLog() {
