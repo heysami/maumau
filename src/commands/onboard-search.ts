@@ -17,6 +17,11 @@ import { sortWebSearchProviders } from "../plugins/web-search-providers.shared.j
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import type { SecretInputMode } from "./onboard-types.js";
+import {
+  buildEmbeddedSearchProviderNote,
+  resolveEmbeddedSearchProviderHint,
+  sortEmbeddedSearchProviders,
+} from "./onboarding-choice-guides.js";
 
 export type SearchProvider = NonNullable<
   NonNullable<NonNullable<NonNullable<MaumauConfig["tools"]>["web"]>["search"]>["provider"]
@@ -280,6 +285,7 @@ function preserveDisabledState(original: MaumauConfig, result: MaumauConfig): Ma
 export type SetupSearchOptions = {
   quickstartDefaults?: boolean;
   secretInputMode?: SecretInputMode;
+  embedded?: boolean;
 };
 
 export async function setupSearch(
@@ -288,7 +294,9 @@ export async function setupSearch(
   prompter: WizardPrompter,
   opts?: SetupSearchOptions,
 ): Promise<MaumauConfig> {
-  const providerOptions = resolveSearchProviderOptions(config);
+  const providerOptions = opts?.embedded
+    ? sortEmbeddedSearchProviders([...resolveSearchProviderOptions(config)])
+    : resolveSearchProviderOptions(config);
   if (providerOptions.length === 0) {
     await prompter.note(
       [
@@ -313,12 +321,13 @@ export async function setupSearch(
   const existingProvider = config.tools?.web?.search?.provider;
 
   const options = providerOptions.map((entry) => {
+    const baseHint = opts?.embedded ? resolveEmbeddedSearchProviderHint(entry) : entry.hint;
     const hint =
       entry.requiresCredential === false
-        ? `${entry.hint} · key-free`
+        ? baseHint
         : providerIsReady(config, entry)
-          ? `${entry.hint} · configured`
-          : entry.hint;
+          ? `${baseHint} · configured`
+          : baseHint;
     return { value: entry.id, label: entry.label, hint };
   });
 
@@ -355,6 +364,12 @@ export async function setupSearch(
   if (!entry) {
     return config;
   }
+
+  if (opts?.embedded) {
+    const note = buildEmbeddedSearchProviderNote(entry);
+    await prompter.note(note.message, note.title);
+  }
+
   const credentialLabel = resolveSearchProviderCredentialLabel(entry);
   const existingKey = resolveExistingKey(config, choice);
   const keyConfigured = hasExistingKey(config, choice);
@@ -369,14 +384,16 @@ export async function setupSearch(
   }
 
   if (!needsCredential) {
-    await prompter.note(
-      [
-        `${entry.label} works without an API key.`,
-        "Maumau will enable the plugin and use it as your web_search provider.",
-        `Docs: ${entry.docsUrl ?? "https://docs.maumau.ai/tools/web"}`,
-      ].join("\n"),
-      "Web search",
-    );
+    if (!opts?.embedded) {
+      await prompter.note(
+        [
+          `${entry.label} works without an API key.`,
+          "Maumau will enable the plugin and use it as your web_search provider.",
+          `Docs: ${entry.docsUrl ?? "https://docs.maumau.ai/tools/web"}`,
+        ].join("\n"),
+        "Web search",
+      );
+    }
     return preserveDisabledState(config, applySearchProviderSelection(config, choice));
   }
 

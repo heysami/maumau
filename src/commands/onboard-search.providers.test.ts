@@ -93,6 +93,27 @@ function createBundledDuckDuckGoEntry(): PluginWebSearchProviderEntry {
   };
 }
 
+function createSearchEntry(
+  id: string,
+  label: string,
+  hint: string,
+  signupUrl: string,
+): PluginWebSearchProviderEntry {
+  return {
+    id: id as never,
+    pluginId: id,
+    label,
+    hint,
+    envVars: [`${id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`],
+    placeholder: `${id}-key`,
+    signupUrl,
+    credentialPath: `plugins.entries.${id}.config.webSearch.apiKey`,
+    getCredentialValue: () => undefined,
+    setCredentialValue: () => {},
+    createTool: () => null,
+  };
+}
+
 describe("onboard-search provider resolution", () => {
   let mod: typeof import("./onboard-search.js");
 
@@ -255,5 +276,84 @@ describe("onboard-search provider resolution", () => {
     expect(result.tools?.web?.search?.provider).toBe("duckduckgo");
     expect(result.plugins?.entries?.duckduckgo?.enabled).toBe(true);
     expect(notes.some((message) => message.includes("works without an API key"))).toBe(true);
+  });
+
+  it("orders embedded search providers by the curated onboarding ranking", async () => {
+    const providers = [
+      createSearchEntry("tavily", "Tavily", "LLM search", "https://tavily.com/"),
+      createBundledDuckDuckGoEntry(),
+      createSearchEntry("brave", "Brave Search", "Search API", "https://brave.com/search/api/"),
+      createSearchEntry("moonshot", "Moonshot Search", "Kimi web search", "https://platform.moonshot.cn/"),
+      createSearchEntry("exa", "Exa", "Semantic search", "https://exa.ai/"),
+    ];
+    mocks.resolvePluginWebSearchProviders.mockImplementation((params) =>
+      params?.config ? providers : providers,
+    );
+    mocks.listBundledWebSearchProviders.mockReturnValue([]);
+
+    const selectCalls: Array<Array<{ value: string; label: string; hint?: string }>> = [];
+    const notes: string[] = [];
+    const prompter = {
+      intro: vi.fn(async () => {}),
+      outro: vi.fn(async () => {}),
+      note: vi.fn(async (message: string) => {
+        notes.push(message);
+      }),
+      select: vi.fn(async ({ options }) => {
+        selectCalls.push(options);
+        return "__skip__";
+      }),
+      multiselect: vi.fn(async () => []),
+      text: vi.fn(async () => ""),
+      confirm: vi.fn(async () => true),
+      progress: vi.fn(() => ({ update: vi.fn(), stop: vi.fn() })),
+    };
+
+    await mod.setupSearch({} as MaumauConfig, {} as never, prompter as never, {
+      embedded: true,
+    });
+
+    expect(selectCalls[0]?.slice(0, 5).map((option) => option.value)).toEqual([
+      "brave",
+      "duckduckgo",
+      "exa",
+      "tavily",
+      "moonshot",
+    ]);
+    expect(selectCalls[0]?.find((option) => option.value === "duckduckgo")?.hint).toBe(
+      "No signup, no key, experimental",
+    );
+    expect(notes[0]).toContain("Choose a provider");
+  });
+
+  it("shows the embedded search guidance note before continuing", async () => {
+    const duckduckgoEntry = createBundledDuckDuckGoEntry();
+    mocks.resolvePluginWebSearchProviders.mockImplementation((params) =>
+      params?.config ? [duckduckgoEntry] : [duckduckgoEntry],
+    );
+
+    const notes: Array<{ title?: string; message: string }> = [];
+    const prompter = {
+      intro: vi.fn(async () => {}),
+      outro: vi.fn(async () => {}),
+      note: vi.fn(async (message: string, title?: string) => {
+        notes.push({ title, message });
+      }),
+      select: vi.fn(async () => "duckduckgo"),
+      multiselect: vi.fn(async () => []),
+      text: vi.fn(async () => {
+        throw new Error("text prompt should not run for keyless providers");
+      }),
+      confirm: vi.fn(async () => true),
+      progress: vi.fn(() => ({ update: vi.fn(), stop: vi.fn() })),
+    };
+
+    await mod.setupSearch({} as MaumauConfig, {} as never, prompter as never, {
+      embedded: true,
+    });
+
+    expect(notes.some((note) => note.title === "Before you choose DuckDuckGo Search (experimental)")).toBe(true);
+    expect(notes.some((note) => note.message.includes("What you need: Nothing extra. No signup, no key."))).toBe(true);
+    expect(notes.some((note) => note.message.includes("Quality / caveat: Experimental key-free fallback."))).toBe(true);
   });
 });

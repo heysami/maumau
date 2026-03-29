@@ -13,6 +13,7 @@ import {
   waitForGatewayReachable,
 } from "../onboard-helpers.js";
 import { ensureOnboardedMultiUserMemoryArtifacts } from "../onboard-multi-user-memory.js";
+import { ensureOnboardedReflectionReviewerArtifacts } from "../onboard-reflection-reviewer.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { inferAuthChoiceFromFlags } from "./local/auth-choice-inference.js";
 import { applyNonInteractiveGatewayConfig } from "./local/gateway-config.js";
@@ -134,6 +135,10 @@ export async function runNonInteractiveLocalSetup(params: {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
   await ensureOnboardedMultiUserMemoryArtifacts({
+    config: nextConfig,
+    runtime,
+  });
+  await ensureOnboardedReflectionReviewerArtifacts({
     config: nextConfig,
     runtime,
   });

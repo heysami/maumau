@@ -41,6 +41,11 @@ can use `web_search`. You can also configure this later with
 `maumau configure --section web`. Docs: [Web tools](/tools/web).
 </Tip>
 
+<Tip>
+Before the brain or web-search step, use [Choose Providers](/start/choose-providers)
+for the onboarding order plus the account, billing, key, or sign-in prep each method needs.
+</Tip>
+
 ## QuickStart vs Advanced
 
 Onboarding starts with **QuickStart** (defaults) vs **Advanced** (full control).
@@ -67,6 +72,7 @@ Onboarding starts with **QuickStart** (defaults) vs **Advanced** (full control).
 
 1. **Model/Auth** — choose any supported provider/auth flow (API key, OAuth, or setup-token), including Custom Provider
    (OpenAI-compatible, Anthropic-compatible, or Unknown auto-detect). Pick a default model.
+   If you want the easiest path first, see [Choose Providers](/start/choose-providers).
    Security note: if this agent will run tools or process webhook/hooks content, prefer the strongest latest-generation model available and keep tool policy strict. Weaker/older tiers are easier to prompt-inject.
    For non-interactive runs, `--secret-input-mode ref` stores env-backed refs in auth profiles instead of plaintext API key values.
    In non-interactive `ref` mode, the provider env var must be set; passing inline key flags without that env var fails fast.

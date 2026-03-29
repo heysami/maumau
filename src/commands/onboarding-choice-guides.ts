@@ -790,9 +790,12 @@ export function sortEmbeddedSearchProviders(
 }
 
 export function resolveEmbeddedSearchProviderHint(
-  entry: Pick<PluginWebSearchProviderEntry, "id" | "hint" | "signupUrl" | "docsUrl" | "label">,
+  entry: Pick<
+    PluginWebSearchProviderEntry,
+    "id" | "hint" | "signupUrl" | "docsUrl" | "label" | "requiresCredential"
+  >,
 ): string {
-  return buildSearchGuideMessage({ ...entry, requiresCredential: true }).hint;
+  return buildSearchGuideMessage(entry).hint;
 }
 
 export function buildEmbeddedSearchProviderNote(

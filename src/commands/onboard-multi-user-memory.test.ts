@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../config/config.js";
-import { loadCronStore, resolveCronStorePath } from "../cron/store.js";
+import { loadCronStore } from "../cron/store.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { withEnvAsync } from "../test-utils/env.js";
 import {
@@ -26,17 +26,20 @@ describe("onboard multi-user-memory", () => {
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-curator-state-"));
     tempDirs.push(stateDir);
     const workspaceDir = path.join(stateDir, "workspace");
+    const cronStorePath = path.join(stateDir, "cron", "jobs.json");
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
       exit: vi.fn(),
     };
-    let cronStorePath = "";
     const seeded = applyLocalSetupMultiUserMemoryDefaults({
       agents: {
         defaults: {
           workspace: workspaceDir,
         },
+      },
+      cron: {
+        store: cronStorePath,
       },
     } satisfies MaumauConfig);
 
@@ -49,7 +52,6 @@ describe("onboard multi-user-memory", () => {
         config: seeded,
         runtime,
       });
-      cronStorePath = resolveCronStorePath(undefined);
     });
 
     const curatorWorkspace = path.join(stateDir, `workspace-${MULTI_USER_MEMORY_CURATOR_AGENT_ID}`);

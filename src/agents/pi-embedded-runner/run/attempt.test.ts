@@ -26,6 +26,7 @@ import {
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.js";
+import { buildEmbeddedHookContext } from "./hook-context.js";
 import { shouldInjectHeartbeatPromptForTrigger } from "./trigger-policy.js";
 
 type FakeWrappedStream = {
@@ -147,6 +148,61 @@ describe("resolvePromptBuildHookResult", () => {
     expect(result.prependContext).toBe("prompt context\n\nlegacy context");
     expect(result.prependSystemContext).toBe("prompt prepend\n\nlegacy prepend");
     expect(result.appendSystemContext).toBe("prompt append\n\nlegacy append");
+  });
+});
+
+describe("buildEmbeddedHookContext", () => {
+  it("includes inbound sender metadata for direct telegram runs", () => {
+    expect(
+      buildEmbeddedHookContext({
+        agentId: "main",
+        sessionKey: "telegram:6925625562",
+        sessionId: "session-1",
+        workspaceDir: "/tmp/workspace",
+        messageProvider: "telegram",
+        agentAccountId: "default",
+        messageTo: "6925625562",
+        senderId: "6925625562",
+        senderName: "Samiadji",
+        senderUsername: "sam",
+        isGroup: false,
+      }),
+    ).toEqual({
+      agentId: "main",
+      sessionKey: "telegram:6925625562",
+      sessionId: "session-1",
+      workspaceDir: "/tmp/workspace",
+      messageProvider: "telegram",
+      trigger: undefined,
+      channelId: "telegram",
+      accountId: "default",
+      requesterSenderId: "6925625562",
+      requesterSenderName: "Samiadji",
+      requesterSenderUsername: "sam",
+      conversationId: "6925625562",
+      isGroup: false,
+    });
+  });
+
+  it("builds canonical telegram topic conversation ids when thread metadata is present", () => {
+    expect(
+      buildEmbeddedHookContext({
+        agentId: "main",
+        sessionKey: "telegram:-100123:topic:77",
+        sessionId: "session-2",
+        workspaceDir: "/tmp/workspace",
+        messageProvider: "telegram",
+        messageTo: "telegram:-100123",
+        messageThreadId: "77",
+        senderId: "6925625562",
+        isGroup: true,
+      }),
+    ).toMatchObject({
+      channelId: "telegram",
+      requesterSenderId: "6925625562",
+      conversationId: "-100123:topic:77",
+      isGroup: true,
+    });
   });
 });
 

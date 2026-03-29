@@ -63,4 +63,71 @@ describe("promptAuthChoiceGrouped", () => {
       }),
     );
   });
+
+  it("shows the embedded setup note before auto-continuing single-method providers", async () => {
+    buildAuthChoiceGroups.mockReturnValue({
+      groups: [
+        {
+          value: "ollama",
+          label: "Ollama",
+          options: [{ value: "ollama", label: "Ollama", hint: "Local runtime" }],
+        },
+      ],
+      skipOption: undefined,
+    });
+
+    const prompter = {
+      select: vi.fn(async () => "ollama"),
+      note: vi.fn(async () => {}),
+    };
+
+    await expect(
+      promptAuthChoiceGrouped({
+        prompter: prompter as never,
+        store: EMPTY_STORE,
+        includeSkip: false,
+        embedded: true,
+      }),
+    ).resolves.toBe("ollama");
+
+    expect(prompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("Best for:"),
+      "Before you choose Ollama",
+    );
+  });
+
+  it("does not show the detached note for multi-method embedded providers", async () => {
+    buildAuthChoiceGroups.mockReturnValue({
+      groups: [
+        {
+          value: "openai",
+          label: "OpenAI",
+          options: [
+            { value: "openai-codex", label: "OpenAI Codex (ChatGPT OAuth)" },
+            { value: "openai-api-key", label: "OpenAI API key" },
+          ],
+        },
+      ],
+      skipOption: undefined,
+    });
+
+    const prompter = {
+      select: vi
+        .fn()
+        .mockResolvedValueOnce("openai")
+        .mockResolvedValueOnce("openai-codex"),
+      note: vi.fn(async () => {}),
+    };
+
+    await expect(
+      promptAuthChoiceGrouped({
+        prompter: prompter as never,
+        store: EMPTY_STORE,
+        includeSkip: false,
+        embedded: true,
+      }),
+    ).resolves.toBe("openai-codex");
+
+    expect(prompter.note).not.toHaveBeenCalled();
+  });
 });

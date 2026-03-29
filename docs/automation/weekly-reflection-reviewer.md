@@ -13,6 +13,8 @@ This is a **supported cron recipe**, not a new scheduler subsystem.
 
 Use it when you want Maumau to review real user-facing conversations every day, curate signals into daily notes, and then synthesize those notes into a weekly reflection without auto-editing code or personality files.
 
+Local onboarding now seeds these jobs automatically for the standard local setup. The manual commands below are still the supported way to recreate or customize them.
+
 ## What this recipe does
 
 - Runs as **two cron jobs**

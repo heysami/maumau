@@ -825,6 +825,7 @@ export async function runSetupWizard(
       nextConfig = await setupSearch(nextConfig, runtime, prompter, {
         quickstartDefaults: flow === "quickstart",
         secretInputMode: opts.secretInputMode,
+        embedded: opts.embedded,
       });
     }
 
@@ -846,6 +847,13 @@ export async function runSetupWizard(
   const { ensureOnboardedMultiUserMemoryArtifacts } =
     await import("../commands/onboard-multi-user-memory.js");
   await ensureOnboardedMultiUserMemoryArtifacts({
+    config: nextConfig,
+    runtime,
+  });
+  const { ensureOnboardedReflectionReviewerArtifacts } = await import(
+    "../commands/onboard-reflection-reviewer.js"
+  );
+  await ensureOnboardedReflectionReviewerArtifacts({
     config: nextConfig,
     runtime,
   });

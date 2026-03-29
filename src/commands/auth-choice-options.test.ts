@@ -473,4 +473,247 @@ describe("buildAuthChoiceOptions", () => {
     expect(embeddedOptions.some((option) => option.value === "openai-api-key")).toBe(true);
     expect(normalOptions.some((option) => option.value === "github-copilot")).toBe(true);
   });
+
+  it("orders embedded provider groups by ease and popularity instead of alphabetically", () => {
+    resolveManifestProviderAuthChoices.mockReturnValue([
+      {
+        pluginId: "openrouter",
+        providerId: "openrouter",
+        methodId: "api-key",
+        choiceId: "openrouter-api-key",
+        choiceLabel: "OpenRouter API key",
+        groupId: "openrouter",
+        groupLabel: "OpenRouter",
+      },
+      {
+        pluginId: "google",
+        providerId: "google",
+        methodId: "api-key",
+        choiceId: "gemini-api-key",
+        choiceLabel: "Gemini API key",
+        groupId: "google",
+        groupLabel: "Google",
+      },
+      {
+        pluginId: "anthropic",
+        providerId: "anthropic",
+        methodId: "api-key",
+        choiceId: "apiKey",
+        choiceLabel: "Anthropic API key",
+        groupId: "anthropic",
+        groupLabel: "Anthropic",
+      },
+      {
+        pluginId: "openai",
+        providerId: "openai",
+        methodId: "oauth",
+        choiceId: "openai-codex",
+        choiceLabel: "OpenAI Codex (ChatGPT OAuth)",
+        groupId: "openai",
+        groupLabel: "OpenAI",
+      },
+    ]);
+    resolveProviderWizardOptions.mockReturnValue([
+      {
+        value: "ollama",
+        label: "Ollama",
+        hint: "Run local models on this Mac",
+        groupId: "ollama",
+        groupLabel: "Ollama",
+      },
+    ]);
+
+    const { groups } = buildAuthChoiceGroups({
+      store: EMPTY_STORE,
+      includeSkip: false,
+      embedded: true,
+    });
+
+    expect(groups.slice(0, 5).map((group) => group.label)).toEqual([
+      "OpenAI",
+      "Anthropic",
+      "Google",
+      "Ollama",
+      "OpenRouter",
+    ]);
+    expect(groups[0]?.hint).toBe("ChatGPT sign-in or API key");
+  });
+
+  it("orders embedded auth methods with the provider-specific ranking and detailed hints", () => {
+    resolveManifestProviderAuthChoices.mockReturnValue([
+      {
+        pluginId: "openai",
+        providerId: "openai",
+        methodId: "api-key",
+        choiceId: "openai-api-key",
+        choiceLabel: "OpenAI API key",
+        groupId: "openai",
+        groupLabel: "OpenAI",
+      },
+      {
+        pluginId: "openai",
+        providerId: "openai",
+        methodId: "oauth",
+        choiceId: "openai-codex",
+        choiceLabel: "OpenAI Codex (ChatGPT OAuth)",
+        groupId: "openai",
+        groupLabel: "OpenAI",
+      },
+      {
+        pluginId: "anthropic",
+        providerId: "anthropic",
+        methodId: "setup-token",
+        choiceId: "token",
+        choiceLabel: "Anthropic setup-token",
+        groupId: "anthropic",
+        groupLabel: "Anthropic",
+      },
+      {
+        pluginId: "anthropic",
+        providerId: "anthropic",
+        methodId: "api-key",
+        choiceId: "apiKey",
+        choiceLabel: "Anthropic API key",
+        groupId: "anthropic",
+        groupLabel: "Anthropic",
+      },
+      {
+        pluginId: "google",
+        providerId: "google",
+        methodId: "oauth",
+        choiceId: "google-gemini-cli",
+        choiceLabel: "Gemini CLI OAuth",
+        groupId: "google",
+        groupLabel: "Google",
+      },
+      {
+        pluginId: "google",
+        providerId: "google",
+        methodId: "api-key",
+        choiceId: "gemini-api-key",
+        choiceLabel: "Gemini API key",
+        groupId: "google",
+        groupLabel: "Google",
+      },
+      {
+        pluginId: "minimax",
+        providerId: "minimax",
+        methodId: "cn-oauth",
+        choiceId: "minimax-cn-oauth",
+        choiceLabel: "MiniMax OAuth (CN)",
+        groupId: "minimax",
+        groupLabel: "MiniMax",
+      },
+      {
+        pluginId: "minimax",
+        providerId: "minimax",
+        methodId: "global-api",
+        choiceId: "minimax-global-api",
+        choiceLabel: "MiniMax API key (Global)",
+        groupId: "minimax",
+        groupLabel: "MiniMax",
+      },
+      {
+        pluginId: "minimax",
+        providerId: "minimax",
+        methodId: "cn-api",
+        choiceId: "minimax-cn-api",
+        choiceLabel: "MiniMax API key (CN)",
+        groupId: "minimax",
+        groupLabel: "MiniMax",
+      },
+      {
+        pluginId: "minimax",
+        providerId: "minimax",
+        methodId: "global-oauth",
+        choiceId: "minimax-global-oauth",
+        choiceLabel: "MiniMax OAuth (Global)",
+        groupId: "minimax",
+        groupLabel: "MiniMax",
+      },
+      {
+        pluginId: "zai",
+        providerId: "zai",
+        methodId: "cn",
+        choiceId: "zai-cn",
+        choiceLabel: "Z.AI CN",
+        groupId: "zai",
+        groupLabel: "Z.AI",
+      },
+      {
+        pluginId: "zai",
+        providerId: "zai",
+        methodId: "global",
+        choiceId: "zai-global",
+        choiceLabel: "Z.AI Global",
+        groupId: "zai",
+        groupLabel: "Z.AI",
+      },
+      {
+        pluginId: "zai",
+        providerId: "zai",
+        methodId: "coding-cn",
+        choiceId: "zai-coding-cn",
+        choiceLabel: "Z.AI Coding Plan (CN)",
+        groupId: "zai",
+        groupLabel: "Z.AI",
+      },
+      {
+        pluginId: "zai",
+        providerId: "zai",
+        methodId: "api-key",
+        choiceId: "zai-api-key",
+        choiceLabel: "Z.AI API key",
+        groupId: "zai",
+        groupLabel: "Z.AI",
+      },
+      {
+        pluginId: "zai",
+        providerId: "zai",
+        methodId: "coding-global",
+        choiceId: "zai-coding-global",
+        choiceLabel: "Z.AI Coding Plan (Global)",
+        groupId: "zai",
+        groupLabel: "Z.AI",
+      },
+    ]);
+
+    const { groups } = buildAuthChoiceGroups({
+      store: EMPTY_STORE,
+      includeSkip: false,
+      embedded: true,
+    });
+
+    expect(groups.find((group) => group.value === "openai")?.options.map((option) => option.value)).toEqual([
+      "openai-codex",
+      "openai-api-key",
+    ]);
+    expect(groups.find((group) => group.value === "anthropic")?.options.map((option) => option.value)).toEqual([
+      "apiKey",
+      "token",
+    ]);
+    expect(groups.find((group) => group.value === "google")?.options.map((option) => option.value)).toEqual([
+      "gemini-api-key",
+      "google-gemini-cli",
+    ]);
+    expect(groups.find((group) => group.value === "minimax")?.options.map((option) => option.value)).toEqual([
+      "minimax-global-api",
+      "minimax-global-oauth",
+      "minimax-cn-api",
+      "minimax-cn-oauth",
+    ]);
+    expect(groups.find((group) => group.value === "zai")?.options.map((option) => option.value)).toEqual([
+      "zai-api-key",
+      "zai-global",
+      "zai-coding-global",
+      "zai-cn",
+      "zai-coding-cn",
+    ]);
+    expect(groups.find((group) => group.value === "openai")?.options[0]?.hint).toContain(
+      "Best for:",
+    );
+    expect(groups.find((group) => group.value === "openai")?.options[0]?.hint).toContain(
+      "What you need:",
+    );
+  });
 });

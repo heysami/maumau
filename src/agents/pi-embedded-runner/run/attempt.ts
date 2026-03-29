@@ -157,6 +157,7 @@ import {
   shouldFlagCompactionTimeout,
 } from "./compaction-timeout.js";
 import { pruneProcessedHistoryImages } from "./history-image-prune.js";
+import { buildEmbeddedHookContext } from "./hook-context.js";
 import { detectAndLoadPromptImages } from "./images.js";
 import { shouldInjectHeartbeatPromptForTrigger } from "./trigger-policy.js";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types.js";
@@ -2740,15 +2741,10 @@ export async function runEmbeddedAttempt(
             preserveExactPrompt: heartbeatPrompt,
           },
         );
-        const hookCtx = {
+        const hookCtx = buildEmbeddedHookContext({
+          ...params,
           agentId: hookAgentId,
-          sessionKey: params.sessionKey,
-          sessionId: params.sessionId,
-          workspaceDir: params.workspaceDir,
-          messageProvider: params.messageProvider ?? undefined,
-          trigger: params.trigger,
-          channelId: params.messageChannel ?? params.messageProvider ?? undefined,
-        };
+        });
         const hookResult = await resolvePromptBuildHookResult({
           prompt: params.prompt,
           messages: activeSession.messages,
@@ -2873,13 +2869,10 @@ export async function runEmbeddedAttempt(
                   imagesCount: imageResult.images.length,
                 },
                 {
-                  agentId: hookAgentId,
-                  sessionKey: params.sessionKey,
-                  sessionId: params.sessionId,
-                  workspaceDir: params.workspaceDir,
-                  messageProvider: params.messageProvider ?? undefined,
-                  trigger: params.trigger,
-                  channelId: params.messageChannel ?? params.messageProvider ?? undefined,
+                  ...buildEmbeddedHookContext({
+                    ...params,
+                    agentId: hookAgentId,
+                  }),
                 },
               )
               .catch((err) => {
@@ -3103,13 +3096,10 @@ export async function runEmbeddedAttempt(
                 durationMs: Date.now() - promptStartedAt,
               },
               {
-                agentId: hookAgentId,
-                sessionKey: params.sessionKey,
-                sessionId: params.sessionId,
-                workspaceDir: params.workspaceDir,
-                messageProvider: params.messageProvider ?? undefined,
-                trigger: params.trigger,
-                channelId: params.messageChannel ?? params.messageProvider ?? undefined,
+                ...buildEmbeddedHookContext({
+                  ...params,
+                  agentId: hookAgentId,
+                }),
               },
             )
             .catch((err) => {

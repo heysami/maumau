@@ -7,6 +7,10 @@ vi.mock("./auth.js", () => ({
   authorizeHttpGatewayConnect: vi.fn(),
 }));
 
+vi.mock("../infra/device-pairing.js", () => ({
+  verifyPairedOperatorToken: vi.fn(),
+}));
+
 vi.mock("./http-common.js", () => ({
   sendGatewayAuthFailure: vi.fn(),
 }));
@@ -16,6 +20,7 @@ vi.mock("./http-utils.js", () => ({
 }));
 
 const { authorizeHttpGatewayConnect } = await import("./auth.js");
+const { verifyPairedOperatorToken } = await import("../infra/device-pairing.js");
 const { sendGatewayAuthFailure } = await import("./http-common.js");
 const { getBearerToken } = await import("./http-utils.js");
 
@@ -67,6 +72,28 @@ describe("authorizeGatewayBearerRequestOrReply", () => {
         connectAuth: { token: "abc", password: "abc" },
       }),
     );
+    expect(vi.mocked(sendGatewayAuthFailure)).not.toHaveBeenCalled();
+  });
+
+  it("accepts a paired operator device token when shared auth does not match", async () => {
+    vi.mocked(getBearerToken).mockReturnValue("paired-device-token");
+    vi.mocked(authorizeHttpGatewayConnect).mockResolvedValue({
+      ok: false,
+      reason: "token_mismatch",
+    });
+    vi.mocked(verifyPairedOperatorToken).mockResolvedValue({
+      ok: true,
+      deviceId: "device-1",
+      scopes: ["operator.admin"],
+    });
+
+    const ok = await authorizeGatewayBearerRequestOrReply(makeAuthorizeParams());
+
+    expect(ok).toBe(true);
+    expect(vi.mocked(verifyPairedOperatorToken)).toHaveBeenCalledWith({
+      token: "paired-device-token",
+      requiredScopes: ["operator.admin"],
+    });
     expect(vi.mocked(sendGatewayAuthFailure)).not.toHaveBeenCalled();
   });
 });

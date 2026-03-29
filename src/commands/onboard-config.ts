@@ -2,6 +2,7 @@ import type { MaumauConfig } from "../config/config.js";
 import type { DmScope } from "../config/types.base.js";
 import type { ToolProfileId } from "../config/types.tools.js";
 import { applyLocalSetupMultiUserMemoryDefaults } from "./onboard-multi-user-memory.js";
+import { applyLocalSetupReflectionReviewerDefaults } from "./onboard-reflection-reviewer.js";
 
 export const ONBOARDING_DEFAULT_DM_SCOPE: DmScope = "per-channel-peer";
 export const ONBOARDING_DEFAULT_TOOLS_PROFILE: ToolProfileId = "coding";
@@ -22,27 +23,29 @@ export function applyLocalSetupWorkspaceConfig(
   baseConfig: MaumauConfig,
   workspaceDir: string,
 ): MaumauConfig {
-  return applyLocalSetupMultiUserMemoryDefaults({
-    ...baseConfig,
-    agents: {
-      ...baseConfig.agents,
-      defaults: {
-        ...baseConfig.agents?.defaults,
-        workspace: workspaceDir,
+  return applyLocalSetupReflectionReviewerDefaults(
+    applyLocalSetupMultiUserMemoryDefaults({
+      ...baseConfig,
+      agents: {
+        ...baseConfig.agents,
+        defaults: {
+          ...baseConfig.agents?.defaults,
+          workspace: workspaceDir,
+        },
       },
-    },
-    gateway: {
-      ...baseConfig.gateway,
-      mode: "local",
-    },
-    session: {
-      ...baseConfig.session,
-      dmScope: baseConfig.session?.dmScope ?? ONBOARDING_DEFAULT_DM_SCOPE,
-    },
-    tools: {
-      ...baseConfig.tools,
-      profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
-      alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
-    },
-  });
+      gateway: {
+        ...baseConfig.gateway,
+        mode: "local",
+      },
+      session: {
+        ...baseConfig.session,
+        dmScope: baseConfig.session?.dmScope ?? ONBOARDING_DEFAULT_DM_SCOPE,
+      },
+      tools: {
+        ...baseConfig.tools,
+        profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
+        alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
+      },
+    }),
+  );
 }

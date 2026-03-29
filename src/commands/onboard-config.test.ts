@@ -21,6 +21,11 @@ describe("applyLocalSetupWorkspaceConfig", () => {
     expect(result.agents?.defaults?.workspace).toBe("/tmp/workspace");
     expect(result.tools?.profile).toBe(ONBOARDING_DEFAULT_TOOLS_PROFILE);
     expect(result.tools?.alsoAllow).toEqual([...ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS]);
+    expect(result.tools?.sessions?.visibility).toBe("all");
+    expect(result.tools?.agentToAgent).toEqual({
+      enabled: true,
+      allow: ["*"],
+    });
   });
 
   it("preserves existing dmScope when already configured", () => {
@@ -82,5 +87,27 @@ describe("applyLocalSetupWorkspaceConfig", () => {
 
     expect(result.tools?.allow).toEqual(["read", "write"]);
     expect(result.tools?.alsoAllow).toBeUndefined();
+  });
+
+  it("preserves explicit session visibility and agent-to-agent settings", () => {
+    const baseConfig: MaumauConfig = {
+      tools: {
+        sessions: {
+          visibility: "agent",
+        },
+        agentToAgent: {
+          enabled: false,
+          allow: ["ops"],
+        },
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace");
+
+    expect(result.tools?.sessions?.visibility).toBe("agent");
+    expect(result.tools?.agentToAgent).toEqual({
+      enabled: false,
+      allow: ["ops"],
+    });
   });
 });

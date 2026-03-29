@@ -43,6 +43,8 @@ export type RunEmbeddedPiAgentParams = {
   groupChannel?: string | null;
   /** Group space label (e.g. guild/team id) for channel-level tool policy resolution. */
   groupSpace?: string | null;
+  /** Whether the inbound message came from a group or channel context. */
+  isGroup?: boolean;
   /** Parent session key for subagent policy inheritance. */
   spawnedBy?: string | null;
   senderId?: string | null;

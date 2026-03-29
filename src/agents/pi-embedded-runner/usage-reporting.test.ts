@@ -98,6 +98,10 @@ describe("runEmbeddedPiAgent usage reporting", () => {
       senderName: "Josh Lehman",
       senderUsername: "josh",
       senderE164: "+15551234567",
+      agentAccountId: "default",
+      messageProvider: "telegram",
+      messageTo: "268300329",
+      isGroup: false,
     });
 
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledWith(
@@ -106,6 +110,10 @@ describe("runEmbeddedPiAgent usage reporting", () => {
         senderName: "Josh Lehman",
         senderUsername: "josh",
         senderE164: "+15551234567",
+        agentAccountId: "default",
+        messageProvider: "telegram",
+        messageTo: "268300329",
+        isGroup: false,
       }),
     );
   });

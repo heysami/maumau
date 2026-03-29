@@ -13,6 +13,8 @@ This doc describes the **current** first‑run setup flow. The goal is a
 smooth “day 0” experience: pick where the Gateway runs, connect auth, run the
 wizard, and let the agent bootstrap itself.
 For a general overview of onboarding paths, see [Onboarding Overview](/start/onboarding-overview).
+If you want the ranked provider list plus prep steps before you click a brain or search provider,
+see [Choose Providers](/start/choose-providers).
 
 <Steps>
 <Step title="Approve macOS warning">

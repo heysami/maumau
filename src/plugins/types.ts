@@ -1487,6 +1487,18 @@ export type PluginHookAgentContext = {
   trigger?: string;
   /** Channel identifier (e.g. "telegram", "discord", "whatsapp"). */
   channelId?: string;
+  /** Provider account id (multi-account), when the run came from a channel message. */
+  accountId?: string;
+  /** Sender id for the inbound user that triggered the run, when known. */
+  requesterSenderId?: string;
+  /** Sender display name for the inbound user that triggered the run, when known. */
+  requesterSenderName?: string;
+  /** Sender username/handle for the inbound user that triggered the run, when known. */
+  requesterSenderUsername?: string;
+  /** Conversation id for the inbound turn, when one can be resolved. */
+  conversationId?: string;
+  /** Whether the inbound turn came from a group or channel context. */
+  isGroup?: boolean;
 };
 
 // before_model_resolve hook
