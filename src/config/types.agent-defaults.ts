@@ -219,6 +219,13 @@ export type AgentDefaultsConfig = {
   typingIntervalSeconds?: number;
   /** Typing indicator start mode (never|instant|thinking|message). */
   typingMode?: TypingMode;
+  /** Shared low-cost automation defaults for background-style runs. */
+  background?: {
+    /** Background automation model override (provider/model). */
+    model?: string;
+    /** Default thinking level for background automation runs. */
+    thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";
+  };
   /** Periodic background heartbeat runs. */
   heartbeat?: {
     /** Heartbeat interval (duration string, default unit: minutes; default: 30m). */
@@ -234,6 +241,8 @@ export type AgentDefaultsConfig = {
     };
     /** Heartbeat model override (provider/model). */
     model?: string;
+    /** Default thinking level for heartbeat runs. */
+    thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";
     /** Session key for heartbeat runs ("main" or explicit session key). */
     session?: string;
     /** Delivery target ("last", "none", or a channel id). */

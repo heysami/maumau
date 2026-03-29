@@ -1,5 +1,9 @@
 import { resolveAgentConfig, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import {
+  resolveAutomationPolicy,
+  resolveHeartbeatAutomationDefaults,
+} from "../agents/background-automation.js";
+import {
   DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
   DEFAULT_HEARTBEAT_EVERY,
   resolveHeartbeatPrompt as resolveHeartbeatPromptText,
@@ -73,8 +77,10 @@ export function resolveHeartbeatSummaryForAgent(
   cfg: MaumauConfig,
   agentId?: string,
 ): HeartbeatSummary {
+  const automationPolicy = resolveAutomationPolicy(cfg, agentId);
   const defaults = cfg.agents?.defaults?.heartbeat;
   const overrides = agentId ? resolveAgentConfig(cfg, agentId)?.heartbeat : undefined;
+  const automationDefaults = resolveHeartbeatAutomationDefaults(automationPolicy);
   const enabled = isHeartbeatEnabledForAgent(cfg, agentId);
 
   if (!enabled) {
@@ -84,7 +90,7 @@ export function resolveHeartbeatSummaryForAgent(
       everyMs: null,
       prompt: resolveHeartbeatPromptText(defaults?.prompt),
       target: defaults?.target ?? DEFAULT_HEARTBEAT_TARGET,
-      model: defaults?.model,
+      model: automationDefaults.model,
       ackMaxChars: Math.max(0, defaults?.ackMaxChars ?? DEFAULT_HEARTBEAT_ACK_MAX_CHARS),
     };
   }
@@ -97,7 +103,7 @@ export function resolveHeartbeatSummaryForAgent(
   );
   const target =
     merged?.target ?? defaults?.target ?? overrides?.target ?? DEFAULT_HEARTBEAT_TARGET;
-  const model = merged?.model ?? defaults?.model ?? overrides?.model;
+  const model = automationDefaults.model;
   const ackMaxChars = Math.max(
     0,
     merged?.ackMaxChars ??

@@ -262,6 +262,7 @@ export function collectConfiguredModelPricingRefs(config: MaumauConfig): ModelRe
   addModelListLike({ value: config.agents?.defaults?.imageModel, aliasIndex, refs });
   addModelListLike({ value: config.agents?.defaults?.pdfModel, aliasIndex, refs });
   addResolvedModelRef({ raw: config.agents?.defaults?.compaction?.model, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.agents?.defaults?.background?.model, aliasIndex, refs });
   addResolvedModelRef({ raw: config.agents?.defaults?.heartbeat?.model, aliasIndex, refs });
   addModelListLike({ value: config.tools?.subagents?.model, aliasIndex, refs });
   addResolvedModelRef({ raw: config.messages?.tts?.summaryModel, aliasIndex, refs });
@@ -270,6 +271,7 @@ export function collectConfiguredModelPricingRefs(config: MaumauConfig): ModelRe
   for (const agent of config.agents?.list ?? []) {
     addModelListLike({ value: agent.model, aliasIndex, refs });
     addModelListLike({ value: agent.subagents?.model, aliasIndex, refs });
+    addResolvedModelRef({ raw: agent.background?.model, aliasIndex, refs });
     addResolvedModelRef({ raw: agent.heartbeat?.model, aliasIndex, refs });
   }
 

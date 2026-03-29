@@ -2483,36 +2483,8 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 additionalProperties: false,
               },
               thinkingDefault: {
-                anyOf: [
-                  {
-                    type: "string",
-                    const: "off",
-                  },
-                  {
-                    type: "string",
-                    const: "minimal",
-                  },
-                  {
-                    type: "string",
-                    const: "low",
-                  },
-                  {
-                    type: "string",
-                    const: "medium",
-                  },
-                  {
-                    type: "string",
-                    const: "high",
-                  },
-                  {
-                    type: "string",
-                    const: "xhigh",
-                  },
-                  {
-                    type: "string",
-                    const: "adaptive",
-                  },
-                ],
+                type: "string",
+                enum: ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
               },
               verboseDefault: {
                 anyOf: [
@@ -2698,6 +2670,19 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                   },
                 ],
               },
+              background: {
+                type: "object",
+                properties: {
+                  model: {
+                    type: "string",
+                  },
+                  thinking: {
+                    type: "string",
+                    enum: ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
+                  },
+                },
+                additionalProperties: false,
+              },
               heartbeat: {
                 type: "object",
                 properties: {
@@ -2721,6 +2706,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                   },
                   model: {
                     type: "string",
+                  },
+                  thinking: {
+                    type: "string",
+                    enum: ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
                   },
                   session: {
                     type: "string",
@@ -3888,6 +3877,19 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                   },
                   additionalProperties: false,
                 },
+                background: {
+                  type: "object",
+                  properties: {
+                    model: {
+                      type: "string",
+                    },
+                    thinking: {
+                      type: "string",
+                      enum: ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
+                    },
+                  },
+                  additionalProperties: false,
+                },
                 heartbeat: {
                   type: "object",
                   properties: {
@@ -3911,6 +3913,10 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     },
                     model: {
                       type: "string",
+                    },
+                    thinking: {
+                      type: "string",
+                      enum: ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
                     },
                     session: {
                       type: "string",
@@ -14141,10 +14147,30 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: 'How embedded Pi handles workspace-local `.pi/config/settings.json`: "sanitize" (default) strips shellPath/shellCommandPrefix, "ignore" disables project settings entirely, and "trusted" applies project settings as-is.',
       tags: ["access"],
     },
+    "agents.defaults.background": {
+      label: "Background Automation",
+      help: "Shared low-cost automation defaults used by background-style runs such as heartbeat turns, main-session wake flows, cron agent turns, and hook-driven automation when they do not set a more explicit model or thinking level.",
+      tags: ["advanced"],
+    },
+    "agents.defaults.background.model": {
+      label: "Background Model Override",
+      help: "Default provider/model for background automation runs when no heartbeat-specific, session, or per-job override is set.",
+      tags: ["models"],
+    },
+    "agents.defaults.background.thinking": {
+      label: "Background Thinking Default",
+      help: "Default thinking level for background automation runs when no session or per-job override is set.",
+      tags: ["advanced"],
+    },
     "agents.defaults.heartbeat.directPolicy": {
       label: "Heartbeat Direct Policy",
       help: 'Controls whether heartbeat delivery may target direct/DM chats: "allow" (default) permits DM delivery and "block" suppresses direct-target sends.',
       tags: ["access", "storage", "automation"],
+    },
+    "agents.defaults.heartbeat.thinking": {
+      label: "Heartbeat Thinking Default",
+      help: "Default thinking level for heartbeat runs. More specific than agents.defaults.background.thinking, but still lower priority than a stored session /think override.",
+      tags: ["automation"],
     },
     "agents.list.*.heartbeat.directPolicy": {
       label: "Heartbeat Direct Policy",
@@ -14154,6 +14180,26 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     "agents.defaults.heartbeat.suppressToolErrorWarnings": {
       label: "Heartbeat Suppress Tool Error Warnings",
       help: "Suppress tool error warning payloads during heartbeat runs.",
+      tags: ["automation"],
+    },
+    "agents.list[].background": {
+      label: "Background Automation",
+      help: "Optional per-agent background automation overrides that replace the shared agents.defaults.background values for that agent.",
+      tags: ["advanced"],
+    },
+    "agents.list[].background.model": {
+      label: "Background Model Override",
+      help: "Per-agent background automation model override used when no heartbeat-specific, session, or per-job override is set.",
+      tags: ["models"],
+    },
+    "agents.list[].background.thinking": {
+      label: "Background Thinking Default",
+      help: "Per-agent background automation thinking override used when no session or per-job override is set.",
+      tags: ["advanced"],
+    },
+    "agents.list[].heartbeat.thinking": {
+      label: "Heartbeat Thinking Default",
+      help: "Per-agent default thinking level for heartbeat runs. More specific than agents.list[].background.thinking, but still lower priority than a stored session /think override.",
       tags: ["automation"],
     },
     "agents.defaults.sandbox.browser.network": {
@@ -16286,6 +16332,6 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["security", "auth"],
     },
   },
-  version: "2026.3.27",
+  version: "2026.3.28-beta.2",
   generatedAt: "2026-03-22T21:17:33.302Z",
 } as const satisfies BaseConfigSchemaResponse;

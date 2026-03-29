@@ -6,6 +6,7 @@ import {
   resolveDefaultAgentId,
 } from "../../agents/agent-scope.js";
 import { resolveSessionAuthProfileOverride } from "../../agents/auth-profiles/session-override.js";
+import { resolveBackgroundAutomationDefaults } from "../../agents/background-automation.js";
 import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
 import { runCliAgent } from "../../agents/cli-runner.js";
 import { getCliSessionId, setCliSessionId } from "../../agents/cli-session.js";
@@ -100,15 +101,16 @@ function resolveCronToolPolicy(params: {
   resolvedDelivery: ResolvedCronDeliveryTarget;
   deliveryContract: IsolatedDeliveryContract;
 }) {
+  const cronOwned = params.deliveryContract === "cron-owned";
+  const cronDeliveryActive = params.deliveryRequested && params.resolvedDelivery.ok;
   return {
-    // Only enforce an explicit message target when the cron delivery target
-    // was successfully resolved. When resolution fails the agent should not
-    // be blocked by a target it cannot satisfy (#27898).
-    requireExplicitMessageTarget: params.deliveryRequested && params.resolvedDelivery.ok,
-    // Cron-owned runs always route user-facing delivery through the runner
-    // itself. Shared callers keep the previous behavior so non-cron paths do
-    // not silently lose the message tool when no explicit delivery is active.
-    disableMessageTool: params.deliveryContract === "cron-owned" ? true : params.deliveryRequested,
+    // Cron-owned runs must never infer a last-route target from the isolated
+    // cron session. They can still send explicitly targeted notices when cron
+    // itself is not handling delivery for the run.
+    requireExplicitMessageTarget: cronOwned || cronDeliveryActive,
+    // When cron-managed delivery is active, suppress manual sends so the run
+    // cannot double-deliver. Shared callers keep the previous behavior.
+    disableMessageTool: cronOwned ? cronDeliveryActive : params.deliveryRequested,
   };
 }
 
@@ -306,7 +308,11 @@ export async function runCronIsolatedAgentTurn(params: {
     (params.job.payload.kind === "agentTurn" ? params.job.payload.thinking : undefined) ??
       undefined,
   );
-  let thinkLevel = jobThink ?? hooksGmailThinking;
+  const sessionThink = normalizeThinkLevel(cronSession.sessionEntry.thinkingLevel);
+  const backgroundThink = resolveBackgroundAutomationDefaults({
+    background: cfgWithAgentDefaults.agents?.defaults?.background,
+  }).thinking;
+  let thinkLevel = jobThink ?? hooksGmailThinking ?? sessionThink ?? backgroundThink;
   if (!thinkLevel) {
     thinkLevel = resolveThinkingDefault({
       cfg: cfgWithAgentDefaults,

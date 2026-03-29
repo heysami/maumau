@@ -56,13 +56,21 @@ final class ControlChannel {
         case degraded(String)
     }
 
+    static func didRecoverConnection(
+        from oldState: ConnectionState,
+        to newState: ConnectionState) -> Bool
+    {
+        guard case .connected = newState else { return false }
+        guard oldState != .connected else { return false }
+        return true
+    }
+
     static func shouldRefreshHealthAfterRecovery(
         from oldState: ConnectionState,
         to newState: ConnectionState,
         currentHealthError: String?) -> Bool
     {
-        guard case .connected = newState else { return false }
-        guard oldState != .connected else { return false }
+        guard Self.didRecoverConnection(from: oldState, to: newState) else { return false }
         guard let currentHealthError, !currentHealthError.isEmpty else { return false }
         return true
     }

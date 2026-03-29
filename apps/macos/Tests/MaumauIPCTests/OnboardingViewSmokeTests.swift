@@ -141,6 +141,13 @@ struct OnboardingViewSmokeTests {
         #expect(AppState(preview: true).effectiveOnboardingLanguage == .en)
     }
 
+    @Test func `memory onboarding copy explains private and shared users model`() {
+        #expect(OnboardingStrings(language: .en).memorySubtitle.contains("private for each user"))
+        #expect(OnboardingStrings(language: .en).memorySubtitle.contains("Open Users later"))
+        #expect(OnboardingStrings(language: .id).memorySubtitle.contains("privat untuk tiap pengguna"))
+        #expect(OnboardingStrings(language: .id).memorySubtitle.contains("Buka Users nanti"))
+    }
+
     @Test func `wizard start waits until the wizard page is active`() {
         #expect(!OnboardingView.shouldStartWizardForActivePage(
             activePageIndex: 1,
@@ -171,11 +178,12 @@ struct OnboardingViewSmokeTests {
             pageIndex: 11))
     }
 
-    @Test func `fresh launch skips stale unconfigured startup apply`() {
+    @Test func `fresh launch defers startup apply until onboarding finishes`() {
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .unconfigured, onboardingSeen: false) == false)
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: false) == false)
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .remote, onboardingSeen: false) == false)
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .unconfigured, onboardingSeen: true))
-        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: false))
-        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .remote, onboardingSeen: false))
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: true))
     }
 
     @Test func `fresh launch keeps retrying onboarding until it is visible or no longer needed`() {
@@ -192,6 +200,18 @@ struct OnboardingViewSmokeTests {
             seenVersion: 0,
             onboardingSeen: false,
             onboardingPresented: true))
+    }
+
+    @Test func `closing required onboarding only quits before completion`() {
+        #expect(OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: true,
+            onboardingSeen: false))
+        #expect(!OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: true,
+            onboardingSeen: true))
+        #expect(!OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: false,
+            onboardingSeen: false))
     }
 
     @Test func `local gateway setup requires cli or local project gateway`() throws {

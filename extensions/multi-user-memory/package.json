@@ -1,0 +1,26 @@
+{
+  "name": "@maumau/multi-user-memory",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau multi-user scoped memory plugin",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

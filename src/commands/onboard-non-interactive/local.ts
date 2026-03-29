@@ -12,6 +12,7 @@ import {
   resolveControlUiLinks,
   waitForGatewayReachable,
 } from "../onboard-helpers.js";
+import { ensureOnboardedMultiUserMemoryArtifacts } from "../onboard-multi-user-memory.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { inferAuthChoiceFromFlags } from "./local/auth-choice-inference.js";
 import { applyNonInteractiveGatewayConfig } from "./local/gateway-config.js";
@@ -131,6 +132,10 @@ export async function runNonInteractiveLocalSetup(params: {
 
   await ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
+  });
+  await ensureOnboardedMultiUserMemoryArtifacts({
+    config: nextConfig,
+    runtime,
   });
 
   const daemonRuntimeRaw = opts.daemonRuntime ?? DEFAULT_GATEWAY_DAEMON_RUNTIME;

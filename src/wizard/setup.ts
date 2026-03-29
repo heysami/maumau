@@ -843,6 +843,12 @@ export async function runSetupWizard(
   nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
   logConfigUpdated(runtime);
+  const { ensureOnboardedMultiUserMemoryArtifacts } =
+    await import("../commands/onboard-multi-user-memory.js");
+  await ensureOnboardedMultiUserMemoryArtifacts({
+    config: nextConfig,
+    runtime,
+  });
 
   const { finalizeSetupWizard } = await import("./setup.finalize.js");
   const { launchedTui } = await finalizeSetupWizard({

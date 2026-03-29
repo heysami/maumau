@@ -12,6 +12,18 @@ import {
 } from "./zod-schema.core.js";
 import { sensitive } from "./zod-schema.sensitive.js";
 
+export const ThinkingLevelSchema = z
+  .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
+  .optional();
+
+export const BackgroundAutomationSchema = z
+  .object({
+    model: z.string().optional(),
+    thinking: ThinkingLevelSchema,
+  })
+  .strict()
+  .optional();
+
 export const HeartbeatSchema = z
   .object({
     every: z.string().optional(),
@@ -24,6 +36,7 @@ export const HeartbeatSchema = z
       .strict()
       .optional(),
     model: z.string().optional(),
+    thinking: ThinkingLevelSchema,
     session: z.string().optional(),
     includeReasoning: z.boolean().optional(),
     target: z.string().optional(),
@@ -768,14 +781,13 @@ export const AgentEntrySchema = z
     workspace: z.string().optional(),
     agentDir: z.string().optional(),
     model: AgentModelSchema.optional(),
-    thinkingDefault: z
-      .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
-      .optional(),
+    thinkingDefault: ThinkingLevelSchema,
     reasoningDefault: z.enum(["on", "off", "stream"]).optional(),
     fastModeDefault: z.boolean().optional(),
     skills: z.array(z.string()).optional(),
     memorySearch: MemorySearchSchema,
     humanDelay: HumanDelaySchema.optional(),
+    background: BackgroundAutomationSchema,
     heartbeat: HeartbeatSchema,
     identity: IdentitySchema,
     groupChat: GroupChatSchema,

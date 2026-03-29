@@ -266,6 +266,68 @@ describe("cron model formatting and precedence edge cases", () => {
       );
     });
 
+    it("background automation model applies when no higher-priority override is present", async () => {
+      await expectSelectedModel(
+        {
+          cfg: {
+            agents: {
+              defaults: {
+                background: {
+                  model: "openai/gpt-4.1-mini",
+                },
+              },
+            },
+          },
+        },
+        { provider: "openai", model: "gpt-4.1-mini" },
+      );
+    });
+
+    it("session override wins over background automation model", async () => {
+      await expectSelectedModel(
+        {
+          cfg: {
+            agents: {
+              defaults: {
+                background: {
+                  model: "anthropic/claude-sonnet-4-5",
+                },
+              },
+            },
+          },
+          sessionEntry: {
+            providerOverride: "openai",
+            modelOverride: "gpt-4.1-mini",
+          },
+        },
+        { provider: "openai", model: "gpt-4.1-mini" },
+      );
+    });
+
+    it("gmail hook model wins over background automation model", async () => {
+      resolveHooksGmailModelMock.mockReturnValueOnce({
+        provider: "anthropic",
+        model: "claude-sonnet-4-5",
+      });
+      getModelRefStatusMock.mockReturnValueOnce({ allowed: true });
+
+      await expectSelectedModel(
+        {
+          cfg: {
+            agents: {
+              defaults: {
+                background: {
+                  model: "openai/gpt-4.1-mini",
+                },
+              },
+            },
+          },
+          isGmailHook: true,
+        },
+        { provider: "anthropic", model: "claude-sonnet-4-5" },
+      );
+    });
+
     it("job payload model wins over conflicting session override", async () => {
       await expectSelectedModel(
         {

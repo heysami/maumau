@@ -16,6 +16,8 @@ enum RemoteOnboardingProbeState: Equatable {
 final class OnboardingController: NSObject, NSWindowDelegate {
     static let shared = OnboardingController()
     private var window: NSWindow?
+    private var requiresCompletionToContinue = false
+    private var isHandlingRequiredDismissal = false
 
     override private init() {
         super.init()
@@ -54,12 +56,19 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         }
     }
 
-    func show() {
+    static func shouldTerminateAfterClosingOnboarding(requiresCompletion: Bool, onboardingSeen: Bool) -> Bool {
+        requiresCompletion && !onboardingSeen
+    }
+
+    func show(requiresCompletion: Bool = false) {
+        guard !self.isHandlingRequiredDismissal else { return }
+        self.requiresCompletionToContinue = self.requiresCompletionToContinue || requiresCompletion
         if ProcessInfo.processInfo.isNixMode {
             // Nix mode is fully declarative; onboarding would suggest interactive setup that doesn't apply.
             UserDefaults.standard.set(true, forKey: "maumau.onboardingSeen")
             UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
             AppStateStore.shared.onboardingSeen = true
+            self.requiresCompletionToContinue = false
             return
         }
         if let window {
@@ -91,6 +100,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     func close() {
         let window = self.window
         self.window = nil
+        self.requiresCompletionToContinue = false
         window?.delegate = nil
         window?.close()
     }
@@ -100,10 +110,30 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         self.show()
     }
 
+    private func abortIncompleteOnboardingAndTerminate() async {
+        let state = AppStateStore.shared
+        await ConnectionModeCoordinator.shared.apply(mode: .unconfigured, paused: state.isPaused)
+        _ = await GatewayLaunchAgentManager.set(
+            enabled: false,
+            bundlePath: Bundle.main.bundleURL.path,
+            port: GatewayEnvironment.gatewayPort())
+        NSApp.terminate(nil)
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let closingWindow = notification.object as? NSWindow else { return }
         if closingWindow === self.window {
+            let shouldTerminate = Self.shouldTerminateAfterClosingOnboarding(
+                requiresCompletion: self.requiresCompletionToContinue,
+                onboardingSeen: AppStateStore.shared.onboardingSeen)
             self.window = nil
+            self.requiresCompletionToContinue = false
+            guard shouldTerminate, !self.isHandlingRequiredDismissal else { return }
+            self.isHandlingRequiredDismissal = true
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.abortIncompleteOnboardingAndTerminate()
+            }
         }
     }
 }

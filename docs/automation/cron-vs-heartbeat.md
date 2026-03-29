@@ -116,6 +116,8 @@ maumau cron add \
 
 This runs at exactly 7:00 AM New York time, uses Opus for quality, and announces a summary directly to WhatsApp.
 
+For a full weekly review recipe that inspects real conversations across agents, see [Weekly Reflection Reviewer](/automation/weekly-reflection-reviewer).
+
 ### Cron example: One-shot reminder
 
 ```bash

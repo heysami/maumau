@@ -478,7 +478,7 @@
           "exportName": "ReplyPayload",
           "kind": "type",
           "source": {
-            "line": 76,
+            "line": 81,
             "path": "src/auto-reply/types.ts"
           }
         },
@@ -1024,7 +1024,7 @@
           "exportName": "ToolPolicySchema",
           "kind": "const",
           "source": {
-            "line": 253,
+            "line": 266,
             "path": "src/config/zod-schema.agent-runtime.ts"
           }
         }
@@ -3387,7 +3387,7 @@
           "exportName": "GatewayRequestHandlerOptions",
           "kind": "type",
           "source": {
-            "line": 113,
+            "line": 120,
             "path": "src/gateway/server-methods/types.ts"
           }
         },

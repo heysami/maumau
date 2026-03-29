@@ -98,7 +98,46 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
     state.configForm = cloneConfigObject(snapshot.config ?? {});
     state.configFormOriginal = cloneConfigObject(snapshot.config ?? {});
     state.configRawOriginal = rawFromSnapshot;
+    return;
   }
+
+  if (state.configFormMode === "form" && state.configForm) {
+    const mergedForm = mergeConfigSnapshot(snapshot.config ?? {}, state.configForm);
+    state.configForm = mergedForm;
+    state.configRaw = serializeConfigForm(mergedForm);
+  }
+
+  if (!state.configFormOriginal) {
+    state.configFormOriginal = cloneConfigObject(snapshot.config ?? {});
+  }
+  if (!state.configRawOriginal) {
+    state.configRawOriginal = rawFromSnapshot;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeConfigSnapshot(snapshotValue: unknown, dirtyValue: unknown): Record<string, unknown> {
+  return mergeConfigValue(snapshotValue, dirtyValue) as Record<string, unknown>;
+}
+
+function mergeConfigValue(snapshotValue: unknown, dirtyValue: unknown): unknown {
+  if (dirtyValue === undefined) {
+    return cloneConfigObject(snapshotValue);
+  }
+  if (Array.isArray(snapshotValue) || Array.isArray(dirtyValue)) {
+    return cloneConfigObject(dirtyValue);
+  }
+  if (isRecord(snapshotValue) && isRecord(dirtyValue)) {
+    const merged: Record<string, unknown> = cloneConfigObject(snapshotValue);
+    for (const [key, value] of Object.entries(dirtyValue)) {
+      merged[key] = mergeConfigValue(snapshotValue[key], value);
+    }
+    return merged;
+  }
+  return cloneConfigObject(dirtyValue);
 }
 
 function asJsonSchema(value: unknown): JsonSchema | null {

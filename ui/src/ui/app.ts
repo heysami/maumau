@@ -1,5 +1,6 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { DEFAULT_LANGUAGE_ID, type LanguageId } from "../../../src/i18n/languages.ts";
 import { i18n, I18nController, isSupportedLocale } from "../i18n/index.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
@@ -58,6 +59,10 @@ import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./contro
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type {
+  MultiUserMemoryAdminSnapshot,
+  MultiUserMemoryIdentity,
+} from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -235,6 +240,15 @@ export class MaumauApp extends LitElement {
   @state() aiAgentsSearchQuery = "";
   @state() aiAgentsActiveSection: string | null = null;
   @state() aiAgentsActiveSubsection: string | null = null;
+  @state() multiUserMemoryLoading = false;
+  @state() multiUserMemoryError: string | null = null;
+  @state() multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null = null;
+  @state() multiUserMemoryNewUserId = "";
+  @state() multiUserMemoryNewUserDisplayName = "";
+  @state() multiUserMemoryNewUserLanguage: LanguageId = DEFAULT_LANGUAGE_ID;
+  @state() multiUserMemoryNewUserIdentities: MultiUserMemoryIdentity[] = [];
+  @state() multiUserMemoryNewGroupId = "";
+  @state() multiUserMemoryNewGroupLabel = "";
 
   @state() channelsLoading = false;
   @state() channelsSnapshot: ChannelsStatusSnapshot | null = null;

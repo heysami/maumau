@@ -361,6 +361,12 @@ final class GatewayProcessManager {
             return
         }
 
+        guard self.desiredActive else {
+            self.status = .stopped
+            self.logger.debug("gateway launchd enable canceled before start")
+            return
+        }
+
         if GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() {
             let message = "Launchd disabled; start the Gateway manually or disable attach-only."
             self.status = .failed(message)
@@ -379,6 +385,16 @@ final class GatewayProcessManager {
             self.status = .failed(err)
             self.lastFailureReason = err
             self.logger.error("gateway launchd enable failed: \(err)")
+            return
+        }
+        if !self.desiredActive {
+            self.status = .stopped
+            self.appendLog("[gateway] startup canceled after launchd enable; disabling launchd\n")
+            self.logger.info("gateway launchd enable canceled after start")
+            _ = await GatewayLaunchAgentManager.set(
+                enabled: false,
+                bundlePath: bundlePath,
+                port: port)
             return
         }
 

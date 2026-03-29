@@ -36,6 +36,11 @@ struct ModelSettingsOption: Identifiable, Hashable {
     }
 }
 
+struct BackgroundAutomationSettingsDraft: Equatable {
+    let modelRef: String
+    let thinking: String
+}
+
 func modelSettingsProviderId(for ref: String?) -> String? {
     let trimmed = ref?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     guard !trimmed.isEmpty else { return nil }
@@ -116,6 +121,35 @@ func buildModelSettingsPayload(primaryRef: String, fallbackRefs: [String]) -> [S
         payload["fallbacks"] = normalizedFallbacks
     }
     return payload
+}
+
+func resolveBackgroundAutomationSettingsDraft(
+    modelRaw: Any?,
+    thinkingRaw: Any?
+) -> BackgroundAutomationSettingsDraft {
+    BackgroundAutomationSettingsDraft(
+        modelRef: (modelRaw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+        thinking: (thinkingRaw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+}
+
+func buildBackgroundAutomationSettingsUpdates(
+    backgroundConfigPath: ConfigPath,
+    backgroundModelConfigPath: ConfigPath,
+    backgroundThinkingConfigPath: ConfigPath,
+    modelRef: String,
+    thinking: String
+) -> [(path: ConfigPath, value: Any?)] {
+    let trimmedModelRef = modelRef.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedThinking = thinking.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    var updates: [(path: ConfigPath, value: Any?)] = [(backgroundConfigPath, nil)]
+    if !trimmedModelRef.isEmpty {
+        updates.append((backgroundModelConfigPath, trimmedModelRef))
+    }
+    if !trimmedThinking.isEmpty {
+        updates.append((backgroundThinkingConfigPath, trimmedThinking))
+    }
+    return updates
 }
 
 func sortModelSettingsOptions(
@@ -298,6 +332,12 @@ private struct ModelsSettingsStatusState {
     let showsProgress: Bool
 }
 
+private struct ModelsSettingsDraftState {
+    let selection: ModelSettingsSelection
+    let backgroundModelRef: String
+    let backgroundThinking: String
+}
+
 private struct ModelsSettingsStatusBanner: View {
     let state: ModelsSettingsStatusState
 
@@ -357,6 +397,8 @@ struct ModelsSettings: View {
     @State private var customFallbackProviderDrafts: [Int: String] = [:]
     @State private var didHydrateSelection = false
     @State private var prefersCustomPrimaryEntry = false
+    @State private var backgroundModelRef: String = ""
+    @State private var backgroundThinking: String = ""
     @State private var providerConnectSheetPresented = false
     @State private var providerConnectLoading = false
     @State private var providerConnectError: String?
@@ -364,12 +406,15 @@ struct ModelsSettings: View {
     @State private var providerConnectSelectedGroupId: String = ""
     @State private var providerConnectSelectedChoiceId: String = ""
     @State private var providerConnectWizard = OnboardingWizardModel()
-    @State private var preservedDraftSelectionBeforeProviderConnect: ModelSettingsSelection?
+    @State private var preservedDraftSelectionBeforeProviderConnect: ModelsSettingsDraftState?
     @State private var providerConnectIntent: ProviderConnectIntent = .generic
     @State private var providerConnectStartingConnectedProviderIds: Set<String> = []
     @State private var providerConnectRequestedProviderId: String?
 
     private let modelConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("model")]
+    private let backgroundConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background")]
+    private let backgroundModelConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background"), .key("model")]
+    private let backgroundThinkingConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background"), .key("thinking")]
 
     init(store: ChannelsStore = .shared) {
         self.store = store
@@ -384,6 +429,13 @@ struct ModelsSettings: View {
             return resolveModelSettingsSelection(from: self.store.configValue(at: self.modelConfigPath))
         }
         return ModelSettingsSelection(primaryRef: self.primaryRef, fallbackRefs: self.fallbackRefs)
+    }
+
+    private var draftState: ModelsSettingsDraftState {
+        ModelsSettingsDraftState(
+            selection: self.draftSelection,
+            backgroundModelRef: self.backgroundModelRef.trimmingCharacters(in: .whitespacesAndNewlines),
+            backgroundThinking: self.backgroundThinking.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private var connectedProviderIds: Set<String> {
@@ -530,6 +582,37 @@ struct ModelsSettings: View {
         return self.primaryRef
     }
 
+    private var backgroundModelPickerSelection: Binding<String> {
+        Binding(
+            get: {
+                self.visibleOptions.contains(where: { $0.ref == self.backgroundModelRef })
+                    ? self.backgroundModelRef
+                    : ""
+            },
+            set: { newValue in
+                self.backgroundModelRef = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.syncBackgroundDraft()
+            })
+    }
+
+    private var backgroundModelTextBinding: Binding<String> {
+        Binding(
+            get: { self.backgroundModelRef },
+            set: { newValue in
+                self.backgroundModelRef = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.syncBackgroundDraft()
+            })
+    }
+
+    private var backgroundThinkingBinding: Binding<String> {
+        Binding(
+            get: { self.backgroundThinking },
+            set: { newValue in
+                self.backgroundThinking = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.syncBackgroundDraft()
+            })
+    }
+
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 18) {
@@ -540,6 +623,7 @@ struct ModelsSettings: View {
                 self.actionRow
                 self.defaultsSection
                 self.fallbackSection
+                self.backgroundSection
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -806,6 +890,65 @@ struct ModelsSettings: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+        }
+    }
+
+    private var backgroundSection: some View {
+        self.sectionCard(
+            title: macLocalized("Background automation", language: self.language),
+            subtitle: macLocalized(
+                "Pick the low-cost defaults heartbeats and automated turns should use when they do not set their own model or thinking.",
+                language: self.language))
+        {
+            EmptyView()
+        } content: {
+            VStack(alignment: .leading, spacing: 14) {
+                self.fieldBlock(
+                    macLocalized("Background model", language: self.language),
+                    help: macLocalized(
+                        "Pick from connected models or type a provider/model reference directly.",
+                        language: self.language))
+                {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !self.visibleOptions.isEmpty {
+                            Picker("", selection: self.backgroundModelPickerSelection) {
+                                Text(macLocalized("Not set", language: self.language)).tag("")
+                                ForEach(self.visibleOptions) { option in
+                                    Text(option.menuLabel).tag(option.ref)
+                                }
+                            }
+                            .labelsHidden()
+                            .disabled(self.controlsDisabled)
+                        }
+
+                        TextField(
+                            macLocalized("Model reference", language: self.language),
+                            text: self.backgroundModelTextBinding,
+                            prompt: Text("openai/gpt-5.4-mini"))
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(self.controlsDisabled)
+                    }
+                }
+
+                self.fieldBlock(
+                    macLocalized("Background thinking", language: self.language),
+                    help: macLocalized(
+                        "Leave unset to use each model's normal defaults. Session /think and explicit job settings still win.",
+                        language: self.language))
+                {
+                    Picker("", selection: self.backgroundThinkingBinding) {
+                        Text(macLocalized("Not set", language: self.language)).tag("")
+                        ForEach(
+                            ["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"],
+                            id: \.self)
+                        { level in
+                            Text(level).tag(level)
+                        }
+                    }
+                    .labelsHidden()
+                    .disabled(self.controlsDisabled)
                 }
             }
         }
@@ -1185,6 +1328,19 @@ struct ModelsSettings: View {
         self.store.updateConfigValue(path: self.modelConfigPath, value: payload)
     }
 
+    private func syncBackgroundDraft() {
+        guard self.didHydrateSelection else { return }
+        for update in buildBackgroundAutomationSettingsUpdates(
+            backgroundConfigPath: self.backgroundConfigPath,
+            backgroundModelConfigPath: self.backgroundModelConfigPath,
+            backgroundThinkingConfigPath: self.backgroundThinkingConfigPath,
+            modelRef: self.backgroundModelRef,
+            thinking: self.backgroundThinking)
+        {
+            self.store.updateConfigValue(path: update.path, value: update.value)
+        }
+    }
+
     private func initialSelection() -> ModelSettingsSelection {
         resolveModelSettingsSelection(from: self.store.configValue(at: self.modelConfigPath))
     }
@@ -1211,6 +1367,11 @@ struct ModelsSettings: View {
                 selectedProviderId: preferredProvider,
                 currentPrimaryRef: self.primaryRef,
                 options: options).contains(where: { $0.ref == self.primaryRef })
+        let backgroundDraft = resolveBackgroundAutomationSettingsDraft(
+            modelRaw: self.store.configValue(at: self.backgroundModelConfigPath),
+            thinkingRaw: self.store.configValue(at: self.backgroundThinkingConfigPath))
+        self.backgroundModelRef = backgroundDraft.modelRef
+        self.backgroundThinking = backgroundDraft.thinking
         self.didHydrateSelection = true
     }
 
@@ -1222,7 +1383,7 @@ struct ModelsSettings: View {
 
     @MainActor
     private func presentProviderConnectSheet(intent: ProviderConnectIntent = .generic) async {
-        self.preservedDraftSelectionBeforeProviderConnect = self.store.configDirty ? self.draftSelection : nil
+        self.preservedDraftSelectionBeforeProviderConnect = self.store.configDirty ? self.draftState : nil
         self.providerConnectIntent = intent
         self.providerConnectStartingConnectedProviderIds = self.connectedProviderIds
         self.providerConnectRequestedProviderId = nil
@@ -1313,7 +1474,10 @@ struct ModelsSettings: View {
         self.didHydrateSelection = false
         self.hydrateSelectionFromConfig()
         if let preservedDraft {
-            self.restoreDraftSelection(preservedDraft)
+            self.restoreDraftSelection(preservedDraft.selection)
+            self.backgroundModelRef = preservedDraft.backgroundModelRef
+            self.backgroundThinking = preservedDraft.backgroundThinking
+            self.syncBackgroundDraft()
         }
         if connectIntent == .fallback, !self.primaryRef.isEmpty {
             let connectedProviderId = resolveProviderConnectCompletionProviderId(
@@ -1390,6 +1554,7 @@ struct ModelsSettings: View {
     @MainActor
     private func saveSettingsState() async {
         self.syncDraftFromSelection()
+        self.syncBackgroundDraft()
         await self.store.saveConfigDraft()
         self.didHydrateSelection = false
         self.hydrateSelectionFromConfig()

@@ -9,7 +9,6 @@ final class GatewayConnectivityCoordinator {
 
     private let logger = Logger(subsystem: "ai.maumau", category: "gateway.connectivity")
     private var endpointTask: Task<Void, Never>?
-    private var lastResolvedURL: URL?
 
     private(set) var endpointState: GatewayEndpointState?
     private(set) var resolvedURL: URL?
@@ -36,16 +35,30 @@ final class GatewayConnectivityCoordinator {
         return Self.hostLabel(for: url)
     }
 
+    static func shouldRefreshControlChannel(
+        previous: GatewayEndpointState?,
+        next: GatewayEndpointState) -> Bool
+    {
+        guard case let .ready(nextMode, nextURL, nextToken, nextPassword) = next else { return false }
+        guard let previous else { return true }
+        guard case let .ready(previousMode, previousURL, previousToken, previousPassword) = previous else {
+            return true
+        }
+        return previousMode != nextMode ||
+            previousURL != nextURL ||
+            previousToken != nextToken ||
+            previousPassword != nextPassword
+    }
+
     private func handleEndpointState(_ state: GatewayEndpointState) {
+        let previousState = self.endpointState
         self.endpointState = state
         switch state {
         case let .ready(mode, url, _, _):
             self.resolvedMode = mode
             self.resolvedURL = url
             self.resolvedHostLabel = Self.hostLabel(for: url)
-            let urlChanged = self.lastResolvedURL?.absoluteString != url.absoluteString
-            if urlChanged {
-                self.lastResolvedURL = url
+            if Self.shouldRefreshControlChannel(previous: previousState, next: state) {
                 Task { await ControlChannel.shared.refreshEndpoint(reason: "endpoint changed") }
             }
         case let .connecting(mode, _):

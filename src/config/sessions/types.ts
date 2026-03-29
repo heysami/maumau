@@ -114,6 +114,7 @@ export type SessionEntry = {
   verboseLevel?: string;
   reasoningLevel?: string;
   elevatedLevel?: string;
+  replyLanguage?: string;
   ttsAuto?: TtsAutoMode;
   execHost?: string;
   execSecurity?: string;

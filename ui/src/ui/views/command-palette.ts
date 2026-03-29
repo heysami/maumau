@@ -54,6 +54,13 @@ const PALETTE_ITEMS: PaletteItem[] = [
     action: "nav:config",
   },
   {
+    id: "nav-users",
+    label: "Users",
+    icon: "folder",
+    category: "navigation",
+    action: "nav:users",
+  },
+  {
     id: "nav-agents",
     label: "Agents",
     icon: "folder",

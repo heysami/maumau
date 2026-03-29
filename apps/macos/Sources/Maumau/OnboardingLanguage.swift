@@ -628,9 +628,9 @@ struct OnboardingStrings: Sendable {
     var memorySubtitle: String {
         switch self.language {
         case .en:
-            "Add a memory backend later if you want Maumau to retain preferences, facts, and past decisions across sessions instead of starting fresh each time."
+            "Maumau keeps long-term memory private for each user while also sharing approved context with the groups they belong to. Open Users later for details on people, groups, and sharing."
         case .id:
-            "Tambahkan backend memori nanti jika Anda ingin Maumau menyimpan preferensi, fakta, dan keputusan sebelumnya di berbagai sesi alih-alih mulai dari awal setiap kali."
+            "Maumau menyimpan memori jangka panjang secara privat untuk tiap pengguna, sambil membagikan konteks yang disetujui ke grup yang mereka ikuti. Buka Users nanti untuk detail tentang orang, grup, dan aturan berbagi."
         }
     }
 

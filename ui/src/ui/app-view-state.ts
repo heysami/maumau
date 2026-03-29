@@ -4,6 +4,10 @@ import type { CronModelSuggestionsState, CronState } from "./controllers/cron.ts
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type {
+  MultiUserMemoryAdminSnapshot,
+  MultiUserMemoryIdentity,
+} from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
@@ -141,6 +145,15 @@ export type AppViewState = {
   aiAgentsSearchQuery: string;
   aiAgentsActiveSection: string | null;
   aiAgentsActiveSubsection: string | null;
+  multiUserMemoryLoading: boolean;
+  multiUserMemoryError: string | null;
+  multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null;
+  multiUserMemoryNewUserId: string;
+  multiUserMemoryNewUserDisplayName: string;
+  multiUserMemoryNewUserLanguage: import("../../../src/i18n/languages.ts").LanguageId;
+  multiUserMemoryNewUserIdentities: MultiUserMemoryIdentity[];
+  multiUserMemoryNewGroupId: string;
+  multiUserMemoryNewGroupLabel: string;
   channelsLoading: boolean;
   channelsSnapshot: ChannelsStatusSnapshot | null;
   channelsError: string | null;

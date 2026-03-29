@@ -50,6 +50,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
     cfg: MaumauConfig;
     sessionKey: string;
     agentId?: string;
+    heartbeatOverride?: NonNullable<Parameters<typeof runHeartbeatOnce>[0]["heartbeat"]>;
   }) {
     await params.seedSession(params.sessionKey, { lastChannel: "whatsapp", lastTo: "+1555" });
 
@@ -59,6 +60,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
     await runHeartbeatOnce({
       cfg: params.cfg,
       agentId: params.agentId,
+      heartbeat: params.heartbeatOverride,
       deps: {
         getQueueSize: () => 0,
         nowMs: () => 0,
@@ -75,19 +77,28 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
 
   async function runDefaultsHeartbeat(params: {
     model?: string;
+    backgroundModel?: string;
+    backgroundThinking?: string;
+    heartbeatThinking?: string;
     suppressToolErrorWarnings?: boolean;
     lightContext?: boolean;
     isolatedSession?: boolean;
+    heartbeatOverride?: NonNullable<Parameters<typeof runHeartbeatOnce>[0]["heartbeat"]>;
   }) {
     return withHeartbeatFixture(async ({ tmpDir, storePath, seedSession }) => {
       const cfg: MaumauConfig = {
         agents: {
           defaults: {
             workspace: tmpDir,
+            background: {
+              model: params.backgroundModel,
+              thinking: params.backgroundThinking as never,
+            },
             heartbeat: {
               every: "5m",
               target: "whatsapp",
               model: params.model,
+              thinking: params.heartbeatThinking as never,
               suppressToolErrorWarnings: params.suppressToolErrorWarnings,
               lightContext: params.lightContext,
               isolatedSession: params.isolatedSession,
@@ -102,6 +113,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
         seedSession,
         cfg,
         sessionKey,
+        heartbeatOverride: params.heartbeatOverride,
       });
       return result.opts;
     });
@@ -242,6 +254,44 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
     expect(replyOpts).toEqual(
       expect.objectContaining({
         isHeartbeat: true,
+      }),
+    );
+  });
+
+  it("passes background automation model override when heartbeat model is unset", async () => {
+    const replyOpts = await runDefaultsHeartbeat({ backgroundModel: "openai/gpt-5.4-mini" });
+    expect(replyOpts).toEqual(
+      expect.objectContaining({
+        isHeartbeat: true,
+        automationModelOverride: "openai/gpt-5.4-mini",
+      }),
+    );
+  });
+
+  it("passes heartbeat thinking default ahead of shared background thinking", async () => {
+    const replyOpts = await runDefaultsHeartbeat({
+      backgroundThinking: "low",
+      heartbeatThinking: "minimal",
+    });
+    expect(replyOpts).toEqual(
+      expect.objectContaining({
+        isHeartbeat: true,
+        automationThinkingDefault: "minimal",
+      }),
+    );
+  });
+
+  it("merges partial heartbeat overrides with configured background automation defaults", async () => {
+    const replyOpts = await runDefaultsHeartbeat({
+      backgroundModel: "openai/gpt-5.4-mini",
+      backgroundThinking: "low",
+      heartbeatOverride: { target: "last" },
+    });
+    expect(replyOpts).toEqual(
+      expect.objectContaining({
+        isHeartbeat: true,
+        automationModelOverride: "openai/gpt-5.4-mini",
+        automationThinkingDefault: "low",
       }),
     );
   });

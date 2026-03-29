@@ -66,7 +66,13 @@ function buildNostrProfileUrl(accountId: string, suffix = ""): string {
   return `/api/channels/nostr/${encodeURIComponent(accountId)}/profile${suffix}`;
 }
 
-function resolveGatewayHttpAuthHeader(host: MaumauApp): string | null {
+function resolveGatewayHttpAuthHeader(
+  host: {
+    hello: { auth?: { deviceToken?: string } } | null;
+    settings: Pick<MaumauApp["settings"], "token">;
+    password: string;
+  },
+): string | null {
   const deviceToken = host.hello?.auth?.deviceToken?.trim();
   if (deviceToken) {
     return `Bearer ${deviceToken}`;
@@ -82,7 +88,13 @@ function resolveGatewayHttpAuthHeader(host: MaumauApp): string | null {
   return null;
 }
 
-function buildGatewayHttpHeaders(host: MaumauApp): Record<string, string> {
+export function buildGatewayHttpHeaders(
+  host: {
+    hello: { auth?: { deviceToken?: string } } | null;
+    settings: Pick<MaumauApp["settings"], "token">;
+    password: string;
+  },
+): Record<string, string> {
   const authorization = resolveGatewayHttpAuthHeader(host);
   return authorization ? { Authorization: authorization } : {};
 }

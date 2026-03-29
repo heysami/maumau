@@ -426,6 +426,7 @@ export async function resolveReplyDirectives(params: {
     model,
     hasModelDirective: directives.hasModelDirective,
     hasResolvedHeartbeatModelOverride,
+    automationThinkingDefault: opts?.automationThinkingDefault,
   });
   provider = modelState.provider;
   model = modelState.model;

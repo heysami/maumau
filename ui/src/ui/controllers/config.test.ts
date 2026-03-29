@@ -110,6 +110,68 @@ describe("applyConfigSnapshot", () => {
     expect(state.configRawOriginal).toBe('{ "original": true }');
     expect(state.configFormOriginal).toEqual({ original: true });
   });
+
+  it("merges the first loaded snapshot into dirty partial form edits", () => {
+    const state = createState();
+    state.configFormDirty = true;
+    state.configFormMode = "form";
+    state.configForm = {
+      plugins: {
+        entries: {
+          "multi-user-memory": {
+            config: {
+              users: {
+                sam: { displayName: "Sam" },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    applyConfigSnapshot(state, {
+      config: {
+        gateway: {
+          auth: { token: "secret-token" },
+          mode: "local",
+        },
+        plugins: {
+          slots: { memory: "multi-user-memory" },
+        },
+      },
+      valid: true,
+      issues: [],
+      raw: '{ "gateway": { "auth": { "token": "secret-token" }, "mode": "local" } }',
+    });
+
+    expect(state.configForm).toEqual({
+      gateway: {
+        auth: { token: "secret-token" },
+        mode: "local",
+      },
+      plugins: {
+        slots: { memory: "multi-user-memory" },
+        entries: {
+          "multi-user-memory": {
+            config: {
+              users: {
+                sam: { displayName: "Sam" },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(state.configFormOriginal).toEqual({
+      gateway: {
+        auth: { token: "secret-token" },
+        mode: "local",
+      },
+      plugins: {
+        slots: { memory: "multi-user-memory" },
+      },
+    });
+  });
 });
 
 describe("updateConfigFormValue", () => {

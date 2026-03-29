@@ -116,6 +116,25 @@ describe("sessions tools visibility", () => {
     });
   });
 
+  it("allows cross-agent access when visibility=all and agent-to-agent is enabled", async () => {
+    mockConfig = {
+      session: { mainKey: "main", scope: "per-sender" },
+      tools: {
+        sessions: { visibility: "all" },
+        agentToAgent: { enabled: true, allow: ["*"] },
+      },
+    };
+    mockGatewayWithHistory();
+    const tool = getSessionsHistoryTool();
+
+    const result = await tool.execute("call-cross-agent", {
+      sessionKey: "agent:reviewer:main",
+    });
+    expect(result.details).toMatchObject({
+      sessionKey: "agent:reviewer:main",
+    });
+  });
+
   it("clamps sandboxed sessions to tree when agents.defaults.sandbox.sessionToolsVisibility=spawned", async () => {
     mockConfig = {
       session: { mainKey: "main", scope: "per-sender" },

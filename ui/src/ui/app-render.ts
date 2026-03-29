@@ -68,6 +68,32 @@ import {
   updateExecApprovalsFormValue,
 } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
+import {
+  addMultiUserMemoryDraftIdentity,
+  addMultiUserMemoryIdentity,
+  clearMultiUserMemoryGroupDraft,
+  clearMultiUserMemoryUserDraft,
+  createConfiguredUserFromProvisional,
+  createMultiUserMemoryGroupFromDraft,
+  createMultiUserMemoryUserFromDraft,
+  enableMultiUserMemoryPlugin,
+  loadMultiUserMemoryAdmin,
+  prefillMultiUserMemoryUserDraftFromProvisional,
+  removeMultiUserMemoryDraftIdentity,
+  removeMultiUserMemoryGroup,
+  removeMultiUserMemoryIdentity,
+  removeMultiUserMemoryUser,
+  resolveMultiUserMemoryConfigState,
+  toggleMultiUserMemoryAdminUser,
+  toggleMultiUserMemoryGroupMember,
+  toggleMultiUserMemoryGroupParent,
+  updateMultiUserMemoryApprovalDelivery,
+  updateMultiUserMemoryDraftIdentity,
+  updateMultiUserMemoryGroup,
+  updateMultiUserMemoryIdentity,
+  updateMultiUserMemoryTopLevel,
+  updateMultiUserMemoryUser,
+} from "./controllers/multi-user-memory.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { deleteSessionsAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
@@ -130,6 +156,7 @@ const lazyLogs = createLazy(() => import("./views/logs.ts"));
 const lazyNodes = createLazy(() => import("./views/nodes.ts"));
 const lazySessions = createLazy(() => import("./views/sessions.ts"));
 const lazySkills = createLazy(() => import("./views/skills.ts"));
+const lazyUsers = createLazy(() => import("./views/users.ts"));
 
 function lazyRender<M>(getter: () => M | null, render: (mod: M) => unknown) {
   const mod = getter();
@@ -317,6 +344,7 @@ export function renderApp(state: AppViewState) {
   const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl ?? null;
   const configValue =
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
+  const multiUserMemoryConfig = resolveMultiUserMemoryConfigState(configValue);
   const basePath = normalizeBasePath(state.basePath ?? "");
   const resolvedAgentId =
     state.agentsSelectedId ??
@@ -1498,6 +1526,171 @@ export function renderApp(state: AppViewState) {
                 assistantAvatar: state.assistantAvatar,
                 basePath: state.basePath ?? "",
               })
+            : nothing
+        }
+
+        ${
+          state.tab === "users"
+            ? lazyRender(lazyUsers, (m) =>
+                m.renderUsers({
+                  configLoading: state.configLoading,
+                  configReady: Boolean(state.configSnapshot),
+                  configSaving: state.configSaving,
+                  configApplying: state.configApplying,
+                  configDirty: state.configFormDirty,
+                  runtimeLoading: state.multiUserMemoryLoading,
+                  runtimeError: state.multiUserMemoryError,
+                  config: multiUserMemoryConfig,
+                  runtime: state.multiUserMemoryAdmin,
+                  newUserDisplayName: state.multiUserMemoryNewUserDisplayName,
+                  newUserLanguage: state.multiUserMemoryNewUserLanguage,
+                  newUserIdentities: state.multiUserMemoryNewUserIdentities,
+                  newGroupLabel: state.multiUserMemoryNewGroupLabel,
+                  onReload: () => {
+                    void (async () => {
+                      await loadConfig(state);
+                      await loadMultiUserMemoryAdmin(state);
+                    })();
+                  },
+                  onSave: () => {
+                    void (async () => {
+                      await saveConfig(state);
+                      await loadMultiUserMemoryAdmin(state);
+                    })();
+                  },
+                  onApply: () => {
+                    void (async () => {
+                      await applyConfig(state);
+                      await loadMultiUserMemoryAdmin(state);
+                    })();
+                  },
+                  onEnablePlugin: () => enableMultiUserMemoryPlugin(state),
+                  onTopLevelBooleanChange: (field, value) => {
+                    if (field === "enabled") {
+                      updateMultiUserMemoryTopLevel(state, { enabled: value });
+                    } else {
+                      updateMultiUserMemoryTopLevel(state, { autoDiscover: value });
+                    }
+                  },
+                  onTopLevelStringChange: (field, value) => {
+                    if (field === "defaultLanguage") {
+                      updateMultiUserMemoryTopLevel(state, { defaultLanguage: value });
+                    } else if (field === "approvalCenterBaseUrl") {
+                      updateMultiUserMemoryTopLevel(state, { approvalCenterBaseUrl: value });
+                    } else {
+                      updateMultiUserMemoryTopLevel(state, { curatorAgentId: value });
+                    }
+                  },
+                  onApprovalDeliveryChange: (field, value) => {
+                    if (field === "mode") {
+                      updateMultiUserMemoryApprovalDelivery(state, {
+                        mode: value as "same_session" | "same_channel" | "disabled",
+                      });
+                    } else if (field === "channelId") {
+                      updateMultiUserMemoryApprovalDelivery(state, { channelId: value });
+                    } else if (field === "accountId") {
+                      updateMultiUserMemoryApprovalDelivery(state, { accountId: value });
+                    } else {
+                      updateMultiUserMemoryApprovalDelivery(state, { to: value });
+                    }
+                  },
+                  onToggleAdminUser: (userId, enabled) =>
+                    toggleMultiUserMemoryAdminUser(state, userId, enabled),
+                  onNewUserDraftChange: (field, value) => {
+                    if (field === "displayName") {
+                      state.multiUserMemoryNewUserDisplayName = value;
+                      state.multiUserMemoryNewUserId = "";
+                    } else {
+                      state.multiUserMemoryNewUserLanguage =
+                        value as typeof state.multiUserMemoryNewUserLanguage;
+                    }
+                  },
+                  onAddDraftIdentity: () => addMultiUserMemoryDraftIdentity(state),
+                  onDraftIdentityFieldChange: (index, field, value) => {
+                    if (field === "label") {
+                      updateMultiUserMemoryDraftIdentity(state, index, { label: value });
+                    } else if (field === "channelId") {
+                      updateMultiUserMemoryDraftIdentity(state, index, { channelId: value });
+                    } else if (field === "accountId") {
+                      updateMultiUserMemoryDraftIdentity(state, index, { accountId: value });
+                    } else if (field === "senderId") {
+                      updateMultiUserMemoryDraftIdentity(state, index, { senderId: value });
+                    } else if (field === "senderName") {
+                      updateMultiUserMemoryDraftIdentity(state, index, { senderName: value });
+                    } else {
+                      updateMultiUserMemoryDraftIdentity(state, index, {
+                        senderUsername: value,
+                      });
+                    }
+                  },
+                  onDeleteDraftIdentity: (index) =>
+                    removeMultiUserMemoryDraftIdentity(state, index),
+                  onCreateUser: () =>
+                    createMultiUserMemoryUserFromDraft(state, multiUserMemoryConfig),
+                  onClearUserDraft: () => clearMultiUserMemoryUserDraft(state),
+                  onNewGroupDraftChange: (_field, value) => {
+                    state.multiUserMemoryNewGroupLabel = value;
+                    state.multiUserMemoryNewGroupId = "";
+                  },
+                  onCreateGroup: () =>
+                    createMultiUserMemoryGroupFromDraft(state, multiUserMemoryConfig),
+                  onClearGroupDraft: () => clearMultiUserMemoryGroupDraft(state),
+                  onUserFieldChange: (userId, field, value) => {
+                    if (field === "displayName") {
+                      updateMultiUserMemoryUser(state, userId, { displayName: value });
+                    } else if (field === "preferredLanguage") {
+                      updateMultiUserMemoryUser(state, userId, { preferredLanguage: value });
+                    } else {
+                      updateMultiUserMemoryUser(state, userId, { notes: value });
+                    }
+                  },
+                  onUserActiveChange: (userId, value) =>
+                    updateMultiUserMemoryUser(state, userId, { active: value }),
+                  onDeleteUser: (userId) => removeMultiUserMemoryUser(state, userId),
+                  onAddIdentity: (userId) => addMultiUserMemoryIdentity(state, userId),
+                  onIdentityFieldChange: (userId, index, field, value) => {
+                    if (field === "label") {
+                      updateMultiUserMemoryIdentity(state, userId, index, { label: value });
+                    } else if (field === "channelId") {
+                      updateMultiUserMemoryIdentity(state, userId, index, { channelId: value });
+                    } else if (field === "accountId") {
+                      updateMultiUserMemoryIdentity(state, userId, index, { accountId: value });
+                    } else if (field === "senderId") {
+                      updateMultiUserMemoryIdentity(state, userId, index, { senderId: value });
+                    } else if (field === "senderName") {
+                      updateMultiUserMemoryIdentity(state, userId, index, { senderName: value });
+                    } else {
+                      updateMultiUserMemoryIdentity(state, userId, index, {
+                        senderUsername: value,
+                      });
+                    }
+                  },
+                  onDeleteIdentity: (userId, index) =>
+                    removeMultiUserMemoryIdentity(state, userId, index),
+                  onGroupFieldChange: (groupId, field, value) => {
+                    if (field === "label") {
+                      updateMultiUserMemoryGroup(state, groupId, { label: value });
+                    } else {
+                      updateMultiUserMemoryGroup(state, groupId, { description: value });
+                    }
+                  },
+                  onGroupActiveChange: (groupId, value) =>
+                    updateMultiUserMemoryGroup(state, groupId, { active: value }),
+                  onDeleteGroup: (groupId) => removeMultiUserMemoryGroup(state, groupId),
+                  onToggleGroupMember: (groupId, userId, enabled) =>
+                    toggleMultiUserMemoryGroupMember(state, groupId, userId, enabled),
+                  onToggleGroupParent: (groupId, parentGroupId, enabled) =>
+                    toggleMultiUserMemoryGroupParent(state, groupId, parentGroupId, enabled),
+                  onCreateUserFromProvisional: (provisional) =>
+                    createConfiguredUserFromProvisional(state, multiUserMemoryConfig, provisional),
+                  onUseProvisionalAsDraft: (provisional) =>
+                    prefillMultiUserMemoryUserDraftFromProvisional(
+                      state,
+                      provisional,
+                      multiUserMemoryConfig,
+                    ),
+                }),
+              )
             : nothing
         }
 

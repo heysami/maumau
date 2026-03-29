@@ -1,6 +1,7 @@
 import type { MaumauConfig } from "../config/config.js";
 import type { DmScope } from "../config/types.base.js";
 import type { ToolProfileId } from "../config/types.tools.js";
+import { applyLocalSetupMultiUserMemoryDefaults } from "./onboard-multi-user-memory.js";
 
 export const ONBOARDING_DEFAULT_DM_SCOPE: DmScope = "per-channel-peer";
 export const ONBOARDING_DEFAULT_TOOLS_PROFILE: ToolProfileId = "coding";
@@ -21,7 +22,7 @@ export function applyLocalSetupWorkspaceConfig(
   baseConfig: MaumauConfig,
   workspaceDir: string,
 ): MaumauConfig {
-  return {
+  return applyLocalSetupMultiUserMemoryDefaults({
     ...baseConfig,
     agents: {
       ...baseConfig.agents,
@@ -43,5 +44,5 @@ export function applyLocalSetupWorkspaceConfig(
       profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
       alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
     },
-  };
+  });
 }

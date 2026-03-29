@@ -324,6 +324,57 @@
       "hasChildren": true
     },
     {
+      "path": "agents.defaults.background",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Automation",
+      "help": "Shared low-cost automation defaults used by background-style runs such as heartbeat turns, main-session wake flows, cron agent turns, and hook-driven automation when they do not set a more explicit model or thinking level.",
+      "hasChildren": true
+    },
+    {
+      "path": "agents.defaults.background.model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "models"
+      ],
+      "label": "Background Model Override",
+      "help": "Default provider/model for background automation runs when no heartbeat-specific, session, or per-job override is set.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.background.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Thinking Default",
+      "help": "Default thinking level for background automation runs when no session or per-job override is set.",
+      "hasChildren": false
+    },
+    {
       "path": "agents.defaults.blockStreamingBreak",
       "kind": "core",
       "type": "string",
@@ -1690,6 +1741,29 @@
         "automation"
       ],
       "help": "Delivery target (\"last\", \"none\", or a channel id). Known channels: telegram, whatsapp, discord, irc, googlechat, slack, signal, imessage, line, bluebubbles, feishu, matrix, mattermost, msteams, nextcloud-talk, nostr, synology-chat, tlon, twitch, zalo, zalouser.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.heartbeat.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "automation"
+      ],
+      "label": "Heartbeat Thinking Default",
+      "help": "Default thinking level for heartbeat runs. More specific than agents.defaults.background.thinking, but still lower priority than a stored session /think override.",
       "hasChildren": false
     },
     {
@@ -3988,6 +4062,15 @@
       "kind": "core",
       "type": "string",
       "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
       "deprecated": false,
       "sensitive": false,
       "tags": [],
@@ -4099,6 +4182,57 @@
       "deprecated": false,
       "sensitive": false,
       "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.background",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Automation",
+      "help": "Optional per-agent background automation overrides that replace the shared agents.defaults.background values for that agent.",
+      "hasChildren": true
+    },
+    {
+      "path": "agents.list.*.background.model",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "models"
+      ],
+      "label": "Background Model Override",
+      "help": "Per-agent background automation model override used when no heartbeat-specific, session, or per-job override is set.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.background.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Background Thinking Default",
+      "help": "Per-agent background automation thinking override used when no session or per-job override is set.",
       "hasChildren": false
     },
     {
@@ -4346,6 +4480,29 @@
         "automation"
       ],
       "help": "Delivery target (\"last\", \"none\", or a channel id). Known channels: telegram, whatsapp, discord, irc, googlechat, slack, signal, imessage, line, bluebubbles, feishu, matrix, mattermost, msteams, nextcloud-talk, nostr, synology-chat, tlon, twitch, zalo, zalouser.",
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.heartbeat.thinking",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "adaptive"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "automation"
+      ],
+      "label": "Heartbeat Thinking Default",
+      "help": "Per-agent default thinking level for heartbeat runs. More specific than agents.list[].background.thinking, but still lower priority than a stored session /think override.",
       "hasChildren": false
     },
     {
@@ -57528,6 +57685,606 @@
     },
     {
       "path": "plugins.entries.msteams.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Multi-User Memory",
+      "help": "Scoped memory with curated users, shared groups, approvals, and per-user language defaults. (plugin: multi-user-memory)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Multi-User Memory Config",
+      "help": "Plugin-defined config payload for multi-user-memory.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.adminUserIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Admin User Ids",
+      "help": "Canonical user ids that should be treated as multi-user-memory admins.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.adminUserIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalCenterBaseUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Center Base URL",
+      "help": "Optional HTTPS base URL for the approval center page. Leave blank to auto-detect from Tailscale Serve or the gateway bind when possible.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.accountId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Account Override",
+      "help": "Optional account override for approval requests.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.channelId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Channel Override",
+      "help": "Optional channel override for approval requests when not using the current session.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "same_session",
+        "same_channel",
+        "disabled"
+      ],
+      "defaultValue": "same_session",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Delivery Mode",
+      "help": "How proposal approvals should be requested in v1.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.to",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Target Override",
+      "help": "Optional explicit target for approval requests.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.autoDiscover",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Auto-Discover New Senders",
+      "help": "Unknown senders become provisional users in the runtime store until an admin curates them in config.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.curatorAgentId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Curator Agent Id",
+      "help": "Agent id allowed to run the curation workflow without owner privileges.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.defaultLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "defaultValue": "en",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Default Reply Language",
+      "help": "Fallback language when a matched user does not have a preferred language.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Multi-User Memory",
+      "help": "Turns on scoped user and group memory resolution for the active memory slot.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "defaultValue": {},
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Groups",
+      "help": "Shared memory groups keyed by group id.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.active",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Active Group",
+      "help": "Inactive groups are ignored for memory visibility and curation.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.description",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Description",
+      "help": "Optional admin description for the group.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.label",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Group Label",
+      "help": "Human-readable group name.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.memberUserIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Member User Ids",
+      "help": "Canonical users that belong directly to this group.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.memberUserIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.parentGroupIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Parent Group Ids",
+      "help": "Broader groups that inherit this group's members upward.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.parentGroupIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "defaultValue": {},
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Users",
+      "help": "Curated user catalog keyed by canonical user id.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.active",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Active User",
+      "help": "Inactive users are ignored for curated identity matching.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.displayName",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Display Name",
+      "help": "Human-readable name shown in admin tooling and curation output.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Channel Identities",
+      "help": "Exact channel/account/sender identities that map to this user.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.accountId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Account Id",
+      "help": "Optional account id when a channel has multiple configured accounts.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.channelId",
+      "kind": "plugin",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Channel Id",
+      "help": "Exact channel id, for example whatsapp, telegram, or discord.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.label",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Identity Label",
+      "help": "Optional admin label for this channel identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderId",
+      "kind": "plugin",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Id",
+      "help": "Trusted sender id to match for this identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderName",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Name",
+      "help": "Optional display name captured for admin reference.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderUsername",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Username",
+      "help": "Optional username captured for admin reference.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.notes",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Admin Notes",
+      "help": "Optional operator notes for this user.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.preferredLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preferred Language",
+      "help": "Language used for replies and plugin-generated notices for this user.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Multi-User Memory",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowModelOverride",
       "kind": "plugin",
       "type": "boolean",
       "required": false,
