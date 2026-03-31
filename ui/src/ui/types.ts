@@ -2,6 +2,11 @@ export type UpdateAvailable = import("../../../src/infra/update-startup.js").Upd
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
 import type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 import type {
+  SessionPreviewItem as SharedSessionPreviewItem,
+  SessionsPreviewEntry as SharedSessionsPreviewEntry,
+  SessionsPreviewResult as SharedSessionsPreviewResult,
+} from "../../../src/gateway/session-utils.types.ts";
+import type {
   GatewayAgentRow as SharedGatewayAgentRow,
   SessionsListResultBase,
   SessionsPatchResultBase,
@@ -369,16 +374,28 @@ export type AgentsFilesSetResult = {
 
 export type SessionRunStatus = "running" | "done" | "failed" | "killed" | "timeout";
 
+export type SessionPreviewItem = SharedSessionPreviewItem;
+export type SessionsPreviewEntry = SharedSessionsPreviewEntry;
+export type SessionsPreviewResult = SharedSessionsPreviewResult;
+
 export type GatewaySessionRow = {
   key: string;
   spawnedBy?: string;
   kind: "direct" | "group" | "global" | "unknown";
   label?: string;
   displayName?: string;
+  derivedTitle?: string;
+  lastMessagePreview?: string;
+  lastUserMessagePreview?: string;
+  lastAssistantMessagePreview?: string;
+  channel?: string;
   surface?: string;
   subject?: string;
+  groupChannel?: string;
   room?: string;
   space?: string;
+  chatType?: string;
+  origin?: string;
   updatedAt: number | null;
   sessionId?: string;
   systemSent?: boolean;
@@ -392,14 +409,21 @@ export type GatewaySessionRow = {
   outputTokens?: number;
   totalTokens?: number;
   totalTokensFresh?: boolean;
+  estimatedCostUsd?: number;
   status?: SessionRunStatus;
   startedAt?: number;
   endedAt?: number;
   runtimeMs?: number;
+  parentSessionKey?: string;
   childSessions?: string[];
+  responseUsage?: "on" | "off" | "tokens" | "full";
   model?: string;
   modelProvider?: string;
   contextTokens?: number;
+  deliveryContext?: Record<string, unknown>;
+  lastChannel?: string;
+  lastTo?: string;
+  lastAccountId?: string;
 };
 
 export type SessionsListResult = SessionsListResultBase<GatewaySessionsDefaults, GatewaySessionRow>;

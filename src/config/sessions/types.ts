@@ -82,6 +82,10 @@ export type SessionEntry = {
   spawnedWorkspaceDir?: string;
   /** Explicit parent session linkage for dashboard-created child sessions. */
   parentSessionKey?: string;
+  /** Active Maumau Team context for team-scoped orchestration sessions. */
+  teamId?: string;
+  /** Team-local role label for the current session within its active team. */
+  teamRole?: string;
   /** True after a thread/topic session has been forked from its parent transcript once. */
   forkedFromParent?: boolean;
   /** Subagent spawn depth (0 = main, 1 = sub-agent, 2 = sub-sub-agent). */

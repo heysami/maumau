@@ -1,8 +1,16 @@
 import { html, nothing } from "lit";
+import type { MaumauConfig } from "../../../src/config/types.maumau.js";
+import type { TeamConfig } from "../../../src/config/types.teams.js";
 import {
   buildAgentMainSessionKey,
   parseAgentSessionKey,
 } from "../../../src/routing/session-key.js";
+import { resolveDefaultTeamWorkflowId } from "../../../src/teams/model.js";
+import {
+  createBlankTeamConfig,
+  ensureStarterTeamConfig,
+  STARTER_TEAM_ID,
+} from "../../../src/teams/presets.js";
 import { t } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
@@ -68,6 +76,11 @@ import {
   updateExecApprovalsFormValue,
 } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
+import {
+  createMauOfficeSessionTarget,
+  loadMauOffice,
+  setMauOfficeRoomFocus,
+} from "./controllers/mau-office.ts";
 import {
   addMultiUserMemoryDraftIdentity,
   addMultiUserMemoryIdentity,
@@ -153,9 +166,11 @@ const lazyCron = createLazy(() => import("./views/cron.ts"));
 const lazyDebug = createLazy(() => import("./views/debug.ts"));
 const lazyInstances = createLazy(() => import("./views/instances.ts"));
 const lazyLogs = createLazy(() => import("./views/logs.ts"));
+const lazyMauOffice = createLazy(() => import("./views/mau-office.ts"));
 const lazyNodes = createLazy(() => import("./views/nodes.ts"));
 const lazySessions = createLazy(() => import("./views/sessions.ts"));
 const lazySkills = createLazy(() => import("./views/skills.ts"));
+const lazyTeams = createLazy(() => import("./views/teams.ts"));
 const lazyUsers = createLazy(() => import("./views/users.ts"));
 
 function lazyRender<M>(getter: () => M | null, render: (mod: M) => unknown) {
@@ -346,6 +361,14 @@ export function renderApp(state: AppViewState) {
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
   const multiUserMemoryConfig = resolveMultiUserMemoryConfigState(configValue);
   const basePath = normalizeBasePath(state.basePath ?? "");
+  const sessionDefaults = (state.hello?.snapshot as
+    | {
+        sessionDefaults?: {
+          defaultAgentId?: string;
+          mainKey?: string;
+        };
+      }
+    | undefined)?.sessionDefaults;
   const resolvedAgentId =
     state.agentsSelectedId ??
     state.agentsList?.defaultId ??
@@ -353,6 +376,17 @@ export function renderApp(state: AppViewState) {
     null;
   const getCurrentConfigValue = () =>
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
+  const getCurrentTeams = () => {
+    const teams = (getCurrentConfigValue()?.teams ?? {}) as { list?: unknown };
+    return Array.isArray(teams.list)
+      ? teams.list.filter((entry): entry is TeamConfig =>
+          Boolean(entry && typeof entry === "object"),
+        )
+      : [];
+  };
+  const updateTeamsList = (nextTeams: TeamConfig[]) => {
+    updateConfigFormValue(state, ["teams", "list"], nextTeams);
+  };
   const findAgentIndex = (agentId: string) =>
     findAgentConfigEntryIndex(getCurrentConfigValue(), agentId);
   const ensureAgentIndex = (agentId: string) => ensureAgentConfigEntry(state, agentId);
@@ -839,6 +873,38 @@ export function renderApp(state: AppViewState) {
         }
 
         ${renderUsageTab(state)}
+
+        ${
+          state.tab === "mauOffice"
+            ? lazyRender(lazyMauOffice, (m) =>
+                m.renderMauOffice({
+                  loading: state.mauOfficeLoading,
+                  error: state.mauOfficeError,
+                  state: state.mauOfficeState,
+                  basePath: state.basePath,
+                  onRefresh: () =>
+                    loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
+                  onRoomFocus: (roomId) => {
+                    state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
+                  },
+                  onActorOpen: (actorId) => {
+                    const target = createMauOfficeSessionTarget(
+                      state.mauOfficeState,
+                      actorId,
+                      sessionDefaults,
+                    );
+                    if (!target) {
+                      return;
+                    }
+                    switchChatSession(state, target);
+                    if (state.tab !== "chat") {
+                      state.setTab("chat");
+                    }
+                  },
+                }),
+              )
+            : nothing
+        }
 
         ${
           state.tab === "cron"
@@ -1689,6 +1755,82 @@ export function renderApp(state: AppViewState) {
                       provisional,
                       multiUserMemoryConfig,
                     ),
+                }),
+              )
+            : nothing
+        }
+
+        ${
+          state.tab === "teams"
+            ? lazyRender(lazyTeams, (m) =>
+                m.renderTeams({
+                  configValue,
+                  configLoading: state.configLoading,
+                  configSaving: state.configSaving,
+                  configApplying: state.configApplying,
+                  configDirty: state.configFormDirty,
+                  configPath: state.configSnapshot?.path ?? null,
+                  agentsList: state.agentsList,
+                  selectedTeamId: state.teamsSelectedId ?? getCurrentTeams()[0]?.id ?? null,
+                  selectedWorkflowId: state.teamsSelectedWorkflowId,
+                  onSelectTeam: (teamId) => {
+                    state.teamsSelectedId = teamId;
+                    state.teamsSelectedWorkflowId = null;
+                  },
+                  onSelectWorkflow: (workflowId) => {
+                    state.teamsSelectedWorkflowId = workflowId;
+                  },
+                  onCreateTeam: (preset) => {
+                    if (preset === "starter") {
+                      const nextConfig = ensureStarterTeamConfig(
+                        (getCurrentConfigValue() ?? {}) as MaumauConfig,
+                      );
+                      updateConfigFormValue(state, ["agents"], nextConfig.agents ?? {});
+                      updateConfigFormValue(state, ["teams"], nextConfig.teams ?? {});
+                      state.teamsSelectedId =
+                        nextConfig.teams?.list?.find((team) => team.id === STARTER_TEAM_ID)?.id ??
+                        STARTER_TEAM_ID;
+                      state.teamsSelectedWorkflowId = resolveDefaultTeamWorkflowId(
+                        nextConfig.teams?.list?.find((team) => team.id === STARTER_TEAM_ID) ?? {
+                          id: STARTER_TEAM_ID,
+                          managerAgentId: "main",
+                        },
+                      );
+                      void loadAgents(state);
+                      return;
+                    }
+                    const nextTeam = createBlankTeamConfig(
+                      (getCurrentConfigValue() ?? {}) as MaumauConfig,
+                    );
+                    updateTeamsList([...getCurrentTeams(), nextTeam]);
+                    state.teamsSelectedId = nextTeam.id;
+                    state.teamsSelectedWorkflowId = resolveDefaultTeamWorkflowId(nextTeam);
+                  },
+                  onReplaceTeam: (teamId, nextTeam) => {
+                    updateTeamsList(
+                      getCurrentTeams().map((team) => (team.id === teamId ? nextTeam : team)),
+                    );
+                    if (state.teamsSelectedId === teamId) {
+                      state.teamsSelectedWorkflowId =
+                        state.teamsSelectedWorkflowId ?? resolveDefaultTeamWorkflowId(nextTeam);
+                    }
+                  },
+                  onDeleteTeam: (teamId) => {
+                    const nextTeams = getCurrentTeams().filter((team) => team.id !== teamId);
+                    const deletingSelectedTeam = state.teamsSelectedId === teamId;
+                    updateTeamsList(nextTeams);
+                    state.teamsSelectedId = deletingSelectedTeam
+                      ? (nextTeams[0]?.id ?? null)
+                      : state.teamsSelectedId;
+                    state.teamsSelectedWorkflowId = deletingSelectedTeam
+                      ? null
+                      : state.teamsSelectedWorkflowId;
+                  },
+                  onSave: () => saveConfig(state),
+                  onApply: () => applyConfig(state),
+                  onRefresh: async () => {
+                    await Promise.allSettled([loadConfig(state), loadAgents(state)]);
+                  },
                 }),
               )
             : nothing

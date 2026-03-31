@@ -25,6 +25,8 @@ import { createSessionsSendTool } from "./tools/sessions-send-tool.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSessionsYieldTool } from "./tools/sessions-yield-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
+import { createTeamsListTool } from "./tools/teams-list-tool.js";
+import { createTeamsRunTool } from "./tools/teams-run-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
@@ -193,6 +195,25 @@ export function createMaumauTools(
     createAgentsListTool({
       agentSessionKey: options?.agentSessionKey,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
+    }),
+    createTeamsListTool({
+      agentSessionKey: options?.agentSessionKey,
+      sandboxed: options?.sandboxed,
+      config: resolvedConfig,
+    }),
+    createTeamsRunTool({
+      agentSessionKey: options?.agentSessionKey,
+      agentChannel: options?.agentChannel,
+      agentAccountId: options?.agentAccountId,
+      agentTo: options?.agentTo,
+      agentThreadId: options?.agentThreadId,
+      sandboxed: options?.sandboxed,
+      requesterAgentIdOverride: options?.requesterAgentIdOverride,
+      workspaceDir: spawnWorkspaceDir,
+      agentGroupId: options?.agentGroupId,
+      agentGroupChannel: options?.agentGroupChannel,
+      agentGroupSpace: options?.agentGroupSpace,
+      config: resolvedConfig,
     }),
     createSessionsListTool({
       agentSessionKey: options?.agentSessionKey,

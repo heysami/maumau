@@ -10,6 +10,7 @@ export const unitTestIncludePatterns = [
   "ui/src/ui/controllers/agents.test.ts",
   "ui/src/ui/controllers/chat.test.ts",
   "ui/src/ui/controllers/config.test.ts",
+  "ui/src/ui/controllers/mau-office.test.ts",
   "ui/src/ui/controllers/multi-user-memory.test.ts",
   "ui/src/ui/navigation-groups.test.ts",
   "ui/src/ui/navigation.test.ts",

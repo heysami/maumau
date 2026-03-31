@@ -5,9 +5,9 @@ export const TAB_GROUPS = [
   { label: "chat", tabs: ["chat"] },
   {
     label: "control",
-    tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
+    tabs: ["overview", "channels", "instances", "sessions", "mauOffice", "usage", "cron"],
   },
-  { label: "agent", tabs: ["agents", "skills", "nodes"] },
+  { label: "agent", tabs: ["agents", "teams", "skills", "nodes"] },
   {
     label: "settings",
     tabs: [
@@ -26,10 +26,12 @@ export const TAB_GROUPS = [
 
 export type Tab =
   | "agents"
+  | "teams"
   | "overview"
   | "channels"
   | "instances"
   | "sessions"
+  | "mauOffice"
   | "usage"
   | "cron"
   | "skills"
@@ -47,10 +49,12 @@ export type Tab =
 
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
+  teams: "/teams",
   overview: "/overview",
   channels: "/channels",
   instances: "/instances",
   sessions: "/sessions",
+  mauOffice: "/mau-office",
   usage: "/usage",
   cron: "/cron",
   skills: "/skills",
@@ -152,6 +156,8 @@ export function iconForTab(tab: Tab): IconName {
   switch (tab) {
     case "agents":
       return "folder";
+    case "teams":
+      return "folder";
     case "chat":
       return "messageSquare";
     case "overview":
@@ -162,6 +168,8 @@ export function iconForTab(tab: Tab): IconName {
       return "radio";
     case "sessions":
       return "fileText";
+    case "mauOffice":
+      return "spark";
     case "usage":
       return "barChart";
     case "cron":

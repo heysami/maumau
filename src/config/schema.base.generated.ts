@@ -527,6 +527,33 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
             },
             additionalProperties: false,
           },
+          mauOffice: {
+            type: "object",
+            properties: {
+              enabled: {
+                type: "boolean",
+              },
+              maxVisibleWorkers: {
+                type: "integer",
+                minimum: 1,
+                maximum: 12,
+              },
+              idlePackages: {
+                type: "object",
+                properties: {
+                  enabled: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
         },
         additionalProperties: false,
       },
@@ -4941,6 +4968,157 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 },
               },
               required: ["id"],
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+      teams: {
+        type: "object",
+        properties: {
+          list: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                },
+                name: {
+                  type: "string",
+                },
+                description: {
+                  type: "string",
+                },
+                managerAgentId: {
+                  type: "string",
+                },
+                members: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      agentId: {
+                        type: "string",
+                      },
+                      role: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                    },
+                    required: ["agentId", "role"],
+                    additionalProperties: false,
+                  },
+                },
+                crossTeamLinks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      type: {
+                        anyOf: [
+                          {
+                            type: "string",
+                            const: "team",
+                          },
+                          {
+                            type: "string",
+                            const: "agent",
+                          },
+                        ],
+                      },
+                      targetId: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                    },
+                    required: ["type", "targetId"],
+                    additionalProperties: false,
+                  },
+                },
+                workflows: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                      managerPrompt: {
+                        type: "string",
+                      },
+                      synthesisPrompt: {
+                        type: "string",
+                      },
+                      default: {
+                        type: "boolean",
+                      },
+                      id: {
+                        type: "string",
+                      },
+                    },
+                    required: ["id"],
+                    additionalProperties: false,
+                  },
+                },
+                workflow: {
+                  type: "object",
+                  properties: {
+                    name: {
+                      type: "string",
+                    },
+                    description: {
+                      type: "string",
+                    },
+                    managerPrompt: {
+                      type: "string",
+                    },
+                    synthesisPrompt: {
+                      type: "string",
+                    },
+                    default: {
+                      type: "boolean",
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                preset: {
+                  type: "object",
+                  properties: {
+                    id: {
+                      type: "string",
+                    },
+                    source: {
+                      anyOf: [
+                        {
+                          type: "string",
+                          const: "bundled",
+                        },
+                        {
+                          type: "string",
+                          const: "user",
+                        },
+                      ],
+                    },
+                    version: {
+                      type: "integer",
+                      exclusiveMinimum: 0,
+                      maximum: 9007199254740991,
+                    },
+                  },
+                  required: ["id"],
+                  additionalProperties: false,
+                },
+              },
+              required: ["id", "managerAgentId"],
               additionalProperties: false,
             },
           },
@@ -11695,6 +11873,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: "Agent runtime configuration root covering defaults and explicit agent entries used for routing and execution context. Keep this section explicit so model/tool behavior stays predictable across multi-agent workflows.",
       tags: ["advanced"],
     },
+    teams: {
+      label: "Teams",
+      group: "Teams",
+      order: 45,
+      help: "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+      tags: ["advanced"],
+    },
     tools: {
       label: "Tools",
       group: "Tools",
@@ -12052,6 +12237,141 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       label: "Cache Trace Include System",
       help: "Include system prompt in trace output (default: true).",
       tags: ["observability", "storage"],
+    },
+    "teams.list": {
+      label: "Team List",
+      help: "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+      tags: ["advanced"],
+    },
+    "teams.list[].id": {
+      label: "Team ID",
+      help: "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+      tags: ["advanced"],
+    },
+    "teams.list[].name": {
+      label: "Team Name",
+      help: "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+      tags: ["advanced"],
+    },
+    "teams.list[].description": {
+      label: "Team Description",
+      help: "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+      tags: ["advanced"],
+    },
+    "teams.list[].managerAgentId": {
+      label: "Team Manager Agent",
+      help: "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members": {
+      label: "Team Specialists",
+      help: "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].agentId": {
+      label: "Specialist Agent",
+      help: "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].role": {
+      label: "Specialist Role",
+      help: "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].description": {
+      label: "Specialist Guidance",
+      help: "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks": {
+      label: "Cross-Team Links",
+      help: "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].type": {
+      label: "Cross-Team Link Type",
+      help: 'Link target kind: "team" allows teams_run into another team, while "agent" allows direct specialist access to one external agent.',
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].targetId": {
+      label: "Cross-Team Link Target",
+      help: "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].description": {
+      label: "Cross-Team Link Description",
+      help: "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows": {
+      label: "Team Workflows",
+      help: "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].id": {
+      label: "Workflow ID",
+      help: "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].name": {
+      label: "Workflow Name",
+      help: "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].description": {
+      label: "Workflow Description",
+      help: "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].default": {
+      label: "Default Workflow",
+      help: "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].managerPrompt": {
+      label: "Manager Workflow Prompt",
+      help: "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].synthesisPrompt": {
+      label: "Synthesis Workflow Prompt",
+      help: "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow": {
+      label: "Legacy Team Workflow",
+      help: "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow.managerPrompt": {
+      label: "Legacy Manager Workflow Prompt",
+      help: "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow.synthesisPrompt": {
+      label: "Legacy Synthesis Workflow Prompt",
+      help: "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset": {
+      label: "Team Preset Metadata",
+      help: "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.id": {
+      label: "Preset ID",
+      help: "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.source": {
+      label: "Preset Source",
+      help: 'Preset origin marker: "bundled" for Maumau starter teams or "user" for locally-authored templates.',
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.version": {
+      label: "Preset Version",
+      help: "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
+      tags: ["advanced"],
     },
     "agents.list.*.identity.avatar": {
       label: "Identity Avatar",
@@ -14321,6 +14641,34 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     "ui.assistant.avatar": {
       label: "Assistant Avatar",
       help: "Assistant avatar image source used in UI surfaces (URL, path, or data URI depending on runtime support). Use trusted assets and consistent branding dimensions for clean rendering.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice": {
+      label: "MauOffice",
+      help: "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.enabled": {
+      label: "MauOffice Enabled",
+      help: "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.maxVisibleWorkers": {
+      label: "MauOffice Max Visible Workers",
+      help: "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+      placeholder: "12",
+      tags: ["performance"],
+    },
+    "ui.mauOffice.idlePackages": {
+      label: "MauOffice Idle Packages",
+      help: "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.idlePackages.enabled": {
+      label: "MauOffice Enabled Idle Packages",
+      help: "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+      placeholder:
+        "jukebox_floor, reading_nook, arcade_corner, snack_table, chess_table, passing_ball_court",
       tags: ["advanced"],
     },
     "browser.evaluateEnabled": {

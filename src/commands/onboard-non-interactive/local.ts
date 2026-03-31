@@ -73,8 +73,9 @@ export async function runNonInteractiveLocalSetup(params: {
   opts: OnboardOptions;
   runtime: RuntimeEnv;
   baseConfig: MaumauConfig;
+  freshInstall: boolean;
 }) {
-  const { opts, runtime, baseConfig } = params;
+  const { opts, runtime, baseConfig, freshInstall } = params;
   const mode = "local" as const;
 
   const workspaceDir = resolveNonInteractiveWorkspaceDir({
@@ -83,7 +84,9 @@ export async function runNonInteractiveLocalSetup(params: {
     defaultWorkspaceDir: DEFAULT_WORKSPACE,
   });
 
-  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir);
+  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir, {
+    freshInstall,
+  });
 
   const inferredAuthChoice = inferAuthChoiceFromFlags(opts);
   if (!opts.authChoice && inferredAuthChoice.matches.length > 1) {

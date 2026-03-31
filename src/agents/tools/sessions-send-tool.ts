@@ -5,6 +5,11 @@ import { callGateway } from "../../gateway/call.js";
 import { normalizeAgentId, resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { SESSION_LABEL_MAX_LENGTH } from "../../sessions/session-label.js";
 import {
+  resolveSessionTeamContext,
+  resolveTeamAgentAccess,
+  resolveTeamSessionAccess,
+} from "../../teams/runtime.js";
+import {
   type GatewayMessageChannel,
   INTERNAL_MESSAGE_CHANNEL,
 } from "../../utils/message-channel.js";
@@ -84,6 +89,10 @@ export function createSessionsSendTool(opts?: {
       const message = readStringParam(params, "message", { required: true });
       const { cfg, mainKey, alias, effectiveRequesterKey, restrictToSpawned } =
         resolveSessionToolContext(opts);
+      const requesterTeamContext = resolveSessionTeamContext({
+        cfg,
+        sessionKey: effectiveRequesterKey,
+      });
 
       const a2aPolicy = createAgentToAgentPolicy(cfg);
       const sessionVisibility = resolveEffectiveSessionToolsVisibility({
@@ -118,20 +127,35 @@ export function createSessionsSendTool(opts?: {
         }
 
         if (requesterAgentId && requestedAgentId && requestedAgentId !== requesterAgentId) {
-          if (!a2aPolicy.enabled) {
-            return jsonResult({
-              runId: crypto.randomUUID(),
-              status: "forbidden",
-              error:
-                "Agent-to-agent messaging is disabled. Set tools.agentToAgent.enabled=true to allow cross-agent sends.",
+          if (requesterTeamContext?.teamId) {
+            const teamAccess = resolveTeamAgentAccess({
+              cfg,
+              sourceTeamId: requesterTeamContext.teamId,
+              targetAgentId: requestedAgentId,
             });
-          }
-          if (!a2aPolicy.isAllowed(requesterAgentId, requestedAgentId)) {
-            return jsonResult({
-              runId: crypto.randomUUID(),
-              status: "forbidden",
-              error: "Agent-to-agent messaging denied by tools.agentToAgent.allow.",
-            });
+            if (!teamAccess.allowed) {
+              return jsonResult({
+                runId: crypto.randomUUID(),
+                status: "forbidden",
+                error: teamAccess.error,
+              });
+            }
+          } else {
+            if (!a2aPolicy.enabled) {
+              return jsonResult({
+                runId: crypto.randomUUID(),
+                status: "forbidden",
+                error:
+                  "Agent-to-agent messaging is disabled. Set tools.agentToAgent.enabled=true to allow cross-agent sends.",
+              });
+            }
+            if (!a2aPolicy.isAllowed(requesterAgentId, requestedAgentId)) {
+              return jsonResult({
+                runId: crypto.randomUUID(),
+                status: "forbidden",
+                error: "Agent-to-agent messaging denied by tools.agentToAgent.allow.",
+              });
+            }
           }
         }
 
@@ -227,20 +251,39 @@ export function createSessionsSendTool(opts?: {
       const announceTimeoutMs = timeoutSeconds === 0 ? 30_000 : timeoutMs;
       const idempotencyKey = crypto.randomUUID();
       let runId: string = idempotencyKey;
-      const visibilityGuard = await createSessionVisibilityGuard({
-        action: "send",
-        requesterSessionKey: effectiveRequesterKey,
-        visibility: sessionVisibility,
-        a2aPolicy,
-      });
-      const access = visibilityGuard.check(resolvedKey);
-      if (!access.allowed) {
-        return jsonResult({
-          runId: crypto.randomUUID(),
-          status: access.status,
-          error: access.error,
-          sessionKey: displayKey,
+      let teamSessionAllowed = false;
+      if (requesterTeamContext?.teamId) {
+        const teamSessionAccess = resolveTeamSessionAccess({
+          cfg,
+          sourceTeamId: requesterTeamContext.teamId,
+          targetSessionKey: resolvedKey,
         });
+        if (!teamSessionAccess.allowed) {
+          return jsonResult({
+            runId: crypto.randomUUID(),
+            status: "forbidden",
+            error: teamSessionAccess.error,
+            sessionKey: displayKey,
+          });
+        }
+        teamSessionAllowed = true;
+      }
+      if (!teamSessionAllowed) {
+        const visibilityGuard = await createSessionVisibilityGuard({
+          action: "send",
+          requesterSessionKey: effectiveRequesterKey,
+          visibility: sessionVisibility,
+          a2aPolicy,
+        });
+        const access = visibilityGuard.check(resolvedKey);
+        if (!access.allowed) {
+          return jsonResult({
+            runId: crypto.randomUUID(),
+            status: access.status,
+            error: access.error,
+            sessionKey: displayKey,
+          });
+        }
       }
 
       const agentMessageContext = buildAgentToAgentMessageContext({

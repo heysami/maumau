@@ -26,6 +26,12 @@ function mockToolFactory(name: string) {
 vi.mock("./tools/agents-list-tool.js", () => ({
   createAgentsListTool: mockToolFactory("agents_list_stub"),
 }));
+vi.mock("./tools/teams-list-tool.js", () => ({
+  createTeamsListTool: mockToolFactory("teams_list_stub"),
+}));
+vi.mock("./tools/teams-run-tool.js", () => ({
+  createTeamsRunTool: mockToolFactory("teams_run_stub"),
+}));
 vi.mock("./tools/browser-tool.js", () => ({
   createBrowserTool: mockToolFactory("browser_stub"),
 }));

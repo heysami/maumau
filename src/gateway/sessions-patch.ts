@@ -68,6 +68,10 @@ function supportsSpawnLineage(storeKey: string): boolean {
   return isSubagentSessionKey(storeKey) || isAcpSessionKey(storeKey);
 }
 
+function supportsTeamMetadata(storeKey: string): boolean {
+  return storeKey === "main" || parseAgentSessionKey(storeKey) != null;
+}
+
 function normalizeSubagentRole(raw: string): "orchestrator" | "leaf" | undefined {
   const normalized = raw.trim().toLowerCase();
   if (normalized === "orchestrator" || normalized === "leaf") {
@@ -169,6 +173,48 @@ export async function applySessionsPatchToStore(params: {
         return invalid("spawnDepth cannot be changed once set");
       }
       next.spawnDepth = normalized;
+    }
+  }
+
+  if ("teamId" in patch) {
+    const raw = patch.teamId;
+    if (raw === null) {
+      if (existing?.teamId) {
+        return invalid("teamId cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsTeamMetadata(storeKey)) {
+        return invalid("teamId is only supported for agent sessions");
+      }
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid teamId: empty");
+      }
+      if (existing?.teamId && existing.teamId !== trimmed) {
+        return invalid("teamId cannot be changed once set");
+      }
+      next.teamId = trimmed;
+    }
+  }
+
+  if ("teamRole" in patch) {
+    const raw = patch.teamRole;
+    if (raw === null) {
+      if (existing?.teamRole) {
+        return invalid("teamRole cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsTeamMetadata(storeKey)) {
+        return invalid("teamRole is only supported for agent sessions");
+      }
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid teamRole: empty");
+      }
+      if (existing?.teamRole && existing.teamRole !== trimmed) {
+        return invalid("teamRole cannot be changed once set");
+      }
+      next.teamRole = trimmed;
     }
   }
 

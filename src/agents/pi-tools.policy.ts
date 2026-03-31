@@ -46,6 +46,7 @@ const SUBAGENT_TOOL_DENY_LEAF = [
   "sessions_list",
   "sessions_history",
   "sessions_spawn",
+  "teams_run",
 ];
 
 /**

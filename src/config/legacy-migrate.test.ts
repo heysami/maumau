@@ -96,6 +96,50 @@ describe("legacy migrate mention routing", () => {
   });
 });
 
+describe("legacy migrate team workflow pattern", () => {
+  it("removes deprecated team workflow pattern fields", () => {
+    const res = migrateLegacyConfig({
+      agents: {
+        list: [{ id: "main", default: true }],
+      },
+      teams: {
+        list: [
+          {
+            id: "vibe-coder",
+            managerAgentId: "main",
+            workflows: [
+              {
+                id: "default",
+                pattern: "manager-specialists",
+                managerPrompt: "Delegate carefully.",
+              },
+            ],
+          },
+          {
+            id: "design-review",
+            managerAgentId: "main",
+            workflow: {
+              pattern: "manager-specialists",
+              synthesisPrompt: "Return one answer.",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(res.changes).toContain(
+      "Removed deprecated team workflow pattern field from 2 workflow entries.",
+    );
+    expect(res.config?.teams?.list?.[0]?.workflows?.[0]).toEqual({
+      id: "default",
+      managerPrompt: "Delegate carefully.",
+    });
+    expect(res.config?.teams?.list?.[1]?.workflow).toEqual({
+      synthesisPrompt: "Return one answer.",
+    });
+  });
+});
+
 describe("legacy migrate heartbeat config", () => {
   it("moves top-level heartbeat into agents.defaults.heartbeat", () => {
     const res = migrateLegacyConfig({

@@ -17,6 +17,7 @@ import {
   parseAgentSessionKey,
 } from "../routing/session-key.js";
 import { emitSessionLifecycleEvent } from "../sessions/session-lifecycle-events.js";
+import { resolveSessionTeamContext, resolveTeamAgentAccess } from "../teams/runtime.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resolveAgentConfig } from "./agent-scope.js";
 import { AGENT_LANE_SUBAGENT } from "./lanes.js";
@@ -69,6 +70,11 @@ export type SpawnSubagentParams = {
     mimeType?: string;
   }>;
   attachMountPath?: string;
+  skipAllowAgentsCheck?: boolean;
+  sessionPatch?: {
+    teamId?: string;
+    teamRole?: string;
+  };
 };
 
 export type SpawnSubagentContext = {
@@ -391,7 +397,28 @@ export async function spawnSubagentDirect(
     ctx.requesterAgentIdOverride ?? parseAgentSessionKey(requesterInternalKey)?.agentId,
   );
   const targetAgentId = requestedAgentId ? normalizeAgentId(requestedAgentId) : requesterAgentId;
-  if (targetAgentId !== requesterAgentId) {
+  const requesterTeamContext = resolveSessionTeamContext({
+    cfg,
+    sessionKey: requesterInternalKey,
+  });
+  const teamSessionPatch: Record<string, unknown> = {};
+  if (params.skipAllowAgentsCheck !== true && requesterTeamContext?.teamId) {
+    const teamAccess = resolveTeamAgentAccess({
+      cfg,
+      sourceTeamId: requesterTeamContext.teamId,
+      targetAgentId,
+    });
+    if (!teamAccess.allowed) {
+      return {
+        status: "forbidden",
+        error: teamAccess.error,
+      };
+    }
+    teamSessionPatch.teamId = requesterTeamContext.teamId;
+    if (teamAccess.teamRole) {
+      teamSessionPatch.teamRole = teamAccess.teamRole;
+    }
+  } else if (targetAgentId !== requesterAgentId && params.skipAllowAgentsCheck !== true) {
     const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
     const allowAny = allowAgents.some((value) => value.trim() === "*");
     const normalizedTargetId = targetAgentId.toLowerCase();
@@ -479,6 +506,9 @@ export async function spawnSubagentDirect(
     spawnDepth: childDepth,
     subagentRole: childCapabilities.role === "main" ? null : childCapabilities.role,
     subagentControlScope: childCapabilities.controlScope,
+    ...teamSessionPatch,
+    ...(params.sessionPatch?.teamId ? { teamId: params.sessionPatch.teamId } : {}),
+    ...(params.sessionPatch?.teamRole ? { teamRole: params.sessionPatch.teamRole } : {}),
   };
   if (resolvedModel) {
     initialChildSessionPatch.model = resolvedModel;

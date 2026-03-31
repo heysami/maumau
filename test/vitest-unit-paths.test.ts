@@ -7,6 +7,7 @@ describe("isUnitConfigTestFile", () => {
     expect(isUnitConfigTestFile("test/format-error.test.ts")).toBe(true);
     expect(isUnitConfigTestFile("ui/src/ui/views/chat.test.ts")).toBe(true);
     expect(isUnitConfigTestFile("ui/src/ui/controllers/config.test.ts")).toBe(true);
+    expect(isUnitConfigTestFile("ui/src/ui/controllers/mau-office.test.ts")).toBe(true);
     expect(isUnitConfigTestFile("ui/src/ui/controllers/multi-user-memory.test.ts")).toBe(true);
     expect(isUnitConfigTestFile("ui/src/ui/navigation.test.ts")).toBe(true);
   });

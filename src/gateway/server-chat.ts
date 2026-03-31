@@ -691,10 +691,13 @@ export function createAgentEventHandler({
     const clientRunId = chatLink?.clientRunId ?? evt.runId;
     const eventRunId = chatLink?.clientRunId ?? evt.runId;
     const eventForClients = chatLink ? { ...evt, runId: eventRunId } : evt;
+    const isHeartbeat = resolveHeartbeatContext(evt.runId)?.isHeartbeat === true;
     const isAborted =
       chatRunState.abortedRuns.has(clientRunId) || chatRunState.abortedRuns.has(evt.runId);
     // Include sessionKey so Control UI can filter tool streams per session.
-    const agentPayload = sessionKey ? { ...eventForClients, sessionKey } : eventForClients;
+    const agentPayload = sessionKey
+      ? { ...eventForClients, sessionKey, ...(isHeartbeat ? { isHeartbeat: true } : {}) }
+      : { ...eventForClients, ...(isHeartbeat ? { isHeartbeat: true } : {}) };
     const last = agentRunSeq.get(evt.runId) ?? 0;
     const isToolEvent = evt.stream === "tool";
     const toolVerbose = isToolEvent ? resolveToolVerboseLevel(evt.runId, sessionKey) : "off";
@@ -706,8 +709,8 @@ export function createAgentEventHandler({
             delete data.result;
             delete data.partialResult;
             return sessionKey
-              ? { ...eventForClients, sessionKey, data }
-              : { ...eventForClients, data };
+              ? { ...eventForClients, sessionKey, data, ...(isHeartbeat ? { isHeartbeat: true } : {}) }
+              : { ...eventForClients, data, ...(isHeartbeat ? { isHeartbeat: true } : {}) };
           })()
         : agentPayload;
     if (last > 0 && evt.seq !== last + 1) {

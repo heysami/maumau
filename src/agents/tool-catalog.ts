@@ -226,6 +226,22 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInMaumauGroup: true,
   },
   {
+    id: "teams_list",
+    label: "teams_list",
+    description: "List teams",
+    sectionId: "agents",
+    profiles: ["coding"],
+    includeInMaumauGroup: true,
+  },
+  {
+    id: "teams_run",
+    label: "teams_run",
+    description: "Run a team workflow",
+    sectionId: "agents",
+    profiles: ["coding"],
+    includeInMaumauGroup: true,
+  },
+  {
     id: "image",
     label: "image",
     description: "Image understanding",

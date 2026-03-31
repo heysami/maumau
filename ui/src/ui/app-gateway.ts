@@ -27,6 +27,13 @@ import {
   removeExecApproval,
 } from "./controllers/exec-approval.ts";
 import { loadHealthState } from "./controllers/health.ts";
+import {
+  applyMauOfficeAgentEvent,
+  applyMauOfficePresence,
+  applyMauOfficeSessionMessageEvent,
+  applyMauOfficeSessionToolEvent,
+  scheduleMauOfficeReload,
+} from "./controllers/mau-office.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions, subscribeSessions } from "./controllers/sessions.ts";
 import {
@@ -79,6 +86,10 @@ type GatewayHost = {
   sessionKey: string;
   chatRunId: string | null;
   refreshSessionsAfterChat: Set<string>;
+  mauOfficeLoading: boolean;
+  mauOfficeError: string | null;
+  mauOfficeState: import("./controllers/mau-office.ts").MauOfficeState;
+  mauOfficeReloadTimer: number | null;
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
   updateAvailable: UpdateAvailable | null;
@@ -94,6 +105,14 @@ type SessionDefaultsSnapshot = {
 type GatewayHostWithShutdownMessage = GatewayHost & {
   pendingShutdownMessage?: string | null;
 };
+
+function hasMauOfficeState(
+  host: GatewayHost,
+): host is GatewayHost & {
+  mauOfficeState: import("./controllers/mau-office.ts").MauOfficeState;
+} {
+  return Boolean((host as { mauOfficeState?: unknown }).mauOfficeState);
+}
 
 export function resolveControlUiClientVersion(params: {
   gatewayUrl: string;
@@ -334,6 +353,13 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (host.onboarding) {
       return;
     }
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeAgentEvent(
+        host.mauOfficeState,
+        evt.payload as AgentEventPayload | undefined,
+        Date.now(),
+      );
+    }
     handleAgentEvent(
       host as unknown as Parameters<typeof handleAgentEvent>[0],
       evt.payload as AgentEventPayload | undefined,
@@ -352,6 +378,13 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host.presenceEntries = payload.presence;
       host.presenceError = null;
       host.presenceStatus = null;
+      if (hasMauOfficeState(host)) {
+        host.mauOfficeState = applyMauOfficePresence(
+          host.mauOfficeState,
+          payload.presence,
+          Date.now(),
+        );
+      }
     }
     return;
   }
@@ -372,7 +405,32 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
+  if (evt.event === "session.tool") {
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeSessionToolEvent(
+        host.mauOfficeState,
+        evt.payload as { sessionKey?: unknown; data?: Record<string, unknown> } | undefined,
+        Date.now(),
+      );
+    }
+    return;
+  }
+
+  if (evt.event === "session.message") {
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeSessionMessageEvent(
+        host.mauOfficeState,
+        evt.payload as { sessionKey?: unknown; message?: Record<string, unknown> } | undefined,
+        Date.now(),
+      );
+    }
+    return;
+  }
+
   if (evt.event === "sessions.changed") {
+    if (hasMauOfficeState(host)) {
+      scheduleMauOfficeReload(host);
+    }
     void loadSessions(host as unknown as MaumauApp);
     return;
   }

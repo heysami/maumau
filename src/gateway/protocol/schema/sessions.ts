@@ -120,6 +120,8 @@ export const SessionsPatchParamsSchema = Type.Object(
     model: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     spawnedBy: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     spawnedWorkspaceDir: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
+    teamId: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
+    teamRole: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     spawnDepth: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()])),
     subagentRole: Type.Optional(
       Type.Union([Type.Literal("orchestrator"), Type.Literal("leaf"), Type.Null()]),

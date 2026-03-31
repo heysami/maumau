@@ -23,6 +23,8 @@ type GatewayClientMock = {
 const gatewayClientInstances: GatewayClientMock[] = [];
 
 vi.mock("./gateway.ts", () => {
+  class GatewayRequestError extends Error {}
+
   function resolveGatewayErrorDetailCode(
     error: { details?: unknown } | null | undefined,
   ): string | null {
@@ -81,7 +83,7 @@ vi.mock("./gateway.ts", () => {
     }
   }
 
-  return { GatewayBrowserClient, resolveGatewayErrorDetailCode };
+  return { GatewayBrowserClient, GatewayRequestError, resolveGatewayErrorDetailCode };
 });
 
 vi.mock("./controllers/chat.ts", async (importOriginal) => {
@@ -139,6 +141,10 @@ function createHost() {
     toolStreamOrder: [],
     toolStreamSyncTimer: null,
     refreshSessionsAfterChat: new Set<string>(),
+    mauOfficeLoading: false,
+    mauOfficeError: null,
+    mauOfficeState: { loaded: false, actorOrder: [], actors: {} },
+    mauOfficeReloadTimer: null,
     execApprovalQueue: [],
     execApprovalError: null,
     updateAvailable: null,

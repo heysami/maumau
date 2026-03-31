@@ -59,6 +59,7 @@ import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./contro
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
   MultiUserMemoryIdentity,
@@ -270,6 +271,8 @@ export class MaumauApp extends LitElement {
   @state() agentsList: AgentsListResult | null = null;
   @state() agentsError: string | null = null;
   @state() agentsSelectedId: string | null = null;
+  @state() teamsSelectedId: string | null = null;
+  @state() teamsSelectedWorkflowId: string | null = null;
   @state() toolsCatalogLoading = false;
   @state() toolsCatalogError: string | null = null;
   @state() toolsCatalogResult: ToolsCatalogResult | null = null;
@@ -303,6 +306,9 @@ export class MaumauApp extends LitElement {
   @state() sessionsPage = 0;
   @state() sessionsPageSize = 25;
   @state() sessionsSelectedKeys: Set<string> = new Set();
+  @state() mauOfficeLoading = false;
+  @state() mauOfficeError: string | null = null;
+  @state() mauOfficeState = createEmptyMauOfficeState();
 
   @state() usageLoading = false;
   @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
@@ -456,14 +462,19 @@ export class MaumauApp extends LitElement {
   private nodesPollInterval: number | null = null;
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;
+  private mauOfficeTicker: number | null = null;
   private logsScrollFrame: number | null = null;
   private toolStreamById = new Map<string, ToolStreamEntry>();
   private toolStreamOrder: string[] = [];
   refreshSessionsAfterChat = new Set<string>();
   basePath = "";
+  mauOfficeReloadTimer: number | null = null;
   private popStateHandler = () =>
     onPopStateInternal(this as unknown as Parameters<typeof onPopStateInternal>[0]);
   private topbarObserver: ResizeObserver | null = null;
+  private visibilityChangeHandler = () => {
+    this.syncMauOfficeTicker();
+  };
   private globalKeydownHandler = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "k") {
       e.preventDefault();
@@ -495,6 +506,7 @@ export class MaumauApp extends LitElement {
       }
     };
     document.addEventListener("keydown", this.globalKeydownHandler);
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
   }
 
@@ -504,6 +516,8 @@ export class MaumauApp extends LitElement {
 
   disconnectedCallback() {
     document.removeEventListener("keydown", this.globalKeydownHandler);
+    document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
+    this.stopMauOfficeTicker();
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -737,6 +751,36 @@ export class MaumauApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  private stopMauOfficeTicker() {
+    if (this.mauOfficeTicker == null) {
+      return;
+    }
+    window.clearInterval(this.mauOfficeTicker);
+    this.mauOfficeTicker = null;
+  }
+
+  syncMauOfficeTicker() {
+    const pageVisible =
+      typeof document === "undefined" ? true : document.visibilityState !== "hidden";
+    const active = this.tab === "mauOffice" && pageVisible;
+    if (!active) {
+      this.stopMauOfficeTicker();
+      return;
+    }
+    if (this.mauOfficeTicker != null) {
+      return;
+    }
+    this.mauOfficeTicker = window.setInterval(() => {
+      if (this.tab !== "mauOffice" || this.mauOfficeState.loaded !== true) {
+        return;
+      }
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      this.mauOfficeState = advanceMauOfficeState(this.mauOfficeState, Date.now());
+    }, 180);
   }
 
   render() {

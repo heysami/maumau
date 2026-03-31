@@ -27,6 +27,7 @@ import type { NodeHostConfig } from "./types.node-host.js";
 import type { PluginsConfig } from "./types.plugins.js";
 import type { SecretsConfig } from "./types.secrets.js";
 import type { SkillsConfig } from "./types.skills.js";
+import type { TeamsConfig } from "./types.teams.js";
 import type { ToolsConfig } from "./types.tools.js";
 
 export type MaumauConfig = {
@@ -91,6 +92,16 @@ export type MaumauConfig = {
       /** Assistant avatar (emoji, short text, or image URL/data URI). */
       avatar?: string;
     };
+    mauOffice?: {
+      /** Enable the MauOffice pixel office scene in Control UI. */
+      enabled?: boolean;
+      /** Maximum number of persistent workers shown before overflow is summarized offsite. */
+      maxVisibleWorkers?: number;
+      idlePackages?: {
+        /** Enabled built-in idle package ids. */
+        enabled?: string[];
+      };
+    };
   };
   secrets?: SecretsConfig;
   skills?: SkillsConfig;
@@ -98,6 +109,7 @@ export type MaumauConfig = {
   models?: ModelsConfig;
   nodeHost?: NodeHostConfig;
   agents?: AgentsConfig;
+  teams?: TeamsConfig;
   tools?: ToolsConfig;
   bindings?: AgentBinding[];
   broadcast?: BroadcastConfig;

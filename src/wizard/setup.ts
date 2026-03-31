@@ -408,6 +408,8 @@ export async function runSetupWizard(
     }
   }
   const shouldKeepExistingConfig = existingConfigAction === "keep";
+  const shouldCreateStarterTeam =
+    !snapshot.exists || treatBootstrapOnlyEmbeddedConfigAsFresh || existingConfigAction === "reset";
 
   const quickstartGateway: QuickstartGatewayDefaults = (() => {
     const hasExisting =
@@ -624,6 +626,10 @@ export async function runSetupWizard(
         secretInputMode: opts.secretInputMode,
       });
     }
+    const { applyStarterTeamOnFreshInstall } = await import("../teams/presets.js");
+    nextConfig = applyStarterTeamOnFreshInstall(nextConfig, {
+      freshInstall: shouldCreateStarterTeam,
+    });
     nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
     await writeConfigFile(nextConfig);
     logConfigUpdated(runtime);
@@ -649,7 +655,9 @@ export async function runSetupWizard(
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
   const { applyLocalSetupWorkspaceConfig } = await import("../commands/onboard-config.js");
-  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir);
+  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir, {
+    freshInstall: shouldCreateStarterTeam,
+  });
   let settings: GatewayWizardSettings;
   const { logConfigUpdated } = await import("../config/logging.js");
   const writeLocalSetupProgressConfig = async (config: MaumauConfig): Promise<MaumauConfig> => {
@@ -850,9 +858,8 @@ export async function runSetupWizard(
     config: nextConfig,
     runtime,
   });
-  const { ensureOnboardedReflectionReviewerArtifacts } = await import(
-    "../commands/onboard-reflection-reviewer.js"
-  );
+  const { ensureOnboardedReflectionReviewerArtifacts } =
+    await import("../commands/onboard-reflection-reviewer.js");
   await ensureOnboardedReflectionReviewerArtifacts({
     config: nextConfig,
     runtime,

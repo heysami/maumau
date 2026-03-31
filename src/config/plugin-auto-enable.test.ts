@@ -200,6 +200,29 @@ describe("applyPluginAutoEnable", () => {
     expect(validated.ok).toBe(true);
   });
 
+  it("auto-enables open-prose when teams are configured", () => {
+    const result = applyPluginAutoEnable({
+      config: {
+        agents: {
+          list: [{ id: "main" }, { id: "vibe-coder-manager" }],
+        },
+        teams: {
+          list: [
+            {
+              id: "vibe-coder",
+              managerAgentId: "vibe-coder-manager",
+              members: [],
+            },
+          ],
+        },
+      },
+      env: {},
+    });
+
+    expect(result.config.plugins?.entries?.["open-prose"]?.enabled).toBe(true);
+    expect(result.changes.join("\n")).toContain("teams configured");
+  });
+
   it("does not re-emit built-in auto-enable changes when rerun with plugins.allow set", () => {
     const first = applyPluginAutoEnable({
       config: {

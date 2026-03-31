@@ -33,6 +33,62 @@ export const FIELD_HELP: Record<string, string> = {
     'Wizard execution mode recorded as "local" or "remote" for the most recent setup flow. Use this to understand whether setup targeted direct local runtime or remote gateway topology.',
   diagnostics:
     "Diagnostics controls for targeted tracing, telemetry export, and cache inspection during debugging. Keep baseline diagnostics minimal in production and enable deeper signals only when investigating issues.",
+  teams:
+    "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+  "teams.list":
+    "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+  "teams.list[].id":
+    "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+  "teams.list[].name":
+    "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+  "teams.list[].description":
+    "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+  "teams.list[].managerAgentId":
+    "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+  "teams.list[].members":
+    "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+  "teams.list[].members[].agentId":
+    "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+  "teams.list[].members[].role":
+    "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+  "teams.list[].members[].description":
+    "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+  "teams.list[].crossTeamLinks":
+    "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+  "teams.list[].crossTeamLinks[].type":
+    'Link target kind: "team" allows teams_run into another team, while "agent" allows direct specialist access to one external agent.',
+  "teams.list[].crossTeamLinks[].targetId":
+    "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+  "teams.list[].crossTeamLinks[].description":
+    "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+  "teams.list[].workflows":
+    "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+  "teams.list[].workflows[].id":
+    "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+  "teams.list[].workflows[].name":
+    "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+  "teams.list[].workflows[].description":
+    "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+  "teams.list[].workflows[].default":
+    "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+  "teams.list[].workflows[].managerPrompt":
+    "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+  "teams.list[].workflows[].synthesisPrompt":
+    "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+  "teams.list[].workflow":
+    "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+  "teams.list[].workflow.managerPrompt":
+    "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+  "teams.list[].workflow.synthesisPrompt":
+    "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+  "teams.list[].preset":
+    "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+  "teams.list[].preset.id":
+    "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+  "teams.list[].preset.source":
+    'Preset origin marker: "bundled" for Maumau starter teams or "user" for locally-authored templates.',
+  "teams.list[].preset.version":
+    "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
   "diagnostics.otel":
     "OpenTelemetry export settings for traces, metrics, and logs emitted by gateway components. Use this when integrating with centralized observability backends and distributed tracing pipelines.",
   "diagnostics.cacheTrace":
@@ -956,6 +1012,16 @@ export const FIELD_HELP: Record<string, string> = {
     "Display name shown for the assistant in UI views, chat chrome, and status contexts. Keep this stable so operators can reliably identify which assistant persona is active.",
   "ui.assistant.avatar":
     "Assistant avatar image source used in UI surfaces (URL, path, or data URI depending on runtime support). Use trusted assets and consistent branding dimensions for clean rendering.",
+  "ui.mauOffice":
+    "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+  "ui.mauOffice.enabled":
+    "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+  "ui.mauOffice.maxVisibleWorkers":
+    "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+  "ui.mauOffice.idlePackages":
+    "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+  "ui.mauOffice.idlePackages.enabled":
+    "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
   plugins:
     "Plugin system controls for enabling extensions, constraining load scope, configuring entries, and tracking installs. Keep plugin policy explicit and least-privilege in production environments.",
   "plugins.enabled":

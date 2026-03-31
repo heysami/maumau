@@ -29,9 +29,19 @@ export async function runNonInteractiveSetup(
   }
 
   if (mode === "remote") {
-    await runNonInteractiveRemoteSetup({ opts, runtime, baseConfig });
+    await runNonInteractiveRemoteSetup({
+      opts,
+      runtime,
+      baseConfig,
+      freshInstall: !snapshot.exists,
+    });
     return;
   }
 
-  await runNonInteractiveLocalSetup({ opts, runtime, baseConfig });
+  await runNonInteractiveLocalSetup({
+    opts,
+    runtime,
+    baseConfig,
+    freshInstall: !snapshot.exists,
+  });
 }

@@ -30,7 +30,9 @@ describe("iconForTab", () => {
     expect(iconForTab("overview")).toBe("barChart");
     expect(iconForTab("channels")).toBe("link");
     expect(iconForTab("instances")).toBe("radio");
+    expect(iconForTab("teams")).toBe("folder");
     expect(iconForTab("sessions")).toBe("fileText");
+    expect(iconForTab("mauOffice")).toBe("spark");
     expect(iconForTab("cron")).toBe("loader");
     expect(iconForTab("skills")).toBe("zap");
     expect(iconForTab("nodes")).toBe("monitor");
@@ -58,6 +60,8 @@ describe("titleForTab", () => {
   it("returns expected titles", () => {
     expect(titleForTab("chat")).toBe("Chat");
     expect(titleForTab("overview")).toBe("Overview");
+    expect(titleForTab("teams")).toBe("Teams");
+    expect(titleForTab("mauOffice")).toBe("MauOffice");
     expect(titleForTab("cron")).toBe("Cron Jobs");
   });
 });
@@ -73,6 +77,8 @@ describe("subtitleForTab", () => {
   it("returns descriptive subtitles", () => {
     expect(subtitleForTab("chat")).toContain("quick interventions");
     expect(subtitleForTab("config")).toContain("maumau.json");
+    expect(subtitleForTab("teams")).toContain("generated workflows");
+    expect(subtitleForTab("mauOffice")).toContain("pixel office");
   });
 });
 
@@ -117,6 +123,8 @@ describe("pathForTab", () => {
   it("returns correct path without base", () => {
     expect(pathForTab("chat")).toBe("/chat");
     expect(pathForTab("overview")).toBe("/overview");
+    expect(pathForTab("teams")).toBe("/teams");
+    expect(pathForTab("mauOffice")).toBe("/mau-office");
   });
 
   it("prepends base path", () => {
@@ -129,7 +137,9 @@ describe("tabFromPath", () => {
   it("returns tab for valid path", () => {
     expect(tabFromPath("/chat")).toBe("chat");
     expect(tabFromPath("/overview")).toBe("overview");
+    expect(tabFromPath("/teams")).toBe("teams");
     expect(tabFromPath("/sessions")).toBe("sessions");
+    expect(tabFromPath("/mau-office")).toBe("mauOffice");
   });
 
   it("returns chat for root path", () => {
@@ -159,6 +169,7 @@ describe("inferBasePathFromPathname", () => {
   it("returns empty string for direct tab path", () => {
     expect(inferBasePathFromPathname("/chat")).toBe("");
     expect(inferBasePathFromPathname("/overview")).toBe("");
+    expect(inferBasePathFromPathname("/teams")).toBe("");
   });
 
   it("infers base path from nested paths", () => {

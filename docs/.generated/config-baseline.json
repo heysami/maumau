@@ -66897,6 +66897,468 @@
       "hasChildren": false
     },
     {
+      "path": "teams",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Teams",
+      "help": "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team List",
+      "help": "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Links",
+      "help": "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Description",
+      "help": "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.targetId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Target",
+      "help": "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.type",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Type",
+      "help": "Link target kind: \"team\" allows teams_run into another team, while \"agent\" allows direct specialist access to one external agent.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Description",
+      "help": "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team ID",
+      "help": "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.managerAgentId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Manager Agent",
+      "help": "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Specialists",
+      "help": "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.members.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.members.*.agentId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Agent",
+      "help": "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Guidance",
+      "help": "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members.*.role",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Role",
+      "help": "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Name",
+      "help": "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Preset Metadata",
+      "help": "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.preset.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset ID",
+      "help": "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset.source",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset Source",
+      "help": "Preset origin marker: \"bundled\" for Maumau starter teams or \"user\" for locally-authored templates.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset.version",
+      "kind": "core",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset Version",
+      "help": "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Team Workflow",
+      "help": "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.default",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.managerPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Manager Workflow Prompt",
+      "help": "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.synthesisPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Synthesis Workflow Prompt",
+      "help": "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Workflows",
+      "help": "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.default",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Default Workflow",
+      "help": "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Description",
+      "help": "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow ID",
+      "help": "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.managerPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Manager Workflow Prompt",
+      "help": "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Name",
+      "help": "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.synthesisPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Synthesis Workflow Prompt",
+      "help": "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+      "hasChildren": false
+    },
+    {
       "path": "tools",
       "kind": "core",
       "type": "object",

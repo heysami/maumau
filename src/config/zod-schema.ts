@@ -20,6 +20,7 @@ import {
   SessionSchema,
   SessionSendPolicySchema,
 } from "./zod-schema.session.js";
+import { TeamsSchema } from "./zod-schema.teams.js";
 
 const BrowserSnapshotDefaultsSchema = z
   .object({
@@ -417,6 +418,19 @@ export const MaumauSchema = z
           })
           .strict()
           .optional(),
+        mauOffice: z
+          .object({
+            enabled: z.boolean().optional(),
+            maxVisibleWorkers: z.number().int().min(1).max(12).optional(),
+            idlePackages: z
+              .object({
+                enabled: z.array(z.string().min(1)).optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -494,6 +508,7 @@ export const MaumauSchema = z
     models: ModelsConfigSchema,
     nodeHost: NodeHostSchema,
     agents: AgentsSchema,
+    teams: TeamsSchema,
     tools: ToolsSchema,
     bindings: BindingsSchema,
     broadcast: BroadcastSchema,

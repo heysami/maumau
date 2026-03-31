@@ -245,6 +245,9 @@ export function buildAgentSystemPrompt(params: {
     agents_list: acpSpawnRuntimeEnabled
       ? 'List Maumau agent ids allowed for sessions_spawn when runtime="subagent" (not ACP harness ids)'
       : "List Maumau agent ids allowed for sessions_spawn",
+    teams_list: "List configured Maumau teams and whether this session can run them",
+    teams_run:
+      "Run a configured Maumau team by spawning its manager agent with the generated OpenProse workflow",
     sessions_list: "List other sessions (incl. sub-agents) with filters/last",
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
@@ -277,6 +280,8 @@ export function buildAgentSystemPrompt(params: {
     "message",
     "gateway",
     "agents_list",
+    "teams_list",
+    "teams_run",
     "sessions_list",
     "sessions_history",
     "sessions_send",

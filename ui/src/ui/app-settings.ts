@@ -18,6 +18,7 @@ import { loadDebug } from "./controllers/debug.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
+import { loadMauOffice } from "./controllers/mau-office.ts";
 import { loadMultiUserMemoryAdmin } from "./controllers/multi-user-memory.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
@@ -55,10 +56,13 @@ type SettingsHost = {
   basePath: string;
   agentsList?: AgentsListResult | null;
   agentsSelectedId?: string | null;
+  teamsSelectedId?: string | null;
+  teamsSelectedWorkflowId?: string | null;
   agentsPanel?: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   pendingGatewayUrl?: string | null;
   systemThemeCleanup?: (() => void) | null;
   pendingGatewayToken?: string | null;
+  syncMauOfficeTicker?: () => void;
 };
 
 export function applySettings(host: SettingsHost, next: UiSettings) {
@@ -230,6 +234,10 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "sessions") {
     await loadSessions(host as unknown as MaumauApp);
   }
+  if (host.tab === "mauOffice") {
+    await loadConfig(host as unknown as MaumauApp);
+    await loadMauOffice(host as unknown as MaumauApp);
+  }
   if (host.tab === "cron") {
     await loadCron(host);
   }
@@ -258,6 +266,10 @@ export async function refreshActiveTab(host: SettingsHost) {
       }
     }
   }
+  if (host.tab === "teams") {
+    await loadAgents(host as unknown as MaumauApp);
+    await loadConfig(host as unknown as MaumauApp);
+  }
   if (host.tab === "nodes") {
     await loadNodes(host as unknown as MaumauApp);
     await loadDevices(host as unknown as MaumauApp);
@@ -278,7 +290,8 @@ export async function refreshActiveTab(host: SettingsHost) {
     host.tab === "appearance" ||
     host.tab === "automation" ||
     host.tab === "infrastructure" ||
-    host.tab === "aiAgents"
+    host.tab === "aiAgents" ||
+    host.tab === "teams"
   ) {
     await loadConfigSchema(host as unknown as MaumauApp);
     await loadConfig(host as unknown as MaumauApp);
@@ -452,6 +465,7 @@ function applyTabSelection(
   } else {
     stopDebugPolling(host as unknown as Parameters<typeof stopDebugPolling>[0]);
   }
+  host.syncMauOfficeTicker?.();
 
   if (options.refreshPolicy === "always" || host.connected) {
     void refreshActiveTab(host);

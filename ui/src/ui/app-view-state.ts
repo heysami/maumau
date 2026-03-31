@@ -4,6 +4,7 @@ import type { CronModelSuggestionsState, CronState } from "./controllers/cron.ts
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type { MauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
   MultiUserMemoryIdentity,
@@ -173,6 +174,8 @@ export type AppViewState = {
   agentsList: AgentsListResult | null;
   agentsError: string | null;
   agentsSelectedId: string | null;
+  teamsSelectedId: string | null;
+  teamsSelectedWorkflowId: string | null;
   toolsCatalogLoading: boolean;
   toolsCatalogError: string | null;
   toolsCatalogResult: ToolsCatalogResult | null;
@@ -205,6 +208,9 @@ export type AppViewState = {
   sessionsPage: number;
   sessionsPageSize: number;
   sessionsSelectedKeys: Set<string>;
+  mauOfficeLoading: boolean;
+  mauOfficeError: string | null;
+  mauOfficeState: MauOfficeState;
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;

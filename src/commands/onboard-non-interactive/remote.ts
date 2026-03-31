@@ -3,6 +3,7 @@ import type { MaumauConfig } from "../../config/config.js";
 import { writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import { type RuntimeEnv, writeRuntimeJson } from "../../runtime.js";
+import { applyStarterTeamOnFreshInstall } from "../../teams/presets.js";
 import { applyWizardMetadata } from "../onboard-helpers.js";
 import type { OnboardOptions } from "../onboard-types.js";
 
@@ -10,8 +11,9 @@ export async function runNonInteractiveRemoteSetup(params: {
   opts: OnboardOptions;
   runtime: RuntimeEnv;
   baseConfig: MaumauConfig;
+  freshInstall: boolean;
 }) {
-  const { opts, runtime, baseConfig } = params;
+  const { opts, runtime, baseConfig, freshInstall } = params;
   const mode = "remote" as const;
 
   const remoteUrl = opts.remoteUrl?.trim();
@@ -32,6 +34,7 @@ export async function runNonInteractiveRemoteSetup(params: {
       },
     },
   };
+  nextConfig = applyStarterTeamOnFreshInstall(nextConfig, { freshInstall });
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
   logConfigUpdated(runtime);

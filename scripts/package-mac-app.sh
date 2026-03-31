@@ -72,9 +72,16 @@ ensure_control_ui_assets() {
     return 0
   fi
 
+  local cached_control_ui_src="$ROOT_DIR/dist/Maumau.app/Contents/Resources/control-ui"
+  if [[ -d "$cached_control_ui_src" && -f "$cached_control_ui_src/index.html" ]]; then
+    echo "🖥  Restoring cached Control UI assets from existing app bundle"
+    mkdir -p "$control_ui_src"
+    cp -R "$cached_control_ui_src/." "$control_ui_src/"
+    return 0
+  fi
+
   if [[ "${SKIP_UI_BUILD:-0}" == "1" ]]; then
-    echo "ERROR: Control UI assets missing at $control_ui_src and SKIP_UI_BUILD=1. Run pnpm ui:build first or unset SKIP_UI_BUILD." >&2
-    exit 1
+    echo "🖥  Control UI assets missing at $control_ui_src; overriding SKIP_UI_BUILD=1 for a one-time rebuild"
   fi
 
   echo "🖥  Control UI assets missing at copy time; rebuilding (ui:build)"
@@ -138,6 +145,42 @@ maybe_enable_adhoc_signing_for_debug() {
     export ALLOW_ADHOC_SIGNING=1
     echo "🪄 No signing identity found for debug bundle; falling back to ad-hoc signing"
   fi
+}
+
+STAGED_CONTROL_UI_DIR=""
+
+cleanup_staged_control_ui_dir() {
+  if [[ -n "${STAGED_CONTROL_UI_DIR:-}" && -d "$STAGED_CONTROL_UI_DIR" ]]; then
+    rm -rf "$STAGED_CONTROL_UI_DIR"
+  fi
+}
+
+trap cleanup_staged_control_ui_dir EXIT
+
+stage_control_ui_assets_for_packaging() {
+  if [[ "${SKIP_UI_BUILD:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  ensure_control_ui_assets
+  STAGED_CONTROL_UI_DIR="$(mktemp -d "${TMPDIR:-/tmp}/maumau-control-ui.XXXXXX")"
+  cp -R "$ROOT_DIR/dist/control-ui/." "$STAGED_CONTROL_UI_DIR/"
+}
+
+restore_staged_control_ui_assets() {
+  if [[ -z "${STAGED_CONTROL_UI_DIR:-}" || ! -d "$STAGED_CONTROL_UI_DIR" ]]; then
+    return 0
+  fi
+
+  local control_ui_src="$ROOT_DIR/dist/control-ui"
+  if [[ -d "$control_ui_src" && -f "$control_ui_src/index.html" ]]; then
+    return 0
+  fi
+
+  echo "🖥  Restoring prebuilt Control UI assets after JS build"
+  rm -rf "$control_ui_src"
+  mkdir -p "$control_ui_src"
+  cp -R "$STAGED_CONTROL_UI_DIR/." "$control_ui_src/"
 }
 
 sparkle_canonical_build_from_version() {
@@ -271,9 +314,12 @@ if [[ "$AUTO_CHECKS" == "true" && ! "$APP_BUILD" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+stage_control_ui_assets_for_packaging
+
 if [[ "${SKIP_TSC:-0}" != "1" ]]; then
   echo "📦 Building JS (pnpm build)"
   (cd "$ROOT_DIR" && pnpm build)
+  restore_staged_control_ui_assets
 else
   echo "📦 Skipping JS build (SKIP_TSC=1)"
 fi

@@ -43,6 +43,7 @@ describe("TAB_GROUPS", () => {
   it("does not expose unfinished settings slices in the sidebar", () => {
     const settings = navigation.TAB_GROUPS.find((group) => group.label === "settings");
     expect(settings?.tabs).toEqual([
+      "users",
       "config",
       "communications",
       "appearance",
@@ -61,5 +62,17 @@ describe("TAB_GROUPS", () => {
     expect(navigation.tabFromPath("/infrastructure")).toBe("infrastructure");
     expect(navigation.tabFromPath("/ai-agents")).toBe("aiAgents");
     expect(navigation.tabFromPath("/config")).toBe("config");
+  });
+
+  it("publishes teams in the agent sidebar group", () => {
+    const agent = navigation.TAB_GROUPS.find((group) => group.label === "agent");
+    expect(agent?.tabs).toContain("teams");
+    expect(navigation.tabFromPath("/teams")).toBe("teams");
+  });
+
+  it("publishes MauOffice in the control sidebar group", () => {
+    const control = navigation.TAB_GROUPS.find((group) => group.label === "control");
+    expect(control?.tabs).toContain("mauOffice");
+    expect(navigation.tabFromPath("/mau-office")).toBe("mauOffice");
   });
 });
