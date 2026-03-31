@@ -171,10 +171,36 @@ export type WorkerRigAnimation = {
   frames: string[];
 };
 
+export const MAU_OFFICE_DIRECTIONAL_WORKER_ANIMATION_IDS = [
+  "stand",
+  "sit",
+  "walk",
+  "reach",
+  "dance",
+  "jump",
+  "chase",
+  "chat",
+] as const;
+
+export const MAU_OFFICE_WORKER_ANIMATION_IDS = [
+  ...MAU_OFFICE_DIRECTIONAL_WORKER_ANIMATION_IDS,
+  "sleep-floor",
+] as const;
+
+export type MauOfficeDirectionalWorkerAnimationId =
+  (typeof MAU_OFFICE_DIRECTIONAL_WORKER_ANIMATION_IDS)[number];
+export type MauOfficeWorkerAnimationId = (typeof MAU_OFFICE_WORKER_ANIMATION_IDS)[number];
+
 export type WorkerRigDefinition = {
   stand: Record<MauOfficeDirection, WorkerRigAnimation>;
   sit: Record<MauOfficeDirection, WorkerRigAnimation>;
   walk: Record<MauOfficeDirection, WorkerRigAnimation>;
+  reach: Record<MauOfficeDirection, WorkerRigAnimation>;
+  dance: Record<MauOfficeDirection, WorkerRigAnimation>;
+  jump: Record<MauOfficeDirection, WorkerRigAnimation>;
+  chase: Record<MauOfficeDirection, WorkerRigAnimation>;
+  chat: Record<MauOfficeDirection, WorkerRigAnimation>;
+  sleepFloor: WorkerRigAnimation;
 };
 
 export type WorkerRigRegistry = Record<MauOfficeWorkerRigId, WorkerRigDefinition>;
@@ -1072,6 +1098,7 @@ function makePropSprites(): MauOfficeSpritePlacement[] {
     tileY: 15,
     tileWidth: 4,
     tileHeight: 4,
+    zOffset: -300,
     assets: {
       topLeft: joinAsset("tiles/rug-r1c1.png"),
       topCenter: joinAsset("tiles/rug-r1c2.png"),
@@ -1170,7 +1197,6 @@ function makePropSprites(): MauOfficeSpritePlacement[] {
     tileWidth: 6,
     tileHeight: 2,
     capTileWidth: 1,
-    zOffset: MAU_OFFICE_COUNTER_OCCLUDER_Z_OFFSET,
     assets: {
       left: joinAsset("items/counter-left-v1.png"),
       center: joinAsset("items/counter-mid-v1.png"),
@@ -1531,6 +1557,26 @@ export const MAU_OFFICE_LAYOUT = {
       layer: 3,
       facingOverride: "north",
     }),
+    break_volley_1: makeAnchor({
+      id: "break_volley_1",
+      tileX: 3.25,
+      tileY: 15.75,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "east",
+    }),
+    break_volley_2: makeAnchor({
+      id: "break_volley_2",
+      tileX: 6.25,
+      tileY: 15.75,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "west",
+    }),
     break_table_1: makeAnchor({
       id: "break_table_1",
       tileX: 4,
@@ -1550,6 +1596,56 @@ export const MAU_OFFICE_LAYOUT = {
       pose: "sit",
       layer: 3,
       facingOverride: "south",
+    }),
+    break_volley_3: makeAnchor({
+      id: "break_volley_3",
+      tileX: 3.5,
+      tileY: 18,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "east",
+    }),
+    break_volley_4: makeAnchor({
+      id: "break_volley_4",
+      tileX: 6,
+      tileY: 18,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "west",
+    }),
+    break_chase_1: makeAnchor({
+      id: "break_chase_1",
+      tileX: 9.5,
+      tileY: 15.5,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "east",
+    }),
+    break_chase_2: makeAnchor({
+      id: "break_chase_2",
+      tileX: 12.25,
+      tileY: 16,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "west",
+    }),
+    break_chase_3: makeAnchor({
+      id: "break_chase_3",
+      tileX: 10.75,
+      tileY: 18,
+      roomId: "break",
+      nodeId: "break_center",
+      pose: "stand",
+      layer: 3,
+      facingOverride: "north",
     }),
     break_game_1: makeAnchor({
       id: "break_game_1",
@@ -1653,27 +1749,40 @@ export const MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS = [
 export const MAU_OFFICE_IDLE_PACKAGES: IdlePackageDefinition[] = [
   {
     id: "passing_ball_court",
-    label: "Foosball match",
+    label: "Passing ball rally",
     cooldownMs: 60_000,
     activityDefinitions: [
       {
-        id: "break-foosball-match",
-        label: "Playing foosball",
-        slotLayout: ["break_game_1", "break_game_2", "break_game_3", "break_game_4"],
-        bubbleTemplates: ["nice shot", "good save", "rematch?", "close one"],
+        id: "break-passing-ball",
+        label: "Passing the ball",
+        slotLayout: ["break_volley_1", "break_volley_2", "break_volley_3", "break_volley_4"],
+        bubbleTemplates: ["heads up", "nice pass", "got it", "mine"],
       },
     ],
   },
   {
     id: "chess_table",
-    label: "Snack-table break",
+    label: "Chatting pair",
     cooldownMs: 48_000,
     activityDefinitions: [
       {
-        id: "break-snack-table",
-        label: "Taking a table break",
+        id: "break-chatting-pair",
+        label: "Chatting by the lounge table",
         slotLayout: ["break_table_1", "break_table_2"],
-        bubbleTemplates: ["finally, break!", "tea time"],
+        bubbleTemplates: ["one sec", "wait, really?"],
+      },
+    ],
+  },
+  {
+    id: "chasing_loop",
+    label: "Chasing loop",
+    cooldownMs: 48_000,
+    activityDefinitions: [
+      {
+        id: "break-chasing-loop",
+        label: "Chasing each other",
+        slotLayout: ["break_chase_1", "break_chase_2", "break_chase_3"],
+        bubbleTemplates: ["catch me", "almost had you", "not today"],
       },
     ],
   },
@@ -1683,21 +1792,73 @@ export const MAU_OFFICE_IDLE_PACKAGES: IdlePackageDefinition[] = [
     cooldownMs: 42_000,
     activityDefinitions: [
       {
-        id: "break-arcade-corner",
-        label: "Playing a quick game",
+        id: "break-arcade-reach",
+        label: "Playing arcade",
         slotLayout: ["break_arcade"],
         bubbleTemplates: ["high score run"],
       },
     ],
   },
   {
-    id: "jukebox_floor",
-    label: "Jukebox floor",
+    id: "foosball_side_1",
+    label: "Foosball side",
     cooldownMs: 42_000,
     activityDefinitions: [
       {
-        id: "break-jukebox-floor",
-        label: "Stretching near the neon sign",
+        id: "break-foosball-side-1",
+        label: "Playing foosball",
+        slotLayout: ["break_game_1"],
+        bubbleTemplates: ["nice shot"],
+      },
+    ],
+  },
+  {
+    id: "foosball_side_2",
+    label: "Foosball side",
+    cooldownMs: 42_000,
+    activityDefinitions: [
+      {
+        id: "break-foosball-side-2",
+        label: "Playing foosball",
+        slotLayout: ["break_game_2"],
+        bubbleTemplates: ["close one"],
+      },
+    ],
+  },
+  {
+    id: "foosball_side_3",
+    label: "Foosball side",
+    cooldownMs: 42_000,
+    activityDefinitions: [
+      {
+        id: "break-foosball-side-3",
+        label: "Playing foosball",
+        slotLayout: ["break_game_3"],
+        bubbleTemplates: ["rematch?"],
+      },
+    ],
+  },
+  {
+    id: "foosball_side_4",
+    label: "Foosball side",
+    cooldownMs: 42_000,
+    activityDefinitions: [
+      {
+        id: "break-foosball-side-4",
+        label: "Playing foosball",
+        slotLayout: ["break_game_4"],
+        bubbleTemplates: ["bank shot"],
+      },
+    ],
+  },
+  {
+    id: "jukebox_floor",
+    label: "Dance floor",
+    cooldownMs: 42_000,
+    activityDefinitions: [
+      {
+        id: "break-dance-floor",
+        label: "Dancing in place",
         slotLayout: ["break_jukebox"],
         bubbleTemplates: ["tiny dance break"],
       },
@@ -1705,27 +1866,14 @@ export const MAU_OFFICE_IDLE_PACKAGES: IdlePackageDefinition[] = [
   },
   {
     id: "reading_nook",
-    label: "Reading nook",
+    label: "Sleeping floor spot",
     cooldownMs: 42_000,
     activityDefinitions: [
       {
-        id: "break-reading-nook",
-        label: "Reading in the nook",
+        id: "break-sleep-floor",
+        label: "Sleeping on the floor",
         slotLayout: ["break_reading"],
-        bubbleTemplates: ["catching up", "quiet corner"],
-      },
-    ],
-  },
-  {
-    id: "snack_table",
-    label: "Snack shelf",
-    cooldownMs: 42_000,
-    activityDefinitions: [
-      {
-        id: "break-snack-shelf",
-        label: "Grabbing a snack",
-        slotLayout: ["break_snack"],
-        bubbleTemplates: ["snack run"],
+        bubbleTemplates: ["zzz"],
       },
     ],
   },
@@ -1765,7 +1913,7 @@ export const MAU_OFFICE_ROOM_SIGN_ASSET = joinAsset("ui/room-sign.png");
 
 function workerAnimationFrames(
   rigId: MauOfficeWorkerRigId,
-  pose: "sit" | "stand" | "walk",
+  pose: MauOfficeDirectionalWorkerAnimationId,
   direction: MauOfficeDirection,
   frameCount: number,
 ): string[] {
@@ -1776,7 +1924,7 @@ function workerAnimationFrames(
 
 function poseAnimation(
   rigId: MauOfficeWorkerRigId,
-  pose: "sit" | "stand" | "walk",
+  pose: MauOfficeDirectionalWorkerAnimationId,
   direction: MauOfficeDirection,
   frameCount: number,
   fps: number,
@@ -1784,6 +1932,19 @@ function poseAnimation(
   return {
     fps,
     frames: workerAnimationFrames(rigId, pose, direction, frameCount),
+  };
+}
+
+function sleepFloorAnimation(
+  rigId: MauOfficeWorkerRigId,
+  frameCount: number,
+  fps: number,
+): WorkerRigAnimation {
+  return {
+    fps,
+    frames: Array.from({ length: frameCount }, (_, index) =>
+      joinAsset(`workers/${rigId}/sleep-floor/frame_${String(index).padStart(3, "0")}.png`),
+    ),
   };
 }
 
@@ -1814,6 +1975,37 @@ function buildWorkerRig(rigId: MauOfficeWorkerRigId): WorkerRigDefinition {
       south: poseAnimation(rigId, "walk", "south", 6, 6),
       west: poseAnimation(rigId, "walk", "west", 6, 6),
     },
+    reach: {
+      north: poseAnimation(rigId, "reach", "north", 4, 3),
+      east: poseAnimation(rigId, "reach", "east", 4, 3),
+      south: poseAnimation(rigId, "reach", "south", 4, 3),
+      west: poseAnimation(rigId, "reach", "west", 4, 3),
+    },
+    dance: {
+      north: poseAnimation(rigId, "dance", "north", 4, 5),
+      east: poseAnimation(rigId, "dance", "east", 4, 5),
+      south: poseAnimation(rigId, "dance", "south", 4, 5),
+      west: poseAnimation(rigId, "dance", "west", 4, 5),
+    },
+    jump: {
+      north: poseAnimation(rigId, "jump", "north", 4, 5),
+      east: poseAnimation(rigId, "jump", "east", 4, 5),
+      south: poseAnimation(rigId, "jump", "south", 4, 5),
+      west: poseAnimation(rigId, "jump", "west", 4, 5),
+    },
+    chase: {
+      north: poseAnimation(rigId, "chase", "north", 4, 6),
+      east: poseAnimation(rigId, "chase", "east", 4, 6),
+      south: poseAnimation(rigId, "chase", "south", 4, 6),
+      west: poseAnimation(rigId, "chase", "west", 4, 6),
+    },
+    chat: {
+      north: poseAnimation(rigId, "chat", "north", 4, 3),
+      east: poseAnimation(rigId, "chat", "east", 4, 3),
+      south: poseAnimation(rigId, "chat", "south", 4, 3),
+      west: poseAnimation(rigId, "chat", "west", 4, 3),
+    },
+    sleepFloor: sleepFloorAnimation(rigId, 4, 2),
   };
 }
 
@@ -1829,8 +2021,20 @@ export function resolveMauOfficeWorkerRig(rigId: MauOfficeWorkerRigId): WorkerRi
   return MAU_OFFICE_WORKER_RIGS[rigId] ?? MAU_OFFICE_WORKER_RIGS.cat;
 }
 
+export function resolveMauOfficeWorkerAnimation(
+  rigId: MauOfficeWorkerRigId,
+  animationId: MauOfficeWorkerAnimationId,
+  direction: MauOfficeDirection,
+): WorkerRigAnimation {
+  const rig = resolveMauOfficeWorkerRig(rigId);
+  if (animationId === "sleep-floor") {
+    return rig.sleepFloor;
+  }
+  return rig[animationId][direction] ?? rig[animationId].south;
+}
+
 const DEFAULT_IDLE_PACKAGE_IDS = MAU_OFFICE_IDLE_PACKAGES.map((pkg) => pkg.id);
-const MAU_OFFICE_ASSET_VERSION = "20260331-landscape-office-v7";
+const MAU_OFFICE_ASSET_VERSION = "20260331-worker-animation-v10";
 
 export function resolveMauOfficeAssetUrl(basePath: string, assetPath: string): string {
   const normalizedBase = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;

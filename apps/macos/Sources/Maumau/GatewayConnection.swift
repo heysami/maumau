@@ -730,7 +730,6 @@ extension GatewayConnection {
         thinking: String,
         idempotencyKey: String,
         attachments: [MaumauChatAttachmentPayload],
-        replyLanguage: String? = nil,
         timeoutMs: Int = 30000) async throws -> MaumauChatSendResponse
     {
         let resolvedKey = self.canonicalizeSessionKey(sessionKey)
@@ -752,10 +751,6 @@ extension GatewayConnection {
                 ]
             }
             params["attachments"] = AnyCodable(encoded)
-        }
-
-        if let replyLanguage, !replyLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            params["replyLanguage"] = AnyCodable(replyLanguage)
         }
 
         return try await self.requestDecoded(

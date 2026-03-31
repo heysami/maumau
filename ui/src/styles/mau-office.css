@@ -193,9 +193,51 @@
   image-rendering: crisp-edges;
 }
 
+.mau-office__worker-sprite-fallback {
+  position: absolute;
+  inset: 12px 18px 8px;
+  display: none;
+  z-index: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 2px solid #8d8a85;
+  background: rgba(92, 92, 92, 0.92);
+  color: #f3eee5;
+  font-family: "Silkscreen", monospace;
+  font-size: 8px;
+  line-height: 1.25;
+  text-align: center;
+  text-transform: uppercase;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.mau-office__worker--fallback .mau-office__worker-sprite {
+  display: none;
+}
+
+.mau-office__worker--fallback .mau-office__worker-sprite-fallback {
+  display: flex;
+}
+
 .mau-office__worker-overlay {
   position: absolute;
   display: block;
+  pointer-events: none;
+}
+
+.mau-office__activity-ball {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #5f4a2d;
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 35% 35%, #fff9d6 0 28%, transparent 29%),
+    linear-gradient(135deg, #fff4b0 0 50%, #e5c55e 50% 100%);
+  box-shadow: 0 2px 0 rgba(64, 43, 22, 0.22);
   pointer-events: none;
 }
 

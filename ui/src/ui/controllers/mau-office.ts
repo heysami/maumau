@@ -1,5 +1,6 @@
 import {
   buildAgentMainSessionKey,
+  isSubagentSessionKey,
   parseAgentSessionKey,
   toAgentStoreSessionKey,
 } from "../../../../src/routing/session-key.js";
@@ -20,6 +21,7 @@ import {
   type MauOfficeDirection,
   type MauOfficeRoomId,
   type MauOfficeUiConfig,
+  type MauOfficeWorkerAnimationId,
   type MauOfficeWorkerRigId,
   type OfficeActorKind,
 } from "../mau-office-contract.ts";
@@ -49,8 +51,15 @@ const MAX_VISITOR_WORKERS = 4;
 const BREAK_ROOM_ANCHOR_IDS = [
   "break_arcade",
   "break_snack",
+  "break_volley_1",
+  "break_volley_2",
   "break_table_1",
   "break_table_2",
+  "break_volley_3",
+  "break_volley_4",
+  "break_chase_1",
+  "break_chase_2",
+  "break_chase_3",
   "break_game_1",
   "break_game_2",
   "break_game_3",
@@ -58,6 +67,18 @@ const BREAK_ROOM_ANCHOR_IDS = [
   "break_jukebox",
   "break_reading",
 ] as const;
+const SOLO_IDLE_PACKAGE_IDS = [
+  "arcade_corner",
+  "foosball_side_1",
+  "foosball_side_2",
+  "foosball_side_3",
+  "foosball_side_4",
+  "jukebox_floor",
+  "reading_nook",
+] as const;
+const RANDOM_GROUP_IDLE_PACKAGE_IDS = ["chess_table", "chasing_loop"] as const;
+const PASSING_BALL_BEAT_MS = 900;
+const CHASING_LOOP_CYCLE_MS = 2_800;
 const BLOCKING_SPRITE_KINDS = new Set([
   "arcade",
   "bench",
@@ -151,6 +172,7 @@ export type OfficeActor = {
   y: number;
   facing: MauOfficeDirection;
   rigId: MauOfficeWorkerRigId;
+  animationId?: MauOfficeWorkerAnimationId | null;
   currentActivity: OfficeActivity;
   snapshotActivity: OfficeActivity | null;
   queuedActivity: OfficeActivity | null;
@@ -169,6 +191,7 @@ export type MauOfficeState = {
   presenceEntries: PresenceEntry[];
   toolsCatalogByAgentId: Record<string, ToolsCatalogResult>;
   heartbeatSessionKeys: Record<string, true>;
+  activeHeartbeatSessionKeys: Record<string, number>;
   actors: Record<string, OfficeActor>;
   actorOrder: string[];
   visibleAgentIds: string[];
@@ -244,6 +267,8 @@ const DEFAULT_IDLE_ACTIVITY: OfficeActivity = {
 };
 
 export const MAU_OFFICE_SUPPORT_DIALOGUE_WINDOW_MS = SUPPORT_ACTIVITY_WINDOW_MS;
+export const MAU_OFFICE_PASSING_BALL_BEAT_MS = PASSING_BALL_BEAT_MS;
+export const MAU_OFFICE_CHASING_LOOP_CYCLE_MS = CHASING_LOOP_CYCLE_MS;
 
 function createEmptyActivity(): OfficeActivity {
   return { ...DEFAULT_IDLE_ACTIVITY };
@@ -263,12 +288,14 @@ function sameActivityPlan(
   return left.kind === right.kind && left.roomId === right.roomId && left.anchorId === right.anchorId;
 }
 
-function snapshotActivityWindowMs(row: Pick<GatewaySessionRow, "kind">): number {
+function snapshotActivityWindowMs(
+  row: Pick<GatewaySessionRow, "kind" | "key" | "parentSessionKey" | "spawnedBy">,
+): number {
   return isSupportSessionRow(row) ? SUPPORT_ACTIVITY_WINDOW_MS : SNAPSHOT_ACTIVE_WINDOW_MS;
 }
 
 function isSnapshotRowActive(
-  row: Pick<GatewaySessionRow, "kind" | "updatedAt"> | null | undefined,
+  row: Pick<GatewaySessionRow, "kind" | "key" | "parentSessionKey" | "spawnedBy" | "updatedAt"> | null | undefined,
   nowMs: number,
 ): boolean {
   const updatedAtMs = row?.updatedAt ?? 0;
@@ -347,6 +374,20 @@ function hashString(value: string): number {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
   return hash;
+}
+
+function stableShuffleByKey<T>(
+  values: readonly T[],
+  seed: string,
+  keyOf: (value: T) => string,
+): T[] {
+  return [...values]
+    .map((value) => ({
+      value,
+      rank: hashString(`${seed}:${keyOf(value)}`),
+    }))
+    .sort((left, right) => left.rank - right.rank)
+    .map((entry) => entry.value);
 }
 
 function normalizeDirection(from: { x: number; y: number }, to: { x: number; y: number }): MauOfficeDirection {
@@ -466,8 +507,22 @@ function labelForAgent(agent: AgentsListResult["agents"][number]): string {
   return agent.identity?.name?.trim() || agent.name?.trim() || agent.id;
 }
 
+function isMeetingSessionKey(sessionKey: string): boolean {
+  return isSubagentSessionKey(sessionKey);
+}
+
 function isUserSessionKey(sessionKey: string): boolean {
-  return sessionKey.includes(":direct:") || sessionKey.includes(":group:");
+  return !isMeetingSessionKey(sessionKey) && (sessionKey.includes(":direct:") || sessionKey.includes(":group:"));
+}
+
+function roleHintForSessionKey(sessionKey: string): ActorRoleHint {
+  if (isMeetingSessionKey(sessionKey)) {
+    return "meeting";
+  }
+  if (isUserSessionKey(sessionKey)) {
+    return "support";
+  }
+  return "desk";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -526,19 +581,56 @@ function isConfiguredHeartbeatSession(state: Pick<MauOfficeState, "heartbeatSess
   return Boolean(state.heartbeatSessionKeys[sessionKey]);
 }
 
+function isActiveHeartbeatSession(
+  state: Pick<MauOfficeState, "heartbeatSessionKeys" | "activeHeartbeatSessionKeys">,
+  sessionKey: string,
+  nowMs: number,
+): boolean {
+  return (
+    isConfiguredHeartbeatSession(state, sessionKey) ||
+    (state.activeHeartbeatSessionKeys[sessionKey] ?? 0) > nowMs
+  );
+}
+
 function isActiveHeartbeatEvent(payload: AgentEventPayload | undefined): boolean {
   return payload?.isHeartbeat === true;
 }
 
-function visitorRoleHintForSessionKey(sessionKey: string): ActorRoleHint {
-  if (isUserSessionKey(sessionKey)) {
-    return "support";
-  }
-  return sessionKey.includes(":subagent:") ? "meeting" : "desk";
+function retainActiveHeartbeatSessionKeys(
+  activeHeartbeatSessionKeys: Record<string, number>,
+  nowMs: number,
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(activeHeartbeatSessionKeys).filter(([, expiresAtMs]) => expiresAtMs > nowMs),
+  );
 }
 
-function isSupportSessionRow(row: Pick<GatewaySessionRow, "kind">): boolean {
-  return row.kind === "direct" || row.kind === "group";
+function touchActiveHeartbeatSession(
+  activeHeartbeatSessionKeys: Record<string, number>,
+  sessionKey: string,
+  nowMs: number,
+  durationMs = EVENT_ACTIVITY_WINDOW_MS,
+) {
+  activeHeartbeatSessionKeys[sessionKey] = Math.max(
+    activeHeartbeatSessionKeys[sessionKey] ?? 0,
+    nowMs + durationMs,
+  );
+}
+
+function visitorRoleHintForSessionKey(sessionKey: string): ActorRoleHint {
+  return roleHintForSessionKey(sessionKey);
+}
+
+function isMeetingSessionRow(
+  row: Pick<GatewaySessionRow, "key" | "parentSessionKey" | "spawnedBy">,
+): boolean {
+  return Boolean(row.parentSessionKey || row.spawnedBy || isMeetingSessionKey(row.key));
+}
+
+function isSupportSessionRow(
+  row: Pick<GatewaySessionRow, "kind" | "key" | "parentSessionKey" | "spawnedBy">,
+): boolean {
+  return (row.kind === "direct" || row.kind === "group") && !isMeetingSessionRow(row);
 }
 
 function normalizeToolEntries(catalog: ToolsCatalogResult | undefined): ToolCatalogEntry[] {
@@ -1072,6 +1164,26 @@ function preserveActiveSupportDialogue(
   return { ...activity, bubbleText: dialogue.text };
 }
 
+function clearSupportPresentationState(
+  actor: Pick<OfficeActor, "bubbles" | "latestSupportDialogue">,
+) {
+  actor.latestSupportDialogue = null;
+  actor.bubbles = actor.bubbles.filter((bubble) => bubble.kind !== "customer_support");
+}
+
+function clearSupportPresentationStateIfLeavingSupport(
+  actor: Pick<OfficeActor, "bubbles" | "latestSupportDialogue">,
+  activity: Pick<OfficeActivity, "kind"> | null | undefined,
+) {
+  if (activity?.kind === "customer_support") {
+    return;
+  }
+  if (!actor.latestSupportDialogue && !actor.bubbles.some((bubble) => bubble.kind === "customer_support")) {
+    return;
+  }
+  clearSupportPresentationState(actor);
+}
+
 function createActivity(params: {
   id: string;
   kind: MauOfficeActivityKind;
@@ -1120,6 +1232,31 @@ function createHeartbeatMeetingActivity(
   });
 }
 
+function createMeetingActivityForActor(
+  actor: Pick<OfficeActor, "kind" | "homeAnchorId" | "roleHint">,
+  params: {
+    id: string;
+    label: string;
+    source: ActivitySource;
+    bubbleText?: string;
+    expiresAtMs?: number;
+  },
+): OfficeActivity {
+  return createActivity({
+    id: params.id,
+    kind: "meeting",
+    label: params.label,
+    bubbleText: params.bubbleText,
+    roomId: "meeting",
+    anchorId:
+      actor.kind === "visitor"
+        ? visitorMeetingAnchor()
+        : meetingAnchorForHome(actor.homeAnchorId, actor.roleHint === "meeting"),
+    source: params.source,
+    expiresAtMs: params.expiresAtMs,
+  });
+}
+
 function snapshotActivityForRow(
   actor: Pick<OfficeActor, "roleHint" | "homeAnchorId">,
   row: GatewaySessionRow | null,
@@ -1142,7 +1279,17 @@ function snapshotActivityForRow(
       source: "snapshot",
     });
   }
-  if (row.kind === "direct" || row.kind === "group") {
+  if (isMeetingSessionRow(row)) {
+    return createActivity({
+      id: "snapshot-meeting",
+      kind: "meeting",
+      label: "Collaborating in a meeting",
+      roomId: "meeting",
+      anchorId: meetingAnchorForHome(actor.homeAnchorId, actor.roleHint === "meeting"),
+      source: "snapshot",
+    });
+  }
+  if (isSupportSessionRow(row)) {
     const isSupportVisitor = actor.homeAnchorId === "outside_support";
     return createActivity({
       id: "snapshot-support",
@@ -1156,16 +1303,6 @@ function snapshotActivityForRow(
         isSupportVisitor
           ? visitorSupportAnchor()
           : supportAnchorForHome(actor.homeAnchorId),
-      source: "snapshot",
-    });
-  }
-  if (row.parentSessionKey || row.spawnedBy || row.key.includes(":subagent:")) {
-    return createActivity({
-      id: "snapshot-meeting",
-      kind: "meeting",
-      label: "Collaborating in a meeting",
-      roomId: "meeting",
-      anchorId: meetingAnchorForHome(actor.homeAnchorId, actor.roleHint === "meeting"),
       source: "snapshot",
     });
   }
@@ -1454,6 +1591,7 @@ function setActorActivity(
   const resolvedAnchorId = resolveAvailableAnchorId(actors, actor.id, activity.anchorId);
   const resolvedActivity =
     resolvedAnchorId === activity.anchorId ? activity : { ...activity, anchorId: resolvedAnchorId };
+  clearSupportPresentationStateIfLeavingSupport(actor, resolvedActivity);
   if (actor.anchorId === resolvedActivity.anchorId) {
     actor.currentActivity = resolvedActivity;
     actor.anchorId = resolvedActivity.anchorId;
@@ -1577,6 +1715,7 @@ function settleActorToPrimaryActivity(
   if (sameActivityPlan(actor.pendingActivity, nextActivity)) {
     actor.pendingActivity = null;
   }
+  clearSupportPresentationStateIfLeavingSupport(actor, nextActivity);
   if (sameActivityPlan(actor.currentActivity, nextActivity) && actor.anchorId === nextActivity.anchorId) {
     actor.currentActivity = nextActivity;
     actor.currentRoomId =
@@ -1595,19 +1734,98 @@ function resolveIdlePackages(config: MauOfficeUiConfig): IdlePackageDefinition[]
   return MAU_OFFICE_IDLE_PACKAGES.filter((pkg) => enabled.has(pkg.id));
 }
 
-function assignIdleActivities(state: MauOfficeState, nowMs: number) {
-  const supportActive = state.actorOrder.some((actorId) => {
-    const actor = state.actors[actorId];
-    if (!actor) {
+function requiredParticipantsForIdlePackage(packageId: string): number {
+  switch (packageId) {
+    case "passing_ball_court":
+      return 4;
+    case "chess_table":
+      return 2;
+    case "chasing_loop":
+      return 3;
+    default:
+      return 1;
+  }
+}
+
+function hasCompleteIdleGroup(
+  actor: Pick<OfficeActor, "id" | "idleAssignment">,
+  actors: Record<string, OfficeActor>,
+  nowMs: number,
+): boolean {
+  const assignment = actor.idleAssignment;
+  if (!assignment || assignment.endsAtMs <= nowMs) {
+    return false;
+  }
+  const requiredParticipants = requiredParticipantsForIdlePackage(assignment.packageId);
+  if (
+    assignment.participantIds.length < requiredParticipants ||
+    !assignment.participantIds.includes(actor.id)
+  ) {
+    return false;
+  }
+  const matchingParticipants = assignment.participantIds.filter((participantId) => {
+    const participant = actors[participantId];
+    if (!participant?.idleAssignment || participant.idleAssignment.endsAtMs <= nowMs) {
       return false;
     }
-    return [actor.currentActivity, actor.queuedActivity, actor.pendingActivity, actor.snapshotActivity].some(
-      (activity) => activity?.kind === "customer_support" && !isStaleSupportPlan(actor, activity, nowMs),
+    return (
+      participant.idleAssignment.packageId === assignment.packageId &&
+      participant.idleAssignment.activityId === assignment.activityId
     );
   });
-  if (supportActive) {
-    return;
+  return matchingParticipants.length >= requiredParticipants;
+}
+
+function resolveIdleAnimationId(
+  actor: Pick<OfficeActor, "id" | "idleAssignment" | "currentActivity" | "path">,
+  nowMs: number,
+): MauOfficeWorkerAnimationId | null {
+  if (actor.path || actor.currentActivity.kind !== "idle_package" || !actor.idleAssignment) {
+    return null;
   }
+  if (actor.idleAssignment.participantIds.length < requiredParticipantsForIdlePackage(actor.idleAssignment.packageId)) {
+    return null;
+  }
+  switch (actor.idleAssignment.packageId) {
+    case "passing_ball_court": {
+      const participantIndex = actor.idleAssignment.participantIds.indexOf(actor.id);
+      if (participantIndex < 0 || actor.idleAssignment.participantIds.length === 0) {
+        return null;
+      }
+      const beatIndex =
+        Math.floor(nowMs / PASSING_BALL_BEAT_MS) % actor.idleAssignment.participantIds.length;
+      return participantIndex === beatIndex ? "jump" : "reach";
+    }
+    case "chess_table":
+      return "chat";
+    case "chasing_loop":
+      return "chase";
+    case "arcade_corner":
+    case "foosball_side_1":
+    case "foosball_side_2":
+    case "foosball_side_3":
+    case "foosball_side_4":
+      return "reach";
+    case "jukebox_floor":
+      return "dance";
+    case "reading_nook":
+      return "sleep-floor";
+    default:
+      return null;
+  }
+}
+
+function syncDerivedActorAnimations(state: MauOfficeState, nowMs: number) {
+  for (const actorId of state.actorOrder) {
+    const actor = state.actors[actorId];
+    if (!actor) {
+      continue;
+    }
+    actor.animationId = resolveIdleAnimationId(actor, nowMs);
+  }
+}
+
+function assignIdleActivities(state: MauOfficeState, nowMs: number) {
   const idleActors = state.actorOrder
     .map((id) => state.actors[id])
     .filter(
@@ -1615,9 +1833,9 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
         Boolean(actor) &&
         actor.kind === "worker" &&
         !actor.path &&
+        !actor.idleAssignment &&
         (!actor.snapshotActivity || actor.snapshotActivity.kind === "idle") &&
         actor.currentActivity.source !== "event" &&
-        actor.currentActivity.source !== "idle" &&
         actor.currentActivity.kind !== "customer_support" &&
         actor.currentActivity.kind !== "idle_package" &&
         actor.currentActivity.kind !== "meeting" &&
@@ -1628,28 +1846,40 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
     return;
   }
   const packages = resolveIdlePackages(state.config);
-  const availablePackage = (id: string) => (state.idleCooldowns[id] ?? 0) <= nowMs;
-  const groupPackage = packages.find(
-    (pkg) => pkg.id === "passing_ball_court" && availablePackage(pkg.id) && idleActors.length >= 4,
-  );
-  const chessPackage = packages.find(
-    (pkg) => pkg.id === "chess_table" && availablePackage(pkg.id) && idleActors.length >= 2,
-  );
-  const remaining = [...idleActors];
-  const assignPackage = (pkg: IdlePackageDefinition, count: number) => {
+  const packageById = new Map(packages.map((pkg) => [pkg.id, pkg] as const));
+  const availablePackage = (id: string) =>
+    packageById.has(id) && (id === "passing_ball_court" || (state.idleCooldowns[id] ?? 0) <= nowMs);
+  const idleSeed = `idle:${Math.floor(nowMs / IDLE_ACTIVITY_WINDOW_MS)}`;
+  const remaining = stableShuffleByKey(idleActors, idleSeed, (actor) => actor.id);
+  const reservedAnchors = new Set<string>();
+
+  const assignPackageById = (packageId: string, count: number): boolean => {
+    const pkg = packageById.get(packageId);
+    const activityDef = pkg?.activityDefinitions[0];
+    if (!pkg || !activityDef || !availablePackage(packageId) || remaining.length < count) {
+      return false;
+    }
+    const slotAnchorIds = activityDef.slotLayout.slice(0, count);
+    if (
+      slotAnchorIds.length < count ||
+      slotAnchorIds.some((anchorId) => reservedAnchors.has(anchorId))
+    ) {
+      return false;
+    }
     const participants = remaining.splice(0, count);
     if (participants.length !== count) {
-      return;
+      remaining.unshift(...participants);
+      return false;
     }
-    const activityDef = pkg.activityDefinitions[0]!;
     state.idleCooldowns[pkg.id] = nowMs + pkg.cooldownMs;
     participants.forEach((actor, index) => {
-      const slotAnchorId = activityDef.slotLayout[Math.min(index, activityDef.slotLayout.length - 1)]!;
+      const slotAnchorId = slotAnchorIds[index]!;
+      reservedAnchors.add(slotAnchorId);
       actor.idleAssignment = {
         packageId: pkg.id,
         activityId: activityDef.id,
         participantIds: participants.map((entry) => entry.id),
-        slotAnchorIds: activityDef.slotLayout,
+        slotAnchorIds,
         startedAtMs: nowMs,
         endsAtMs: nowMs + IDLE_ACTIVITY_WINDOW_MS,
       };
@@ -1668,36 +1898,73 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
         nowMs,
       );
     });
+    return true;
   };
-  if (groupPackage) {
-    assignPackage(groupPackage, 4);
+
+  if (remaining.length >= 4) {
+    assignPackageById("passing_ball_court", 4);
   }
-  if (chessPackage && remaining.length >= 2) {
-    assignPackage(chessPackage, 2);
-  }
-  const soloPackages = packages.filter((pkg) =>
-    ["arcade_corner", "jukebox_floor", "reading_nook", "snack_table"].includes(pkg.id),
+
+  const randomizedGroupIds = stableShuffleByKey(
+    RANDOM_GROUP_IDLE_PACKAGE_IDS,
+    `${idleSeed}:groups`,
+    (value) => value,
   );
-  for (const actor of remaining) {
-    const pkg = soloPackages.find((entry) => availablePackage(entry.id)) ?? soloPackages[0];
-      if (!pkg) {
-        setActorActivity(
-          actor,
-          state.actors,
-          createActivity({
-            id: "idle-fallback",
-            kind: "idle",
-          label: "Taking a breather",
-          roomId: "break",
-          anchorId: idleAnchorForHome(actor.homeAnchorId),
-          source: "idle",
-          expiresAtMs: nowMs + IDLE_ACTIVITY_WINDOW_MS,
-        }),
-        nowMs,
-      );
+  for (const packageId of randomizedGroupIds) {
+    const requiredCount = packageById.get(packageId)?.activityDefinitions[0]?.slotLayout.length ?? 0;
+    if (requiredCount > 0 && remaining.length >= requiredCount) {
+      assignPackageById(packageId, requiredCount);
+    }
+  }
+
+  const randomizedSoloIds = stableShuffleByKey(
+    SOLO_IDLE_PACKAGE_IDS,
+    `${idleSeed}:solo`,
+    (value) => value,
+  );
+  for (const actor of remaining.splice(0)) {
+    const packageId = randomizedSoloIds.find((id) => {
+      const slotAnchorId = packageById.get(id)?.activityDefinitions[0]?.slotLayout[0];
+      return Boolean(slotAnchorId) && availablePackage(id) && !reservedAnchors.has(slotAnchorId);
+    });
+    if (packageId && assignPackageById(packageId, 1)) {
       continue;
     }
-    assignPackage(pkg, 1);
+    setActorActivity(
+      actor,
+      state.actors,
+      createActivity({
+        id: "idle-fallback",
+        kind: "idle",
+        label: "Taking a breather",
+        roomId: "break",
+        anchorId: idleAnchorForHome(actor.homeAnchorId),
+        source: "idle",
+        expiresAtMs: nowMs + IDLE_ACTIVITY_WINDOW_MS,
+      }),
+      nowMs,
+    );
+  }
+}
+
+function pruneInvalidIdleAssignments(state: MauOfficeState, nowMs: number) {
+  for (const actorId of state.actorOrder) {
+    const actor = state.actors[actorId];
+    if (!actor?.idleAssignment) {
+      continue;
+    }
+    if (hasCompleteIdleGroup(actor, state.actors, nowMs)) {
+      continue;
+    }
+    actor.idleAssignment = null;
+    if (actor.currentActivity.kind === "idle_package") {
+      actor.currentActivity = fallbackActivityForActor(actor, nowMs);
+      actor.currentRoomId =
+        MAU_OFFICE_LAYOUT.anchors[actor.currentActivity.anchorId]?.roomId === "outside"
+          ? "outside"
+          : roomFromAnchor(actor.currentActivity.anchorId);
+      syncActorToAnchor(actor, actor.currentActivity.anchorId);
+    }
   }
 }
 
@@ -1872,15 +2139,14 @@ function buildSnapshotState(
       const actorId = `visitor:${row.key}`;
       const prev = previous.actors[actorId];
       const parsed = parseAgentSessionKey(row.key);
-      const roleHint: ActorRoleHint =
-        row.kind === "direct" || row.kind === "group"
+      const roleHint: ActorRoleHint = isMeetingSessionRow(row)
+        ? "meeting"
+        : isSupportSessionRow(row)
           ? "support"
-          : row.parentSessionKey || row.spawnedBy || row.key.includes(":subagent:")
-            ? "meeting"
-            : "desk";
+          : "desk";
       const label = row.displayName?.trim() || row.derivedTitle?.trim() || parsed?.agentId || "Visitor";
       const homeAnchorId =
-        row.kind === "direct" || row.kind === "group"
+        isSupportSessionRow(row)
           ? "outside_support"
           : (prev?.homeAnchorId ?? "outside_mauHome");
       const supportVisitorAnchorId = visitorSupportAnchorForAgentId(
@@ -1966,6 +2232,7 @@ function buildSnapshotState(
     nowMs,
     config: params.config,
     heartbeatSessionKeys,
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(previous.activeHeartbeatSessionKeys, nowMs),
     presenceEntries: params.presenceEntries,
     actors: nextActors,
     actorOrder,
@@ -1999,6 +2266,7 @@ export function createEmptyMauOfficeState(source?: unknown): MauOfficeState {
     presenceEntries: [],
     toolsCatalogByAgentId: {},
     heartbeatSessionKeys: {},
+    activeHeartbeatSessionKeys: {},
     actors: {},
     actorOrder: [],
     visibleAgentIds: [],
@@ -2013,6 +2281,7 @@ export function advanceMauOfficeState(state: MauOfficeState, nowMs: number): Mau
   const next: MauOfficeState = {
     ...state,
     nowMs,
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
@@ -2031,6 +2300,9 @@ export function advanceMauOfficeState(state: MauOfficeState, nowMs: number): Mau
     nextOrder.push(actorId);
   }
   next.actorOrder = nextOrder;
+  pruneInvalidIdleAssignments(next, nowMs);
+  assignIdleActivities(next, nowMs);
+  syncDerivedActorAnimations(next, nowMs);
   return next;
 }
 
@@ -2210,16 +2482,21 @@ export function applyMauOfficeAgentEvent(
   if (!sessionKey) {
     return state;
   }
+  const sessionRoleHint = roleHintForSessionKey(sessionKey);
   const next = {
     ...state,
     nowMs,
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
     version: state.version + 1,
   };
-  const isHeartbeatSession = isConfiguredHeartbeatSession(next, sessionKey) || isActiveHeartbeatEvent(payload);
-  const actor = isUserSessionKey(sessionKey) || isHeartbeatSession
+  const isHeartbeatSession = isActiveHeartbeatSession(next, sessionKey, nowMs) || isActiveHeartbeatEvent(payload);
+  if (isHeartbeatSession) {
+    touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
+  }
+  const actor = sessionRoleHint === "support" || isHeartbeatSession
     ? resolveWorkerActorForSessionKey(next, sessionKey)
     : (resolveActorForSessionKey(next, sessionKey) ?? ensureVisitorActor(next, sessionKey, nowMs));
   if (!actor) {
@@ -2249,18 +2526,26 @@ export function applyMauOfficeAgentEvent(
             source: "event",
             expiresAtMs: nowMs + EVENT_ACTIVITY_WINDOW_MS,
           })
-        : createActivity({
-            id: `event-agent:${phase || "work"}`,
-            kind: isUserSessionKey(sessionKey) ? "customer_support" : "desk_work",
-            label: isUserSessionKey(sessionKey) ? "Handling support" : "Working through a task",
-            bubbleText: extractAgentEventPreviewText(payload?.data),
-            roomId: isUserSessionKey(sessionKey) ? "support" : roomFromAnchor(actor.homeAnchorId),
-            anchorId: isUserSessionKey(sessionKey) ? supportAnchorForHome(actor.homeAnchorId) : actor.homeAnchorId,
-            source: "event",
-            expiresAtMs: nowMs + activityLifetimeMs(isUserSessionKey(sessionKey) ? "customer_support" : "desk_work"),
-          });
+        : sessionRoleHint === "meeting"
+          ? createMeetingActivityForActor(actor, {
+              id: `event-agent:${phase || "work"}`,
+              label: "Collaborating in a meeting",
+              bubbleText: extractAgentEventPreviewText(payload?.data),
+              source: "event",
+              expiresAtMs: nowMs + EVENT_ACTIVITY_WINDOW_MS,
+            })
+          : createActivity({
+              id: `event-agent:${phase || "work"}`,
+              kind: sessionRoleHint === "support" ? "customer_support" : "desk_work",
+              label: sessionRoleHint === "support" ? "Handling support" : "Working through a task",
+              bubbleText: extractAgentEventPreviewText(payload?.data),
+              roomId: sessionRoleHint === "support" ? "support" : roomFromAnchor(actor.homeAnchorId),
+              anchorId: sessionRoleHint === "support" ? supportAnchorForHome(actor.homeAnchorId) : actor.homeAnchorId,
+              source: "event",
+              expiresAtMs: nowMs + activityLifetimeMs(sessionRoleHint === "support" ? "customer_support" : "desk_work"),
+            });
   applyEventToActor(actor, next.actors, activity, nowMs);
-  if (isUserSessionKey(sessionKey) && !isHeartbeatSession) {
+  if (sessionRoleHint === "support" && !isHeartbeatSession) {
     touchSupportVisitorForSession(next, sessionKey, nowMs);
   }
   return next;
@@ -2283,7 +2568,17 @@ export function applyMauOfficeSessionToolEvent(
         : typeof payload?.data?.toolId === "string"
           ? payload.data.toolId
           : "tool";
-  const mapped = bubbleTextForTool(toolId);
+  const sessionRoleHint = roleHintForSessionKey(sessionKey);
+  const baseMapped = bubbleTextForTool(toolId);
+  const mapped =
+    sessionRoleHint === "meeting"
+      ? {
+          label: "Coordinating with helpers",
+          kind: "meeting" as const,
+          roomId: "meeting" as const,
+          anchorId: "meeting_presenter",
+        }
+      : baseMapped;
   const bubbleText =
     extractPreviewText(payload?.data?.args) ??
     extractPreviewText(payload?.data?.arguments) ??
@@ -2294,14 +2589,19 @@ export function applyMauOfficeSessionToolEvent(
   const next = {
     ...state,
     nowMs,
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
     version: state.version + 1,
   };
-  const isHeartbeatSession = isConfiguredHeartbeatSession(next, sessionKey) || payload?.isHeartbeat === true;
+  const isHeartbeatSession =
+    isActiveHeartbeatSession(next, sessionKey, nowMs) || payload?.isHeartbeat === true;
+  if (isHeartbeatSession) {
+    touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
+  }
   const actor =
-    mapped.kind === "customer_support" && isUserSessionKey(sessionKey) && !isHeartbeatSession
+    mapped.kind === "customer_support" && sessionRoleHint === "support" && !isHeartbeatSession
       ? resolveWorkerActorForSessionKey(next, sessionKey)
       : isHeartbeatSession
         ? (resolveWorkerActorForSessionKey(next, sessionKey) ?? resolveActorForSessionKey(next, sessionKey))
@@ -2371,7 +2671,8 @@ export function applyMauOfficeSessionMessageEvent(
     typeof payload?.messageId === "string" && payload.messageId.trim()
       ? payload.messageId.trim()
       : undefined;
-  const isSupport = sessionKey.includes(":direct:") || sessionKey.includes(":group:");
+  const sessionRoleHint = roleHintForSessionKey(sessionKey);
+  const isSupport = sessionRoleHint === "support";
   const bubbleText =
     isSupport && role === "user"
       ? extractVisitorPreviewText(payload?.message)
@@ -2381,12 +2682,16 @@ export function applyMauOfficeSessionMessageEvent(
   const next = {
     ...state,
     nowMs,
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
     version: state.version + 1,
   };
-  const isHeartbeatSession = isConfiguredHeartbeatSession(next, sessionKey);
+  const isHeartbeatSession = isActiveHeartbeatSession(next, sessionKey, nowMs);
+  if (isHeartbeatSession) {
+    touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
+  }
   const actor =
     isHeartbeatSession
       ? (resolveWorkerActorForSessionKey(next, sessionKey) ?? resolveActorForSessionKey(next, sessionKey))
@@ -2416,26 +2721,34 @@ export function applyMauOfficeSessionMessageEvent(
           source: "event",
           expiresAtMs: nowMs + EVENT_ACTIVITY_WINDOW_MS,
         })
-      : createActivity({
-          id: `event-message:${role}`,
-          kind: isSupport ? "customer_support" : "desk_work",
-          label:
-            isSupport && role === "user"
-              ? "Customer message"
-              : isSupport
-                ? "Handling support"
-                : "Reviewing the latest update",
-          bubbleText,
-          roomId: isSupport ? "support" : roomFromAnchor(actor.homeAnchorId),
-          anchorId:
-            isSupport && actor.kind === "visitor"
-              ? visitorSupportAnchorForAgentId(next.actors, actor.agentId)
-              : isSupport
-                ? supportAnchorForHome(actor.homeAnchorId)
-                : actor.homeAnchorId,
-          source: "event",
-          expiresAtMs: nowMs + activityLifetimeMs(isSupport ? "customer_support" : "desk_work"),
-        }),
+      : sessionRoleHint === "meeting"
+        ? createMeetingActivityForActor(actor, {
+            id: `event-message:${role}`,
+            label: role === "user" ? "Discussing a plan" : "Collaborating in a meeting",
+            bubbleText,
+            source: "event",
+            expiresAtMs: nowMs + EVENT_ACTIVITY_WINDOW_MS,
+          })
+        : createActivity({
+            id: `event-message:${role}`,
+            kind: isSupport ? "customer_support" : "desk_work",
+            label:
+              isSupport && role === "user"
+                ? "Customer message"
+                : isSupport
+                  ? "Handling support"
+                  : "Reviewing the latest update",
+            bubbleText,
+            roomId: isSupport ? "support" : roomFromAnchor(actor.homeAnchorId),
+            anchorId:
+              isSupport && actor.kind === "visitor"
+                ? visitorSupportAnchorForAgentId(next.actors, actor.agentId)
+                : isSupport
+                  ? supportAnchorForHome(actor.homeAnchorId)
+                  : actor.homeAnchorId,
+            source: "event",
+            expiresAtMs: nowMs + activityLifetimeMs(isSupport ? "customer_support" : "desk_work"),
+          }),
     nowMs,
   );
   if (isSupport && !isHeartbeatSession) {

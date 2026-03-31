@@ -26,6 +26,7 @@ export type MauOfficePixellabProvenance = {
     | "create_tiles_pro"
     | "create_topdown_tileset"
     | "existing_pack"
+    | "local_placeholder_derive"
     | "uploaded_sheet_slice";
   jobId: string;
   selectedOutput: string;
@@ -74,6 +75,34 @@ export function collectMauOfficeReferencedAssetPaths(): string[] {
       for (const asset of animation.frames) {
         assets.add(asset);
       }
+    }
+    for (const animation of Object.values(rig.reach)) {
+      for (const asset of animation.frames) {
+        assets.add(asset);
+      }
+    }
+    for (const animation of Object.values(rig.dance)) {
+      for (const asset of animation.frames) {
+        assets.add(asset);
+      }
+    }
+    for (const animation of Object.values(rig.jump)) {
+      for (const asset of animation.frames) {
+        assets.add(asset);
+      }
+    }
+    for (const animation of Object.values(rig.chase)) {
+      for (const asset of animation.frames) {
+        assets.add(asset);
+      }
+    }
+    for (const animation of Object.values(rig.chat)) {
+      for (const asset of animation.frames) {
+        assets.add(asset);
+      }
+    }
+    for (const asset of rig.sleepFloor.frames) {
+      assets.add(asset);
     }
   }
   return Array.from(assets).sort();
@@ -608,16 +637,74 @@ for (const asset of [...Object.values(MAU_OFFICE_BUBBLE_FRAME_ASSETS), MAU_OFFIC
 
 const HUMAN_VISITOR_CHARACTER_ID = "41d723fb-9c46-4cf7-91c5-ed860e9a4354";
 const HUMAN_VISITOR_WALK_JOB_ID = "animate:41d723fb-9c46-4cf7-91c5-ed860e9a4354:walking-6-frames";
+const HUMAN_VISITOR_STAND_JOB_ID = "animate:41d723fb-9c46-4cf7-91c5-ed860e9a4354:breathing-idle";
+const BIRD_WORKER_CHARACTER_ID = "5b6c4fa4-6a04-4e86-ac4b-41248d688f13";
+const BIRD_WORKER_STAND_JOB_ID = "animate:5b6c4fa4-6a04-4e86-ac4b-41248d688f13:breathing-idle";
+const BIRD_WORKER_WALK_JOB_ID = "animate:5b6c4fa4-6a04-4e86-ac4b-41248d688f13:walking-6-frames";
+const DEER_WORKER_CHARACTER_ID = "fc376e2e-3ea8-46dd-a056-adcf5c6dfec6";
+const DEER_WORKER_STAND_JOB_ID = "animate:fc376e2e-3ea8-46dd-a056-adcf5c6dfec6:breathing-idle";
+const DEER_WORKER_WALK_JOB_ID = "animate:fc376e2e-3ea8-46dd-a056-adcf5c6dfec6:walking-6-frames";
+const DOG_WORKER_CHARACTER_ID = "228ee863-2488-44dd-8b2e-dfcfb8b89566";
+const DOG_WORKER_STAND_JOB_ID = "animate:228ee863-2488-44dd-8b2e-dfcfb8b89566:breathing-idle";
+const DOG_WORKER_WALK_JOB_ID = "animate:228ee863-2488-44dd-8b2e-dfcfb8b89566:walking-6-frames";
 const CAT_WORKER_CHARACTER_ID = "46c7ec8a-66d7-4034-bcbb-e70aac9271a0";
 const CAT_WORKER_STAND_JOB_ID = "animate:46c7ec8a-66d7-4034-bcbb-e70aac9271a0:breathing-idle";
+const CAT_WORKER_SIT_CHARACTER_ID = "854058e3-5e18-43ac-8d1e-2fc77f1ce540";
+const CAT_WORKER_SIT_JOB_ID = "animate:854058e3-5e18-43ac-8d1e-2fc77f1ce540:breathing-idle";
+const PLACEHOLDER_WORKER_POSE_NOTES = {
+  reach:
+    "Placeholder forward-reach loop derived locally from the standing idle frames until dedicated Pixellab acting poses land.",
+  dance:
+    "Placeholder dance loop remixed locally from the walking cadence so the renderer can address a playful in-place animation family now.",
+  jump:
+    "Placeholder jump-ready loop derived from the standing idle frames until a real overhead passing pose is generated.",
+  chase:
+    "Placeholder chase loop remixed locally from the walking cadence until a forward-lean sprint/point pose is generated.",
+  chat:
+    "Placeholder chatting loop derived from the standing idle frames until a dedicated conversational gesture set is generated.",
+  "sleep-floor":
+    "Placeholder floor-sleep loop derived locally by rotating the seated side pose onto the floor plane until a dedicated sleep pose is generated.",
+} as const;
 
 const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
   .flatMap((rig) => [
     ...Object.values(rig.stand).flatMap((animation) => animation.frames),
     ...Object.values(rig.sit).flatMap((animation) => animation.frames),
     ...Object.values(rig.walk).flatMap((animation) => animation.frames),
+    ...Object.values(rig.reach).flatMap((animation) => animation.frames),
+    ...Object.values(rig.dance).flatMap((animation) => animation.frames),
+    ...Object.values(rig.jump).flatMap((animation) => animation.frames),
+    ...Object.values(rig.chase).flatMap((animation) => animation.frames),
+    ...Object.values(rig.chat).flatMap((animation) => animation.frames),
+    ...rig.sleepFloor.frames,
   ])
   .reduce<Record<string, MauOfficePixellabProvenance>>((acc, asset) => {
+    const placeholderPose = Object.keys(PLACEHOLDER_WORKER_POSE_NOTES).find((pose) =>
+      asset.includes(`/${pose}-`) || asset.includes(`/${pose}/`),
+    ) as keyof typeof PLACEHOLDER_WORKER_POSE_NOTES | undefined;
+    if (placeholderPose) {
+      const rigId = asset.split("/")[2] ?? "worker";
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "local_placeholder_derive",
+        jobId: `placeholder:${asset.replaceAll("/", ":")}`,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt: PLACEHOLDER_WORKER_POSE_NOTES[placeholderPose],
+        postprocess:
+          placeholderPose === "sleep-floor"
+            ? [
+                "take the rig's side-facing seated placeholder frames as the source art",
+                "rotate them onto a horizontal floor pose with nearest-neighbor transforms",
+                "center the rotated sleeper on the shared 64px MauOffice worker slot",
+                "bottom-align it to the floor plane without directional variants",
+                "keep a simple four-frame placeholder loop until a dedicated sleep pose exists",
+              ]
+            : ["reuse the existing rig's accepted stand or walk frames as source art", "derive a named placeholder animation family with local nearest-neighbor edits only", "keep the placeholder loop on the shared 64px MauOffice worker slot until dedicated Pixellab acting poses replace it"],
+        beautyCritique: `${rigId} ${placeholderPose} is currently a wired placeholder so MauOffice can reference the animation family without missing assets.`,
+      });
+      return acc;
+    }
     if (asset.startsWith("mau-office/workers/cat/stand-")) {
       acc[asset] = entry({
         asset,
@@ -640,14 +727,174 @@ const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
       });
       return acc;
     }
+    if (asset.startsWith("mau-office/workers/cat/sit-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: CAT_WORKER_SIT_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic tuxedo cat office worker in a seated posture as if sitting on an unseen office chair, oversized head, short body, expressive face, tiny paws, warm business outfit, polished pixel art, readable from all four directions, subtle breathing idle loop",
+        postprocess: [
+          "create a seated-base cat worker character with the same chunky MauOffice cast style",
+          "download the Pixellab breathing-idle output from that seated base",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing cat seated worker scale band without removing the subtle bob motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the seated pose to the existing chair/desk row expectations",
+          "keep the four-frame sit-idle cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The cat finally has a believable seated idle loop instead of pretending the standing rig is a chair pose.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/bird/stand-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: BIRD_WORKER_STAND_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic cardinal bird office worker with red feathers, tiny yellow beak, dark business jacket and green tie, same chunky MauOffice cast proportions, subtle breathing idle loop",
+        postprocess: [
+          "download the Pixellab breathing-idle output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing bird worker scale band without removing the subtle bob motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "keep the four-frame idle cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The bird now breathes with the same subtle office-idle energy as the cat and human rigs while keeping its sharper cardinal silhouette.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/deer/stand-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: DEER_WORKER_STAND_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic deer office worker with small antlers, warm tan fur, brown business jacket and green tie, same chunky MauOffice cast proportions, subtle breathing idle loop",
+        postprocess: [
+          "download the Pixellab breathing-idle output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing deer worker scale band without removing the subtle bob motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "keep the four-frame idle cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The deer idle loop keeps the gentle antlered silhouette alive without making the office feel jittery or noisy.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/bird/walk-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: BIRD_WORKER_WALK_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic cardinal bird office worker with red feathers, tiny yellow beak, dark business jacket and green tie, same chunky MauOffice cast proportions, readable walking cycle from all four directions",
+        postprocess: [
+          "download the Pixellab walking-6-frames output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing bird worker scale band without flattening the stride motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "preserve the six-frame walk cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The bird finally walks with a real stride instead of sliding as a cardboard cutout through the office.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/deer/walk-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: DEER_WORKER_WALK_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic deer office worker with small antlers, warm tan fur, brown business jacket and green tie, same chunky MauOffice cast proportions, readable walking cycle from all four directions",
+        postprocess: [
+          "download the Pixellab walking-6-frames output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing deer worker scale band without flattening the stride motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "preserve the six-frame walk cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The deer finally moves like a real office worker instead of hovering through the room as a repeated still.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/dog/stand-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: DOG_WORKER_STAND_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic dog office worker with floppy brown ears, warm tan muzzle, brown business jacket and red tie, same chunky MauOffice cast proportions, subtle breathing idle loop",
+        postprocess: [
+          "download the Pixellab breathing-idle output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing dog worker scale band without removing the subtle bob motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "keep the four-frame idle cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The dog now idles with the same subtle office-life rhythm as the rest of the cast instead of freezing between moves.",
+      });
+      return acc;
+    }
+    if (asset.startsWith("mau-office/workers/dog/walk-")) {
+      acc[asset] = entry({
+        asset,
+        family: "worker",
+        tool: "animate_character",
+        jobId: DOG_WORKER_WALK_JOB_ID,
+        selectedOutput: asset.split("/").slice(-3).join("/"),
+        prompt:
+          "cute chibi anthropomorphic dog office worker with floppy brown ears, warm tan muzzle, brown business jacket and red tie, same chunky MauOffice cast proportions, readable walking cycle from all four directions",
+        postprocess: [
+          "download the Pixellab walking-6-frames output",
+          "crop the full direction sequence to one shared bounding box per direction",
+          "scale the sequence into the existing dog worker scale band without flattening the stride motion",
+          "center it on the shared 64px MauOffice worker slot",
+          "bottom-align the feet to the shared MauOffice worker foot row",
+          "preserve the six-frame walk cadence for north, east, south, and west",
+        ],
+        beautyCritique:
+          "The dog finally walks with a real step cycle instead of sliding across the office as a static cutout.",
+      });
+      return acc;
+    }
     if (asset.startsWith("mau-office/workers/human/")) {
       const sitPose = asset.includes("/sit-");
+      const standPose = asset.includes("/stand-");
       const walkPose = asset.includes("/walk-");
       acc[asset] = entry({
         asset,
         family: "worker",
-        tool: walkPose ? "animate_character" : "create_character",
-        jobId: walkPose ? HUMAN_VISITOR_WALK_JOB_ID : HUMAN_VISITOR_CHARACTER_ID,
+        tool: walkPose || standPose ? "animate_character" : "create_character",
+        jobId: walkPose
+          ? HUMAN_VISITOR_WALK_JOB_ID
+          : standPose
+            ? HUMAN_VISITOR_STAND_JOB_ID
+            : HUMAN_VISITOR_CHARACTER_ID,
         selectedOutput: asset.split("/").slice(-2).join("/"),
         prompt:
           "chibi human office visitor with a simple round human face and the same chunky MauOffice worker style, business casual white shirt and dark pants, short dark hair, low top-down pixel art, transparent background",
@@ -659,6 +906,15 @@ const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
               "widen the silhouette slightly to match the office cast proportions",
               "duplicate the standing frame into the unused sit pose for contract completeness",
             ]
+          : standPose
+            ? [
+                "download the Pixellab breathing-idle output",
+                "crop each frame to the opaque worker bounds",
+                "resize each frame into the existing human worker scale band",
+                "place the resized sprite onto the shared 64px MauOffice worker slot",
+                "keep the same bottom-aligned foot row and side-view width as the current human rig",
+                "preserve the four-frame idle cadence for north, east, south, and west",
+              ]
           : walkPose
             ? [
                 "download the Pixellab walking-6-frames output",

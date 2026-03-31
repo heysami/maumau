@@ -23,6 +23,7 @@ import {
 } from "../mau-office-pixellab-manifest.ts";
 import {
   MAU_OFFICE_ASSET_SCALE_SPECS,
+  MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC,
   MAU_OFFICE_WORKER_FRAME_SPEC,
   MAU_OFFICE_WORKER_RENDER_METRICS,
   resolveMauOfficeAssetScaleSpec,
@@ -190,6 +191,12 @@ function collectWorkerFrameAssets() {
     ...Object.values(rig.stand).flatMap((animation) => animation.frames),
     ...Object.values(rig.sit).flatMap((animation) => animation.frames),
     ...Object.values(rig.walk).flatMap((animation) => animation.frames),
+    ...Object.values(rig.reach).flatMap((animation) => animation.frames),
+    ...Object.values(rig.dance).flatMap((animation) => animation.frames),
+    ...Object.values(rig.jump).flatMap((animation) => animation.frames),
+    ...Object.values(rig.chase).flatMap((animation) => animation.frames),
+    ...Object.values(rig.chat).flatMap((animation) => animation.frames),
+    ...rig.sleepFloor.frames,
   ]);
 }
 
@@ -234,6 +241,84 @@ describe("createEmptyMauOfficeState", () => {
 });
 
 describe("loadMauOffice", () => {
+  it("stages free workers into volleyball, chat, and chase groups in the idle room", async () => {
+    const nowMs = 1_800_000;
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(nowMs);
+    const host = {
+      client: {
+        request: vi.fn(async (method: string) => {
+          if (method === "agents.list") {
+            return {
+              defaultId: "main",
+              mainKey: "main",
+              scope: "operator",
+              agents: Array.from({ length: 9 }, (_, index) => ({
+                id: `agent-${index + 1}`,
+                name: `Agent ${index + 1}`,
+              })),
+            };
+          }
+          if (method === "sessions.list") {
+            return {
+              ts: nowMs,
+              path: "/tmp/sessions.json",
+              count: 0,
+              defaults: {
+                modelProvider: null,
+                model: null,
+                contextTokens: null,
+              },
+              sessions: [],
+            };
+          }
+          if (method === "system-presence") {
+            return [];
+          }
+          if (method === "tools.catalog") {
+            return { groups: [] };
+          }
+          throw new Error(`Unexpected method ${method}`);
+        }),
+      },
+      connected: true,
+      configSnapshot: {
+        config: {
+          ui: {
+            mauOffice: {
+              maxVisibleWorkers: 9,
+            },
+          },
+        },
+      },
+      mauOfficeLoading: false,
+      mauOfficeError: null,
+      mauOfficeState: createEmptyMauOfficeState(),
+      mauOfficeReloadTimer: null,
+    };
+
+    try {
+      await loadMauOffice(host as never);
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+
+    const settled = advanceMauOfficeState(host.mauOfficeState, nowMs + 12_000);
+    const workers = settled.actorOrder
+      .map((actorId) => settled.actors[actorId])
+      .filter((actor): actor is OfficeActor => Boolean(actor) && actor.kind === "worker");
+    const packageCounts = workers.reduce<Record<string, number>>((acc, actor) => {
+      const packageId = actor.idleAssignment?.packageId;
+      if (packageId) {
+        acc[packageId] = (acc[packageId] ?? 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    expect(packageCounts.passing_ball_court).toBe(4);
+    expect(packageCounts.chess_table).toBe(2);
+    expect(packageCounts.chasing_loop).toBe(3);
+  });
+
   it("keeps support visitor snapshot previews as the visitor's actual latest message", async () => {
     const host = {
       client: {
@@ -401,6 +486,68 @@ Need help recovering the shared workspace password.`,
     );
     expect(host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"]?.snapshotActivity?.bubbleText).toBe(
       "Need help recovering the shared workspace password.",
+    );
+  });
+
+  it("hydrates delegated subagent sessions as meeting-room work instead of support", async () => {
+    const nowMs = Date.now();
+    const host = {
+      client: {
+        request: vi.fn(async (method: string) => {
+          if (method === "agents.list") {
+            return {
+              defaultId: "ops",
+              mainKey: "main",
+              scope: "operator",
+              agents: [{ id: "ops", name: "Ops" }],
+            };
+          }
+          if (method === "sessions.list") {
+            return {
+              ts: nowMs,
+              path: "/tmp/sessions.json",
+              count: 1,
+              defaults: {
+                modelProvider: null,
+                model: null,
+                contextTokens: null,
+              },
+              sessions: [
+                {
+                  key: "agent:ops:subagent:delegate-review",
+                  kind: "direct",
+                  displayName: "Delegate Review",
+                  updatedAt: nowMs,
+                },
+              ],
+            };
+          }
+          if (method === "sessions.preview") {
+            return { ts: nowMs, previews: [] };
+          }
+          if (method === "system-presence") {
+            return [];
+          }
+          if (method === "tools.catalog") {
+            return { groups: [{ label: "Coordination", tools: [{ id: "sessions_spawn", label: "Delegate" }] }] };
+          }
+          throw new Error(`unexpected method ${method}`);
+        }),
+      },
+      connected: true,
+      configSnapshot: null,
+      mauOfficeLoading: false,
+      mauOfficeError: null,
+      mauOfficeState: createEmptyMauOfficeState(),
+      mauOfficeReloadTimer: null,
+    };
+
+    await loadMauOffice(host as never);
+
+    expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.kind).toBe("meeting");
+    expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.roomId).toBe("meeting");
+    expect(host.mauOfficeState.actors["visitor:agent:ops:subagent:delegate-review"]?.snapshotActivity?.kind).toBe(
+      "meeting",
     );
   });
 
@@ -1248,6 +1395,463 @@ Need help recovering the shared workspace password.`,
 });
 
 describe("advanceMauOfficeState", () => {
+  it("derives idle-room animation ids from the assigned break-room role", () => {
+    const nowMs = 7_200;
+    const volleyAnchors = [
+      MAU_OFFICE_LAYOUT.anchors.break_volley_1,
+      MAU_OFFICE_LAYOUT.anchors.break_volley_2,
+      MAU_OFFICE_LAYOUT.anchors.break_volley_3,
+      MAU_OFFICE_LAYOUT.anchors.break_volley_4,
+    ];
+    const chaseAnchors = [
+      MAU_OFFICE_LAYOUT.anchors.break_chase_1,
+      MAU_OFFICE_LAYOUT.anchors.break_chase_2,
+      MAU_OFFICE_LAYOUT.anchors.break_chase_3,
+    ];
+    const state = advanceMauOfficeState(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        nowMs: nowMs - 1,
+        actorOrder: [
+          "worker:ball",
+          "worker:ball-2",
+          "worker:ball-3",
+          "worker:ball-4",
+          "worker:chat",
+          "worker:chat-2",
+          "worker:chase",
+          "worker:chase-2",
+          "worker:chase-3",
+          "worker:dance",
+          "worker:sleep",
+          "worker:arcade",
+        ],
+        actors: {
+          "worker:ball": makeActor({
+            id: "worker:ball",
+            anchorId: "break_volley_1",
+            nodeId: "break_center",
+            x: volleyAnchors[0].x,
+            y: volleyAnchors[0].y,
+            currentActivity: {
+              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_1", "Passing the ball"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "passing_ball_court",
+              activityId: "break-passing-ball",
+              participantIds: ["worker:ball", "worker:ball-2", "worker:ball-3", "worker:ball-4"],
+              slotAnchorIds: [
+                "break_volley_1",
+                "break_volley_2",
+                "break_volley_3",
+                "break_volley_4",
+              ],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:ball-2": makeActor({
+            id: "worker:ball-2",
+            anchorId: "break_volley_2",
+            nodeId: "break_center",
+            x: volleyAnchors[1].x,
+            y: volleyAnchors[1].y,
+            currentActivity: {
+              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_2", "Passing the ball"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "passing_ball_court",
+              activityId: "break-passing-ball",
+              participantIds: ["worker:ball", "worker:ball-2", "worker:ball-3", "worker:ball-4"],
+              slotAnchorIds: [
+                "break_volley_1",
+                "break_volley_2",
+                "break_volley_3",
+                "break_volley_4",
+              ],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:ball-3": makeActor({
+            id: "worker:ball-3",
+            anchorId: "break_volley_3",
+            nodeId: "break_center",
+            x: volleyAnchors[2].x,
+            y: volleyAnchors[2].y,
+            currentActivity: {
+              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_3", "Passing the ball"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "passing_ball_court",
+              activityId: "break-passing-ball",
+              participantIds: ["worker:ball", "worker:ball-2", "worker:ball-3", "worker:ball-4"],
+              slotAnchorIds: [
+                "break_volley_1",
+                "break_volley_2",
+                "break_volley_3",
+                "break_volley_4",
+              ],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:ball-4": makeActor({
+            id: "worker:ball-4",
+            anchorId: "break_volley_4",
+            nodeId: "break_center",
+            x: volleyAnchors[3].x,
+            y: volleyAnchors[3].y,
+            currentActivity: {
+              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_4", "Passing the ball"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "passing_ball_court",
+              activityId: "break-passing-ball",
+              participantIds: ["worker:ball", "worker:ball-2", "worker:ball-3", "worker:ball-4"],
+              slotAnchorIds: [
+                "break_volley_1",
+                "break_volley_2",
+                "break_volley_3",
+                "break_volley_4",
+              ],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:chat": makeActor({
+            id: "worker:chat",
+            anchorId: "break_table_1",
+            nodeId: "break_center",
+            currentActivity: {
+              ...makeActivity("idle-chat", "idle_package", "break", "break_table_1", "Chatting"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chess_table",
+              activityId: "break-chatting-pair",
+              participantIds: ["worker:chat", "worker:chat-2"],
+              slotAnchorIds: ["break_table_1", "break_table_2"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:chat-2": makeActor({
+            id: "worker:chat-2",
+            anchorId: "break_table_2",
+            nodeId: "break_center",
+            currentActivity: {
+              ...makeActivity("idle-chat", "idle_package", "break", "break_table_2", "Chatting"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chess_table",
+              activityId: "break-chatting-pair",
+              participantIds: ["worker:chat", "worker:chat-2"],
+              slotAnchorIds: ["break_table_1", "break_table_2"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:chase": makeActor({
+            id: "worker:chase",
+            anchorId: "break_chase_1",
+            nodeId: "break_center",
+            x: chaseAnchors[0].x,
+            y: chaseAnchors[0].y,
+            currentActivity: {
+              ...makeActivity("idle-chase", "idle_package", "break", "break_chase_1", "Chasing"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chasing_loop",
+              activityId: "break-chasing-loop",
+              participantIds: ["worker:chase", "worker:chase-2", "worker:chase-3"],
+              slotAnchorIds: ["break_chase_1", "break_chase_2", "break_chase_3"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:chase-2": makeActor({
+            id: "worker:chase-2",
+            anchorId: "break_chase_2",
+            nodeId: "break_center",
+            x: chaseAnchors[1].x,
+            y: chaseAnchors[1].y,
+            currentActivity: {
+              ...makeActivity("idle-chase", "idle_package", "break", "break_chase_2", "Chasing"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chasing_loop",
+              activityId: "break-chasing-loop",
+              participantIds: ["worker:chase", "worker:chase-2", "worker:chase-3"],
+              slotAnchorIds: ["break_chase_1", "break_chase_2", "break_chase_3"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:chase-3": makeActor({
+            id: "worker:chase-3",
+            anchorId: "break_chase_3",
+            nodeId: "break_center",
+            x: chaseAnchors[2].x,
+            y: chaseAnchors[2].y,
+            currentActivity: {
+              ...makeActivity("idle-chase", "idle_package", "break", "break_chase_3", "Chasing"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chasing_loop",
+              activityId: "break-chasing-loop",
+              participantIds: ["worker:chase", "worker:chase-2", "worker:chase-3"],
+              slotAnchorIds: ["break_chase_1", "break_chase_2", "break_chase_3"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:dance": makeActor({
+            id: "worker:dance",
+            anchorId: "break_jukebox",
+            nodeId: "break_center",
+            currentActivity: {
+              ...makeActivity("idle-dance", "idle_package", "break", "break_jukebox", "Dancing"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "jukebox_floor",
+              activityId: "break-dance-floor",
+              participantIds: ["worker:dance"],
+              slotAnchorIds: ["break_jukebox"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:sleep": makeActor({
+            id: "worker:sleep",
+            anchorId: "break_reading",
+            nodeId: "break_center",
+            currentActivity: {
+              ...makeActivity("idle-sleep", "idle_package", "break", "break_reading", "Sleeping"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "reading_nook",
+              activityId: "break-sleep-floor",
+              participantIds: ["worker:sleep"],
+              slotAnchorIds: ["break_reading"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+          "worker:arcade": makeActor({
+            id: "worker:arcade",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            currentActivity: {
+              ...makeActivity("idle-arcade", "idle_package", "break", "break_arcade", "Playing arcade"),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "arcade_corner",
+              activityId: "break-arcade-reach",
+              participantIds: ["worker:arcade"],
+              slotAnchorIds: ["break_arcade"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+        },
+      },
+      nowMs,
+    );
+
+    expect(state.actors["worker:ball"]?.animationId).toBe("jump");
+    expect(state.actors["worker:chat"]?.animationId).toBe("chat");
+    expect(state.actors["worker:chase"]?.animationId).toBe("chase");
+    expect(state.actors["worker:dance"]?.animationId).toBe("dance");
+    expect(state.actors["worker:sleep"]?.animationId).toBe("sleep-floor");
+    expect(state.actors["worker:arcade"]?.animationId).toBe("reach");
+  });
+
+  it("keeps volleyball active for four idle workers even when the prior cooldown has not expired", () => {
+    const nowMs = 5_000;
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const state = advanceMauOfficeState(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        nowMs: nowMs - 1,
+        idleCooldowns: {
+          passing_ball_court: nowMs + 60_000,
+        },
+        actorOrder: ["worker:1", "worker:2", "worker:3", "worker:4"],
+        actors: {
+          "worker:1": makeActor({
+            id: "worker:1",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:2": makeActor({
+            id: "worker:2",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:3": makeActor({
+            id: "worker:3",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:4": makeActor({
+            id: "worker:4",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+        },
+      },
+      nowMs,
+    );
+
+    for (const actorId of state.actorOrder) {
+      expect(state.actors[actorId]?.idleAssignment?.packageId).toBe("passing_ball_court");
+    }
+  });
+
+  it("still assigns break-room idle packages while a separate support interaction is active", () => {
+    const nowMs = 5_000;
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;
+    const state = advanceMauOfficeState(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        nowMs: nowMs - 1,
+        actorOrder: ["worker:support", "worker:1", "worker:2", "worker:3", "worker:4"],
+        actors: {
+          "worker:support": makeActor({
+            id: "worker:support",
+            anchorId: "support_staff_1",
+            nodeId: "support_center",
+            x: supportAnchor.x,
+            y: supportAnchor.y,
+            currentRoomId: "support",
+            currentActivity: {
+              id: "support-live",
+              kind: "customer_support",
+              label: "Handling support",
+              priority: 70,
+              roomId: "support",
+              anchorId: "support_staff_1",
+              source: "event",
+              expiresAtMs: nowMs + 30_000,
+            },
+          }),
+          "worker:1": makeActor({
+            id: "worker:1",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:2": makeActor({
+            id: "worker:2",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:3": makeActor({
+            id: "worker:3",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+          "worker:4": makeActor({
+            id: "worker:4",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+        },
+      },
+      nowMs,
+    );
+
+    expect(state.actors["worker:support"]?.currentActivity.kind).toBe("customer_support");
+    expect(state.actors["worker:1"]?.idleAssignment?.packageId).toBe("passing_ball_court");
+    expect(state.actors["worker:2"]?.idleAssignment?.packageId).toBe("passing_ball_court");
+    expect(state.actors["worker:3"]?.idleAssignment?.packageId).toBe("passing_ball_court");
+    expect(state.actors["worker:4"]?.idleAssignment?.packageId).toBe("passing_ball_court");
+  });
+
+  it("clears incomplete group activities so one actor does not keep pretending to chase alone", () => {
+    const nowMs = 9_000;
+    const chaseAnchor = MAU_OFFICE_LAYOUT.anchors.break_chase_1;
+    const state = advanceMauOfficeState(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        nowMs: nowMs - 1,
+        actorOrder: ["worker:solo"],
+        actors: {
+          "worker:solo": makeActor({
+            id: "worker:solo",
+            anchorId: "break_chase_1",
+            nodeId: "break_center",
+            x: chaseAnchor.x,
+            y: chaseAnchor.y,
+            currentActivity: {
+              ...makeActivity(
+                "idle-chase",
+                "idle_package",
+                "break",
+                "break_chase_1",
+                "Chasing",
+              ),
+              source: "idle",
+            },
+            idleAssignment: {
+              packageId: "chasing_loop",
+              activityId: "break-chasing-loop",
+              participantIds: ["worker:solo"],
+              slotAnchorIds: ["break_chase_1"],
+              startedAtMs: nowMs - 100,
+              endsAtMs: nowMs + 10_000,
+            },
+          }),
+        },
+      },
+      nowMs,
+    );
+
+    expect(state.actors["worker:solo"]?.idleAssignment).toBeNull();
+    expect(state.actors["worker:solo"]?.animationId).not.toBe("chase");
+    expect(state.actors["worker:solo"]?.currentActivity.kind).not.toBe("idle_package");
+  });
+
   it("sends a stale support worker back to their stable break-room idle spot after the quiet window", () => {
     const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;
     const state: MauOfficeState = {
@@ -1283,6 +1887,19 @@ describe("advanceMauOfficeState", () => {
             anchorId: "support_staff_1",
             source: "snapshot",
           },
+          latestSupportDialogue: {
+            role: "assistant",
+            text: "This should disappear once the worker leaves support.",
+            updatedAtMs: 1_000,
+          },
+          bubbles: [
+            {
+              id: "bubble:support",
+              text: "This should disappear once the worker leaves support.",
+              atMs: 1_000,
+              kind: "customer_support",
+            },
+          ],
           lastSeenAtMs: 0,
         }),
       },
@@ -1291,12 +1908,16 @@ describe("advanceMauOfficeState", () => {
     const leavingSupport = advanceMauOfficeState(state, 61_000);
     const enRoute = leavingSupport.actors["worker:main"]!;
     expect(enRoute.path?.targetAnchorId).toBe("break_arcade");
+    expect(enRoute.latestSupportDialogue).toBeNull();
+    expect(enRoute.bubbles.some((bubble) => bubble.kind === "customer_support")).toBe(false);
 
     const settled = advanceMauOfficeState(leavingSupport, 120_000);
     const worker = settled.actors["worker:main"]!;
     expect(worker.anchorId).toBe("break_arcade");
     expect(worker.currentRoomId).toBe("break");
     expect(worker.currentActivity.kind).toBe("idle");
+    expect(worker.latestSupportDialogue).toBeNull();
+    expect(worker.bubbles.some((bubble) => bubble.kind === "customer_support")).toBe(false);
   });
 
   it("lets a stale support visitor leave instead of idling in front of the counter forever", () => {
@@ -1427,10 +2048,27 @@ describe("advanceMauOfficeState", () => {
 });
 
 describe("applyMauOfficeSessionToolEvent", () => {
-  it("maps support tools into customer-support activity while showing the live preview text", () => {
+  it("routes delegated subagent tool traffic into the meeting room instead of customer support", () => {
     const startedAt = 1_000;
     const first = applyMauOfficeSessionToolEvent(
-      createEmptyMauOfficeState(),
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "meeting",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            homeAnchorId: "desk_worker_1",
+            currentRoomId: "break",
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+        },
+      },
       {
         sessionKey: "agent:ops:subagent:support",
         data: {
@@ -1442,16 +2080,13 @@ describe("applyMauOfficeSessionToolEvent", () => {
       },
       startedAt,
     );
-    const actorId = first.actorOrder[0]!;
-    const actor = first.actors[actorId]!;
+    const actor = first.actors["worker:ops"]!;
 
-    expect(actor.kind).toBe("visitor");
     expect(actor.currentActivity.kind).toBe("walking");
-    expect(actor.path?.targetAnchorId).toBe("support_staff_1");
-    expect(actor.queuedActivity?.kind).toBe("customer_support");
-    expect(actor.queuedActivity?.anchorId).toBe("support_staff_1");
-    expect(actor.currentActivity.anchorId).toBe("support_staff_1");
-    expect(createMauOfficeSessionTarget(first, actorId)).toBe("agent:ops:subagent:support");
+    expect(actor.path?.targetAnchorId).toBe("meeting_presenter");
+    expect(actor.queuedActivity?.kind).toBe("meeting");
+    expect(actor.queuedActivity?.roomId).toBe("meeting");
+    expect(first.actors["visitor:agent:ops:subagent:support"]).toBeUndefined();
   });
 
   it("routes direct support tool updates to the worker instead of overwriting the visitor bubble", () => {
@@ -1662,6 +2297,47 @@ describe("applyMauOfficeAgentEvent", () => {
     expect(visitor.currentActivity.bubbleText).toBe("Can you reset my workspace access?");
   });
 
+  it("routes delegated subagent agent events into the meeting room", () => {
+    const startedAt = 1_000;
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const first = applyMauOfficeAgentEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "meeting",
+            homeAnchorId: "desk_worker_1",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            currentRoomId: "break",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:subagent:delegate-review",
+        data: {
+          phase: "delta",
+          content: "Need your input on the delegated plan.",
+        },
+      },
+      startedAt,
+    );
+
+    const worker = first.actors["worker:ops"]!;
+    expect(worker.currentActivity.kind).toBe("walking");
+    expect(worker.queuedActivity?.kind).toBe("meeting");
+    expect(worker.queuedActivity?.roomId).toBe("meeting");
+    expect(first.actors["visitor:agent:ops:subagent:delegate-review"]).toBeUndefined();
+  });
+
   it("does not overwrite the worker with stale nested support text when no fresh assistant delta is present", () => {
     const startedAt = 1_000;
     const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_2;
@@ -1825,6 +2501,47 @@ describe("applyMauOfficeSessionMessageEvent", () => {
     expect(actor.y).toBe(visitorAnchor.y);
     expect(actor.facing).toBe("north");
     expect(actor.bubbles[0]?.text).toBe("Need an invoice update for this account before Friday.");
+  });
+
+  it("routes delegated subagent messages into the meeting room instead of support", () => {
+    const startedAt = 2_000;
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const first = applyMauOfficeSessionMessageEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "meeting",
+            homeAnchorId: "desk_worker_1",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            currentRoomId: "break",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:subagent:delegate-review",
+        message: {
+          role: "assistant",
+          text: "Let's talk through the delegated plan together.",
+        },
+      },
+      startedAt,
+    );
+
+    const worker = first.actors["worker:ops"]!;
+    expect(worker.currentActivity.kind).toBe("walking");
+    expect(worker.queuedActivity?.kind).toBe("meeting");
+    expect(worker.queuedActivity?.roomId).toBe("meeting");
+    expect(first.actors["visitor:agent:ops:subagent:delegate-review"]).toBeUndefined();
   });
 
   it("strips injected metadata blocks from visitor-facing support messages", () => {
@@ -2053,6 +2770,46 @@ Need an invoice update for this account before Friday.`,
     expect(worker.queuedActivity?.kind).toBe("meeting");
     expect(worker.queuedActivity?.roomId).toBe("meeting");
     expect(next.actors["visitor:agent:main:direct:heartbeat-room"]).toBeUndefined();
+  });
+
+  it("keeps main-session heartbeat transcript messages in the meeting room while the heartbeat run is active", () => {
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      activeHeartbeatSessionKeys: {
+        "agent:main:main": 5_000,
+      },
+      actorOrder: ["worker:main"],
+      actors: {
+        "worker:main": makeActor({
+          id: "worker:main",
+          agentId: "main",
+          sessionKey: "agent:main:main",
+          roleHint: "desk",
+          anchorId: "desk_worker_1",
+          nodeId: "desk_center",
+          homeAnchorId: "desk_worker_1",
+          currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+        }),
+      },
+    };
+
+    const next = applyMauOfficeSessionMessageEvent(
+      state,
+      {
+        sessionKey: "agent:main:main",
+        message: {
+          role: "assistant",
+          text: "Heartbeat found a follow-up to review.",
+        },
+      },
+      1_000,
+    );
+
+    const worker = next.actors["worker:main"]!;
+    expect(worker.currentActivity.kind).toBe("walking");
+    expect(worker.queuedActivity?.kind).toBe("meeting");
+    expect(worker.queuedActivity?.roomId).toBe("meeting");
   });
 
   it("returns a heartbeat worker to normal activity after the heartbeat ends", () => {
@@ -2741,13 +3498,32 @@ describe("mau-office contract", () => {
       for (const [direction, animation] of Object.entries(rig.walk)) {
         expect(animation.frames, `${rigId} walk ${direction}`).toHaveLength(6);
       }
+      for (const [direction, animation] of Object.entries(rig.reach)) {
+        expect(animation.frames, `${rigId} reach ${direction}`).toHaveLength(4);
+      }
+      for (const [direction, animation] of Object.entries(rig.dance)) {
+        expect(animation.frames, `${rigId} dance ${direction}`).toHaveLength(4);
+      }
+      for (const [direction, animation] of Object.entries(rig.jump)) {
+        expect(animation.frames, `${rigId} jump ${direction}`).toHaveLength(4);
+      }
+      for (const [direction, animation] of Object.entries(rig.chase)) {
+        expect(animation.frames, `${rigId} chase ${direction}`).toHaveLength(4);
+      }
+      for (const [direction, animation] of Object.entries(rig.chat)) {
+        expect(animation.frames, `${rigId} chat ${direction}`).toHaveLength(4);
+      }
+      expect(rig.sleepFloor.frames, `${rigId} sleep-floor`).toHaveLength(4);
     }
   });
 
-  it("keeps stand, sit, and walk worker frames within one consistent visual scale band", async () => {
+  it("keeps upright worker frames within one consistent visual scale band", async () => {
     const workerAssets = collectWorkerFrameAssets();
 
     for (const asset of workerAssets) {
+      if (asset.includes("/sleep-floor/")) {
+        continue;
+      }
       const bounds = await readPngOpaqueBounds(asset);
       expectWithinRange(bounds.width, MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.width, `${asset} width`);
       expectWithinRange(
@@ -2757,6 +3533,35 @@ describe("mau-office contract", () => {
       );
       expect(bounds.offsetX).toBeLessThanOrEqual(MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetX ?? 64);
       expect(bounds.offsetY).toBeLessThanOrEqual(MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetY ?? 64);
+      // Worker rigs can vary slightly in head silhouette, but they should still share one foot row.
+      expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeGreaterThanOrEqual(58);
+      expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeLessThanOrEqual(61);
+    }
+  });
+
+  it("keeps sleep-floor worker placeholders inside their own horizontal scale band", async () => {
+    const sleepFloorAssets = collectWorkerFrameAssets().filter((asset) => asset.includes("/sleep-floor/"));
+
+    for (const asset of sleepFloorAssets) {
+      const bounds = await readPngOpaqueBounds(asset);
+      expectWithinRange(
+        bounds.width,
+        MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC.visibleBounds!.width,
+        `${asset} width`,
+      );
+      expectWithinRange(
+        bounds.height,
+        MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC.visibleBounds!.height,
+        `${asset} height`,
+      );
+      expect(bounds.offsetX).toBeLessThanOrEqual(
+        MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC.visibleBounds!.maxOffsetX ?? 64,
+      );
+      expect(bounds.offsetY).toBeLessThanOrEqual(
+        MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC.visibleBounds!.maxOffsetY ?? 64,
+      );
+      expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeGreaterThanOrEqual(59);
+      expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeLessThanOrEqual(62);
     }
   });
 
@@ -2766,6 +3571,78 @@ describe("mau-office contract", () => {
         MAU_OFFICE_WORKER_RIGS.cat.stand[direction].frames.map((asset) => readAssetHash(asset)),
       );
       expect(new Set(hashes).size, `cat stand ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the cat seated idle rig as a real four-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.cat.sit[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `cat sit ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the human standing idle rig as a real four-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.human.stand[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `human stand ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the bird standing idle rig as a real four-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.bird.stand[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `bird stand ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the deer standing idle rig as a real four-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.deer.stand[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `deer stand ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the bird walking rig as a real six-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.bird.walk[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `bird walk ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the deer walking rig as a real six-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.deer.walk[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `deer walk ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the dog standing idle rig as a real four-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.dog.stand[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `dog stand ${direction}`).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the dog walking rig as a real six-frame Pixellab animation", async () => {
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const hashes = await Promise.all(
+        MAU_OFFICE_WORKER_RIGS.dog.walk[direction].frames.map((asset) => readAssetHash(asset)),
+      );
+      expect(new Set(hashes).size, `dog walk ${direction}`).toBeGreaterThan(1);
     }
   });
 });
@@ -2917,7 +3794,7 @@ describe("mau-office view", () => {
     expect(bubbleStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.minWidthPx}px`);
     expect(bubbleStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.minHeightPx}px`);
     expect(bubbleStyle).toContain(
-      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 40}px`,
+      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 20}px`,
     );
     expect(bubbleStyle).toContain(
       `transform:translate(-50%,${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.offsetYPx}px)`,
@@ -2927,7 +3804,7 @@ describe("mau-office view", () => {
     expect(historyStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minWidthPx}px`);
     expect(historyStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minHeightPx}px`);
     expect(historyStyle).toContain(
-      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 40}px`,
+      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 20}px`,
     );
     expect(historyStyle).toContain(
       `transform:translate(-50%,${MAU_OFFICE_WORKER_RENDER_METRICS.history.offsetYPx}px)`,
@@ -2940,6 +3817,398 @@ describe("mau-office view", () => {
     expect(container.querySelector(".mau-office__viewport")?.getAttribute("style")).toContain(
       "--mau-camera-scale:0.75",
     );
+  });
+
+  it("uses explicit worker animation overrides for placeholder animation families", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const standAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      nowMs: 0,
+      actorOrder: ["worker:dance", "worker:sleep"],
+      actors: {
+        "worker:dance": makeActor({
+          id: "worker:dance",
+          anchorId: "break_arcade",
+          nodeId: "break_arcade",
+          x: standAnchor.x,
+          y: standAnchor.y,
+          facing: "west",
+          animationId: "dance",
+        }),
+        "worker:sleep": makeActor({
+          id: "worker:sleep",
+          anchorId: "break_arcade",
+          nodeId: "break_arcade",
+          x: standAnchor.x,
+          y: standAnchor.y,
+          animationId: "sleep-floor",
+        }),
+      },
+    };
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state,
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const workerSprites = Array.from(
+      container.querySelectorAll<HTMLImageElement>(".mau-office__worker-sprite"),
+    ).map((img) => img.getAttribute("src") ?? "");
+    expect(workerSprites.some((src) => src.includes("/workers/cat/dance-west/"))).toBe(true);
+    expect(workerSprites.some((src) => src.includes("/workers/cat/sleep-floor/"))).toBe(true);
+    const sleepWorker = container.querySelector(".mau-office__worker--sleep");
+    expect(sleepWorker).not.toBeNull();
+    expect(normalizeStyle(sleepWorker?.getAttribute("style"))).toContain(
+      `transform:translate(-50%,calc(-100%+${MAU_OFFICE_WORKER_RENDER_METRICS.poseOffsetYPx.sleepFloor}px))`,
+    );
+  });
+
+  it("keeps the break-room rug behind workers standing on the lounge area", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const rugAnchor = MAU_OFFICE_LAYOUT.anchors.break_volley_1;
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 0,
+          actorOrder: ["worker:rug"],
+          actors: {
+            "worker:rug": makeActor({
+              id: "worker:rug",
+              anchorId: "break_volley_1",
+              nodeId: "break_center",
+              x: rugAnchor.x,
+              y: rugAnchor.y,
+            }),
+          },
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const workerZ = parseStyleNumber(
+      normalizeStyle(container.querySelector(".mau-office__worker")?.getAttribute("style")),
+      "z-index",
+    );
+    const rugZ = parseStyleNumber(
+      normalizeStyle(
+        container
+          .querySelector('[data-id="break-rug:middle-center"], .mau-office__sprite[src*="rug-r2c2.png"]')
+          ?.getAttribute("style"),
+      ),
+      "z-index",
+    );
+
+    expect(rugZ).toBeLessThan(workerZ);
+  });
+
+  it("keeps the support counter between the staff side and the customer side", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const staffAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;
+    const customerAnchor = MAU_OFFICE_LAYOUT.anchors.support_customer_2;
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 0,
+          actorOrder: ["worker:staff", "visitor:customer"],
+          actors: {
+            "worker:staff": makeActor({
+              id: "worker:staff",
+              anchorId: "support_staff_1",
+              nodeId: "support_center",
+              x: staffAnchor.x,
+              y: staffAnchor.y,
+              currentRoomId: "support",
+            }),
+            "visitor:customer": makeActor({
+              id: "visitor:customer",
+              kind: "visitor",
+              anchorId: "support_customer_2",
+              nodeId: "support_customer_2",
+              x: customerAnchor.x,
+              y: customerAnchor.y,
+              currentRoomId: "support",
+            }),
+          },
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const workerElements = Array.from(container.querySelectorAll(".mau-office__worker"));
+    const staffZ = parseStyleNumber(normalizeStyle(workerElements[0]?.getAttribute("style")), "z-index");
+    const customerZ = parseStyleNumber(normalizeStyle(workerElements[1]?.getAttribute("style")), "z-index");
+    const counterZ = parseStyleNumber(
+      normalizeStyle(
+        container.querySelector('.mau-office__sprite[src*="counter-mid-v1.png"]')?.getAttribute("style"),
+      ),
+      "z-index",
+    );
+
+    expect(counterZ).toBeGreaterThan(staffZ);
+    expect(counterZ).toBeLessThan(customerZ);
+  });
+
+  it("renders a visible volleyball that moves along a parabolic arc for the 4-person rally", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const ballAssignment = {
+      packageId: "passing_ball_court" as const,
+      activityId: "break-passing-ball",
+      participantIds: ["worker:1", "worker:2", "worker:3", "worker:4"],
+      slotAnchorIds: ["break_volley_1", "break_volley_2", "break_volley_3", "break_volley_4"],
+      startedAtMs: 0,
+      endsAtMs: 10_000,
+    };
+    const actorIds = ballAssignment.participantIds;
+    const actors = Object.fromEntries(
+      actorIds.map((actorId, index) => {
+        const anchorId = ballAssignment.slotAnchorIds[index]!;
+        const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId]!;
+        return [
+          actorId,
+          makeActor({
+            id: actorId,
+            anchorId,
+            nodeId: "break_center",
+            x: anchor.x,
+            y: anchor.y,
+            currentActivity: {
+              ...makeActivity("idle-ball", "idle_package", "break", anchorId, "Passing the ball"),
+              source: "idle",
+            },
+            idleAssignment: { ...ballAssignment },
+          }),
+        ];
+      }),
+    );
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 0,
+          actorOrder: actorIds,
+          actors,
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const initialStyle = normalizeStyle(
+      container.querySelector(".mau-office__activity-ball")?.getAttribute("style"),
+    );
+    expect(container.querySelector(".mau-office__activity-ball")).not.toBeNull();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 450,
+          actorOrder: actorIds,
+          actors,
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const midStyle = normalizeStyle(
+      container.querySelector(".mau-office__activity-ball")?.getAttribute("style"),
+    );
+    expect(midStyle).not.toBe(initialStyle);
+    expect(parseStyleNumber(midStyle, "top")).toBeLessThan(parseStyleNumber(initialStyle, "top"));
+  });
+
+  it("moves chasing workers in a visible loop instead of leaving them static on one anchor", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const chaseAssignment = {
+      packageId: "chasing_loop" as const,
+      activityId: "break-chasing-loop",
+      participantIds: ["worker:a", "worker:b", "worker:c"],
+      slotAnchorIds: ["break_chase_1", "break_chase_2", "break_chase_3"],
+      startedAtMs: 0,
+      endsAtMs: 10_000,
+    };
+    const actorIds = chaseAssignment.participantIds;
+    const actors = Object.fromEntries(
+      actorIds.map((actorId, index) => {
+        const anchorId = chaseAssignment.slotAnchorIds[index]!;
+        const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId]!;
+        return [
+          actorId,
+          makeActor({
+            id: actorId,
+            anchorId,
+            nodeId: "break_center",
+            x: anchor.x,
+            y: anchor.y,
+            currentActivity: {
+              ...makeActivity("idle-chase", "idle_package", "break", anchorId, "Chasing"),
+              source: "idle",
+            },
+            idleAssignment: { ...chaseAssignment },
+          }),
+        ];
+      }),
+    );
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 0,
+          actorOrder: actorIds,
+          actors,
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const firstStyle = normalizeStyle(
+      container.querySelector(".mau-office__worker")?.getAttribute("style"),
+    );
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 900,
+          actorOrder: actorIds,
+          actors,
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const secondStyle = normalizeStyle(
+      container.querySelector(".mau-office__worker")?.getAttribute("style"),
+    );
+
+    expect(secondStyle).not.toBe(firstStyle);
+  });
+
+  it("shows a gray labeled fallback when a worker animation sprite is missing", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const standAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const danceFrames = MAU_OFFICE_WORKER_RIGS.cat.dance.west.frames;
+    const originalFrames = [...danceFrames];
+
+    danceFrames.splice(
+      0,
+      danceFrames.length,
+      "mau-office/workers/cat/dance-west/missing-frame_000.png",
+      "mau-office/workers/cat/dance-west/missing-frame_001.png",
+      "mau-office/workers/cat/dance-west/missing-frame_002.png",
+      "mau-office/workers/cat/dance-west/missing-frame_003.png",
+    );
+
+    try {
+      const state: MauOfficeState = {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        nowMs: 0,
+        actorOrder: ["worker:dance"],
+        actors: {
+          "worker:dance": makeActor({
+            id: "worker:dance",
+            anchorId: "break_arcade",
+            nodeId: "break_arcade",
+            x: standAnchor.x,
+            y: standAnchor.y,
+            facing: "west",
+            animationId: "dance",
+          }),
+        },
+      };
+
+      render(
+        renderMauOffice({
+          loading: false,
+          error: null,
+          state,
+          basePath: "",
+          onRefresh: () => undefined,
+          onRoomFocus: () => undefined,
+          onActorOpen: () => undefined,
+        }),
+        container,
+      );
+
+      const worker = container.querySelector<HTMLElement>(".mau-office__worker");
+      const sprite = worker?.querySelector<HTMLImageElement>(".mau-office__worker-sprite");
+      sprite?.dispatchEvent(new Event("error"));
+
+      expect(worker?.classList.contains("mau-office__worker--fallback")).toBe(true);
+      expect(worker?.querySelector(".mau-office__worker-sprite-fallback")?.textContent?.trim()).toBe(
+        "DANCE",
+      );
+    } finally {
+      danceFrames.splice(0, danceFrames.length, ...originalFrames);
+    }
   });
 
   it("advances stationary standing workers through their idle animation frames", () => {
@@ -3275,6 +4544,74 @@ describe("mau-office view", () => {
     );
     expect(container.querySelector(".mau-office__history-copy span")?.textContent).toContain(
       "This is the actual newest assistant reply.",
+    );
+  });
+
+  it("hides stale support dialogue once a worker has returned to an idle activity", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...createEmptyMauOfficeState(),
+          loaded: true,
+          nowMs: 6_000,
+          actorOrder: ["worker:main"],
+          actors: {
+            "worker:main": makeActor({
+              id: "worker:main",
+              agentId: "main",
+              sessionKey: "agent:main:direct:customer-42",
+              roleHint: "support",
+              anchorId: "break_arcade",
+              nodeId: "break_arcade",
+              currentRoomId: "break",
+              x: breakAnchor.x,
+              y: breakAnchor.y,
+              currentActivity: {
+                id: "idle-break",
+                kind: "idle",
+                label: "Taking a breather",
+                priority: 10,
+                roomId: "break",
+                anchorId: "break_arcade",
+                source: "idle",
+              },
+              latestSupportDialogue: {
+                role: "assistant",
+                text: "Older support reply should not follow the worker into idle.",
+                updatedAtMs: 5_000,
+              },
+              bubbles: [
+                {
+                  id: "bubble:support",
+                  text: "Older support reply should not follow the worker into idle.",
+                  atMs: 5_000,
+                  kind: "customer_support",
+                },
+              ],
+            }),
+          },
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(container.querySelector(".mau-office__bubble")).toBeNull();
+    expect(container.querySelector(".mau-office__history-copy span")?.textContent).toContain(
+      "Taking a breather",
+    );
+    expect(container.querySelector(".mau-office__history-copy span")?.textContent).not.toContain(
+      "Older support reply should not follow the worker into idle.",
     );
   });
 

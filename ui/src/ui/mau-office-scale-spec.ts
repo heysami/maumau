@@ -55,6 +55,7 @@ export type MauOfficeWorkerRenderMetrics = {
   poseOffsetYPx: {
     sit: number;
     stand: number;
+    sleepFloor: number;
   };
   badge: {
     widthPx: number;
@@ -645,9 +646,23 @@ export const MAU_OFFICE_WORKER_FRAME_SPEC: MauOfficeAssetScaleSpec = {
   sourceCanvas: { width: 64, height: 64 },
   visibleBounds: {
     width: px(15, 30),
-    height: px(37, 45),
+    height: px(36, 45),
     maxOffsetX: 26,
-    maxOffsetY: 18,
+    maxOffsetY: 25,
+  },
+};
+
+export const MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC: MauOfficeAssetScaleSpec = {
+  asset: "mau-office/workers/<rig>/sleep-floor/*.png",
+  anchor: "bottom-center",
+  family: "worker",
+  slotTiles: { width: 1, height: 1 },
+  sourceCanvas: { width: 64, height: 64 },
+  visibleBounds: {
+    width: px(40, 46),
+    height: px(20, 30),
+    maxOffsetX: 12,
+    maxOffsetY: 40,
   },
 };
 
@@ -659,6 +674,7 @@ export const MAU_OFFICE_WORKER_RENDER_METRICS: MauOfficeWorkerRenderMetrics = {
     // need a small downward tuck to visually connect the worker to the chair row.
     sit: 8,
     stand: 0,
+    sleepFloor: 0,
   },
   badge: {
     widthPx: 56,
@@ -686,6 +702,9 @@ export const MAU_OFFICE_WORKER_RENDER_METRICS: MauOfficeWorkerRenderMetrics = {
 export const MAU_OFFICE_ASSET_SCALE_SPECS = FIXED_ASSET_SPECS;
 
 export function resolveMauOfficeAssetScaleSpec(assetPath: string): MauOfficeAssetScaleSpec | null {
+  if (assetPath.startsWith("mau-office/workers/") && assetPath.includes("/sleep-floor/")) {
+    return MAU_OFFICE_SLEEP_FLOOR_FRAME_SPEC;
+  }
   if (assetPath.startsWith("mau-office/workers/")) {
     return MAU_OFFICE_WORKER_FRAME_SPEC;
   }

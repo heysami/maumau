@@ -1,6 +1,10 @@
 import { html, nothing } from "lit";
 import { styleMap } from "lit/directives/style-map.js";
-import { MAU_OFFICE_SUPPORT_DIALOGUE_WINDOW_MS } from "../controllers/mau-office.ts";
+import {
+  MAU_OFFICE_CHASING_LOOP_CYCLE_MS,
+  MAU_OFFICE_PASSING_BALL_BEAT_MS,
+  MAU_OFFICE_SUPPORT_DIALOGUE_WINDOW_MS,
+} from "../controllers/mau-office.ts";
 import type {
   MauOfficeState,
   OfficeActor,
@@ -18,9 +22,10 @@ import {
   MAU_OFFICE_LAYOUT,
   MAU_OFFICE_ROOM_IDS,
   MAU_OFFICE_TILE_SIZE,
-  resolveMauOfficeWorkerRig,
+  resolveMauOfficeWorkerAnimation,
   resolveMauOfficeAssetUrl,
   type MauOfficeAnchor,
+  type MauOfficeWorkerAnimationId,
   type MauOfficeDirection,
   type MauOfficeRoomId,
   type MauOfficeSpritePlacement,
@@ -36,7 +41,7 @@ const MAU_OFFICE_MAX_FULL_SCENE_SCALE = 1;
 const MAU_OFFICE_MAX_ROOM_SCALE = 1.25;
 const MAU_OFFICE_MIN_CAMERA_SCALE = 0.25;
 const MAU_OFFICE_CAMERA_SCALE_STEP = 0.25;
-const MAU_OFFICE_WORKER_BUBBLE_CLEARANCE_PX = 40;
+const MAU_OFFICE_WORKER_BUBBLE_CLEARANCE_PX = 20;
 const PIXEL_TEXT_GLYPH_WIDTH_RATIO = 0.78;
 const BUBBLE_SIZE_STEP_PX = 8;
 const BUBBLE_TEXT_SIDE_PADDING_PX = 20;
@@ -76,6 +81,12 @@ type ResponsiveTextBox = {
   widthPx: number;
   heightPx: number;
   lineClamp: number;
+};
+
+type WorkerRenderPlacement = {
+  x: number;
+  y: number;
+  facing: MauOfficeDirection;
 };
 
 export type MauOfficeProps = {
@@ -156,8 +167,21 @@ function isActorVisibleInFocus(actor: OfficeActor, roomFocus: MauOfficeRoomId | 
   return MAU_OFFICE_LAYOUT.anchors[actor.anchorId]?.roomId === roomFocus;
 }
 
+function hasActiveSupportPresentation(actor: OfficeActor): boolean {
+  return (
+    actor.currentActivity.kind === "customer_support" ||
+    actor.queuedActivity?.kind === "customer_support" ||
+    actor.pendingActivity?.kind === "customer_support"
+  );
+}
+
 function resolveLatestBubble(actor: OfficeActor, nowMs: number): OfficeBubbleEntry | null {
-  const bubble = actor.bubbles[0] ?? null;
+  const bubble =
+    actor.bubbles.find(
+      (entry) =>
+        nowMs - entry.atMs <= RECENT_BUBBLE_WINDOW_MS &&
+        (entry.kind !== "customer_support" || hasActiveSupportPresentation(actor)),
+    ) ?? null;
   const supportDialogue = resolveLatestSupportDialogueBubble(actor, nowMs);
   if (supportDialogue) {
     return supportDialogue;
@@ -169,10 +193,17 @@ function resolveLatestBubble(actor: OfficeActor, nowMs: number): OfficeBubbleEnt
 }
 
 function resolveMostRecentBubble(actor: OfficeActor): OfficeBubbleEntry | null {
-  return actor.bubbles[0] ?? null;
+  return (
+    actor.bubbles.find(
+      (entry) => entry.kind !== "customer_support" || hasActiveSupportPresentation(actor),
+    ) ?? null
+  );
 }
 
 function resolveSupportDialogueText(actor: OfficeActor, nowMs: number): string | null {
+  if (!hasActiveSupportPresentation(actor)) {
+    return null;
+  }
   const dialogue = actor.latestSupportDialogue;
   if (!dialogue) {
     return null;
@@ -225,17 +256,133 @@ function resolveAnimationFrame(
   return animation.frames[frameIndex] ?? animation.frames[0]!;
 }
 
-function resolveWorkerSprite(actor: OfficeActor, basePath: string, nowMs: number): string {
-  const rig = resolveMauOfficeWorkerRig(actor.rigId);
+function resolveWorkerSprite(
+  actor: OfficeActor,
+  basePath: string,
+  nowMs: number,
+  placement: WorkerRenderPlacement,
+): string {
+  const anchor = MAU_OFFICE_LAYOUT.anchors[actor.anchorId];
+  const animationId = resolveWorkerAnimationId(actor, anchor);
+  const animation = resolveMauOfficeWorkerAnimation(actor.rigId, animationId, placement.facing);
+  return resolveMauOfficeAssetUrl(basePath, resolveAnimationFrame(actor, animation, nowMs));
+}
+
+function resolveWorkerAnimationId(
+  actor: OfficeActor,
+  anchor: MauOfficeAnchor | undefined,
+): MauOfficeWorkerAnimationId {
   if (actor.path) {
-    const walk = rig.walk[actor.facing] ?? rig.walk.south;
-    return resolveMauOfficeAssetUrl(basePath, resolveAnimationFrame(actor, walk, nowMs));
+    return "walk";
+  }
+  return actor.animationId ?? (anchor?.pose === "sit" ? "sit" : "stand");
+}
+
+function formatWorkerAnimationPlaceholderLabel(animationId: MauOfficeWorkerAnimationId): string {
+  return animationId.toUpperCase().replaceAll("-", " ");
+}
+
+function resolvePassingBallPhase(
+  participantCount: number,
+  nowMs: number,
+): { beatIndex: number; nextIndex: number; beatProgress: number } {
+  const cycleCount = Math.max(1, participantCount);
+  const beatProgress = (nowMs % MAU_OFFICE_PASSING_BALL_BEAT_MS) / MAU_OFFICE_PASSING_BALL_BEAT_MS;
+  const beatIndex = Math.floor(nowMs / MAU_OFFICE_PASSING_BALL_BEAT_MS) % cycleCount;
+  return {
+    beatIndex,
+    nextIndex: (beatIndex + 1) % cycleCount,
+    beatProgress,
+  };
+}
+
+function resolveIdleWorkerPlacement(actor: OfficeActor, nowMs: number): WorkerRenderPlacement | null {
+  const anchor = MAU_OFFICE_LAYOUT.anchors[actor.anchorId];
+  if (!anchor || !actor.idleAssignment) {
+    return null;
+  }
+  const participantIndex = actor.idleAssignment.participantIds.indexOf(actor.id);
+  if (participantIndex < 0) {
+    return null;
   }
 
+  if (
+    actor.idleAssignment.packageId === "passing_ball_court" &&
+    actor.idleAssignment.participantIds.length >= 4
+  ) {
+    const phase = resolvePassingBallPhase(actor.idleAssignment.participantIds.length, nowMs);
+    const jumpPx =
+      participantIndex === phase.beatIndex
+        ? Math.round(Math.sin(phase.beatProgress * Math.PI) * 22)
+        : 0;
+    return {
+      x: actor.x,
+      y: actor.y - jumpPx,
+      facing: resolveStaticFacing(actor, anchor),
+    };
+  }
+
+  if (
+    actor.idleAssignment.packageId === "chasing_loop" &&
+    actor.idleAssignment.participantIds.length >= 3
+  ) {
+    const slotAnchors = actor.idleAssignment.slotAnchorIds
+      .map((anchorId) => MAU_OFFICE_LAYOUT.anchors[anchorId])
+      .filter((entry): entry is MauOfficeAnchor => Boolean(entry));
+    if (slotAnchors.length >= 3) {
+      const centerX = slotAnchors.reduce((sum, entry) => sum + entry.x, 0) / slotAnchors.length;
+      const centerY = slotAnchors.reduce((sum, entry) => sum + entry.y, 0) / slotAnchors.length;
+      const radiusX = Math.max(
+        36,
+        Math.max(...slotAnchors.map((entry) => Math.abs(entry.x - centerX))) + 20,
+      );
+      const radiusY = Math.max(
+        20,
+        Math.max(...slotAnchors.map((entry) => Math.abs(entry.y - centerY))) + 12,
+      );
+      const orbitPhase =
+        (((nowMs % MAU_OFFICE_CHASING_LOOP_CYCLE_MS) / MAU_OFFICE_CHASING_LOOP_CYCLE_MS) +
+          participantIndex / actor.idleAssignment.participantIds.length) %
+        1;
+      const angle = orbitPhase * Math.PI * 2 - Math.PI / 2;
+      const x = Math.round(centerX + Math.cos(angle) * radiusX);
+      const y = Math.round(centerY + Math.sin(angle) * radiusY);
+      const tangent = {
+        x: x + Math.round(-Math.sin(angle) * 16),
+        y: y + Math.round(Math.cos(angle) * 10),
+      };
+      return {
+        x,
+        y,
+        facing: directionBetween({ x, y }, tangent),
+      };
+    }
+  }
+
+  return null;
+}
+
+function resolveWorkerPlacement(actor: OfficeActor, nowMs: number): WorkerRenderPlacement {
   const anchor = MAU_OFFICE_LAYOUT.anchors[actor.anchorId];
-  const facing = resolveStaticFacing(actor, anchor);
-  const animation = anchor?.pose === "sit" ? rig.sit[facing] ?? rig.sit.south : rig.stand[facing] ?? rig.stand.south;
-  return resolveMauOfficeAssetUrl(basePath, resolveAnimationFrame(actor, animation, nowMs));
+  return (
+    resolveIdleWorkerPlacement(actor, nowMs) ?? {
+      x: actor.x,
+      y: actor.y,
+      facing: actor.path ? actor.facing : resolveStaticFacing(actor, anchor),
+    }
+  );
+}
+
+function setWorkerSpriteFallback(event: Event, visible: boolean) {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLImageElement)) {
+    return;
+  }
+  const worker = target.closest(".mau-office__worker");
+  if (!(worker instanceof HTMLElement)) {
+    return;
+  }
+  worker.classList.toggle("mau-office__worker--fallback", visible);
 }
 
 function directionBetween(
@@ -323,24 +470,33 @@ function positionForSprite(sprite: MauOfficeSpritePlacement) {
   });
 }
 
-function positionForWorker(actor: OfficeActor, anchor: MauOfficeAnchor | undefined) {
-  const pose = anchor?.pose === "sit" ? "sit" : "stand";
+function positionForWorker(
+  placement: WorkerRenderPlacement,
+  anchor: MauOfficeAnchor | undefined,
+  animationId: MauOfficeWorkerAnimationId,
+) {
+  const pose =
+    animationId === "sleep-floor"
+      ? "sleepFloor"
+      : animationId === "sit"
+        ? "sit"
+        : "stand";
   const metrics = MAU_OFFICE_WORKER_RENDER_METRICS;
   return styleMap({
-    left: `${actor.x}px`,
-    top: `${actor.y}px`,
+    left: `${placement.x}px`,
+    top: `${placement.y}px`,
     width: `${metrics.logicalWidthPx}px`,
     height: `${metrics.logicalHeightPx}px`,
     transform: `translate(-50%, calc(-100% + ${metrics.poseOffsetYPx[pose]}px))`,
-    zIndex: String(70 + Math.round(actor.y) + (anchor?.layer ?? 0)),
+    zIndex: String(70 + Math.round(placement.y) + (anchor?.layer ?? 0)),
   });
 }
 
-function positionForWorkerOverlay(actor: OfficeActor) {
+function positionForWorkerOverlay(placement: WorkerRenderPlacement) {
   return styleMap({
-    left: `${actor.x}px`,
-    top: `${actor.y}px`,
-    zIndex: String(1400 + Math.round(actor.y)),
+    left: `${placement.x}px`,
+    top: `${placement.y}px`,
+    zIndex: String(1400 + Math.round(placement.y)),
   });
 }
 
@@ -683,6 +839,78 @@ function renderHistory(actor: OfficeActor, basePath: string, nowMs: number) {
   `;
 }
 
+function idleGroupKey(actor: OfficeActor): string | null {
+  const assignment = actor.idleAssignment;
+  if (!assignment) {
+    return null;
+  }
+  return `${assignment.packageId}:${assignment.activityId}:${assignment.participantIds.join("|")}`;
+}
+
+function resolveVolleyballHandPoint(
+  assignment: NonNullable<OfficeActor["idleAssignment"]>,
+  participantIndex: number,
+  nowMs: number,
+): { x: number; y: number } | null {
+  const anchorId = assignment.slotAnchorIds[participantIndex];
+  const anchor = anchorId ? MAU_OFFICE_LAYOUT.anchors[anchorId] : null;
+  if (!anchor) {
+    return null;
+  }
+  const phase = resolvePassingBallPhase(assignment.participantIds.length, nowMs);
+  const jumpPx =
+    participantIndex === phase.beatIndex
+      ? Math.round(Math.sin(phase.beatProgress * Math.PI) * 22)
+      : 0;
+  return {
+    x: anchor.x,
+    y: anchor.y - MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 18 - jumpPx,
+  };
+}
+
+function positionForActivityBall(point: { x: number; y: number }) {
+  return styleMap({
+    left: `${point.x}px`,
+    top: `${point.y}px`,
+    zIndex: String(900 + Math.round(point.y)),
+  });
+}
+
+function renderIdleGroupOverlays(actors: OfficeActor[], nowMs: number) {
+  const renderedGroups = new Set<string>();
+  const overlays = [];
+  for (const actor of actors) {
+    const assignment = actor.idleAssignment;
+    if (!assignment || assignment.packageId !== "passing_ball_court" || assignment.participantIds.length < 4) {
+      continue;
+    }
+    const key = idleGroupKey(actor);
+    if (!key || renderedGroups.has(key)) {
+      continue;
+    }
+    renderedGroups.add(key);
+    const phase = resolvePassingBallPhase(assignment.participantIds.length, nowMs);
+    const from = resolveVolleyballHandPoint(assignment, phase.beatIndex, nowMs);
+    const to = resolveVolleyballHandPoint(assignment, phase.nextIndex, nowMs);
+    if (!from || !to) {
+      continue;
+    }
+    const progress = phase.beatProgress;
+    const x = Math.round(from.x + (to.x - from.x) * progress);
+    const baseY = from.y + (to.y - from.y) * progress;
+    const arcHeight = 44;
+    const y = Math.round(baseY - arcHeight * 4 * progress * (1 - progress));
+    overlays.push(html`
+      <span
+        class="mau-office__activity-ball"
+        style=${positionForActivityBall({ x, y })}
+        aria-hidden="true"
+      ></span>
+    `);
+  }
+  return overlays;
+}
+
 function renderWorker(
   actor: OfficeActor,
   basePath: string,
@@ -690,20 +918,35 @@ function renderWorker(
   onActorOpen: (actorId: string) => void,
 ) {
   const bubble = resolveLatestBubble(actor, nowMs);
-  const spriteUrl = resolveWorkerSprite(actor, basePath, nowMs);
   const anchor = MAU_OFFICE_LAYOUT.anchors[actor.anchorId];
+  const placement = resolveWorkerPlacement(actor, nowMs);
+  const animationId = resolveWorkerAnimationId(actor, anchor);
+  const spriteUrl = resolveWorkerSprite(actor, basePath, nowMs, placement);
+  const placeholderLabel = formatWorkerAnimationPlaceholderLabel(animationId);
+  const workerPoseClass =
+    animationId === "sleep-floor"
+      ? "mau-office__worker--sleep"
+      : animationId === "sit"
+        ? "mau-office__worker--sit"
+        : "mau-office__worker--stand";
   return html`
     <button
-      class="mau-office__worker mau-office__worker--${actor.kind} ${
-        anchor?.pose === "sit" ? "mau-office__worker--sit" : "mau-office__worker--stand"
-      }"
-      style=${positionForWorker(actor, anchor)}
+      class="mau-office__worker mau-office__worker--${actor.kind} ${workerPoseClass}"
+      style=${positionForWorker(placement, anchor, animationId)}
       @click=${() => onActorOpen(actor.id)}
       aria-label=${`${actor.label}. ${actor.currentActivity.label}.`}
     >
-      <img class="mau-office__worker-sprite" src=${spriteUrl} alt="" draggable="false" />
+      <img
+        class="mau-office__worker-sprite"
+        src=${spriteUrl}
+        alt=""
+        draggable="false"
+        @error=${(event: Event) => setWorkerSpriteFallback(event, true)}
+        @load=${(event: Event) => setWorkerSpriteFallback(event, false)}
+      />
+      <span class="mau-office__worker-sprite-fallback" aria-hidden="true">${placeholderLabel}</span>
     </button>
-    <span class="mau-office__worker-overlay" style=${positionForWorkerOverlay(actor)}>
+    <span class="mau-office__worker-overlay" style=${positionForWorkerOverlay(placement)}>
       ${bubble ? renderBubble(bubble, basePath) : nothing}
       ${renderHistory(actor, basePath, nowMs)}
     </span>
@@ -773,6 +1016,7 @@ export function renderMauOffice(props: MauOfficeProps) {
                 props.onActorOpen,
               ),
             )}
+            ${renderIdleGroupOverlays(actors, props.state.nowMs)}
           </div>
         </div>
       </div>
