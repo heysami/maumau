@@ -2,12 +2,13 @@ import { Type } from "@sinclair/typebox";
 import type { MaumauConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import {
-  listTeamWorkflows,
   listAccessibleTeams,
+  listTeamWorkflows,
   listTeamMembers,
   resolveDefaultTeamWorkflowId,
   resolveAgentDisplayName,
 } from "../../teams/model.js";
+import { evaluateTeamWorkflowContractReadiness } from "../../teams/contracts.js";
 import { resolveSessionTeamContext } from "../../teams/runtime.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult } from "./common.js";
@@ -37,29 +38,49 @@ export function createTeamsListTool(opts?: {
         sessionKey: effectiveRequesterKey,
       });
       const teams = listAccessibleTeams(cfg, currentTeamContext?.teamId).map(
-        ({ team, runnable }) => ({
-          id: team.id,
-          name: team.name,
-          description: team.description,
-          managerAgentId: team.managerAgentId,
-          managerName: resolveAgentDisplayName(cfg, team.managerAgentId),
-          members: listTeamMembers(team).map((member) => ({
-            agentId: member.agentId,
-            agentName: resolveAgentDisplayName(cfg, member.agentId),
-            role: member.role,
-            description: member.description,
-          })),
-          workflows: listTeamWorkflows(team).map((workflow) => ({
-            id: workflow.id,
-            name: workflow.name,
-            description: workflow.description,
-            default:
-              workflow.default === true || workflow.id === resolveDefaultTeamWorkflowId(team),
-          })),
-          crossTeamLinks: Array.isArray(team.crossTeamLinks) ? team.crossTeamLinks : [],
-          preset: team.preset,
-          runnable,
-        }),
+        ({ team, runnable }) => {
+          const workflows = listTeamWorkflows(team).map((workflow) => {
+            const readiness = evaluateTeamWorkflowContractReadiness({
+              cfg,
+              team,
+              workflow,
+            });
+            return {
+              id: workflow.id,
+              name: workflow.name,
+              description: workflow.description,
+              default:
+                workflow.default === true || workflow.id === resolveDefaultTeamWorkflowId(team),
+              contractReady: readiness.contractReady,
+              blockingReasons: readiness.blockingReasons,
+              requiredRoles: readiness.requiredRoles,
+              requiredQaRoles: readiness.requiredQaRoles,
+            };
+          });
+          const defaultWorkflow =
+            workflows.find((workflow) => workflow.default) ?? workflows[0];
+          return {
+            id: team.id,
+            name: team.name,
+            description: team.description,
+            managerAgentId: team.managerAgentId,
+            managerName: resolveAgentDisplayName(cfg, team.managerAgentId),
+            members: listTeamMembers(team).map((member) => ({
+              agentId: member.agentId,
+              agentName: resolveAgentDisplayName(cfg, member.agentId),
+              role: member.role,
+              description: member.description,
+            })),
+            workflows,
+            crossTeamLinks: Array.isArray(team.crossTeamLinks) ? team.crossTeamLinks : [],
+            preset: team.preset,
+            runnable,
+            contractReady: defaultWorkflow?.contractReady ?? true,
+            blockingReasons: defaultWorkflow?.blockingReasons ?? [],
+            requiredRoles: defaultWorkflow?.requiredRoles ?? [],
+            requiredQaRoles: defaultWorkflow?.requiredQaRoles ?? [],
+          };
+        },
       );
 
       return jsonResult({

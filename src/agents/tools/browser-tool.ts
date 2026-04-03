@@ -15,7 +15,9 @@ import {
   browserStart,
   browserStatus,
   browserStop,
+  browserTabs,
 } from "../../browser/client.js";
+import type { MaumauConfig } from "../../config/config.js";
 import { resolveBrowserConfig, resolveProfile } from "../../browser/config.js";
 import { DEFAULT_UPLOAD_DIR, resolveExistingPathsWithinRoot } from "../../browser/paths.js";
 import { getBrowserProfileCapabilities } from "../../browser/profile-capabilities.js";
@@ -25,12 +27,14 @@ import {
   untrackSessionBrowserTab,
 } from "../../browser/session-tab-registry.js";
 import { loadConfig } from "../../config/config.js";
+import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import {
   executeActAction,
   executeConsoleAction,
   executeSnapshotAction,
   executeTabsAction,
 } from "./browser-tool.actions.js";
+import { runGmailReceiptDigest } from "./browser-tool.receipts.js";
 import { BrowserToolSchema } from "./browser-tool.schema.js";
 import { type AnyAgentTool, imageResultFromFile, jsonResult, readStringParam } from "./common.js";
 import { callGatewayTool } from "./gateway.js";
@@ -55,6 +59,7 @@ const browserToolDeps = {
   browserStart,
   browserStatus,
   browserStop,
+  browserTabs,
   imageResultFromFile,
   loadConfig,
   listNodes,
@@ -79,6 +84,7 @@ export const __testing = {
       browserStart: typeof browserStart;
       browserStatus: typeof browserStatus;
       browserStop: typeof browserStop;
+      browserTabs: typeof browserTabs;
       imageResultFromFile: typeof imageResultFromFile;
       loadConfig: typeof loadConfig;
       listNodes: typeof listNodes;
@@ -102,6 +108,7 @@ export const __testing = {
     browserToolDeps.browserStart = overrides?.browserStart ?? browserStart;
     browserToolDeps.browserStatus = overrides?.browserStatus ?? browserStatus;
     browserToolDeps.browserStop = overrides?.browserStop ?? browserStop;
+    browserToolDeps.browserTabs = overrides?.browserTabs ?? browserTabs;
     browserToolDeps.imageResultFromFile = overrides?.imageResultFromFile ?? imageResultFromFile;
     browserToolDeps.loadConfig = overrides?.loadConfig ?? loadConfig;
     browserToolDeps.listNodes = overrides?.listNodes ?? listNodes;
@@ -366,9 +373,18 @@ function shouldPreferHostForProfile(profileName: string | undefined) {
 }
 
 export function createBrowserTool(opts?: {
+  config?: MaumauConfig;
   sandboxBridgeUrl?: string;
   allowHostControl?: boolean;
   agentSessionKey?: string;
+  agentChannel?: GatewayMessageChannel;
+  senderName?: string | null;
+  senderUsername?: string | null;
+  requesterTailscaleLogin?: string | null;
+  senderIsOwner?: boolean;
+  agentGroupId?: string | null;
+  agentGroupChannel?: string | null;
+  agentGroupSpace?: string | null;
 }): AnyAgentTool {
   const targetDefault = opts?.sandboxBridgeUrl ? "sandbox" : "host";
   const hostHint =
@@ -376,10 +392,12 @@ export function createBrowserTool(opts?: {
   return {
     label: "Browser",
     name: "browser",
+    ownerOnly: true,
     description: [
-      "Control the browser via Maumau's browser control server (status/start/stop/profiles/tabs/open/snapshot/screenshot/actions).",
+      "Control the browser via Maumau's browser control server (status/start/stop/profiles/receipt_digest/tabs/open/snapshot/screenshot/actions).",
       "Browser choice: omit profile by default for the isolated Maumau-managed browser (`maumau`).",
       'For the logged-in user browser on the local host, use profile="user". A supported Chromium-based browser (v144+) must be running. Use only when existing logins/cookies matter and the user is present.',
+      "Use action=receipt_digest for the Gmail receipt and spending summary workflow. It prefers the signed-in existing-session browser and falls back to Clawd Cursor only when that lane is unavailable or insufficient.",
       'When a node-hosted browser proxy is available, the tool may auto-route to it. Pin a node with node=<id|name> or target="node".',
       "When using refs from snapshot (e.g. e12), keep the same tab: prefer passing targetId from the snapshot response into subsequent actions (act/click/type/etc).",
       'For stable, self-resolving refs across calls, use snapshot with refs="aria" (Playwright aria-ref ids). Default refs="role" are role+name-based.',
@@ -389,11 +407,68 @@ export function createBrowserTool(opts?: {
     ].join(" "),
     parameters: BrowserToolSchema,
     execute: async (_toolCallId, args) => {
+      if (
+        opts?.senderIsOwner !== true ||
+        opts?.agentGroupId ||
+        opts?.agentGroupChannel ||
+        opts?.agentGroupSpace
+      ) {
+        throw new Error("Browser automation is only available in owner direct chats.");
+      }
       const params = args as Record<string, unknown>;
       const action = readStringParam(params, "action", { required: true });
       const profile = readStringParam(params, "profile");
       const requestedNode = readStringParam(params, "node");
       let target = readStringParam(params, "target") as "sandbox" | "host" | "node" | undefined;
+
+      if (action === "receipt_digest") {
+        if (profile) {
+          throw new Error(
+            "receipt_digest selects the browser lane automatically; omit profile.",
+          );
+        }
+        if (requestedNode || target === "node" || target === "sandbox") {
+          throw new Error(
+            "receipt_digest only supports the local host browser lanes (existing-session or Clawd Cursor).",
+          );
+        }
+        const cfg = opts?.config ?? browserToolDeps.loadConfig();
+        return jsonResult(
+          await runGmailReceiptDigest({
+            cfg,
+            baseUrl: undefined,
+            deps: {
+              browserAct: browserToolDeps.browserAct,
+              browserNavigate: browserToolDeps.browserNavigate,
+              browserOpenTab: browserToolDeps.browserOpenTab,
+              browserStart: browserToolDeps.browserStart,
+              browserStatus: browserToolDeps.browserStatus,
+              browserTabs: browserToolDeps.browserTabs,
+            },
+            capabilityOpts: {
+              config: cfg,
+              agentSessionKey: opts?.agentSessionKey,
+              senderIsOwner: opts?.senderIsOwner,
+              senderName: opts?.senderName,
+              senderUsername: opts?.senderUsername,
+              requesterTailscaleLogin: opts?.requesterTailscaleLogin,
+              messageChannel: opts?.agentChannel,
+              groupId: opts?.agentGroupId,
+              groupChannel: opts?.agentGroupChannel,
+              groupSpace: opts?.agentGroupSpace,
+            },
+            query: readStringParam(params, "query"),
+            lookbackDays:
+              typeof params.lookbackDays === "number" && Number.isFinite(params.lookbackDays)
+                ? params.lookbackDays
+                : undefined,
+            limit:
+              typeof params.limit === "number" && Number.isFinite(params.limit)
+                ? params.limit
+                : undefined,
+          }),
+        );
+      }
 
       if (requestedNode && target && target !== "node") {
         throw new Error('node is only supported with target="node".');

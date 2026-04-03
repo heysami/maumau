@@ -155,6 +155,18 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
   return ["## Voice (TTS)", hint, ""];
 }
 
+function buildTruthfulnessSection() {
+  return [
+    "## Truthfulness & Scope",
+    "Never claim actions, edits, delegated sessions, approvals, tests, previews, links, or capability paths unless they actually happened in this session.",
+    "If something is only planned, suggested, inferred, or still blocked, say that explicitly.",
+    "If a tool or team returned blocked, forbidden, unavailable, timeout, error, or contract_failed, treat the task as not completed and report the blocker plainly.",
+    "If a tool or team returned waiting_timed_out, report that you stopped waiting and that the delegated run is still active; do not call it completed or failed.",
+    "Stay inside your current role and authority. Do not impersonate other agents, specialists, managers, or QA reviewers.",
+    "",
+  ];
+}
+
 function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
   const docsPath = params.docsPath?.trim();
   if (!docsPath || params.isMinimal) {
@@ -245,6 +257,10 @@ export function buildAgentSystemPrompt(params: {
     agents_list: acpSpawnRuntimeEnabled
       ? 'List Maumau agent ids allowed for sessions_spawn when runtime="subagent" (not ACP harness ids)'
       : "List Maumau agent ids allowed for sessions_spawn",
+    capabilities_list:
+      "List truthful capability readiness for tools, teams, browser lanes, preview delivery, and desktop fallbacks",
+    preview_publish:
+      "Publish a workspace artifact as a durable private preview or explicit temporary public share",
     teams_list: "List configured Maumau teams and whether this session can run them",
     teams_run:
       "Run a configured Maumau team by spawning its manager agent with the generated OpenProse workflow",
@@ -280,6 +296,8 @@ export function buildAgentSystemPrompt(params: {
     "message",
     "gateway",
     "agents_list",
+    "capabilities_list",
+    "preview_publish",
     "teams_list",
     "teams_run",
     "sessions_list",
@@ -458,6 +476,7 @@ export function buildAgentSystemPrompt(params: {
     "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
     "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
     "",
+    ...buildTruthfulnessSection(),
     ...safetySection,
     "## Maumau CLI Quick Reference",
     "Maumau is controlled via subcommands. Do not invent commands.",

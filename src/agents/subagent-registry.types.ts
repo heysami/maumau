@@ -12,6 +12,7 @@ export type SubagentRunRecord = {
   requesterDisplayKey: string;
   task: string;
   cleanup: "delete" | "keep";
+  teamRole?: string;
   label?: string;
   model?: string;
   workspaceDir?: string;
@@ -31,6 +32,7 @@ export type SubagentRunRecord = {
   cleanupHandled?: boolean;
   suppressAnnounceReason?: "steer-restart" | "killed";
   expectsCompletionMessage?: boolean;
+  suppressRequesterAnnounce?: boolean;
   /** Number of announce delivery attempts that returned false (deferred). */
   announceRetryCount?: number;
   /** Timestamp of the last announce retry attempt (for backoff). */

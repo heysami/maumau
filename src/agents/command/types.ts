@@ -69,6 +69,12 @@ export type AgentCommandOpts = {
   runContext?: AgentRunContext;
   /** Whether this caller is authorized for owner-only tools (defaults true for local CLI calls). */
   senderIsOwner?: boolean;
+  /** Trusted sender display name from the ingress surface. */
+  senderName?: string | null;
+  /** Trusted sender username/handle from the ingress surface. */
+  senderUsername?: string | null;
+  /** Verified requester Tailscale login when the current route is authenticated through Tailscale. */
+  requesterTailscaleLogin?: string | null;
   /** Whether this caller is authorized to use provider/model per-run overrides. */
   allowModelOverride?: boolean;
   /** Group/spawn metadata for subagent policy inheritance and routing context. */

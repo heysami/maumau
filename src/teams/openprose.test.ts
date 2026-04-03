@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { generateTeamOpenProsePreview } from "./openprose.js";
-import { createStarterTeamAgents, createStarterTeamConfig } from "./presets.js";
+import {
+  createMainOrchestrationTeamConfig,
+  createStarterTeamAgents,
+  createStarterTeamConfig,
+} from "./presets.js";
 
 describe("generateTeamOpenProsePreview", () => {
   it("generates deterministic specialist bindings for colliding role names", () => {
@@ -128,10 +132,60 @@ describe("generateTeamOpenProsePreview", () => {
     expect(preview).toContain("content_visual_designer = session: content_visual_designer");
     expect(preview).toContain("technical_review = session: technical_qa");
     expect(preview).toContain("experience_review = session: visual_ux_qa");
+    expect(preview).toContain(
+      "Never claim work, approvals, or decisions that did not actually happen in your own role session.",
+    );
+    expect(preview).toContain(
+      "You verify only. Do not implement fixes, redesign the product, or claim manager decisions or other specialists' work.",
+    );
     expect(preview).toContain("developer = resume: developer");
     expect(preview).toContain("let final_signoff = resume: manager");
     expect(preview).toContain(
       "context: { task, plan, architecture, execution_stage, developer, ui_ux_designer, content_visual_designer }",
     );
+    expect(preview).toContain(
+      "The generated OpenProse workflow is the execution contract, not an illustrative outline.",
+    );
+    expect(preview).toContain(
+      "Manager-authored reasoning, self-review, or commentary does not satisfy required specialist or QA participation.",
+    );
+    expect(preview).toContain(
+      "When spawning same-team specialist work, target the bound specialist instead of the manager.",
+    );
+    expect(preview).toContain(
+      "prefer a durable preview link over only local paths or LAN URLs whenever capability truth says private preview is ready.",
+    );
+    expect(preview).toContain("FILE:<workspace-relative-path>");
+    expect(preview).toContain("return a requester-openable non-loopback URL");
+  });
+
+  it("encodes root orchestration teams as routing flows instead of generic parallel specialists", () => {
+    const preview = generateTeamOpenProsePreview({
+      config: {
+        agents: {
+          list: [{ id: "main", name: "Main" }, ...createStarterTeamAgents()],
+        },
+      },
+      team: createMainOrchestrationTeamConfig(),
+    });
+
+    expect(preview).toContain(
+      "# Step 1: the manager triages the request and chooses the execution path",
+    );
+    expect(preview).toContain("execution_worker_result = session: execution_worker");
+    expect(preview).toContain("use teams_run with the chosen linked team instead of sessions_spawn.");
+    expect(preview).toContain("Choose the best linked team from: vibe-coder.");
+    expect(preview).toContain(
+      "plan for durable preview delivery instead of only local paths or LAN URLs whenever capability truth says private preview is ready.",
+    );
+    expect(preview).toContain(
+      "If you produced a previewable HTML/static web artifact for a remote/chat requester and capability truth says private preview is ready, return the durable preview link instead of only local paths or LAN URLs.",
+    );
+    expect(preview).toContain("FILE:<workspace-relative-path>");
+    expect(preview).toContain(
+      "verified requester-openable non-loopback fallback URL instead of only localhost instructions or filesystem paths",
+    );
+    expect(preview).toContain("context: { task, triage, linked_team_stage, linked_team_result }");
+    expect(preview).not.toContain("# Step 2: specialists work in parallel");
   });
 });

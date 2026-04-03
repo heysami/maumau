@@ -198,6 +198,14 @@ private let indonesianMacStrings: [String: String] = [
         "Lalu buka tautan privat yang ditampilkan di sini.",
     "Tailscale is not installed on this Mac yet":
         "Tailscale belum terpasang di Mac ini",
+    "Tailscale Serve is active on this Mac":
+        "Tailscale Serve aktif di Mac ini",
+    "Tailscale is signed in, but Serve is not active on this Mac.":
+        "Tailscale sudah login, tetapi Serve belum aktif di Mac ini.",
+    "Tailscale Funnel is active on this Mac":
+        "Tailscale Funnel aktif di Mac ini",
+    "Tailscale is signed in, but Funnel is not active on this Mac.":
+        "Tailscale sudah login, tetapi Funnel belum aktif di Mac ini.",
     "Tailscale is installed and signed in on this Mac":
         "Tailscale sudah terpasang dan sudah login di Mac ini",
     "Tailscale is installed, but this Mac is not signed in yet":
@@ -216,6 +224,12 @@ private let indonesianMacStrings: [String: String] = [
         "HTTPS privat untuk perangkat di jaringan Tailscale Anda.",
     "Public HTTPS link. Maumau requires its own password.":
         "Tautan HTTPS publik. Maumau memerlukan kata sandinya sendiri.",
+    "Loading private access settings…":
+        "Memuat pengaturan akses privat…",
+    "Install Tailscale on this Mac first.":
+        "Pasang Tailscale di Mac ini terlebih dahulu.",
+    "Sign in to Tailscale on this Mac first.":
+        "Masuk ke Tailscale di Mac ini terlebih dahulu.",
     "Sign in on this Mac first. Tailscale can open your browser, and then you can come back here for the private link.":
         "Masuk di Mac ini terlebih dahulu. Tailscale bisa membuka browser Anda, lalu Anda bisa kembali ke sini untuk tautan privat.",
     "Open browser sign-in": "Buka login lewat browser",
@@ -224,13 +238,55 @@ private let indonesianMacStrings: [String: String] = [
         "Mode privat mempercayai identitas Tailscale yang terverifikasi, jadi Maumau tidak memerlukan kata sandinya sendiri di sini.",
     "Public mode requires a Maumau password.":
         "Mode publik memerlukan kata sandi Maumau.",
+    "Finish these steps to turn on this access mode.":
+        "Selesaikan langkah-langkah ini untuk menyalakan mode akses ini.",
+    "This selection is not saved yet. Maumau keeps the current access mode until setup is complete.":
+        "Pilihan ini belum disimpan. Maumau tetap memakai mode akses saat ini sampai penyiapan selesai.",
+    "Current access mode":
+        "Mode akses saat ini",
+    "Tailscale Serve is selected, but it is not active on this Mac yet.":
+        "Tailscale Serve dipilih, tetapi belum aktif di Mac ini.",
+    "Tailscale Funnel is selected, but it is not active on this Mac yet.":
+        "Tailscale Funnel dipilih, tetapi belum aktif di Mac ini.",
+    "Tailscale Serve is not enabled on this tailnet yet.":
+        "Tailscale Serve belum diaktifkan di tailnet ini.",
+    "Tailscale Funnel is not enabled on this tailnet yet.":
+        "Tailscale Funnel belum diaktifkan di tailnet ini.",
+    "Activating Tailscale Serve on this Mac…":
+        "Mengaktifkan Tailscale Serve di Mac ini…",
+    "Activating Tailscale Funnel on this Mac…":
+        "Mengaktifkan Tailscale Funnel di Mac ini…",
+    "Ready to activate. Press Refresh to finish turning this on.":
+        "Siap diaktifkan. Tekan Segarkan untuk menyelesaikannya.",
+    "Install Tailscale on this Mac.":
+        "Pasang Tailscale di Mac ini.",
+    "Sign in to Tailscale on this Mac.":
+        "Masuk ke Tailscale di Mac ini.",
+    "Enable Tailscale Serve for this device in Tailscale.":
+        "Aktifkan Tailscale Serve untuk perangkat ini di Tailscale.",
+    "Enable Tailscale Funnel for this device in Tailscale.":
+        "Aktifkan Tailscale Funnel untuk perangkat ini di Tailscale.",
+    "Set a Maumau password for this mode.":
+        "Tetapkan kata sandi Maumau untuk mode ini.",
+    "Open Tailscale Serve setup":
+        "Buka pengaturan Tailscale Serve",
+    "Open Tailscale Funnel setup":
+        "Buka pengaturan Tailscale Funnel",
+    "Retry activation":
+        "Coba aktifkan lagi",
     "Password": "Kata sandi",
     "Stored in ~/.maumau/maumau.json. Prefer MAUMAU_GATEWAY_PASSWORD if you want to manage it outside the app.":
         "Disimpan di ~/.maumau/maumau.json. Lebih baik gunakan MAUMAU_GATEWAY_PASSWORD jika Anda ingin mengelolanya di luar aplikasi.",
     "Update password": "Perbarui kata sandi",
     "Password required for this mode.": "Kata sandi wajib untuk mode ini.",
+    "Could not apply private access settings on this Mac.":
+        "Tidak bisa menerapkan pengaturan akses privat di Mac ini.",
+    "Saved private access settings.":
+        "Pengaturan akses privat disimpan.",
     "Saved private access settings. Restarting gateway…":
         "Pengaturan akses privat disimpan. Gateway sedang dimulai ulang…",
+    "Saved private access settings. Applying…":
+        "Pengaturan akses privat disimpan. Sedang diterapkan…",
     "Saved private access settings. Restart the gateway to apply.":
         "Pengaturan akses privat disimpan. Mulai ulang gateway untuk menerapkan.",
     "Downloading the official Tailscale installer…":

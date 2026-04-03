@@ -1,4 +1,7 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { MaumauConfig } from "../config/config.js";
@@ -9,6 +12,16 @@ const mocks = vi.hoisted(() => ({
   deliverOutboundPayloads: vi.fn(async () => []),
   getChannelPlugin: vi.fn(() => ({})),
   resolveOutboundTarget: vi.fn(() => ({ ok: true as const, to: "+15551234567" })),
+  publishPreviewArtifact: vi.fn(async () => ({
+    previewId: "preview-123",
+    url: "https://preview.example/preview/for-sam-ji/preview-123/",
+    expiresAt: "2026-04-01T12:00:00.000Z",
+    sourcePath: "dist/index.html",
+    status: "published" as const,
+    visibility: "private" as const,
+    recipientHint: "sam-ji",
+    confirmRequired: false,
+  })),
 }));
 
 vi.mock("../channels/plugins/index.js", () => ({
@@ -18,6 +31,10 @@ vi.mock("../channels/plugins/index.js", () => ({
 
 vi.mock("../infra/outbound/deliver.js", () => ({
   deliverOutboundPayloads: mocks.deliverOutboundPayloads,
+}));
+
+vi.mock("../gateway/previews.js", () => ({
+  publishPreviewArtifact: mocks.publishPreviewArtifact,
 }));
 
 vi.mock("../infra/outbound/targets.js", async () => {
@@ -31,6 +48,7 @@ vi.mock("../infra/outbound/targets.js", async () => {
 });
 
 let deliverAgentCommandResult: typeof import("./agent/delivery.js").deliverAgentCommandResult;
+const tempDirs = new Set<string>();
 
 describe("deliverAgentCommandResult", () => {
   beforeAll(async () => {
@@ -87,7 +105,25 @@ describe("deliverAgentCommandResult", () => {
   beforeEach(() => {
     mocks.deliverOutboundPayloads.mockClear();
     mocks.resolveOutboundTarget.mockClear();
+    mocks.publishPreviewArtifact.mockClear();
   });
+
+  afterEach(async () => {
+    await Promise.all(
+      Array.from(tempDirs).map(async (dir) => {
+        tempDirs.delete(dir);
+        await fs.rm(dir, { recursive: true, force: true });
+      }),
+    );
+  });
+
+  async function createPreviewableArtifact(fileName = "index.html") {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-delivery-preview-"));
+    tempDirs.add(dir);
+    const filePath = path.join(dir, fileName);
+    await fs.writeFile(filePath, "<!doctype html><title>Preview</title>");
+    return { dir, filePath };
+  }
 
   it("prefers explicit accountId for outbound delivery", async () => {
     await runDelivery({
@@ -323,5 +359,92 @@ describe("deliverAgentCommandResult", () => {
       ],
       meta: { durationMs: 1 },
     });
+  });
+
+  it("appends a private preview receipt for previewable html artifacts", async () => {
+    const { dir, filePath } = await createPreviewableArtifact();
+
+    await runDelivery({
+      opts: {
+        message: "hello",
+        deliver: true,
+        channel: "telegram",
+        to: "12345",
+        senderIsOwner: true,
+        senderUsername: "samiaji",
+        requesterTailscaleLogin: "sam@tailnet",
+        workspaceDir: dir,
+      },
+      payloads: [{ text: `FILE:${filePath}` }],
+    });
+
+    expect(mocks.publishPreviewArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourcePath: filePath,
+        workspaceDir: dir,
+        visibility: "private",
+        senderIsOwner: true,
+        senderUsername: "samiaji",
+        messageChannel: "telegram",
+        requesterTailscaleLogin: "sam@tailnet",
+      }),
+    );
+    expect(mocks.deliverOutboundPayloads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payloads: expect.arrayContaining([
+          expect.objectContaining({ text: `FILE:${filePath}` }),
+          expect.objectContaining({
+            text: "Private preview for sam-ji: https://preview.example/preview/for-sam-ji/preview-123/",
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("offers explicit public-share opt-in instead of sending a url when requester is not on tailscale", async () => {
+    const { dir, filePath } = await createPreviewableArtifact();
+    mocks.publishPreviewArtifact.mockResolvedValueOnce({
+      sourcePath: filePath,
+      status: "share_consent_required",
+      visibility: "public-share",
+      recipientHint: "sam-ji",
+      confirmRequired: true,
+      blockedReason: "user_not_on_tailscale",
+      suggestedFix:
+        "The requester is not verified on Tailscale for this session. Offer a temporary public share instead.",
+    });
+
+    await runDelivery({
+      opts: {
+        message: "hello",
+        deliver: true,
+        channel: "whatsapp",
+        to: "+15551234567",
+        senderIsOwner: true,
+        senderUsername: "samiaji",
+        workspaceDir: dir,
+      },
+      payloads: [{ text: `FILE:${filePath}` }],
+    });
+
+    expect(mocks.deliverOutboundPayloads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payloads: expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringContaining(
+              "Private preview for sam-ji was not auto-sent because this requester is not verified on Tailscale for the current session.",
+            ),
+          }),
+        ]),
+      }),
+    );
+    const deliveredPayloads = mocks.deliverOutboundPayloads.mock.calls.at(-1)?.[0]?.payloads as
+      | Array<{ text?: string }>
+      | undefined;
+    const receiptText = deliveredPayloads?.find((payload) =>
+      payload.text?.includes("Temporary public share"),
+    )?.text;
+    expect(receiptText).toContain("Temporary public share is available on request for 1 hour.");
+    expect(receiptText).not.toContain("https://");
   });
 });

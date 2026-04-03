@@ -72088,6 +72088,86 @@
       "hasChildren": false
     },
     {
+      "path": "ui.mauOffice",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice",
+      "help": "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.enabled",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Enabled",
+      "help": "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.idlePackages",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Idle Packages",
+      "help": "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.idlePackages.enabled",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Enabled Idle Packages",
+      "help": "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.idlePackages.enabled.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.maxVisibleWorkers",
+      "kind": "core",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "performance"
+      ],
+      "label": "MauOffice Max Visible Workers",
+      "help": "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+      "hasChildren": false
+    },
+    {
       "path": "ui.seamColor",
       "kind": "core",
       "type": "string",

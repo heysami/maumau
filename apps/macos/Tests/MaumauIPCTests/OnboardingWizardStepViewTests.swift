@@ -6,6 +6,19 @@ import Testing
 
 private typealias ProtoAnyCodable = MaumauProtocol.AnyCodable
 
+private actor WizardReadinessProbeRecorder {
+    private(set) var authProbeCalls = 0
+    private(set) var probeCalls = 0
+
+    func recordAuthProbe() {
+        self.authProbeCalls += 1
+    }
+
+    func recordProbe() {
+        self.probeCalls += 1
+    }
+}
+
 @Suite(.serialized)
 @MainActor
 struct OnboardingWizardStepViewTests {
@@ -91,6 +104,28 @@ struct OnboardingWizardStepViewTests {
         #expect(OnboardingWizardModel.shouldRetryLegacyStart(for: error))
     }
 
+    @Test func `wizard lost-session detection matches restart churn errors`() {
+        let notFound = GatewayResponseError(
+            method: GatewayConnection.Method.wizardNext.rawValue,
+            code: ErrorCode.invalidRequest.rawValue,
+            message: "wizard not found",
+            details: nil)
+        let notRunning = GatewayResponseError(
+            method: GatewayConnection.Method.wizardNext.rawValue,
+            code: ErrorCode.invalidRequest.rawValue,
+            message: "wizard not running",
+            details: nil)
+        let unrelated = GatewayResponseError(
+            method: GatewayConnection.Method.wizardNext.rawValue,
+            code: ErrorCode.invalidRequest.rawValue,
+            message: "config changed since last load; re-run config.get and retry",
+            details: nil)
+
+        #expect(OnboardingWizardModel.isWizardSessionLostError(notFound))
+        #expect(OnboardingWizardModel.isWizardSessionLostError(notRunning))
+        #expect(!OnboardingWizardModel.isWizardSessionLostError(unrelated))
+    }
+
     @Test func `legacy wizard fallback drops embedded only params`() {
         let params = OnboardingWizardModel.startParams(
             mode: .local,
@@ -133,6 +168,68 @@ struct OnboardingWizardStepViewTests {
                 done: false,
                 status: AnyCodable("error"),
                 rawStep: nil))
+    }
+
+    @Test func `local wizard readiness accepts raw local health while auth warmup lags`() async {
+        let recorder = WizardReadinessProbeRecorder()
+
+        let readiness = await OnboardingWizardModel.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: 0.2,
+            authWarmupTimeout: 0.01,
+            port: 18789,
+            probeAuthReady: {
+                await recorder.recordAuthProbe()
+                return false
+            },
+            probeGatewayHealth: { _ in
+                await recorder.recordProbe()
+                return true
+            })
+
+        #expect(readiness == .processReady)
+        #expect(await recorder.authProbeCalls == 1)
+        #expect(await recorder.probeCalls == 1)
+    }
+
+    @Test func `local wizard readiness prefers auth ready before probing raw health`() async {
+        let recorder = WizardReadinessProbeRecorder()
+
+        let readiness = await OnboardingWizardModel.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: 0.2,
+            authWarmupTimeout: 0.05,
+            port: 18789,
+            probeAuthReady: {
+                await recorder.recordAuthProbe()
+                return true
+            },
+            probeGatewayHealth: { _ in
+                await recorder.recordProbe()
+                return true
+            })
+
+        #expect(readiness == .authReady)
+        #expect(await recorder.authProbeCalls == 1)
+        #expect(await recorder.probeCalls == 0)
+    }
+
+    @Test func `local wizard readiness fails when neither auth nor raw health becomes ready`() async {
+        let recorder = WizardReadinessProbeRecorder()
+        let readiness = await OnboardingWizardModel.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: 0.05,
+            authWarmupTimeout: 0.01,
+            port: 18789,
+            probeAuthReady: {
+                await recorder.recordAuthProbe()
+                return false
+            },
+            probeGatewayHealth: { _ in
+                await recorder.recordProbe()
+                return false
+            })
+
+        #expect(readiness == .notReady)
+        #expect(await recorder.authProbeCalls > 0)
+        #expect(await recorder.probeCalls > 0)
     }
 
     @Test func `persisted local onboard metadata counts as completed setup`() {
@@ -189,6 +286,17 @@ struct OnboardingWizardStepViewTests {
 
     @Test func `empty config does not count as completed setup`() {
         #expect(!OnboardingWizardModel.shouldTreatPersistedSetupAsComplete([:]))
+    }
+
+    @Test func `skip for now satisfies onboarding without pretending setup finished`() async {
+        let wizard = OnboardingWizardModel()
+
+        await wizard.skipForNow()
+
+        #expect(wizard.isSkippedForNow)
+        #expect(wizard.isSatisfiedForOnboarding)
+        #expect(!wizard.isComplete)
+        #expect(!wizard.isBlocking)
     }
 
     @Test func `legacy compatibility auto selects quickstart and later`() {

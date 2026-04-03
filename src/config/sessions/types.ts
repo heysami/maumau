@@ -90,6 +90,11 @@ export type SessionEntry = {
   forkedFromParent?: boolean;
   /** Subagent spawn depth (0 = main, 1 = sub-agent, 2 = sub-sub-agent). */
   spawnDepth?: number;
+  /**
+   * Session-local spawn depth ceiling override used by manager-led workflows
+   * that need deeper delegation than the global default.
+   */
+  subagentMaxSpawnDepth?: number;
   /** Explicit role assigned at spawn time for subagent tool policy/control decisions. */
   subagentRole?: "orchestrator" | "leaf";
   /** Explicit control scope assigned at spawn time for subagent control decisions. */
@@ -102,6 +107,10 @@ export type SessionEntry = {
   endedAt?: number;
   /** Accumulated runtime across subagent follow-up runs, persisted after completion. */
   runtimeMs?: number;
+  /** Latest requester owner authorization state for this session's active delivery route. */
+  requesterSenderIsOwner?: boolean;
+  /** Latest verified requester Tailscale login for this session's active delivery route. */
+  requesterTailscaleLogin?: string;
   /** Final persisted subagent run status, used after in-memory run archival. */
   status?: "running" | "done" | "failed" | "killed" | "timeout";
   /**

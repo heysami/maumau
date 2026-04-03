@@ -35,6 +35,32 @@ struct GatewayProcessManagerTests {
         #expect(!GatewayProcessManager.shouldTreatExistingListenerAttachFailureAsWarmup(protocolMismatch))
     }
 
+    @Test func `replaces managed local listener after auth failure`() {
+        let authFailure = URLError(.dataNotAllowed)
+        let managedListener = PortGuardian.Descriptor(
+            pid: 42,
+            command: "node",
+            fullCommand: "maumau-gateway",
+            executablePath: "/usr/local/bin/node")
+
+        #expect(GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            authFailure,
+            instance: managedListener))
+    }
+
+    @Test func `does not replace unrelated listener after auth failure`() {
+        let authFailure = URLError(.dataNotAllowed)
+        let unrelatedListener = PortGuardian.Descriptor(
+            pid: 99,
+            command: "python",
+            fullCommand: "python -m http.server 18789",
+            executablePath: "/usr/bin/python3")
+
+        #expect(!GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            authFailure,
+            instance: unrelatedListener))
+    }
+
     @Test func `clears last failure when health succeeds`() async throws {
         let session = GatewayTestWebSocketSession(
             taskFactory: {

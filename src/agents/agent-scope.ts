@@ -35,6 +35,8 @@ type ResolvedAgentConfig = {
   name?: string;
   workspace?: string;
   agentDir?: string;
+  executionStyle?: "direct" | "hybrid" | "orchestrator";
+  executionWorkerAgentId?: string;
   model?: AgentEntry["model"];
   thinkingDefault?: AgentEntry["thinkingDefault"];
   reasoningDefault?: AgentEntry["reasoningDefault"];
@@ -134,10 +136,26 @@ export function resolveAgentConfig(
   if (!entry) {
     return undefined;
   }
+  const defaultAgentId = resolveDefaultAgentId(cfg);
+  const inheritsExecutionDefaults = id === defaultAgentId || id === DEFAULT_AGENT_ID;
+  const executionStyle =
+    entry.executionStyle ??
+    (inheritsExecutionDefaults ? cfg.agents?.defaults?.executionStyle : undefined) ??
+    (id === DEFAULT_AGENT_ID ? "orchestrator" : undefined);
+  const executionWorkerAgentId =
+    (typeof entry.executionWorkerAgentId === "string" && entry.executionWorkerAgentId.trim()) ||
+    (inheritsExecutionDefaults &&
+    typeof cfg.agents?.defaults?.executionWorkerAgentId === "string" &&
+    cfg.agents.defaults.executionWorkerAgentId.trim()
+      ? cfg.agents.defaults.executionWorkerAgentId
+      : undefined) ||
+    (executionStyle === "orchestrator" && id === DEFAULT_AGENT_ID ? "main-worker" : undefined);
   return {
     name: typeof entry.name === "string" ? entry.name : undefined,
     workspace: typeof entry.workspace === "string" ? entry.workspace : undefined,
     agentDir: typeof entry.agentDir === "string" ? entry.agentDir : undefined,
+    executionStyle,
+    executionWorkerAgentId,
     model:
       typeof entry.model === "string" || (entry.model && typeof entry.model === "object")
         ? entry.model

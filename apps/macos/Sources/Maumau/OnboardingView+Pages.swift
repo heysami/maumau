@@ -1183,7 +1183,10 @@ extension OnboardingView {
                 TailscaleIntegrationSection(
                     connectionMode: self.state.connectionMode,
                     isPaused: self.state.isPaused,
-                    presentation: .onboarding)
+                    presentation: .onboarding,
+                    isActive: Self.shouldActivateOnboardingPageSideEffects(
+                        activePageIndex: self.activePageIndex,
+                        pageIndex: self.privateAccessPageIndex))
 
                 self.onboardingCard {
                     self.featureActionRow(

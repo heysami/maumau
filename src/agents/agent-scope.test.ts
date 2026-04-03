@@ -59,12 +59,59 @@ describe("resolveAgentConfig", () => {
       name: "Main Agent",
       workspace: "~/maumau",
       agentDir: "~/.maumau/agents/main",
+      executionStyle: "orchestrator",
+      executionWorkerAgentId: "main-worker",
       model: "anthropic/claude-sonnet-4-6",
       identity: undefined,
       groupChat: undefined,
       subagents: undefined,
       sandbox: undefined,
       tools: undefined,
+    });
+  });
+
+  it("resolves execution defaults from agent and global config", () => {
+    const cfg: MaumauConfig = {
+      agents: {
+        defaults: {
+          executionStyle: "hybrid",
+          executionWorkerAgentId: "shared-worker",
+        },
+        list: [{ id: "helper" }, { id: "main", executionWorkerAgentId: "main-worker-2" }],
+      },
+    };
+
+    expect(resolveAgentConfig(cfg, "helper")).toMatchObject({
+      executionStyle: "hybrid",
+      executionWorkerAgentId: "shared-worker",
+    });
+    expect(resolveAgentConfig(cfg, "main")).toMatchObject({
+      executionStyle: "hybrid",
+      executionWorkerAgentId: "main-worker-2",
+    });
+  });
+
+  it("does not leak execution defaults into non-default helper agents", () => {
+    const cfg: MaumauConfig = {
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: "main-worker",
+        },
+        list: [
+          { id: "main", default: true },
+          { id: "main-worker" },
+        ],
+      },
+    };
+
+    expect(resolveAgentConfig(cfg, "main")).toMatchObject({
+      executionStyle: "orchestrator",
+      executionWorkerAgentId: "main-worker",
+    });
+    expect(resolveAgentConfig(cfg, "main-worker")).toMatchObject({
+      executionStyle: undefined,
+      executionWorkerAgentId: undefined,
     });
   });
 

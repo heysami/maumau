@@ -166,6 +166,45 @@ describe("deliverReplies", () => {
     expect(sendMessage.mock.calls[0]?.[1]).toBe("hello");
   });
 
+  it("suppresses exact NO_REPLY payloads before Telegram delivery", async () => {
+    const runtime = createRuntime(false);
+    const sendMessage = vi.fn();
+    const bot = createBot({ sendMessage });
+
+    await deliverWith({
+      sessionKeyForInternalHooks: "agent:test:telegram:123",
+      replies: [{ text: "NO_REPLY" }],
+      runtime,
+      bot,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(triggerInternalHook).not.toHaveBeenCalled();
+  });
+
+  it("strips trailing silent and heartbeat tokens before Telegram-visible delivery", async () => {
+    const runtime = createRuntime(false);
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 7, chat: { id: "123" } });
+    const bot = createBot({ sendMessage });
+
+    await deliverWith({
+      sessionKeyForInternalHooks: "agent:test:telegram:123",
+      replies: [{ text: "Finished the task.\n\nNO_REPLY\nHEARTBEAT_OK" }],
+      runtime,
+      bot,
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]?.[1]).toBe("Finished the task.");
+    expect(triggerInternalHook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          content: "Finished the task.",
+        }),
+      }),
+    );
+  });
+
   it("reports message_sent success=false when hooks blank out a text-only reply", async () => {
     messageHookRunner.hasHooks.mockImplementation(
       (name: string) => name === "message_sending" || name === "message_sent",

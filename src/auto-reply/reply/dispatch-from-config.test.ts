@@ -103,6 +103,9 @@ const ttsMocks = vi.hoisted(() => {
     resolveTtsConfig: vi.fn((_cfg: MaumauConfig) => ({ mode: "final" })),
   };
 });
+const previewDeliveryMocks = vi.hoisted(() => ({
+  maybeBuildPreviewReceiptPayloads: vi.fn(async () => [] as ReplyPayload[]),
+}));
 
 vi.mock("./route-reply.runtime.js", () => ({
   isRoutableChannel: (channel: string | undefined) =>
@@ -208,6 +211,10 @@ vi.mock("../../tts/tts.js", () => ({
 }));
 vi.mock("../../tts/tts.runtime.js", () => ({
   maybeApplyTtsToPayload: (params: unknown) => ttsMocks.maybeApplyTtsToPayload(params),
+}));
+vi.mock("../../gateway/preview-delivery.js", () => ({
+  maybeBuildPreviewReceiptPayloads: (params: unknown) =>
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads(params),
 }));
 vi.mock("../../tts/tts-config.js", () => ({
   normalizeTtsAutoMode: (value: unknown) => ttsMocks.normalizeTtsAutoMode(value),
@@ -354,6 +361,8 @@ describe("dispatchReplyFromConfig", () => {
     ttsMocks.maybeApplyTtsToPayload.mockClear();
     ttsMocks.normalizeTtsAutoMode.mockClear();
     ttsMocks.resolveTtsConfig.mockClear();
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockReset();
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([]);
     ttsMocks.resolveTtsConfig.mockReturnValue({
       mode: "final",
     });
@@ -407,6 +416,36 @@ describe("dispatchReplyFromConfig", () => {
         groupId: "telegram:999",
       }),
     );
+  });
+
+  it("delivers preview receipts after the final reply without routing them through TTS", async () => {
+    setNoAbort();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      Surface: "telegram",
+      OriginatingChannel: "telegram",
+      OriginatingTo: "telegram:999",
+      SenderId: "999",
+      OwnerAllowFrom: ["telegram:999"],
+    });
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([
+      { text: "Private preview for owner: https://preview.example/lease" },
+    ]);
+
+    const replyResolver = async (_ctx: MsgContext, _opts?: GetReplyOptions, _cfg?: MaumauConfig) =>
+      ({ text: "Built UI.\nFILE:index.html" }) satisfies ReplyPayload;
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(2);
+    expect(dispatcher.sendFinalReply).toHaveBeenNthCalledWith(1, {
+      text: "Built UI.\nFILE:index.html",
+    });
+    expect(dispatcher.sendFinalReply).toHaveBeenNthCalledWith(2, {
+      text: "Private preview for owner: https://preview.example/lease",
+    });
+    expect(ttsMocks.maybeApplyTtsToPayload).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to thread-scoped session key when current ctx has no MessageThreadId", async () => {

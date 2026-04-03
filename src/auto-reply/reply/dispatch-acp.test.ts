@@ -51,6 +51,9 @@ const sessionMetaMocks = vi.hoisted(() => ({
 const bindingServiceMocks = vi.hoisted(() => ({
   listBySession: vi.fn<(sessionKey: string) => SessionBindingRecord[]>(() => []),
 }));
+const previewDeliveryMocks = vi.hoisted(() => ({
+  maybeBuildPreviewReceiptPayloads: vi.fn(async () => []),
+}));
 
 vi.mock("../../acp/control-plane/manager.js", () => ({
   getAcpSessionManager: () => managerMocks,
@@ -85,6 +88,10 @@ vi.mock("../../infra/outbound/session-binding-service.js", () => ({
   getSessionBindingService: () => ({
     listBySession: (sessionKey: string) => bindingServiceMocks.listBySession(sessionKey),
   }),
+}));
+vi.mock("../../gateway/preview-delivery.js", () => ({
+  maybeBuildPreviewReceiptPayloads: (params: unknown) =>
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads(params),
 }));
 
 const { tryDispatchAcpReply } = await import("./dispatch-acp.js");
@@ -266,9 +273,11 @@ describe("tryDispatchAcpReply", () => {
     ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
     sessionMetaMocks.readAcpSessionEntry.mockReset();
     sessionMetaMocks.readAcpSessionEntry.mockReturnValue(null);
-    bindingServiceMocks.listBySession.mockReset();
-    bindingServiceMocks.listBySession.mockReturnValue([]);
-  });
+  bindingServiceMocks.listBySession.mockReset();
+  bindingServiceMocks.listBySession.mockReturnValue([]);
+  previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockReset();
+  previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([]);
+});
 
   it("routes ACP block output to originating channel", async () => {
     setReadyAcpResolution();

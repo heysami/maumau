@@ -51,6 +51,8 @@ export type RunEmbeddedPiAgentParams = {
   senderName?: string | null;
   senderUsername?: string | null;
   senderE164?: string | null;
+  /** Verified requester Tailscale login when the current route is authenticated through Tailscale. */
+  requesterTailscaleLogin?: string | null;
   /** Whether the sender is an owner (required for owner-only tools). */
   senderIsOwner?: boolean;
   /** Current channel ID for auto-threading (Slack). */

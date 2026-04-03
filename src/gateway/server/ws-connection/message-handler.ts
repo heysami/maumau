@@ -1001,6 +1001,12 @@ export function attachGatewayWsMessageHandler(params: {
           canvasHostUrl,
           canvasCapability,
           canvasCapabilityExpiresAtMs,
+          internal:
+            authMethod === "tailscale"
+              ? {
+                  requesterTailscaleLogin: authResult.user?.trim() || undefined,
+                }
+              : undefined,
         };
         setSocketMaxPayload(socket, MAX_PAYLOAD_BYTES);
         setClient(nextClient);

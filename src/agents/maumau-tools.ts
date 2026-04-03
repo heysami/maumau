@@ -9,6 +9,7 @@ import type { SpawnedToolContext } from "./spawned-context.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";
 import { createAgentsListTool } from "./tools/agents-list-tool.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
+import { createCapabilitiesListTool } from "./tools/capabilities-list-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
 import { createCronTool } from "./tools/cron-tool.js";
@@ -18,6 +19,7 @@ import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
 import { createNodesTool } from "./tools/nodes-tool.js";
 import { createPdfTool } from "./tools/pdf-tool.js";
+import { createPreviewPublishTool } from "./tools/preview-publish-tool.js";
 import { createSessionStatusTool } from "./tools/session-status-tool.js";
 import { createSessionsHistoryTool } from "./tools/sessions-history-tool.js";
 import { createSessionsListTool } from "./tools/sessions-list-tool.js";
@@ -82,8 +84,14 @@ export function createMaumauTools(
     disableMessageTool?: boolean;
     /** Trusted sender id from inbound context (not tool args). */
     requesterSenderId?: string | null;
+    /** Trusted sender display name from inbound context. */
+    senderName?: string | null;
+    /** Trusted sender username/handle from inbound context. */
+    senderUsername?: string | null;
     /** Whether the requesting sender is an owner. */
     senderIsOwner?: boolean;
+    /** Verified requester Tailscale login when available. */
+    requesterTailscaleLogin?: string | null;
     /** Ephemeral session UUID — regenerated on /new and /reset. */
     sessionId?: string;
     /**
@@ -164,9 +172,18 @@ export function createMaumauTools(
       });
   const tools: AnyAgentTool[] = [
     createBrowserTool({
+      config: resolvedConfig,
       sandboxBridgeUrl: options?.sandboxBrowserBridgeUrl,
       allowHostControl: options?.allowHostBrowserControl,
       agentSessionKey: options?.agentSessionKey,
+      agentChannel: options?.agentChannel,
+      senderName: options?.senderName,
+      senderUsername: options?.senderUsername,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
+      senderIsOwner: options?.senderIsOwner,
+      agentGroupId: options?.agentGroupId,
+      agentGroupChannel: options?.agentGroupChannel,
+      agentGroupSpace: options?.agentGroupSpace,
     }),
     createCanvasTool({ config: options?.config }),
     createNodesTool({
@@ -196,6 +213,31 @@ export function createMaumauTools(
       agentSessionKey: options?.agentSessionKey,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
     }),
+    createCapabilitiesListTool({
+      agentSessionKey: options?.agentSessionKey,
+      agentChannel: options?.agentChannel,
+      senderIsOwner: options?.senderIsOwner,
+      senderName: options?.senderName,
+      senderUsername: options?.senderUsername,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
+      agentGroupId: options?.agentGroupId,
+      agentGroupChannel: options?.agentGroupChannel,
+      agentGroupSpace: options?.agentGroupSpace,
+      config: resolvedConfig,
+    }),
+    createPreviewPublishTool({
+      config: resolvedConfig,
+      workspaceDir,
+      sessionId: options?.sessionId,
+      senderName: options?.senderName,
+      senderUsername: options?.senderUsername,
+      senderIsOwner: options?.senderIsOwner,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
+      agentChannel: options?.agentChannel,
+      agentGroupId: options?.agentGroupId,
+      agentGroupChannel: options?.agentGroupChannel,
+      agentGroupSpace: options?.agentGroupSpace,
+    }),
     createTeamsListTool({
       agentSessionKey: options?.agentSessionKey,
       sandboxed: options?.sandboxed,
@@ -207,6 +249,8 @@ export function createMaumauTools(
       agentAccountId: options?.agentAccountId,
       agentTo: options?.agentTo,
       agentThreadId: options?.agentThreadId,
+      senderIsOwner: options?.senderIsOwner,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
       sandboxed: options?.sandboxed,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
       workspaceDir: spawnWorkspaceDir,
@@ -247,6 +291,8 @@ export function createMaumauTools(
       agentGroupId: options?.agentGroupId,
       agentGroupChannel: options?.agentGroupChannel,
       agentGroupSpace: options?.agentGroupSpace,
+      senderIsOwner: options?.senderIsOwner,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
       sandboxed: options?.sandboxed,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
       workspaceDir: spawnWorkspaceDir,

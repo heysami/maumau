@@ -60,6 +60,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "teams.list[].name": "Team Name",
   "teams.list[].description": "Team Description",
   "teams.list[].managerAgentId": "Team Manager Agent",
+  "teams.list[].implicitForManagerSessions": "Implicit Manager Team Sessions",
   "teams.list[].members": "Team Specialists",
   "teams.list[].members[].agentId": "Specialist Agent",
   "teams.list[].members[].role": "Specialist Role",

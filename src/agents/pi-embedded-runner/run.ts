@@ -883,6 +883,7 @@ export async function runEmbeddedPiAgent(
             senderName: params.senderName,
             senderUsername: params.senderUsername,
             senderE164: params.senderE164,
+            requesterTailscaleLogin: params.requesterTailscaleLogin,
             senderIsOwner: params.senderIsOwner,
             currentChannelId: params.currentChannelId,
             currentThreadTs: params.currentThreadTs,

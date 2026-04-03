@@ -88,6 +88,7 @@ import {
   resolveDefaultModelForAgent,
   resolveThinkingDefault,
 } from "./model-selection.js";
+import { rewriteTranscriptEntriesInSessionFile } from "./pi-embedded-runner/transcript-rewrite.js";
 import { prepareSessionManagerForRun } from "./pi-embedded-runner/session-manager-init.js";
 import { runEmbeddedPiAgent } from "./pi-embedded.js";
 import { buildWorkspaceSkillSnapshot } from "./skills.js";
@@ -349,6 +350,113 @@ async function persistAcpTurnTranscript(params: {
   return sessionEntry;
 }
 
+type SessionManagerLike = ReturnType<typeof SessionManager.open>;
+type SessionBranchEntry = ReturnType<SessionManagerLike["getBranch"]>[number];
+type SessionMessageEntry = Extract<SessionBranchEntry, { type: "message" }>;
+
+function replacePersistedPromptContent(params: {
+  message: SessionMessageEntry["message"];
+  persistedPrompt: string;
+  visiblePrompt: string;
+}): SessionMessageEntry["message"] | null {
+  if (params.message.role !== "user") {
+    return null;
+  }
+  if (typeof params.message.content === "string") {
+    if (params.message.content !== params.persistedPrompt) {
+      return null;
+    }
+    return {
+      ...params.message,
+      content: params.visiblePrompt,
+    };
+  }
+  if (!Array.isArray(params.message.content)) {
+    return null;
+  }
+
+  let changed = false;
+  const nextContent = params.message.content.map((part) => {
+    if (
+      part &&
+      typeof part === "object" &&
+      "type" in part &&
+      part.type === "text" &&
+      "text" in part &&
+      part.text === params.persistedPrompt
+    ) {
+      changed = true;
+      return {
+        ...part,
+        text: params.visiblePrompt,
+      };
+    }
+    return part;
+  });
+  if (!changed) {
+    return null;
+  }
+  return {
+    ...params.message,
+    content: nextContent,
+  };
+}
+
+function resolveLatestPersistedPromptRewrite(params: {
+  sessionFile: string;
+  persistedPrompt: string;
+  visiblePrompt: string;
+}): { entryId: string; message: SessionMessageEntry["message"] } | null {
+  const branch = SessionManager.open(params.sessionFile).getBranch();
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry.type !== "message") {
+      continue;
+    }
+    const replacement = replacePersistedPromptContent({
+      message: entry.message,
+      persistedPrompt: params.persistedPrompt,
+      visiblePrompt: params.visiblePrompt,
+    });
+    if (!replacement) {
+      continue;
+    }
+    return {
+      entryId: entry.id,
+      message: replacement,
+    };
+  }
+  return null;
+}
+
+async function maybeRewriteInternalEventTranscriptPrompt(params: {
+  sessionFile: string | undefined;
+  sessionId: string;
+  sessionKey: string | undefined;
+  persistedPrompt: string;
+  visiblePrompt: string;
+}): Promise<void> {
+  if (!params.sessionFile || params.persistedPrompt === params.visiblePrompt) {
+    return;
+  }
+  const replacement = resolveLatestPersistedPromptRewrite({
+    sessionFile: params.sessionFile,
+    persistedPrompt: params.persistedPrompt,
+    visiblePrompt: params.visiblePrompt,
+  });
+  if (!replacement) {
+    return;
+  }
+  await rewriteTranscriptEntriesInSessionFile({
+    sessionFile: params.sessionFile,
+    sessionId: params.sessionId,
+    sessionKey: params.sessionKey,
+    request: {
+      replacements: [replacement],
+    },
+  });
+}
+
 function runAgentAttempt(params: {
   providerOverride: string;
   modelOverride: string;
@@ -500,6 +608,9 @@ function runAgentAttempt(params: {
     groupChannel: params.runContext.groupChannel,
     groupSpace: params.runContext.groupSpace,
     spawnedBy: params.spawnedBy,
+    senderName: params.opts.senderName,
+    senderUsername: params.opts.senderUsername,
+    requesterTailscaleLogin: params.opts.requesterTailscaleLogin,
     currentChannelId: params.runContext.currentChannelId,
     currentThreadTs: params.runContext.currentThreadTs,
     replyToMode: params.runContext.replyToMode,
@@ -682,6 +793,7 @@ async function prepareAgentCommandExecution(
 
   return {
     body,
+    visiblePrompt: message,
     cfg,
     normalizedSpawned,
     agentCfg,
@@ -715,6 +827,7 @@ async function agentCommandInternal(
   const prepared = await prepareAgentCommandExecution(opts, runtime);
   const {
     body,
+    visiblePrompt,
     cfg,
     normalizedSpawned,
     agentCfg,
@@ -852,7 +965,7 @@ async function agentCommandInternal(
       const finalText = visibleTextAccumulator.finalize();
       try {
         sessionEntry = await persistAcpTurnTranscript({
-          body,
+          body: visiblePrompt,
           finalText: finalTextRaw,
           sessionId,
           sessionKey,
@@ -1240,6 +1353,13 @@ async function agentCommandInternal(
         });
       }
     } catch (err) {
+      await maybeRewriteInternalEventTranscriptPrompt({
+        sessionFile,
+        sessionId,
+        sessionKey,
+        persistedPrompt: body,
+        visiblePrompt,
+      });
       if (!lifecycleEnded) {
         emitAgentEvent({
           runId,
@@ -1254,6 +1374,14 @@ async function agentCommandInternal(
       }
       throw err;
     }
+
+    await maybeRewriteInternalEventTranscriptPrompt({
+      sessionFile,
+      sessionId,
+      sessionKey,
+      persistedPrompt: body,
+      visiblePrompt,
+    });
 
     // Update token+model fields in the session store.
     if (sessionStore && sessionKey) {

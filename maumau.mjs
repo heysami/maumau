@@ -38,6 +38,22 @@ const ensureSupportedNodeVersion = () => {
 
 ensureSupportedNodeVersion();
 
+const shouldUseReadonlyCliState = (argv) => {
+  const args = argv.slice(2);
+  if (args.includes("reset") || args.includes("uninstall")) {
+    return true;
+  }
+  if (args[0] === "onboard" && (args.includes("--reset") || args.includes("--reset-scope"))) {
+    return true;
+  }
+  return false;
+};
+
+if (shouldUseReadonlyCliState(process.argv)) {
+  process.env.MAUMAU_AUTH_STORE_READONLY ??= "1";
+  process.env.MAUMAU_MODELS_JSON_READONLY ??= "1";
+}
+
 // https://nodejs.org/api/module.html#module-compile-cache
 if (module.enableCompileCache && !process.env.NODE_DISABLE_COMPILE_CACHE) {
   try {

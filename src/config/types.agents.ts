@@ -1,5 +1,6 @@
 import type { ChatType } from "../channels/chat-type.js";
 import type { AgentDefaultsConfig } from "./types.agent-defaults.js";
+import type { AgentExecutionStyle } from "./types.agents-execution.js";
 import type { AgentModelConfig, AgentSandboxConfig } from "./types.agents-shared.js";
 import type { HumanDelayConfig, IdentityConfig } from "./types.base.js";
 import type { GroupChatConfig } from "./types.messages.js";
@@ -64,6 +65,8 @@ export type AgentConfig = {
   name?: string;
   workspace?: string;
   agentDir?: string;
+  executionStyle?: AgentExecutionStyle;
+  executionWorkerAgentId?: string;
   model?: AgentModelConfig;
   /** Optional per-agent default thinking level (overrides agents.defaults.thinkingDefault). */
   thinkingDefault?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";

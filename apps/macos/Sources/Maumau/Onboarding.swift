@@ -182,6 +182,7 @@ struct OnboardingView: View {
     @State var didAutoInstallDefaultSkills = false
     @Bindable var state: AppState
     var permissionMonitor: PermissionMonitor
+    private let tailscaleService = TailscaleService.shared
 
     static let windowWidth: CGFloat = 630
     static let windowHeight: CGFloat = 752 // ~+10% to fit full onboarding content
@@ -352,11 +353,20 @@ struct OnboardingView: View {
             self.localWorkspaceSafetyMessage != nil
     }
 
+    var isPrivateAccessBlocking: Bool {
+        Self.shouldBlockPrivateAccessAdvance(
+            mode: self.state.connectionMode,
+            activePageIndex: self.activePageIndex,
+            privateAccessPageIndex: self.privateAccessPageIndex,
+            accessFlow: self.tailscaleService.accessFlow)
+    }
+
     var canAdvance: Bool {
         (self.activePageIndex != self.languagePageIndex || self.state.hasSelectedOnboardingLanguage)
             && !self.isWizardBlocking
             && !self.isCLIBlocking
             && !self.isWorkspaceBlocking
+            && !self.isPrivateAccessBlocking
     }
 
     var isCheckingLocalGatewaySetup: Bool {
@@ -459,6 +469,17 @@ struct OnboardingView: View {
         let blockedByWizard = wizardPageOrderIndex != nil && !wizardComplete &&
             targetPage > (wizardPageOrderIndex ?? 0)
         return blockedByCurrentStep || blockedByRequiredSetup || blockedByWizard
+    }
+
+    static func shouldBlockPrivateAccessAdvance(
+        mode: AppState.ConnectionMode,
+        activePageIndex: Int,
+        privateAccessPageIndex: Int,
+        accessFlow: TailscaleService.AccessFlowState) -> Bool
+    {
+        mode == .local &&
+            activePageIndex == privateAccessPageIndex &&
+            accessFlow.blocksOnboardingAdvance
     }
 
     struct LocalGatewayProbe: Equatable {

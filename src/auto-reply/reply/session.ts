@@ -463,6 +463,7 @@ export async function initSessionState(params: {
     lastThreadId,
   };
   const metaPatch = deriveSessionMetaPatch({
+    cfg,
     ctx: sessionCtxForState,
     sessionKey,
     existing: sessionEntry,

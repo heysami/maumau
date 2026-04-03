@@ -45,6 +45,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
   "teams.list[].managerAgentId":
     "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+  "teams.list[].implicitForManagerSessions":
+    "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
   "teams.list[].members":
     "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
   "teams.list[].members[].agentId":

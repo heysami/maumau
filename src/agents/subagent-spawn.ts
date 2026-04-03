@@ -17,9 +17,11 @@ import {
   parseAgentSessionKey,
 } from "../routing/session-key.js";
 import { emitSessionLifecycleEvent } from "../sessions/session-lifecycle-events.js";
+import { findTeamConfig, listTeamMembers } from "../teams/model.js";
 import { resolveSessionTeamContext, resolveTeamAgentAccess } from "../teams/runtime.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resolveAgentConfig } from "./agent-scope.js";
+import { resolveExecutionRouteRequirement } from "./execution-routing.js";
 import { AGENT_LANE_SUBAGENT } from "./lanes.js";
 import { resolveSubagentSpawnModelSelection } from "./model-selection.js";
 import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
@@ -34,7 +36,10 @@ import {
   materializeSubagentAttachments,
   type SubagentAttachmentReceiptFile,
 } from "./subagent-attachments.js";
-import { resolveSubagentCapabilities } from "./subagent-capabilities.js";
+import {
+  resolveStoredSubagentCapabilities,
+  resolveSubagentCapabilities,
+} from "./subagent-capabilities.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { countActiveRunsForSession, registerSubagentRun } from "./subagent-registry.js";
 import { readStringParam } from "./tools/common.js";
@@ -55,6 +60,7 @@ export type SpawnSubagentParams = {
   task: string;
   label?: string;
   agentId?: string;
+  intent?: "delegate" | "team_manager";
   model?: string;
   thinking?: string;
   runTimeoutSeconds?: number;
@@ -63,6 +69,7 @@ export type SpawnSubagentParams = {
   cleanup?: "delete" | "keep";
   sandbox?: SpawnSubagentSandboxMode;
   expectsCompletionMessage?: boolean;
+  suppressRequesterAnnounce?: boolean;
   attachments?: Array<{
     name: string;
     content: string;
@@ -74,6 +81,7 @@ export type SpawnSubagentParams = {
   sessionPatch?: {
     teamId?: string;
     teamRole?: string;
+    subagentMaxSpawnDepth?: number;
   };
 };
 
@@ -86,6 +94,8 @@ export type SpawnSubagentContext = {
   agentGroupId?: string | null;
   agentGroupChannel?: string | null;
   agentGroupSpace?: string | null;
+  senderIsOwner?: boolean;
+  requesterTailscaleLogin?: string | null;
   requesterAgentIdOverride?: string;
   /** Explicit workspace directory for subagent to inherit (optional). */
   workspaceDir?: string;
@@ -236,6 +246,56 @@ function summarizeError(err: unknown): string {
   return "error";
 }
 
+function normalizeRoleHint(value?: string): string {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function labelMatchesTeamRole(label: string, role: string): boolean {
+  if (!label || !role) {
+    return false;
+  }
+  if (label === role || label.startsWith(`${role} `) || label.includes(` ${role} `)) {
+    return true;
+  }
+  const labelTokens = new Set(label.split(" ").filter(Boolean));
+  const roleTokens = role.split(" ").filter(Boolean);
+  return roleTokens.length > 0 && roleTokens.every((token) => labelTokens.has(token));
+}
+
+function resolveImplicitManagerSpecialistTarget(params: {
+  requesterTeamContext?: ReturnType<typeof resolveSessionTeamContext>;
+  label?: string;
+}): { agentId?: string; role?: string; ambiguous?: boolean } {
+  // Team managers often delegate by role label (for example from generated OpenProse).
+  // Resolve that label back to the configured specialist agent before falling back to self.
+  if (params.requesterTeamContext?.teamRole?.trim().toLowerCase() !== "manager") {
+    return {};
+  }
+  const team = params.requesterTeamContext.team;
+  if (!team) {
+    return {};
+  }
+  const normalizedLabel = normalizeRoleHint(params.label);
+  if (!normalizedLabel) {
+    return {};
+  }
+  const matches = listTeamMembers(team).filter((member) =>
+    labelMatchesTeamRole(normalizedLabel, normalizeRoleHint(member.role)),
+  );
+  if (matches.length !== 1) {
+    return { ambiguous: matches.length > 1 };
+  }
+  return {
+    agentId: normalizeAgentId(matches[0]!.agentId),
+    role: matches[0]!.role,
+  };
+}
+
 async function ensureThreadBindingForSubagentSpawn(params: {
   hookRunner: ReturnType<typeof getGlobalHookRunner>;
   childSessionKey: string;
@@ -376,7 +436,9 @@ export async function spawnSubagentDirect(
 
   const callerDepth = getSubagentDepthFromSessionStore(requesterInternalKey, { cfg });
   const maxSpawnDepth =
-    cfg.agents?.defaults?.subagents?.maxSpawnDepth ?? DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH;
+    resolveStoredSubagentCapabilities(requesterInternalKey, { cfg }).maxSpawnDepth ??
+    cfg.agents?.defaults?.subagents?.maxSpawnDepth ??
+    DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH;
   if (callerDepth >= maxSpawnDepth) {
     return {
       status: "forbidden",
@@ -396,11 +458,90 @@ export async function spawnSubagentDirect(
   const requesterAgentId = normalizeAgentId(
     ctx.requesterAgentIdOverride ?? parseAgentSessionKey(requesterInternalKey)?.agentId,
   );
-  const targetAgentId = requestedAgentId ? normalizeAgentId(requestedAgentId) : requesterAgentId;
+  const requesterAgentConfig = resolveAgentConfig(cfg, requesterAgentId);
+  const defaultTargetAgentId =
+    requesterAgentConfig?.executionStyle === "orchestrator" &&
+    typeof requesterAgentConfig.executionWorkerAgentId === "string" &&
+    requesterAgentConfig.executionWorkerAgentId.trim()
+      ? normalizeAgentId(requesterAgentConfig.executionWorkerAgentId)
+      : requesterAgentId;
   const requesterTeamContext = resolveSessionTeamContext({
     cfg,
     sessionKey: requesterInternalKey,
   });
+  const implicitManagerSpecialistTarget = !requestedAgentId
+    ? resolveImplicitManagerSpecialistTarget({
+        requesterTeamContext,
+        label,
+      })
+    : undefined;
+  const targetAgentId = requestedAgentId
+    ? normalizeAgentId(requestedAgentId)
+    : implicitManagerSpecialistTarget?.agentId ?? defaultTargetAgentId;
+  const executionRouteRequirement = resolveExecutionRouteRequirement({
+    cfg,
+    task,
+    sessionKey: requesterInternalKey,
+    agentId: requesterAgentId,
+  });
+  const routedTeamId = params.sessionPatch?.teamId?.trim().toLowerCase();
+  const routedTeamConfig = routedTeamId ? findTeamConfig(cfg, routedTeamId) : undefined;
+  const requesterTeamId = requesterTeamContext?.teamId?.trim().toLowerCase();
+  const requiredTeamId = executionRouteRequirement.teamId?.trim().toLowerCase();
+  const isRequiredTeamManagerSpawn =
+    params.intent === "team_manager" &&
+    params.skipAllowAgentsCheck === true &&
+    params.sessionPatch?.teamRole === "manager" &&
+    !!routedTeamConfig &&
+    executionRouteRequirement.kind === "team_openprose" &&
+    executionRouteRequirement.teamReady === true &&
+    requiredTeamId === routedTeamId &&
+    normalizeAgentId(routedTeamConfig.managerAgentId) === targetAgentId;
+  const requesterIsTeamManager =
+    requesterTeamContext?.teamRole?.trim().toLowerCase() === "manager";
+  if (
+    requesterIsTeamManager &&
+    !requestedAgentId &&
+    params.intent !== "team_manager" &&
+    targetAgentId === requesterAgentId
+  ) {
+    const teamMembers = requesterTeamContext?.team
+      ? listTeamMembers(requesterTeamContext.team)
+      : [];
+    const availableSpecialists = teamMembers
+      .map((member) => `${member.role} -> ${normalizeAgentId(member.agentId)}`)
+      .join(", ");
+    const labelHint = label
+      ? implicitManagerSpecialistTarget?.ambiguous
+        ? ` Label "${label}" matched multiple configured specialist roles.`
+        : ` Label "${label}" did not match a configured specialist role.`
+      : "";
+    return {
+      status: "forbidden",
+      error:
+        `Team managers must target a configured specialist when using sessions_spawn.${labelHint} ` +
+        "Pass agentId explicitly or use a label that matches the configured role name. " +
+        (availableSpecialists
+          ? `Available specialists: ${availableSpecialists}.`
+          : "No configured specialists were found for this team."),
+    };
+  }
+  if (
+    requesterAgentConfig?.executionStyle === "orchestrator" &&
+    executionRouteRequirement.requiresTeam &&
+    requesterTeamId !== requiredTeamId &&
+    !isRequiredTeamManagerSpawn
+  ) {
+    const suggestedTeamRun = executionRouteRequirement.teamId
+      ? `teams_run with teamId="${executionRouteRequirement.teamId}"`
+      : "teams_run with the matching linked specialist team";
+    return {
+      status: "forbidden",
+      error: executionRouteRequirement.teamReady
+        ? `This task requires UI/human-facing team execution. Use ${suggestedTeamRun} instead of sessions_spawn.`
+        : `This task requires UI/human-facing team execution, but the team route is currently blocked: ${executionRouteRequirement.blockingReasons.join(" ") || "unknown blocking reason"}`,
+    };
+  }
   const teamSessionPatch: Record<string, unknown> = {};
   if (params.skipAllowAgentsCheck !== true && requesterTeamContext?.teamId) {
     const teamAccess = resolveTeamAgentAccess({
@@ -419,7 +560,7 @@ export async function spawnSubagentDirect(
       teamSessionPatch.teamRole = teamAccess.teamRole;
     }
   } else if (targetAgentId !== requesterAgentId && params.skipAllowAgentsCheck !== true) {
-    const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
+    const allowAgents = requesterAgentConfig?.subagents?.allowAgents ?? [];
     const allowAny = allowAgents.some((value) => value.trim() === "*");
     const normalizedTargetId = targetAgentId.toLowerCase();
     const allowSet = new Set(
@@ -460,11 +601,17 @@ export async function spawnSubagentDirect(
   }
   const childDepth = callerDepth + 1;
   const spawnedByKey = requesterInternalKey;
+  const childMaxSpawnDepth =
+    typeof params.sessionPatch?.subagentMaxSpawnDepth === "number" &&
+    Number.isFinite(params.sessionPatch.subagentMaxSpawnDepth)
+      ? Math.max(1, Math.floor(params.sessionPatch.subagentMaxSpawnDepth))
+      : maxSpawnDepth;
   const childCapabilities = resolveSubagentCapabilities({
     depth: childDepth,
-    maxSpawnDepth,
+    maxSpawnDepth: childMaxSpawnDepth,
   });
-  const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
+  const targetAgentConfig =
+    targetAgentId === requesterAgentId ? requesterAgentConfig : resolveAgentConfig(cfg, targetAgentId);
   const resolvedModel = resolveSubagentSpawnModelSelection({
     cfg,
     agentId: targetAgentId,
@@ -509,7 +656,18 @@ export async function spawnSubagentDirect(
     ...teamSessionPatch,
     ...(params.sessionPatch?.teamId ? { teamId: params.sessionPatch.teamId } : {}),
     ...(params.sessionPatch?.teamRole ? { teamRole: params.sessionPatch.teamRole } : {}),
+    ...(typeof params.sessionPatch?.subagentMaxSpawnDepth === "number"
+      ? { subagentMaxSpawnDepth: childMaxSpawnDepth }
+      : {}),
+    ...(ctx.senderIsOwner === true ? { requesterSenderIsOwner: true } : {}),
+    ...(ctx.requesterTailscaleLogin?.trim()
+      ? { requesterTailscaleLogin: ctx.requesterTailscaleLogin.trim() }
+      : {}),
   };
+  const resolvedChildTeamRole =
+    typeof initialChildSessionPatch.teamRole === "string"
+      ? initialChildSessionPatch.teamRole
+      : undefined;
   if (resolvedModel) {
     initialChildSessionPatch.model = resolvedModel;
   }
@@ -779,11 +937,13 @@ export async function spawnSubagentDirect(
       requesterDisplayKey,
       task,
       cleanup,
+      teamRole: resolvedChildTeamRole,
       label: label || undefined,
       model: resolvedModel,
       workspaceDir: spawnedMetadata.workspaceDir,
       runTimeoutSeconds,
       expectsCompletionMessage,
+      suppressRequesterAnnounce: params.suppressRequesterAnnounce,
       spawnMode,
       attachmentsDir: attachmentAbsDir,
       attachmentsRootDir: attachmentRootDir,

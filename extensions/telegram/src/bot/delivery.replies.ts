@@ -34,6 +34,7 @@ import {
   sendTelegramWithThreadFallback,
 } from "./delivery.send.js";
 import { resolveTelegramReplyId, type TelegramThreadSpec } from "./helpers.js";
+import { normalizeTelegramReplyPayload } from "./reply-normalize.js";
 import {
   markReplyApplied,
   resolveReplyToForSend,
@@ -646,6 +647,11 @@ export async function deliverReplies(params: {
       }
     }
 
+    const normalizedReply = normalizeTelegramReplyPayload(reply);
+    if (!normalizedReply) {
+      continue;
+    }
+    reply = normalizedReply;
     const contentForSentHook = reply.text || "";
 
     try {

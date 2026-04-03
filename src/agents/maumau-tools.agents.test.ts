@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
+import { createMainOrchestrationTeamConfig, MAIN_WORKER_AGENT_ID } from "../teams/presets.js";
 
 let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
   session: createPerSenderSessionConfig(),
@@ -129,5 +130,26 @@ describe("agents_list", () => {
     expect(agents?.map((agent) => agent.id)).toEqual(["main", "research"]);
     const research = agents?.find((agent) => agent.id === "research");
     expect(research?.configured).toBe(false);
+  });
+
+  it("uses implicit root-team membership for the main orchestrator agent", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+      agents: {
+        list: [{ id: "main" }, { id: MAIN_WORKER_AGENT_ID }],
+      },
+      teams: {
+        list: [createMainOrchestrationTeamConfig()],
+      },
+    };
+
+    const tool = requireAgentsListTool();
+    const result = await tool.execute("call5", {});
+    expect(result.details).toMatchObject({
+      requester: "main",
+      allowAny: false,
+    });
+    const agents = readAgentList(result);
+    expect(agents?.map((agent) => agent.id)).toEqual(["main", MAIN_WORKER_AGENT_ID]);
   });
 });

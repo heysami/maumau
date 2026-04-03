@@ -440,10 +440,16 @@ actor GatewayConnection {
     }
 
     private func configure(url: URL, token: String?, password: String?) async {
-        if self.client != nil, self.configuredURL == url, self.configuredToken == token,
+        if let client = self.client,
+           self.configuredURL == url,
+           self.configuredToken == token,
            self.configuredPassword == password
         {
-            return
+            if await client.isConnectedOrConnecting() {
+                return
+            }
+            await client.shutdown()
+            self.client = nil
         }
         if let client {
             await client.shutdown()

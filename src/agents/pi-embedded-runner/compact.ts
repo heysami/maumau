@@ -746,6 +746,11 @@ export async function compactEmbeddedPiSessionDirect(
       workspaceDir: effectiveWorkspace,
       config: params.config,
       skillsSnapshot: params.skillsSnapshot,
+      agentId: resolveSessionAgentId({
+        config: params.config,
+        sessionKey: params.sessionKey,
+      }),
+      sessionKey: params.sessionKey,
     });
     restoreSkillEnv = params.skillsSnapshot
       ? applySkillEnvOverridesFromSnapshot({

@@ -75,6 +75,23 @@ export function listTeamMembers(team: TeamConfig): TeamMemberConfig[] {
   return Array.isArray(team.members) ? team.members : [];
 }
 
+function normalizeWorkflowRoleList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const roles: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const normalized = normalizeOptionalText(entry)?.toLowerCase();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    roles.push(normalized);
+  }
+  return roles.length > 0 ? roles : undefined;
+}
+
 function normalizeTeamWorkflowFromBase(
   workflow: TeamWorkflowBaseConfig,
   workflowId = DEFAULT_TEAM_WORKFLOW_ID,
@@ -85,6 +102,14 @@ function normalizeTeamWorkflowFromBase(
     description: normalizeOptionalText(workflow.description),
     managerPrompt: normalizeOptionalText(workflow.managerPrompt),
     synthesisPrompt: normalizeOptionalText(workflow.synthesisPrompt),
+    contract:
+      workflow.contract && typeof workflow.contract === "object"
+        ? {
+            requiredRoles: normalizeWorkflowRoleList(workflow.contract.requiredRoles),
+            requiredQaRoles: normalizeWorkflowRoleList(workflow.contract.requiredQaRoles),
+            requireDelegation: workflow.contract.requireDelegation === true || undefined,
+          }
+        : undefined,
     default: workflow.default === true || undefined,
   };
 }

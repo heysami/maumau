@@ -26,10 +26,7 @@ and there is no better native integration already available.
 ## Install
 
 ```bash
-git clone https://github.com/AmrDab/clawdcursor.git
-cd clawdcursor
-npm install
-npm run setup
+curl -fsSL https://clawdcursor.com/install.sh | bash
 clawdcursor doctor
 ```
 

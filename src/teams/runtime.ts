@@ -1,11 +1,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig, type MaumauConfig } from "../config/config.js";
 import type { TeamConfig, TeamWorkflowConfig } from "../config/types.teams.js";
 import { loadSessionEntry } from "../gateway/session-utils.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
-import { findTeamConfig, listLinkedAgentIds, resolveTeamRole, canTeamUseTeam } from "./model.js";
+import { evaluateTeamWorkflowContractReadiness } from "./contracts.js";
+import {
+  findTeamConfig,
+  listConfiguredTeams,
+  listLinkedAgentIds,
+  listLinkedTeamIds,
+  resolveTeamRole,
+  canTeamUseTeam,
+} from "./model.js";
 import { findTeamWorkflow, normalizeTeamWorkflowId } from "./model.js";
 import { generateTeamOpenProsePreview } from "./openprose.js";
 
@@ -17,12 +25,148 @@ function normalizeOptionalText(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
+function resolveSessionAgentId(params: { cfg: MaumauConfig; sessionKey: string }): string | undefined {
+  const parsedAgentId = parseAgentSessionKey(params.sessionKey)?.agentId;
+  if (parsedAgentId) {
+    return normalizeAgentId(parsedAgentId);
+  }
+  if (params.sessionKey.trim().toLowerCase() === "main") {
+    return normalizeAgentId(resolveDefaultAgentId(params.cfg));
+  }
+  return undefined;
+}
+
+function findImplicitManagerTeam(params: {
+  cfg: MaumauConfig;
+  managerAgentId?: string;
+}): TeamConfig | undefined {
+  const normalizedManagerAgentId = normalizeOptionalText(params.managerAgentId);
+  if (!normalizedManagerAgentId) {
+    return undefined;
+  }
+  return listConfiguredTeams(params.cfg).find(
+    (team) =>
+      team.implicitForManagerSessions === true &&
+      normalizeAgentId(team.managerAgentId) === normalizedManagerAgentId,
+  );
+}
+
 export type SessionTeamContext = {
   teamId: string;
   teamRole?: string;
   team?: TeamConfig;
   sessionAgentId?: string;
 };
+
+export type ResolvedTeamRunTarget = {
+  team: TeamConfig;
+  workflow: TeamWorkflowConfig;
+  runtime: "openprose";
+  managerAgentId: string;
+  contractReady: boolean;
+  blockingReasons: string[];
+  requiredRoles: string[];
+  requiredQaRoles: string[];
+  requireDelegation: boolean;
+};
+
+export type TeamRoutingPreference = "ui_human_facing";
+
+const UI_HUMAN_FACING_TEAM_HINT_RE =
+  /\b(ui|ux|design|designer|visual|content|frontend|accessibility|experience|human|user)\b/i;
+const STAGED_SPECIALIST_TEAM_HINT_RE =
+  /\b(architect|developer|qa|quality|review|implementation|content)\b/i;
+
+function buildTeamRoutingHintText(target: ResolvedTeamRunTarget): string {
+  return [
+    target.team.name,
+    target.team.description,
+    target.workflow.name,
+    target.workflow.description,
+    target.workflow.managerPrompt,
+    ...target.requiredRoles,
+    ...target.requiredQaRoles,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+}
+
+function describeTeamRoutingPreference(preference: TeamRoutingPreference): string {
+  return preference === "ui_human_facing" ? "UI/human-facing" : preference;
+}
+
+function scoreTeamForRoutingPreference(
+  target: ResolvedTeamRunTarget,
+  preference: TeamRoutingPreference,
+): number {
+  if (preference !== "ui_human_facing") {
+    return 0;
+  }
+  const hintText = buildTeamRoutingHintText(target);
+  let score = 0;
+  if (target.requireDelegation) {
+    score += 4;
+  }
+  if (target.requiredQaRoles.length > 0) {
+    score += 3;
+  }
+  if (UI_HUMAN_FACING_TEAM_HINT_RE.test(hintText)) {
+    score += 10;
+  }
+  if (STAGED_SPECIALIST_TEAM_HINT_RE.test(hintText)) {
+    score += 2;
+  }
+  return score;
+}
+
+function matchesTeamRoutingPreference(
+  target: ResolvedTeamRunTarget,
+  preference: TeamRoutingPreference,
+): boolean {
+  return scoreTeamForRoutingPreference(target, preference) > 0;
+}
+
+function compareTeamRoutingCandidates(
+  left: ResolvedTeamRunTarget,
+  right: ResolvedTeamRunTarget,
+  preference: TeamRoutingPreference,
+): number {
+  const readinessDelta = Number(right.contractReady) - Number(left.contractReady);
+  if (readinessDelta !== 0) {
+    return readinessDelta;
+  }
+  return scoreTeamForRoutingPreference(right, preference) - scoreTeamForRoutingPreference(left, preference);
+}
+
+function listCandidateTeamIdsForPreference(params: {
+  cfg: MaumauConfig;
+  sourceTeamId?: string;
+  managerAgentId?: string;
+}): string[] {
+  const normalizedSourceTeamId = normalizeOptionalText(params.sourceTeamId);
+  const sourceTeam = normalizedSourceTeamId
+    ? findTeamConfig(params.cfg, normalizedSourceTeamId)
+    : findImplicitManagerTeam({
+        cfg: params.cfg,
+        managerAgentId: params.managerAgentId,
+      });
+  const teamIds =
+    sourceTeam !== undefined
+      ? listLinkedTeamIds(sourceTeam)
+      : listConfiguredTeams(params.cfg).map((team) => team.id);
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const teamId of teamIds) {
+    const normalized = teamId.trim().toLowerCase();
+    if (!normalized || normalized === normalizedSourceTeamId || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    deduped.push(teamId);
+  }
+  return deduped;
+}
 
 export function resolveSessionTeamContext(params: {
   sessionKey?: string;
@@ -35,15 +179,132 @@ export function resolveSessionTeamContext(params: {
   const cfg = params.cfg ?? loadConfig();
   const entry = loadSessionEntry(sessionKey).entry;
   const teamId = normalizeOptionalText(entry?.teamId);
+  const sessionAgentId = resolveSessionAgentId({ cfg, sessionKey });
   if (!teamId) {
-    return undefined;
+    const implicitTeam = findImplicitManagerTeam({
+      cfg,
+      managerAgentId: sessionAgentId,
+    });
+    if (!implicitTeam) {
+      return undefined;
+    }
+    return {
+      teamId: implicitTeam.id,
+      teamRole: "manager",
+      team: implicitTeam,
+      sessionAgentId,
+    };
   }
-  const sessionAgentId = parseAgentSessionKey(sessionKey)?.agentId;
   return {
     teamId,
     teamRole: normalizeOptionalText(entry?.teamRole),
     team: findTeamConfig(cfg, teamId),
     sessionAgentId: sessionAgentId ? normalizeAgentId(sessionAgentId) : undefined,
+  };
+}
+
+export function resolveTeamRunTarget(params: {
+  cfg?: MaumauConfig;
+  teamId: string;
+  workflowId?: string;
+}): { ok: true; target: ResolvedTeamRunTarget } | { ok: false; error: string } {
+  const cfg = params.cfg ?? loadConfig();
+  const team = findTeamConfig(cfg, params.teamId);
+  if (!team) {
+    return {
+      ok: false,
+      error: `Unknown team: ${params.teamId}`,
+    };
+  }
+
+  const workflow = findTeamWorkflow(team, params.workflowId);
+  if (
+    params.workflowId &&
+    workflow.id.trim().toLowerCase() !== params.workflowId.trim().toLowerCase()
+  ) {
+    return {
+      ok: false,
+      error: `Unknown workflow "${params.workflowId}" for team "${team.id}"`,
+    };
+  }
+
+  const readiness = evaluateTeamWorkflowContractReadiness({
+    cfg,
+    team,
+    workflow,
+  });
+  return {
+    ok: true,
+    target: {
+      team,
+      workflow,
+      runtime: "openprose",
+      managerAgentId: team.managerAgentId,
+      contractReady: readiness.contractReady,
+      blockingReasons: readiness.blockingReasons,
+      requiredRoles: readiness.requiredRoles,
+      requiredQaRoles: readiness.requiredQaRoles,
+      requireDelegation: readiness.requireDelegation,
+    },
+  };
+}
+
+export function resolvePreferredTeamRunTarget(params: {
+  cfg?: MaumauConfig;
+  sourceTeamId?: string;
+  managerAgentId?: string;
+  preference: TeamRoutingPreference;
+}): { ok: true; target: ResolvedTeamRunTarget } | { ok: false; error: string } {
+  const cfg = params.cfg ?? loadConfig();
+  const normalizedSourceTeamId = normalizeOptionalText(params.sourceTeamId);
+  if (normalizedSourceTeamId && !findTeamConfig(cfg, normalizedSourceTeamId)) {
+    return {
+      ok: false,
+      error: `Active team "${params.sourceTeamId}" is no longer configured.`,
+    };
+  }
+  const candidateTeamIds = listCandidateTeamIdsForPreference({
+    cfg,
+    sourceTeamId: normalizedSourceTeamId,
+    managerAgentId: params.managerAgentId,
+  });
+
+  if (candidateTeamIds.length === 0) {
+    const preferenceLabel = describeTeamRoutingPreference(params.preference);
+    return {
+      ok: false,
+      error: params.sourceTeamId
+        ? `Team "${params.sourceTeamId}" has no linked specialist team configured for ${preferenceLabel} work.`
+        : `No configured specialist team is available for ${preferenceLabel} work.`,
+    };
+  }
+
+  const matches: ResolvedTeamRunTarget[] = [];
+  for (const teamId of candidateTeamIds) {
+    const resolved = resolveTeamRunTarget({ cfg, teamId });
+    if (!resolved.ok) {
+      continue;
+    }
+    if (!matchesTeamRoutingPreference(resolved.target, params.preference)) {
+      continue;
+    }
+    matches.push(resolved.target);
+  }
+
+  if (matches.length === 0) {
+    const preferenceLabel = describeTeamRoutingPreference(params.preference);
+    return {
+      ok: false,
+      error: params.sourceTeamId
+        ? `Team "${params.sourceTeamId}" has no linked specialist team that matches ${preferenceLabel} work.`
+        : `No configured specialist team matches ${preferenceLabel} work.`,
+    };
+  }
+
+  matches.sort((left, right) => compareTeamRoutingCandidates(left, right, params.preference));
+  return {
+    ok: true,
+    target: matches[0]!,
   };
 }
 

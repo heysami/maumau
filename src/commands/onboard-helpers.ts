@@ -24,6 +24,7 @@ import { CONFIG_DIR, shortenHomeInString, shortenHomePath, sleep } from "../util
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../utils/message-channel.js";
 import { VERSION } from "../version.js";
 import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
+import { removeMacAppStateArtifacts, stopRunningMacAppIfPresent } from "./cleanup-utils.js";
 import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 import type { NodeManagerChoice, OnboardMode, ResetScope } from "./onboard-types.js";
 
@@ -332,6 +333,7 @@ export async function moveToTrash(pathname: string, runtime: RuntimeEnv): Promis
 
 export async function handleReset(scope: ResetScope, workspaceDir: string, runtime: RuntimeEnv) {
   if (scope === "clean") {
+    await stopRunningMacAppIfPresent(runtime);
     await uninstallGatewayServiceIfPresent(runtime);
     const cleanup = resolveCleanupPlanFromDisk();
     await moveToTrash(cleanup.stateDir, runtime);
@@ -342,17 +344,20 @@ export async function handleReset(scope: ResetScope, workspaceDir: string, runti
       await moveToTrash(cleanup.oauthDir, runtime);
     }
     await moveToTrash(workspaceDir, runtime);
+    await removeMacAppStateArtifacts(runtime);
     return;
   }
   await moveToTrash(CONFIG_PATH, runtime);
   if (scope === "config") {
     return;
   }
+  await stopRunningMacAppIfPresent(runtime);
   await moveToTrash(path.join(CONFIG_DIR, "credentials"), runtime);
   await moveToTrash(resolveSessionTranscriptsDirForAgent(), runtime);
   if (scope === "full") {
     await moveToTrash(workspaceDir, runtime);
   }
+  await removeMacAppStateArtifacts(runtime);
 }
 
 function shouldSkipBrowserOpenInTests(): boolean {

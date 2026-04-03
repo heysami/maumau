@@ -40,8 +40,10 @@ import { getGlobalHookRunner, getGlobalPluginRegistry } from "../../plugins/hook
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { normalizeTtsAutoMode, resolveConfiguredTtsMode } from "../../tts/tts-config.js";
 import { INTERNAL_MESSAGE_CHANNEL, normalizeMessageChannel } from "../../utils/message-channel.js";
+import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { BlockReplyContext, GetReplyOptions, ReplyPayload } from "../types.js";
+import { resolveCommandAuthorization } from "../command-auth.js";
 import { shouldSkipDuplicateInbound } from "./inbound-dedupe.js";
 import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
 import { resolveRunTypingPolicy } from "./typing-policy.js";
@@ -267,6 +269,11 @@ export async function dispatchReplyFromConfig(params: {
   const shouldSuppressTyping =
     shouldRouteToOriginating || originatingChannel === INTERNAL_MESSAGE_CHANNEL;
   const ttsChannel = shouldRouteToOriginating ? originatingChannel : currentSurface;
+  const requesterAuth = resolveCommandAuthorization({
+    ctx,
+    cfg,
+    commandAuthorized: ctx.CommandAuthorized,
+  });
 
   /**
    * Helper to send a payload via route-reply (async).
@@ -674,6 +681,24 @@ export async function dispatchReplyFromConfig(params: {
     }
 
     const replies = replyResult ? (Array.isArray(replyResult) ? replyResult : [replyResult]) : [];
+    const previewReceiptPayloads = await maybeBuildPreviewReceiptPayloads({
+      cfg,
+      payloads: replies,
+      sessionKey: sessionStoreEntry.sessionKey ?? sessionKey,
+      sessionEntry: sessionStoreEntry.entry,
+      messageChannel: ttsChannel,
+      senderIsOwner: requesterAuth.senderIsOwner,
+      requesterTailscaleLogin:
+        typeof sessionStoreEntry.entry?.requesterTailscaleLogin === "string"
+          ? sessionStoreEntry.entry.requesterTailscaleLogin
+          : undefined,
+      senderName: ctx.SenderName ?? undefined,
+      senderUsername: ctx.SenderUsername ?? undefined,
+      groupId,
+      groupChannel: ctx.GroupChannel ?? undefined,
+      groupSpace: ctx.GroupSpace ?? undefined,
+      onError: (message) => logVerbose(`dispatch-from-config: ${message}`),
+    });
 
     let queuedFinal = false;
     let routedFinalCount = 0;
@@ -715,6 +740,31 @@ export async function dispatchReplyFromConfig(params: {
         }
       } else {
         queuedFinal = dispatcher.sendFinalReply(ttsReply) || queuedFinal;
+      }
+    }
+    for (const payload of previewReceiptPayloads) {
+      if (shouldRouteToOriginating && originatingChannel && originatingTo) {
+        const result = await routeReplyRuntime.routeReply({
+          payload,
+          channel: originatingChannel,
+          to: originatingTo,
+          sessionKey: ctx.SessionKey,
+          accountId: ctx.AccountId,
+          threadId: routeThreadId,
+          cfg,
+          isGroup,
+          groupId,
+        });
+        if (!result.ok) {
+          logVerbose(
+            `dispatch-from-config: route-reply (preview receipt) failed: ${result.error ?? "unknown error"}`,
+          );
+          continue;
+        }
+        queuedFinal = true;
+        routedFinalCount += 1;
+      } else {
+        queuedFinal = dispatcher.sendFinalReply(payload) || queuedFinal;
       }
     }
 

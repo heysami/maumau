@@ -15,6 +15,7 @@ import {
   normalizeSessionDeliveryFields,
   type DeliveryContext,
 } from "../../utils/delivery-context.js";
+import { loadConfig } from "../config.js";
 import { getFileStatSnapshot } from "../cache-utils.js";
 import { enforceSessionDiskBudget, type SessionDiskBudgetSweepResult } from "./disk-budget.js";
 import { deriveSessionMetaPatch } from "./metadata.js";
@@ -821,6 +822,7 @@ export async function recordSessionMetaFromInbound(params: {
       const resolved = resolveSessionStoreEntry({ store, sessionKey });
       const existing = resolved.existing;
       const patch = deriveSessionMetaPatch({
+        cfg: loadConfig(),
         ctx,
         sessionKey: resolved.normalizedKey,
         existing,
@@ -908,6 +910,7 @@ export async function updateLastRoute(params: {
     });
     const metaPatch = ctx
       ? deriveSessionMetaPatch({
+          cfg: loadConfig(),
           ctx,
           sessionKey: resolved.normalizedKey,
           existing,

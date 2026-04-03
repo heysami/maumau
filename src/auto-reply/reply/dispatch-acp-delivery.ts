@@ -1,9 +1,13 @@
 import { hasOutboundReplyContent } from "maumau/plugin-sdk/reply-payload";
+import { normalizeChatType } from "../../channels/chat-type.js";
 import type { MaumauConfig } from "../../config/config.js";
+import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { logVerbose } from "../../globals.js";
 import { runMessageAction } from "../../infra/outbound/message-action-runner.js";
 import { maybeApplyTtsToPayload } from "../../tts/tts.js";
+import { normalizeMessageChannel } from "../../utils/message-channel.js";
+import { resolveCommandAuthorization } from "../command-auth.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
@@ -28,6 +32,7 @@ type AcpDispatchDeliveryState = {
   accumulatedBlockText: string;
   blockCount: number;
   deliveredFinalReply: boolean;
+  previewReceiptDelivered: boolean;
   routedCounts: Record<ReplyDispatchKind, number>;
   toolMessageByCallId: Map<string, ToolMessageHandle>;
 };
@@ -63,6 +68,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     accumulatedBlockText: "",
     blockCount: 0,
     deliveredFinalReply: false,
+    previewReceiptDelivered: false,
     routedCounts: {
       tool: 0,
       block: 0,
@@ -77,6 +83,63 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     }
     state.startedReplyLifecycle = true;
     await params.onReplyStart?.();
+  };
+
+  const requesterAuth = resolveCommandAuthorization({
+    ctx: params.ctx,
+    cfg: params.cfg,
+    commandAuthorized: params.ctx.CommandAuthorized,
+  });
+
+  const deliverPreviewReceipt = async (payload: ReplyPayload): Promise<void> => {
+    if (state.previewReceiptDelivered) {
+      return;
+    }
+    const previewReceiptPayloads = await maybeBuildPreviewReceiptPayloads({
+      cfg: params.cfg,
+      payloads: [payload],
+      sessionKey: params.ctx.SessionKey,
+      messageChannel:
+        params.shouldRouteToOriginating && params.originatingChannel
+          ? params.originatingChannel
+          : normalizeMessageChannel(
+              params.ctx.OriginatingChannel ?? params.ctx.Surface ?? params.ctx.Provider,
+            ),
+      senderIsOwner: requesterAuth.senderIsOwner,
+      requesterTailscaleLogin: params.ctx.RequesterTailscaleLogin,
+      senderName: params.ctx.SenderName ?? undefined,
+      senderUsername: params.ctx.SenderUsername ?? undefined,
+      groupId: normalizeChatType(params.ctx.ChatType) === "direct" ? undefined : "group",
+      groupChannel: params.ctx.GroupChannel ?? undefined,
+      groupSpace: params.ctx.GroupSpace ?? undefined,
+      onError: (message) => logVerbose(`dispatch-acp: ${message}`),
+    });
+    if (previewReceiptPayloads.length === 0) {
+      return;
+    }
+    for (const receipt of previewReceiptPayloads) {
+      if (params.shouldRouteToOriginating && params.originatingChannel && params.originatingTo) {
+        const result = await routeReply({
+          payload: receipt,
+          channel: params.originatingChannel,
+          to: params.originatingTo,
+          sessionKey: params.ctx.SessionKey,
+          accountId: params.ctx.AccountId,
+          threadId: params.ctx.MessageThreadId,
+          cfg: params.cfg,
+        });
+        if (!result.ok) {
+          logVerbose(
+            `dispatch-acp: route-reply (preview receipt) failed: ${result.error ?? "unknown error"}`,
+          );
+          continue;
+        }
+        state.routedCounts.final += 1;
+      } else {
+        params.dispatcher.sendFinalReply(receipt);
+      }
+    }
+    state.previewReceiptDelivered = true;
   };
 
   const tryEditToolMessage = async (
@@ -184,6 +247,9 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         state.deliveredFinalReply = true;
       }
       state.routedCounts[kind] += 1;
+      if (kind === "final") {
+        await deliverPreviewReceipt(payload);
+      }
       return true;
     }
 
@@ -195,6 +261,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
           : params.dispatcher.sendFinalReply(ttsPayload);
     if (kind === "final" && delivered) {
       state.deliveredFinalReply = true;
+      await deliverPreviewReceipt(payload);
     }
     return delivered;
   };

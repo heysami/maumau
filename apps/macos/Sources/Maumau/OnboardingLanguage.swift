@@ -409,6 +409,15 @@ struct OnboardingStrings: Sendable {
         }
     }
 
+    var wizardSkippedTitle: String {
+        switch self.language {
+        case .en:
+            "Brain setup skipped for now. You can finish it later in Settings."
+        case .id:
+            "Pengaturan brain dilewati dulu. Anda bisa menyelesaikannya nanti di Settings."
+        }
+    }
+
     var waitingForWizardTitle: String {
         switch self.language {
         case .en:
@@ -963,7 +972,7 @@ struct OnboardingStrings: Sendable {
             [
                 OnboardingToolHighlight(
                     title: "Clawd Cursor",
-                    subtitle: "Includes a bundled Skill that helps you set up the upstream clawdcursor helper for native desktop control across apps. The helper itself is installed separately.",
+                    subtitle: "Fresh local setup installs the upstream clawdcursor helper for native desktop control across apps, then Maumau keeps checking readiness and permissions truthfully.",
                     systemImage: "desktopcomputer"),
                 OnboardingToolHighlight(
                     title: "Maumau Guardrails",
@@ -982,7 +991,7 @@ struct OnboardingStrings: Sendable {
             [
                 OnboardingToolHighlight(
                     title: "Clawd Cursor",
-                    subtitle: "Menyertakan Skill bawaan yang membantu Anda menyiapkan helper clawdcursor upstream untuk kontrol desktop native lintas aplikasi. Helper itu sendiri dipasang terpisah.",
+                    subtitle: "Setup lokal baru memasang helper clawdcursor upstream untuk kontrol desktop native lintas aplikasi, lalu Maumau terus memeriksa kesiapan dan izin secara jujur.",
                     systemImage: "desktopcomputer"),
                 OnboardingToolHighlight(
                     title: "Maumau Guardrails",

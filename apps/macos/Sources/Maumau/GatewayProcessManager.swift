@@ -263,6 +263,23 @@ final class GatewayProcessManager {
                             "gateway existing listener still warming up: \(error.localizedDescription, privacy: .public)")
                         return true
                     }
+                    if Self.shouldReplaceExistingManagedGatewayAfterAuthFailure(error, instance: instance) {
+                        self.existingGatewayDetails = instanceText
+                        self.clearLastFailure()
+                        self.status = .starting
+                        if let instance {
+                            let terminated = await PortGuardian.shared.terminate(pid: instance.pid)
+                            let action = terminated ? "terminated" : "could not terminate"
+                            self.appendLog(
+                                "[gateway] managed listener on port \(port) rejected auth; \(action) pid \(instance.pid) and reinstalling launchd gateway\n")
+                        } else {
+                            self.appendLog(
+                                "[gateway] managed listener on port \(port) rejected auth; reinstalling launchd gateway\n")
+                        }
+                        self.logger.notice(
+                            "gateway existing managed listener rejected auth; replacing listener on port \(port, privacy: .public)")
+                        return false
+                    }
                     let reason = self.describeAttachFailure(error, port: port, instance: instance)
                     self.existingGatewayDetails = instanceText
                     self.status = .failed(reason)
@@ -311,7 +328,7 @@ final class GatewayProcessManager {
         let ns = error as NSError
         let message = ns.localizedDescription.isEmpty ? "unknown error" : ns.localizedDescription
         let lower = message.lowercased()
-        if self.isGatewayAuthFailure(error) {
+        if Self.isGatewayAuthFailure(error) {
             return """
             Gateway on port \(port) rejected auth. Set gateway.auth.token to match the running gateway \
             (or clear it on the gateway) and retry.
@@ -330,7 +347,7 @@ final class GatewayProcessManager {
         return "Gateway listener found on port \(port) but health check failed: \(message)"
     }
 
-    private func isGatewayAuthFailure(_ error: Error) -> Bool {
+    private static func isGatewayAuthFailure(_ error: Error) -> Bool {
         if let urlError = error as? URLError, urlError.code == .dataNotAllowed {
             return true
         }
@@ -338,6 +355,17 @@ final class GatewayProcessManager {
         if ns.domain == "Gateway", ns.code == 1008 { return true }
         let lower = ns.localizedDescription.lowercased()
         return lower.contains("unauthorized") || lower.contains("auth")
+    }
+
+    static func shouldReplaceExistingManagedGatewayAfterAuthFailure(
+        _ error: Error,
+        instance: PortGuardian.Descriptor?) -> Bool
+    {
+        guard Self.isGatewayAuthFailure(error) else { return false }
+        guard let instance else { return false }
+        return PortGuardian.isManagedLocalGatewayCandidate(
+            command: instance.command,
+            fullCommand: instance.fullCommand)
     }
 
     static func shouldTreatExistingListenerAttachFailureAsWarmup(_ error: Error) -> Bool {

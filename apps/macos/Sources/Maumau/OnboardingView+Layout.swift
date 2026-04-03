@@ -33,7 +33,7 @@ extension OnboardingView {
     private func navigateToPage(_ index: Int) {
         guard index != self.currentPage else { return }
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
-        if leavingWizard, !self.onboardingWizard.isComplete {
+        if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             Task {
                 await self.onboardingWizard.cancelIfRunning()
                 self.onboardingWizard.reset()
@@ -63,7 +63,7 @@ extension OnboardingView {
                                 canAdvance: self.canAdvance,
                                 requiredSetupPageIndex: self.requiredSetupPageOrderIndex,
                                 wizardPageOrderIndex: self.wizardPageOrderIndex,
-                                wizardComplete: self.onboardingWizard.isComplete)
+                                wizardComplete: self.onboardingWizard.isSatisfiedForOnboarding)
                             return OnboardingHeaderHero.StepItem(
                                 stage: step.stage,
                                 title: step.title,
@@ -134,7 +134,7 @@ extension OnboardingView {
                 self.currentPage = max(0, self.pageOrder.count - 1)
             }
         }
-        .onChange(of: self.onboardingWizard.isComplete) { _, newValue in
+        .onChange(of: self.onboardingWizard.isSatisfiedForOnboarding) { _, newValue in
             guard newValue, self.activePageIndex == self.wizardPageIndex else { return }
             self.refreshBootstrapStatus()
             self.handleNext()
@@ -176,10 +176,10 @@ extension OnboardingView {
         let wizardLockIndex = self.wizardPageOrderIndex
         let hideBackButton = self.activePageIndex == self.wizardPageIndex && self.onboardingWizard.isBlocking
         let showsWizardFooterControls = self.activePageIndex == self.wizardPageIndex &&
-            !self.onboardingWizard.isComplete
+            !self.onboardingWizard.isSatisfiedForOnboarding
         let footerSlotWidth: CGFloat = 120
         let showWizardPrimaryButton = showsWizardFooterControls &&
-            !self.onboardingWizard.isComplete &&
+            !self.onboardingWizard.isSatisfiedForOnboarding &&
             self.onboardingWizard.primaryActionTitle != nil
         return Group {
             if showsWizardFooterControls {
@@ -292,7 +292,7 @@ extension OnboardingView {
                     canAdvance: self.canAdvance,
                     requiredSetupPageIndex: requiredSetupPageIndex,
                     wizardPageOrderIndex: wizardLockIndex,
-                    wizardComplete: self.onboardingWizard.isComplete)
+                    wizardComplete: self.onboardingWizard.isSatisfiedForOnboarding)
                 Button {
                     withAnimation { self.currentPage = index }
                 } label: {

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   registerAgentRunContext: vi.fn(),
   performGatewaySessionReset: vi.fn(),
   getSubagentRunByChildSessionKey: vi.fn(),
+  getLatestSubagentRunByChildSessionKey: vi.fn(),
   replaceSubagentRunAfterSteer: vi.fn(),
   loadConfigReturn: {} as Record<string, unknown>,
 }));
@@ -68,6 +69,7 @@ vi.mock("../../infra/agent-events.js", () => ({
 
 vi.mock("../../agents/subagent-registry.js", () => ({
   getSubagentRunByChildSessionKey: mocks.getSubagentRunByChildSessionKey,
+  getLatestSubagentRunByChildSessionKey: mocks.getLatestSubagentRunByChildSessionKey,
   replaceSubagentRunAfterSteer: mocks.replaceSubagentRunAfterSteer,
 }));
 
@@ -484,7 +486,7 @@ describe("gateway agent handler", () => {
       };
       return await updater(store);
     });
-    mocks.getSubagentRunByChildSessionKey.mockReturnValueOnce(completedRun);
+    mocks.getLatestSubagentRunByChildSessionKey.mockReturnValueOnce(completedRun);
     mocks.replaceSubagentRunAfterSteer.mockReturnValueOnce(true);
     mocks.loadGatewaySessionRow.mockReturnValueOnce({
       status: "running",
@@ -608,6 +610,50 @@ describe("gateway agent handler", () => {
       | { senderIsOwner?: boolean }
       | undefined;
     expect(callArgs?.senderIsOwner).toBe(senderIsOwner);
+  });
+
+  it("rehydrates requester trust from the session entry for internal follow-up runs", async () => {
+    mockMainSessionEntry({
+      requesterSenderIsOwner: true,
+      requesterTailscaleLogin: "owner@example.com",
+    });
+    mocks.updateSessionStore.mockImplementation(async (_path, updater) => {
+      const store: Record<string, unknown> = {
+        "agent:main:main": buildExistingMainStoreEntry({
+          requesterSenderIsOwner: true,
+          requesterTailscaleLogin: "owner@example.com",
+        }),
+      };
+      return await updater(store);
+    });
+    mocks.agentCommand.mockResolvedValue({
+      payloads: [{ text: "ok" }],
+      meta: { durationMs: 100 },
+    });
+
+    await invokeAgent(
+      {
+        message: "follow-up delivery",
+        sessionKey: "agent:main:main",
+        idempotencyKey: "test-session-trust-rehydration",
+      },
+      {
+        client: {
+          connect: {
+            role: "operator",
+            scopes: ["operator.write"],
+            client: { id: "test-client", mode: "gateway" },
+          },
+        } as unknown as AgentHandlerArgs["client"],
+      },
+    );
+
+    await waitForAssertion(() => expect(mocks.agentCommand).toHaveBeenCalled());
+    const callArgs = mocks.agentCommand.mock.calls.at(-1)?.[0] as
+      | { senderIsOwner?: boolean; requesterTailscaleLogin?: string }
+      | undefined;
+    expect(callArgs?.senderIsOwner).toBe(true);
+    expect(callArgs?.requesterTailscaleLogin).toBe("owner@example.com");
   });
 
   it("respects explicit bestEffortDeliver=false for main session runs", async () => {

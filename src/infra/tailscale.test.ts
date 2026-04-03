@@ -9,6 +9,7 @@ const {
   enableTailscaleServe,
   disableTailscaleServe,
   ensureFunnel,
+  probeTailscaleExposure,
 } = tailscale;
 const tailscaleBin = expect.stringMatching(/tailscale$/i);
 
@@ -216,5 +217,45 @@ describe("tailscale helpers", () => {
     await expect(enableTailscaleServe(3000, exec as never)).rejects.toBe(originalError);
 
     expect(exec).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports serve disabled on the tailnet as doctor_failed", async () => {
+    const exec = vi.fn().mockResolvedValue({
+      stdout: [
+        "",
+        "Serve is not enabled on your tailnet.",
+        "To enable, visit:",
+        "",
+        "         https://login.tailscale.com/f/serve?node=abc123",
+        "",
+      ].join("\n"),
+      stderr: "",
+    });
+
+    await expect(probeTailscaleExposure("serve", exec as never)).resolves.toEqual(
+      expect.objectContaining({
+        mode: "serve",
+        featureEnabled: false,
+        active: false,
+        blockedReason: "doctor_failed",
+        enableUrl: "https://login.tailscale.com/f/serve?node=abc123",
+      }),
+    );
+  });
+
+  it("reports missing live serve config as service_not_running", async () => {
+    const exec = vi.fn().mockResolvedValue({
+      stdout: "No serve config\n",
+      stderr: "",
+    });
+
+    await expect(probeTailscaleExposure("serve", exec as never)).resolves.toEqual(
+      expect.objectContaining({
+        mode: "serve",
+        featureEnabled: true,
+        active: false,
+        blockedReason: "service_not_running",
+      }),
+    );
   });
 });

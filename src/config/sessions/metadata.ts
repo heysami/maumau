@@ -1,7 +1,9 @@
+import { resolveCommandAuthorization } from "../../auto-reply/command-auth.js";
 import type { MsgContext } from "../../auto-reply/templating.js";
 import { normalizeChatType } from "../../channels/chat-type.js";
 import { resolveConversationLabel } from "../../channels/conversation-label.js";
 import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import type { MaumauConfig } from "../config.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { buildGroupDisplayName, resolveGroupSessionKey } from "./group.js";
 import type { GroupKeyResolution, SessionEntry, SessionOrigin } from "./types.js";
@@ -150,6 +152,7 @@ export function deriveGroupSessionPatch(params: {
 }
 
 export function deriveSessionMetaPatch(params: {
+  cfg: MaumauConfig;
   ctx: MsgContext;
   sessionKey: string;
   existing?: SessionEntry;
@@ -157,7 +160,13 @@ export function deriveSessionMetaPatch(params: {
 }): Partial<SessionEntry> | null {
   const groupPatch = deriveGroupSessionPatch(params);
   const origin = deriveSessionOrigin(params.ctx);
-  if (!groupPatch && !origin) {
+  const auth = resolveCommandAuthorization({
+    ctx: params.ctx,
+    cfg: params.cfg,
+    commandAuthorized: params.ctx.CommandAuthorized === true,
+  });
+  const requesterTailscaleLogin = params.ctx.RequesterTailscaleLogin?.trim() || undefined;
+  if (!groupPatch && !origin && auth.senderIsOwner === false && requesterTailscaleLogin === undefined) {
     return null;
   }
 
@@ -166,6 +175,8 @@ export function deriveSessionMetaPatch(params: {
   if (mergedOrigin) {
     patch.origin = mergedOrigin;
   }
+  patch.requesterSenderIsOwner = auth.senderIsOwner;
+  patch.requesterTailscaleLogin = requesterTailscaleLogin;
 
   return Object.keys(patch).length > 0 ? patch : null;
 }

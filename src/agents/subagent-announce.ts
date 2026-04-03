@@ -2,6 +2,7 @@ import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { loadConfig } from "../config/config.js";
+import type { SessionEntry } from "../config/sessions/types.js";
 import {
   loadSessionStore,
   resolveAgentIdFromSessionKey,
@@ -28,6 +29,8 @@ import {
   INTERNAL_MESSAGE_CHANNEL,
   isDeliverableMessageChannel,
   isInternalMessageChannel,
+  isRequesterRemoteMessagingChannel,
+  normalizeMessageChannel,
 } from "../utils/message-channel.js";
 import {
   buildAnnounceIdFromChildRun,
@@ -71,6 +74,12 @@ const DIRECT_ANNOUNCE_TRANSIENT_RETRY_DELAYS_MS = FAST_TEST_MODE
 type ToolResultMessage = {
   role?: unknown;
   content?: unknown;
+};
+
+type ChildResultPresentation = {
+  resultForDefaultDelivery: string;
+  followupDetails?: string;
+  hidesGitDetailsByDefault: boolean;
 };
 
 type SubagentOutputSnapshot = {
@@ -680,6 +689,120 @@ async function buildCompactAnnounceStatsLine(params: {
   return `Stats: ${parts.join(" • ")}`;
 }
 
+const GIT_SECTION_HEADER_RE = /^git(?: details)?\s*:\s*$/i;
+const GIT_KEYWORD_RE =
+  /\b(?:git|commit|branch|working tree|staged|unstaged|diff|rebase|merge|checkout|cherry-pick)\b/i;
+const EXECUTION_RECEIPT_HEADER_RE = /^execution receipt\s*:\s*$/i;
+const EXECUTION_RECEIPT_LINE_RE =
+  /^(?:[-*]\s*)?(?:mode|worker\/team used|qa state|capability path used|preview\/share state)\s*:/i;
+const STRUCTURED_SECTION_HEADER_RE = /^[A-Za-z][A-Za-z /_-]*:\s*$/;
+
+function isOwnerDirectRemoteRoute(params: {
+  entry?: SessionEntry;
+  deliveryOrigin?: DeliveryContext;
+}): boolean {
+  const entry = params.entry;
+  if (entry?.requesterSenderIsOwner !== true) {
+    return false;
+  }
+  if (entry.groupId?.trim() || entry.groupChannel?.trim() || entry.space?.trim()) {
+    return false;
+  }
+  const channel = normalizeMessageChannel(
+    params.deliveryOrigin?.channel ??
+      entry.deliveryContext?.channel ??
+      entry.lastChannel ??
+      entry.channel,
+  );
+  return isRequesterRemoteMessagingChannel(channel);
+}
+
+function isGitDetailsParagraph(paragraph: string): boolean {
+  const normalized = paragraph.trim();
+  if (!normalized) {
+    return false;
+  }
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return false;
+  }
+  const firstLine = lines[0] ?? "";
+  if (GIT_SECTION_HEADER_RE.test(firstLine)) {
+    return true;
+  }
+  if (/^relevant detail\s*:\s*$/i.test(firstLine) && GIT_KEYWORD_RE.test(normalized)) {
+    return true;
+  }
+  const bodyLines =
+    lines.length > 1 && STRUCTURED_SECTION_HEADER_RE.test(firstLine) ? lines.slice(1) : lines;
+  return bodyLines.length > 0 && bodyLines.every((line) => GIT_KEYWORD_RE.test(line));
+}
+
+function isExecutionReceiptParagraph(paragraph: string): boolean {
+  const normalized = paragraph.trim();
+  if (!normalized) {
+    return false;
+  }
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return false;
+  }
+  const firstLine = lines[0] ?? "";
+  if (EXECUTION_RECEIPT_HEADER_RE.test(firstLine)) {
+    return lines.slice(1).some((line) => EXECUTION_RECEIPT_LINE_RE.test(line));
+  }
+  const bodyLines =
+    lines.length > 1 && STRUCTURED_SECTION_HEADER_RE.test(firstLine) ? lines.slice(1) : lines;
+  return bodyLines.length > 0 && bodyLines.every((line) => EXECUTION_RECEIPT_LINE_RE.test(line));
+}
+
+function buildChildResultPresentation(params: {
+  findings: string;
+  hideGitDetailsByDefault: boolean;
+}): ChildResultPresentation {
+  const findings = params.findings.trim();
+  if (!params.hideGitDetailsByDefault || !findings) {
+    return {
+      resultForDefaultDelivery: findings || "(no output)",
+      hidesGitDetailsByDefault: false,
+    };
+  }
+
+  const visibleParagraphs: string[] = [];
+  const hiddenParagraphs: string[] = [];
+  for (const paragraph of findings.split(/\n{2,}/)) {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (isGitDetailsParagraph(trimmed) || isExecutionReceiptParagraph(trimmed)) {
+      hiddenParagraphs.push(trimmed);
+      continue;
+    }
+    visibleParagraphs.push(trimmed);
+  }
+
+  if (hiddenParagraphs.length === 0) {
+    return {
+      resultForDefaultDelivery: findings,
+      hidesGitDetailsByDefault: false,
+    };
+  }
+
+  return {
+    resultForDefaultDelivery:
+      visibleParagraphs.join("\n\n").trim() || "Completed successfully.",
+    followupDetails: hiddenParagraphs.join("\n\n"),
+    hidesGitDetailsByDefault: true,
+  };
+}
+
 type DeliveryContextSource = Parameters<typeof deliveryContextFromSession>[0];
 
 function resolveAnnounceOrigin(
@@ -1231,12 +1354,17 @@ function buildAnnounceReplyInstruction(params: {
   requesterIsSubagent: boolean;
   announceType: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
+  hideGitDetailsByDefault?: boolean;
 }): string {
   if (params.requesterIsSubagent) {
     return `Convert this completion into a concise internal orchestration update for your parent agent in your own words. Keep this internal context private (don't mention system/log/stats/session details or announce type). If this result is duplicate or no update is needed, reply ONLY: ${SILENT_REPLY_TOKEN}.`;
   }
   if (params.expectsCompletionMessage) {
-    return `A completed ${params.announceType} is ready for user delivery. Convert the result above into your normal assistant voice and send that user-facing update now. Keep this internal context private (don't mention system/log/stats/session details or announce type).`;
+    return `A completed ${params.announceType} is ready for user delivery. Convert the result above into your normal assistant voice and send that user-facing update now. Keep this internal context private (don't mention system/log/stats/session details or announce type).${
+      params.hideGitDetailsByDefault
+        ? " Do not include Git details or execution receipt details such as commit hashes, commit messages, branch/status output, worker/team metadata, QA state, capability path, or preview/share state in the default user-facing reply unless the user explicitly asks for them. Those details are preserved for follow-up questions."
+        : ""
+    }`;
   }
   return `A completed ${params.announceType} is ready for user delivery. Convert the result above into your normal assistant voice and send that user-facing update now. Keep this internal context private (don't mention system/log/stats/session details or announce type), and do not copy the internal event text verbatim. Reply ONLY: ${SILENT_REPLY_TOKEN} if this exact result was already delivered to the user in this same turn.`;
 }
@@ -1372,6 +1500,7 @@ export async function runSubagentAnnounceFlow(params: {
   outcome?: SubagentRunOutcome;
   announceType?: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
+  suppressRequesterAnnounce?: boolean;
   spawnMode?: SpawnSubagentMode;
   wakeOnDescendantSettle?: boolean;
   signal?: AbortSignal;
@@ -1498,6 +1627,10 @@ export async function runSubagentAnnounceFlow(params: {
       }
     }
 
+    if (params.suppressRequesterAnnounce === true) {
+      return true;
+    }
+
     if (!childCompletionFindings) {
       const fallbackReply = params.fallbackReply?.trim() ? params.fallbackReply.trim() : undefined;
       const fallbackIsSilent =
@@ -1598,10 +1731,38 @@ export async function runSubagentAnnounceFlow(params: {
       }
     }
 
+    // Send to the requester session. For nested subagents this is an internal
+    // follow-up injection (deliver=false) so the orchestrator receives it.
+    let requesterEntry: SessionEntry | undefined;
+    let directOrigin = targetRequesterOrigin;
+    if (!requesterIsSubagent) {
+      const loaded = loadRequesterSessionEntry(targetRequesterSessionKey);
+      requesterEntry = loaded.entry;
+      directOrigin = resolveAnnounceOrigin(loaded.entry, targetRequesterOrigin);
+    }
+    const completionDirectOrigin =
+      expectsCompletionMessage && !requesterIsSubagent
+        ? await resolveSubagentCompletionOrigin({
+            childSessionKey: params.childSessionKey,
+            requesterSessionKey: targetRequesterSessionKey,
+            requesterOrigin: directOrigin,
+            childRunId: params.childRunId,
+            spawnMode: params.spawnMode,
+            expectsCompletionMessage,
+          })
+        : targetRequesterOrigin;
+    const presentation = buildChildResultPresentation({
+      findings,
+      hideGitDetailsByDefault: isOwnerDirectRemoteRoute({
+        entry: requesterEntry,
+        deliveryOrigin: completionDirectOrigin ?? directOrigin,
+      }),
+    });
     const replyInstruction = buildAnnounceReplyInstruction({
       requesterIsSubagent,
       announceType,
       expectsCompletionMessage,
+      hideGitDetailsByDefault: presentation.hidesGitDetailsByDefault,
     });
     const statsLine = await buildCompactAnnounceStatsLine({
       sessionKey: params.childSessionKey,
@@ -1618,31 +1779,13 @@ export async function runSubagentAnnounceFlow(params: {
         taskLabel,
         status: outcome.status,
         statusLabel,
-        result: findings,
+        result: presentation.resultForDefaultDelivery,
         statsLine,
+        followupDetails: presentation.followupDetails,
         replyInstruction,
       },
     ];
     const triggerMessage = buildAnnounceSteerMessage(internalEvents);
-
-    // Send to the requester session. For nested subagents this is an internal
-    // follow-up injection (deliver=false) so the orchestrator receives it.
-    let directOrigin = targetRequesterOrigin;
-    if (!requesterIsSubagent) {
-      const { entry } = loadRequesterSessionEntry(targetRequesterSessionKey);
-      directOrigin = resolveAnnounceOrigin(entry, targetRequesterOrigin);
-    }
-    const completionDirectOrigin =
-      expectsCompletionMessage && !requesterIsSubagent
-        ? await resolveSubagentCompletionOrigin({
-            childSessionKey: params.childSessionKey,
-            requesterSessionKey: targetRequesterSessionKey,
-            requesterOrigin: directOrigin,
-            childRunId: params.childRunId,
-            spawnMode: params.spawnMode,
-            expectsCompletionMessage,
-          })
-        : targetRequesterOrigin;
     const directIdempotencyKey = buildAnnounceIdempotencyKey(announceId);
     const delivery = await deliverSubagentAnnouncement({
       requesterSessionKey: targetRequesterSessionKey,

@@ -46,6 +46,29 @@ function shouldBootstrapFirstUser(pluginConfig: MultiUserMemoryConfig): boolean 
   return Object.keys(pluginConfig.users).length === 0 && pluginConfig.adminUserIds.length === 0;
 }
 
+function bootstrapOwnerAllowFromIfUnset(params: {
+  cfg: MaumauConfig;
+  channelId: string;
+  senderId: string;
+}): MaumauConfig {
+  const existingOwnerAllowFrom = params.cfg.commands?.ownerAllowFrom ?? [];
+  if (existingOwnerAllowFrom.some((entry) => String(entry ?? "").trim().length > 0)) {
+    return params.cfg;
+  }
+  const channelPrefix = params.channelId.trim().toLowerCase();
+  const senderId = params.senderId.trim();
+  if (!channelPrefix || !senderId) {
+    return params.cfg;
+  }
+  return {
+    ...params.cfg,
+    commands: {
+      ...params.cfg.commands,
+      ownerAllowFrom: [`${channelPrefix}:${senderId}`],
+    },
+  };
+}
+
 export async function maybeBootstrapFirstObservedUser(params: {
   api: MaumauPluginApi;
   pluginConfig: MultiUserMemoryConfig;
@@ -87,7 +110,7 @@ export async function maybeBootstrapFirstObservedUser(params: {
     active: true,
   };
 
-  const nextConfig: MaumauConfig = {
+  const nextConfigBase: MaumauConfig = {
     ...liveConfig,
     plugins: {
       ...liveConfig.plugins,
@@ -134,6 +157,11 @@ export async function maybeBootstrapFirstObservedUser(params: {
       },
     },
   };
+  const nextConfig = bootstrapOwnerAllowFromIfUnset({
+    cfg: nextConfigBase,
+    channelId: params.channelId,
+    senderId: params.senderId,
+  });
 
   await params.api.runtime.config.writeConfigFile(nextConfig);
   return {

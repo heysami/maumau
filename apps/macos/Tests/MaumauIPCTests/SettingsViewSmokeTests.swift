@@ -179,6 +179,14 @@ struct SettingsViewSmokeTests {
         GeneralSettings.exerciseForTesting()
     }
 
+    @Test func `general settings mounts in window`() {
+        let state = AppState(preview: true)
+        let controller = NSHostingController(rootView: GeneralSettings(state: state))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
     @Test func `sessions settings builds body`() {
         let view = SessionsSettings(rows: SessionRow.previewRows, isPreview: true)
         _ = view.body

@@ -72,6 +72,8 @@ export function createSessionsSpawnTool(
     agentAccountId?: string;
     agentTo?: string;
     agentThreadId?: string | number;
+    senderIsOwner?: boolean;
+    requesterTailscaleLogin?: string | null;
     sandboxed?: boolean;
     /** Explicit agent ID override for cron/hook sessions where session key parsing may not work. */
     requesterAgentIdOverride?: string;
@@ -161,15 +163,17 @@ export function createSessionsSpawnTool(
             sandbox,
             streamTo,
           },
-          {
-            agentSessionKey: opts?.agentSessionKey,
-            agentChannel: opts?.agentChannel,
-            agentAccountId: opts?.agentAccountId,
-            agentTo: opts?.agentTo,
-            agentThreadId: opts?.agentThreadId,
-            sandboxed: opts?.sandboxed,
-          },
-        );
+        {
+          agentSessionKey: opts?.agentSessionKey,
+          agentChannel: opts?.agentChannel,
+          agentAccountId: opts?.agentAccountId,
+          agentTo: opts?.agentTo,
+          agentThreadId: opts?.agentThreadId,
+          senderIsOwner: opts?.senderIsOwner,
+          requesterTailscaleLogin: opts?.requesterTailscaleLogin,
+          sandboxed: opts?.sandboxed,
+        },
+      );
         return jsonResult(result);
       }
 
@@ -201,6 +205,8 @@ export function createSessionsSpawnTool(
           agentGroupId: opts?.agentGroupId,
           agentGroupChannel: opts?.agentGroupChannel,
           agentGroupSpace: opts?.agentGroupSpace,
+          senderIsOwner: opts?.senderIsOwner,
+          requesterTailscaleLogin: opts?.requesterTailscaleLogin,
           requesterAgentIdOverride: opts?.requesterAgentIdOverride,
           workspaceDir: opts?.workspaceDir,
         },

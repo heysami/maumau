@@ -9,9 +9,11 @@ function readToolByName() {
 describe("createMaumauTools owner authorization", () => {
   it("marks owner-only core tools in raw registration", () => {
     const tools = readToolByName();
+    expect(tools.get("browser")?.ownerOnly).toBe(true);
     expect(tools.get("cron")?.ownerOnly).toBe(true);
     expect(tools.get("gateway")?.ownerOnly).toBe(true);
     expect(tools.get("nodes")?.ownerOnly).toBe(true);
+    expect(tools.get("preview_publish")?.ownerOnly).toBe(true);
   });
 
   it("keeps canvas non-owner-only in raw registration", () => {

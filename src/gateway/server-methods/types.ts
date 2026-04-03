@@ -25,6 +25,7 @@ export type GatewayClient = {
   /** Internal-only auth context that cannot be supplied through gateway RPC payloads. */
   internal?: {
     allowModelOverride?: boolean;
+    requesterTailscaleLogin?: string;
   };
 };
 

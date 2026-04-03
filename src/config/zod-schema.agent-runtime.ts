@@ -16,6 +16,10 @@ export const ThinkingLevelSchema = z
   .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
   .optional();
 
+export const AgentExecutionStyleSchema = z
+  .enum(["direct", "hybrid", "orchestrator"])
+  .optional();
+
 export const BackgroundAutomationSchema = z
   .object({
     model: z.string().optional(),
@@ -780,6 +784,8 @@ export const AgentEntrySchema = z
     name: z.string().optional(),
     workspace: z.string().optional(),
     agentDir: z.string().optional(),
+    executionStyle: AgentExecutionStyleSchema,
+    executionWorkerAgentId: z.string().optional(),
     model: AgentModelSchema.optional(),
     thinkingDefault: ThinkingLevelSchema,
     reasoningDefault: z.enum(["on", "off", "stream"]).optional(),

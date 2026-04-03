@@ -12,6 +12,7 @@ import {
   removeMacAppStateArtifacts,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
+  stopRunningMacAppIfPresent,
 } from "./cleanup-utils.js";
 import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 
@@ -139,6 +140,7 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
   }
 
   if (scope === "config+creds+sessions") {
+    await stopRunningMacAppIfPresent(runtime, { dryRun });
     await removePath(configPath, runtime, { dryRun, label: configPath });
     await removePath(oauthDir, runtime, { dryRun, label: oauthDir });
     const sessionDirs = await listAgentSessionDirs(stateDir);
@@ -151,6 +153,7 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
   }
 
   if (scope === "full") {
+    await stopRunningMacAppIfPresent(runtime, { dryRun });
     await removeStateAndLinkedPaths(
       { stateDir, configPath, oauthDir, configInsideState, oauthInsideState },
       runtime,
@@ -163,6 +166,7 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
   }
 
   if (scope === "clean") {
+    await stopRunningMacAppIfPresent(runtime, { dryRun });
     await uninstallGatewayServiceIfPresent(runtime, { dryRun });
     await removeStateAndLinkedPaths(
       { stateDir, configPath, oauthDir, configInsideState, oauthInsideState },

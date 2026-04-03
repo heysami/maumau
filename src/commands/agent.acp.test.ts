@@ -306,6 +306,48 @@ describe("agentCommand ACP runtime routing", () => {
     });
   });
 
+  it("keeps internal event prompt context out of the persisted ACP transcript", async () => {
+    await withAcpSessionEnvInfo(async ({ storePath }) => {
+      const visiblePrompt = "Please summarize the worker result.";
+      const runTurn = createRunTurnFromTextDeltas(["ACP_OK"]);
+      mockAcpManager({
+        runTurn: (input: unknown) => runTurn(input),
+      });
+
+      await agentCommand(
+        {
+          message: visiblePrompt,
+          sessionKey: "agent:codex:acp:test",
+          internalEvents: [
+            {
+              type: "task_completion",
+              source: "subagent",
+              childSessionKey: "agent:main:subagent:child",
+              announceType: "subagent task",
+              taskLabel: "worker task",
+              status: "ok",
+              statusLabel: "completed successfully",
+              result: "Worker finished cleanly.",
+              replyInstruction: "Reply to the user in normal assistant voice.",
+            },
+          ],
+        },
+        runtime,
+      );
+
+      expect(runTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("Maumau runtime context (internal):"),
+        }),
+      );
+      expectPersistedAcpTranscript({
+        storePath,
+        userContent: visiblePrompt,
+        assistantText: "ACP_OK",
+      });
+    });
+  });
+
   it("suppresses ACP NO_REPLY lead fragments before emitting assistant text", async () => {
     await withAcpSessionEnv(async () => {
       const { assistantEvents, logLines } = await runAcpTurnWithAssistantEvents([

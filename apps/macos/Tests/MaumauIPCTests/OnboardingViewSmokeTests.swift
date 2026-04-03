@@ -506,4 +506,51 @@ struct OnboardingViewSmokeTests {
             #expect(state.remoteTarget.isEmpty)
         }
     }
+
+    @Test func `private access page blocks forward progress for blocked serve request`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "serve",
+                phase: .blocked,
+                requirements: [],
+                detail: "Install Tailscale on this Mac first.",
+                exposure: nil)))
+    }
+
+    @Test func `private access page blocks forward progress for blocked funnel request`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "funnel",
+                phase: .failed,
+                requirements: [],
+                detail: "Tailscale Funnel is not enabled on this tailnet yet.",
+                exposure: nil)))
+    }
+
+    @Test func `private access page stays optional when effective mode is off`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .idle(appliedMode: "off")) == false)
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .remote,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "serve",
+                phase: .blocked,
+                requirements: [],
+                detail: "Install Tailscale on this Mac first.",
+                exposure: nil)) == false)
+    }
 }

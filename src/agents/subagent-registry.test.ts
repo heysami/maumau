@@ -203,6 +203,113 @@ describe("subagent registry seam flow", () => {
     expect(mocks.persistSubagentRunsToDisk).toHaveBeenCalled();
   });
 
+  it("retains completed team-role delete runs long enough for contract audit", async () => {
+    mod.registerSubagentRun({
+      runId: "run-team-qa",
+      childSessionKey: "agent:vibe-coder-technical-qa:subagent:child",
+      requesterSessionKey: "agent:vibe-coder-manager:main",
+      requesterDisplayKey: "vibe-coder-manager",
+      task: "technical qa",
+      cleanup: "delete",
+      teamRole: "technical qa",
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
+    });
+
+    const run = mod
+      .listDescendantRunsForRequester("agent:vibe-coder-manager:main")
+      .find((entry) => entry.runId === "run-team-qa");
+    expect(run).toMatchObject({
+      runId: "run-team-qa",
+      teamRole: "technical qa",
+      cleanup: "delete",
+      frozenResultText: "final completion reply",
+    });
+    expect(typeof run?.cleanupCompletedAt).toBe("number");
+  });
+
+  it("keeps a run active when agent.wait times out and allows late completion handoff", async () => {
+    mocks.callGateway.mockImplementation(async (request: { method?: string }) => {
+      if (request.method === "agent.wait") {
+        return {
+          status: "timeout",
+          startedAt: 111,
+        };
+      }
+      return {};
+    });
+
+    mod.registerSubagentRun({
+      runId: "run-still-active",
+      childSessionKey: "agent:main:subagent:child",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "long running task",
+      cleanup: "keep",
+      expectsCompletionMessage: true,
+      suppressRequesterAnnounce: true,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.runSubagentAnnounceFlow).not.toHaveBeenCalled();
+    const run = mod
+      .listSubagentRunsForRequester("agent:main:main")
+      .find((entry) => entry.runId === "run-still-active");
+    expect(run?.runId).toBe("run-still-active");
+    expect(run?.startedAt).toBe(111);
+    expect(run?.endedAt).toBeUndefined();
+    expect(run?.outcome).toBeUndefined();
+    expect(run?.cleanupCompletedAt).toBeUndefined();
+    expect(run?.suppressRequesterAnnounce).toBe(true);
+
+    expect(mod.handoffSubagentCompletionToRequester("run-still-active")).toBe(true);
+    const handedOff = mod
+      .listSubagentRunsForRequester("agent:main:main")
+      .find((entry) => entry.runId === "run-still-active");
+    expect(handedOff?.suppressRequesterAnnounce).toBe(false);
+  });
+
+  it("preserves requester handoff across continuation run replacement", async () => {
+    mocks.callGateway.mockImplementation(async (request: { method?: string }) => {
+      if (request.method === "agent.wait") {
+        return {
+          status: "timeout",
+          startedAt: 222,
+        };
+      }
+      return {};
+    });
+
+    mod.registerSubagentRun({
+      runId: "run-root-team-manager",
+      childSessionKey: "agent:main:subagent:root-team-manager",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "root team manager task",
+      cleanup: "keep",
+      expectsCompletionMessage: true,
+      suppressRequesterAnnounce: true,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mod.handoffSubagentCompletionToRequester("run-root-team-manager")).toBe(true);
+
+    const replaced = mod.replaceSubagentRunAfterSteer({
+      previousRunId: "run-root-team-manager",
+      nextRunId: "run-root-team-manager:wake",
+    });
+    expect(replaced).toBe(true);
+
+    const replacement = mod
+      .listSubagentRunsForRequester("agent:main:main")
+      .find((entry) => entry.runId === "run-root-team-manager:wake");
+    expect(replacement?.suppressRequesterAnnounce).toBe(false);
+  });
+
   it("deletes delete-mode completion runs when announce cleanup gives up after retry limit", async () => {
     mocks.runSubagentAnnounceFlow.mockResolvedValue(false);
     const endedAt = Date.parse("2026-03-24T12:00:00Z");

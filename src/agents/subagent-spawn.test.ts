@@ -140,9 +140,14 @@ describe("spawnSubagentDirect seam flow", () => {
     const { spawnSubagentDirect } = await import("./subagent-spawn.js");
     const operations: string[] = [];
     let persistedStore: Record<string, Record<string, unknown>> | undefined;
+    let initialPatchRequest: { params?: Record<string, unknown> } | undefined;
 
-    hoisted.callGatewayMock.mockImplementation(async (request: { method?: string }) => {
+    hoisted.callGatewayMock.mockImplementation(
+      async (request: { method?: string; params?: Record<string, unknown> }) => {
       operations.push(`gateway:${request.method ?? "unknown"}`);
+      if (request.method === "sessions.patch" && !initialPatchRequest) {
+        initialPatchRequest = request;
+      }
       if (request.method === "agent") {
         return { runId: "run-1" };
       }
@@ -150,7 +155,8 @@ describe("spawnSubagentDirect seam flow", () => {
         return { ok: true };
       }
       return {};
-    });
+      },
+    );
     hoisted.updateSessionStoreMock.mockImplementation(
       async (
         _storePath: string,
@@ -174,6 +180,8 @@ describe("spawnSubagentDirect seam flow", () => {
         agentChannel: "discord",
         agentAccountId: "acct-1",
         agentTo: "user-1",
+        senderIsOwner: true,
+        requesterTailscaleLogin: "owner@example.com",
         workspaceDir: "/tmp/requester-workspace",
       },
     );
@@ -223,6 +231,10 @@ describe("spawnSubagentDirect seam flow", () => {
       model: "gpt-5.4",
     });
     expect(operations.indexOf("gateway:sessions.patch")).toBeGreaterThan(-1);
+    expect(initialPatchRequest?.params).toMatchObject({
+      requesterSenderIsOwner: true,
+      requesterTailscaleLogin: "owner@example.com",
+    });
     expect(operations.indexOf("store:update")).toBeGreaterThan(
       operations.indexOf("gateway:sessions.patch"),
     );

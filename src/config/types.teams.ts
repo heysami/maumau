@@ -23,6 +23,11 @@ export type TeamWorkflowBaseConfig = {
   description?: string;
   managerPrompt?: string;
   synthesisPrompt?: string;
+  contract?: {
+    requiredRoles?: string[];
+    requiredQaRoles?: string[];
+    requireDelegation?: boolean;
+  };
   default?: boolean;
 };
 
@@ -35,6 +40,7 @@ export type TeamConfig = {
   name?: string;
   description?: string;
   managerAgentId: string;
+  implicitForManagerSessions?: boolean;
   members?: TeamMemberConfig[];
   crossTeamLinks?: TeamCrossTeamLinkConfig[];
   workflows?: TeamWorkflowConfig[];

@@ -1,4 +1,5 @@
 import { type RuntimeEnv, writeRuntimeJson } from "../../../runtime.js";
+import type { BundledFreshInstallToolResult } from "../../onboard-bundled-tools.js";
 import type { OnboardOptions } from "../../onboard-types.js";
 
 export type GatewayHealthFailureDiagnostics = {
@@ -37,6 +38,7 @@ export function logNonInteractiveOnboardingJson(params: {
   daemonRuntime?: string;
   skipSkills?: boolean;
   skipHealth?: boolean;
+  bundledTools?: BundledFreshInstallToolResult[];
 }) {
   if (!params.opts.json) {
     return;
@@ -52,6 +54,7 @@ export function logNonInteractiveOnboardingJson(params: {
     daemonRuntime: params.daemonRuntime,
     skipSkills: Boolean(params.skipSkills),
     skipHealth: Boolean(params.skipHealth),
+    bundledTools: params.bundledTools,
   });
 }
 

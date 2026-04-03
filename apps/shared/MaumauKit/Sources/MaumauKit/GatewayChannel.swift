@@ -227,6 +227,8 @@ public actor GatewayChannelActor {
     }
 
     public func authSource() -> GatewayAuthSource { self.lastAuthSource }
+    public func isConnected() -> Bool { self.connected }
+    public func isConnectedOrConnecting() -> Bool { self.connected || self.isConnecting }
 
     public func shutdown() async {
         self.shouldReconnect = false

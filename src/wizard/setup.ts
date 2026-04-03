@@ -410,6 +410,13 @@ export async function runSetupWizard(
   const shouldKeepExistingConfig = existingConfigAction === "keep";
   const shouldCreateStarterTeam =
     !snapshot.exists || treatBootstrapOnlyEmbeddedConfigAsFresh || existingConfigAction === "reset";
+  const detectedFreshInstallTailscaleMode =
+    shouldCreateStarterTeam && (opts.mode ?? (flow === "quickstart" ? "local" : undefined)) === "local"
+      ? await (async () => {
+          const { detectFreshInstallTailscaleMode } = await import("../commands/onboard-config.js");
+          return await detectFreshInstallTailscaleMode(baseConfig);
+        })()
+      : resolveSavedTailscaleMode(baseConfig);
 
   const quickstartGateway: QuickstartGatewayDefaults = (() => {
     const hasExisting =
@@ -447,7 +454,9 @@ export async function runSetupWizard(
     const tailscaleMode =
       tailscaleRaw === "off" || tailscaleRaw === "serve" || tailscaleRaw === "funnel"
         ? tailscaleRaw
-        : "off";
+        : hasExisting
+          ? "off"
+          : detectedFreshInstallTailscaleMode;
 
     return {
       hasExisting,
@@ -493,6 +502,10 @@ export async function runSetupWizard(
       }
       return "Funnel";
     };
+    const formatTailscaleWithSource = (value: "off" | "serve" | "funnel") =>
+      !quickstartGateway.hasExisting && value === detectedFreshInstallTailscaleMode && value !== "off"
+        ? `${formatTailscale(value)} (detected)`
+        : formatTailscale(value);
     const quickstartLines = quickstartGateway.hasExisting
       ? [
           "Keeping your current gateway settings:",
@@ -502,14 +515,14 @@ export async function runSetupWizard(
             ? [`Gateway custom IP: ${quickstartGateway.customBindHost}`]
             : []),
           `Gateway auth: ${formatAuth(quickstartGateway.authMode)}`,
-          `Tailscale exposure: ${formatTailscale(quickstartGateway.tailscaleMode)}`,
+          `Tailscale exposure: ${formatTailscaleWithSource(quickstartGateway.tailscaleMode)}`,
           "Direct to chat channels.",
         ]
       : [
           `Gateway port: ${DEFAULT_GATEWAY_PORT}`,
           "Gateway bind: Loopback (127.0.0.1)",
           "Gateway auth: Token (default)",
-          "Tailscale exposure: Off",
+          `Tailscale exposure: ${formatTailscaleWithSource(quickstartGateway.tailscaleMode)}`,
           "Direct to chat channels.",
         ];
     await prompter.note(quickstartLines.join("\n"), "QuickStart");
@@ -864,6 +877,40 @@ export async function runSetupWizard(
     config: nextConfig,
     runtime,
   });
+
+  if (mode === "local" && shouldCreateStarterTeam) {
+    const { ensureFreshInstallBundledTools } = await import("../commands/onboard-bundled-tools.js");
+    const progress = prompter.progress("Included tools");
+    let bundledToolsDoneMessage = "Included tools checked.";
+    const bundledTools = await (async () => {
+      try {
+        progress.update("Installing Google Chrome and Clawd Cursor…");
+        const result = await ensureFreshInstallBundledTools({
+          freshInstall: true,
+          runtime: {
+            log: (message) => progress.update(String(message)),
+          },
+        });
+        bundledToolsDoneMessage = result.ok
+          ? "Included tools are ready."
+          : "Included tools need attention.";
+        return result;
+      } finally {
+        progress.stop(bundledToolsDoneMessage);
+      }
+    })();
+    if (!bundledTools.ok) {
+      await prompter.note(
+        [
+          "Fresh-install bundled tool setup needs attention:",
+          ...bundledTools.results
+            .filter((result) => result.status === "failed")
+            .map((result) => `- ${result.id}: ${result.detail}`),
+        ].join("\n"),
+        "Included tools",
+      );
+    }
+  }
 
   const { finalizeSetupWizard } = await import("./setup.finalize.js");
   const { launchedTui } = await finalizeSetupWizard({

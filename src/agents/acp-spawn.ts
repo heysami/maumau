@@ -83,6 +83,8 @@ export type SpawnAcpContext = {
   agentAccountId?: string;
   agentTo?: string;
   agentThreadId?: string | number;
+  senderIsOwner?: boolean;
+  requesterTailscaleLogin?: string | null;
   sandboxed?: boolean;
 };
 
@@ -798,6 +800,10 @@ export async function spawnAcpDirect(
       params: {
         key: sessionKey,
         spawnedBy: requesterInternalKey,
+        ...(ctx.senderIsOwner === true ? { requesterSenderIsOwner: true } : {}),
+        ...(ctx.requesterTailscaleLogin?.trim()
+          ? { requesterTailscaleLogin: ctx.requesterTailscaleLogin.trim() }
+          : {}),
         ...(params.label ? { label: params.label } : {}),
       },
       timeoutMs: 10_000,

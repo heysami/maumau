@@ -13,6 +13,7 @@ export type SubagentControlScope = (typeof SUBAGENT_CONTROL_SCOPES)[number];
 type SessionCapabilityEntry = {
   sessionId?: unknown;
   spawnDepth?: unknown;
+  subagentMaxSpawnDepth?: unknown;
   subagentRole?: unknown;
   subagentControlScope?: unknown;
 };
@@ -39,6 +40,14 @@ function normalizeSubagentControlScope(value: unknown): SubagentControlScope | u
   }
   const trimmed = value.trim().toLowerCase();
   return SUBAGENT_CONTROL_SCOPES.find((entry) => entry === trimmed);
+}
+
+function normalizeSubagentMaxSpawnDepth(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 1 || numeric > 5) {
+    return undefined;
+  }
+  return numeric;
 }
 
 function readSessionStore(storePath: string): Record<string, SessionCapabilityEntry> {
@@ -134,20 +143,26 @@ export function resolveStoredSubagentCapabilities(
     store: opts?.store,
   });
   if (!normalizedSessionKey || !isSubagentSessionKey(normalizedSessionKey)) {
-    return resolveSubagentCapabilities({ depth, maxSpawnDepth });
+    return {
+      ...resolveSubagentCapabilities({ depth, maxSpawnDepth }),
+      maxSpawnDepth,
+    };
   }
   const entry = resolveSessionCapabilityEntry({
     sessionKey: normalizedSessionKey,
     cfg: opts?.cfg,
     store: opts?.store,
   });
+  const effectiveMaxSpawnDepth =
+    normalizeSubagentMaxSpawnDepth(entry?.subagentMaxSpawnDepth) ?? maxSpawnDepth;
   const storedRole = normalizeSubagentRole(entry?.subagentRole);
   const storedControlScope = normalizeSubagentControlScope(entry?.subagentControlScope);
-  const fallback = resolveSubagentCapabilities({ depth, maxSpawnDepth });
+  const fallback = resolveSubagentCapabilities({ depth, maxSpawnDepth: effectiveMaxSpawnDepth });
   const role = storedRole ?? fallback.role;
   const controlScope = storedControlScope ?? resolveSubagentControlScopeForRole(role);
   return {
     depth,
+    maxSpawnDepth: effectiveMaxSpawnDepth,
     role,
     controlScope,
     canSpawn: role === "main" || role === "orchestrator",

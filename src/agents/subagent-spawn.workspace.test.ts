@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createMainOrchestrationTeamConfig,
+  createStarterTeamAgents,
+  createStarterTeamConfig,
+  MAIN_WORKER_AGENT_ID,
+  STARTER_TEAM_ID,
+  STARTER_TEAM_MANAGER_AGENT_ID,
+} from "../teams/presets.js";
+import {
   createDefaultSessionHelperMocks,
   identityDeliveryContext,
 } from "./subagent-spawn.test-helpers.js";
@@ -8,6 +16,8 @@ import { installAcceptedSubagentGatewayMock } from "./test-helpers/subagent-gate
 type TestAgentConfig = {
   id?: string;
   workspace?: string;
+  executionStyle?: string;
+  executionWorkerAgentId?: string;
   subagents?: {
     allowAgents?: string[];
   };
@@ -15,7 +25,14 @@ type TestAgentConfig = {
 
 type TestConfig = {
   agents?: {
+    defaults?: {
+      executionStyle?: string;
+      executionWorkerAgentId?: string;
+    };
     list?: TestAgentConfig[];
+  };
+  teams?: {
+    list?: Array<Record<string, unknown>>;
   };
 };
 
@@ -23,6 +40,7 @@ const hoisted = vi.hoisted(() => ({
   callGatewayMock: vi.fn(),
   configOverride: {} as Record<string, unknown>,
   registerSubagentRunMock: vi.fn(),
+  sessionEntries: {} as Record<string, Record<string, unknown>>,
   hookRunner: {
     hasHooks: vi.fn(() => false),
     runSubagentSpawning: vi.fn(),
@@ -40,6 +58,14 @@ vi.mock("../config/config.js", async (importOriginal) => {
   return {
     ...actual,
     loadConfig: () => hoisted.configOverride,
+  };
+});
+
+vi.mock("../gateway/session-utils.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../gateway/session-utils.js")>();
+  return {
+    ...actual,
+    loadSessionEntry: (key: string) => ({ entry: hoisted.sessionEntries[key] ?? {} }),
   };
 });
 
@@ -88,6 +114,7 @@ vi.mock("./tools/sessions-helpers.js", () => createDefaultSessionHelperMocks());
 vi.mock("./agent-scope.js", () => ({
   resolveAgentConfig: (cfg: TestConfig, agentId: string) =>
     cfg.agents?.list?.find((entry) => entry.id === agentId),
+  resolveDefaultAgentId: () => "main",
   resolveAgentWorkspaceDir: (cfg: TestConfig, agentId: string) =>
     cfg.agents?.list?.find((entry) => entry.id === agentId)?.workspace ??
     `/tmp/workspace-${agentId}`,
@@ -127,6 +154,13 @@ async function loadFreshSubagentSpawnWorkspaceModuleForTest() {
       loadConfig: () => hoisted.configOverride,
     };
   });
+  vi.doMock("../gateway/session-utils.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../gateway/session-utils.js")>();
+    return {
+      ...actual,
+      loadSessionEntry: (key: string) => ({ entry: hoisted.sessionEntries[key] ?? {} }),
+    };
+  });
   vi.doMock("./subagent-registry.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./subagent-registry.js")>();
     return {
@@ -157,6 +191,7 @@ async function loadFreshSubagentSpawnWorkspaceModuleForTest() {
   vi.doMock("./agent-scope.js", () => ({
     resolveAgentConfig: (cfg: TestConfig, agentId: string) =>
       cfg.agents?.list?.find((entry) => entry.id === agentId),
+    resolveDefaultAgentId: () => "main",
     resolveAgentWorkspaceDir: (cfg: TestConfig, agentId: string) =>
       cfg.agents?.list?.find((entry) => entry.id === agentId)?.workspace ??
       `/tmp/workspace-${agentId}`,
@@ -196,6 +231,7 @@ describe("spawnSubagentDirect workspace inheritance", () => {
     await loadFreshSubagentSpawnWorkspaceModuleForTest();
     hoisted.callGatewayMock.mockClear();
     hoisted.registerSubagentRunMock.mockClear();
+    hoisted.sessionEntries = {};
     hoisted.hookRunner.hasHooks.mockReset();
     hoisted.hookRunner.hasHooks.mockImplementation(() => false);
     hoisted.hookRunner.runSubagentSpawning.mockReset();
@@ -233,6 +269,235 @@ describe("spawnSubagentDirect workspace inheritance", () => {
       agentId: "main",
       expectedWorkspaceDir: "/tmp/requester-workspace",
     });
+  });
+
+  it("allows teams_run to launch the required vibe-coder manager for UI tasks", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+        },
+        list: [
+          {
+            id: "main",
+            workspace: "/tmp/workspace-main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+            subagents: {
+              allowAgents: [MAIN_WORKER_AGENT_ID],
+            },
+          },
+          ...createStarterTeamAgents(),
+        ],
+      },
+      teams: {
+        list: [createMainOrchestrationTeamConfig(), createStarterTeamConfig()],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task: "Build a polished responsive web app with visual design and accessibility review.",
+        agentId: STARTER_TEAM_MANAGER_AGENT_ID,
+        intent: "team_manager",
+        skipAllowAgentsCheck: true,
+        sessionPatch: {
+          teamId: STARTER_TEAM_ID,
+          teamRole: "manager",
+          subagentMaxSpawnDepth: 2,
+        },
+      },
+      {
+        agentSessionKey: "main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.childSessionKey).toMatch(
+      new RegExp(`^agent:${STARTER_TEAM_MANAGER_AGENT_ID}:subagent:`),
+    );
+    const patchCall = hoisted.callGatewayMock.mock.calls
+      .map((call) => call[0] as { method?: string; params?: Record<string, unknown> })
+      .find(
+        (entry) =>
+          entry.method === "sessions.patch" &&
+          entry.params?.teamId === STARTER_TEAM_ID &&
+          entry.params?.teamRole === "manager",
+      );
+    expect(patchCall?.params).toMatchObject({
+      spawnDepth: 1,
+      subagentMaxSpawnDepth: 2,
+      subagentRole: "orchestrator",
+      subagentControlScope: "children",
+    });
+  });
+
+  it("still forbids direct worker delegation for UI tasks from the implicit root team", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+        },
+        list: [
+          {
+            id: "main",
+            workspace: "/tmp/workspace-main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+          },
+          ...createStarterTeamAgents(),
+        ],
+      },
+      teams: {
+        list: [createMainOrchestrationTeamConfig(), createStarterTeamConfig()],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task: "Build a polished responsive web app with visual design and accessibility review.",
+        agentId: MAIN_WORKER_AGENT_ID,
+      },
+      {
+        agentSessionKey: "main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "forbidden",
+      error: expect.stringContaining('teams_run with teamId="vibe-coder"'),
+    });
+  });
+
+  it("resolves same-team specialist spawns by label for team managers", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        list: createStarterTeamAgents(),
+      },
+      teams: {
+        list: [{ ...createStarterTeamConfig(), implicitForManagerSessions: true }],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task: "Produce the architecture package for the task.",
+        label: "system architect",
+      },
+      {
+        agentSessionKey: "agent:vibe-coder-manager:main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.childSessionKey).toMatch(/^agent:vibe-coder-system-architect:subagent:/);
+    const patchCall = hoisted.callGatewayMock.mock.calls
+      .map((call) => call[0] as { method?: string; params?: Record<string, unknown> })
+      .find(
+        (entry) =>
+          entry.method === "sessions.patch" &&
+          entry.params?.teamId === STARTER_TEAM_ID &&
+          entry.params?.teamRole === "system architect",
+      );
+    expect(patchCall?.params).toBeTruthy();
+  });
+
+  it("forbids team-manager specialist spawns that do not resolve to a configured specialist", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        list: createStarterTeamAgents(),
+      },
+      teams: {
+        list: [{ ...createStarterTeamConfig(), implicitForManagerSessions: true }],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task: "Do the next specialist thing.",
+        label: "mystery role",
+      },
+      {
+        agentSessionKey: "agent:vibe-coder-manager:main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "forbidden",
+      error: expect.stringContaining("Team managers must target a configured specialist"),
+    });
+    expect(result.error).toContain("system architect -> vibe-coder-system-architect");
+  });
+
+  it("resolves configured specialist labels for custom user-defined teams", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        list: [
+          { id: "studio-manager", workspace: "/tmp/workspace-studio-manager" },
+          { id: "interaction-planner", workspace: "/tmp/workspace-interaction-planner" },
+          { id: "delivery-designer", workspace: "/tmp/workspace-delivery-designer" },
+        ],
+      },
+      teams: {
+        list: [
+          {
+            id: "studio",
+            name: "Studio",
+            managerAgentId: "studio-manager",
+            implicitForManagerSessions: true,
+            members: [
+              { agentId: "interaction-planner", role: "interaction planner" },
+              { agentId: "delivery-designer", role: "delivery designer" },
+            ],
+            workflows: [{ id: "default", default: true }],
+          },
+        ],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task: "Create the interaction plan.",
+        label: "interaction planner",
+      },
+      {
+        agentSessionKey: "agent:studio-manager:main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.childSessionKey).toMatch(/^agent:interaction-planner:subagent:/);
+    const patchCall = hoisted.callGatewayMock.mock.calls
+      .map((call) => call[0] as { method?: string; params?: Record<string, unknown> })
+      .find(
+        (entry) =>
+          entry.method === "sessions.patch" &&
+          entry.params?.teamId === "studio" &&
+          entry.params?.teamRole === "interaction planner",
+      );
+    expect(patchCall?.params).toBeTruthy();
   });
 
   it("deletes the provisional child session when a non-thread subagent start fails", async () => {

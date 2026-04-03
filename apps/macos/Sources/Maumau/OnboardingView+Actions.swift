@@ -57,7 +57,7 @@ extension OnboardingView {
 
     func handleBack() {
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
-        if leavingWizard, !self.onboardingWizard.isComplete {
+        if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             self.resetWizardAfterNavigation()
         }
         withAnimation {
@@ -68,7 +68,7 @@ extension OnboardingView {
     func handleNext() {
         if self.isWizardBlocking { return }
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
-        if leavingWizard, !self.onboardingWizard.isComplete {
+        if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             self.resetWizardAfterNavigation()
         }
         if self.currentPage < self.pageCount - 1 {

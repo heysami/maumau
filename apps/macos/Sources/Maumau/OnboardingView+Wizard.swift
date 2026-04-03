@@ -128,6 +128,7 @@ private struct OnboardingWizardCardContent: View {
         case starting
         case step(WizardStep)
         case complete
+        case skipped
         case waiting
     }
 
@@ -136,6 +137,7 @@ private struct OnboardingWizardCardContent: View {
         if self.wizard.isStarting { return .starting }
         if let step = wizard.currentStep { return .step(step) }
         if self.wizard.isComplete { return .complete }
+        if self.wizard.isSkippedForNow { return .skipped }
         return .waiting
     }
 
@@ -171,6 +173,9 @@ private struct OnboardingWizardCardContent: View {
             case .complete:
                 Text(OnboardingStrings(language: self.language).wizardCompleteTitle)
                     .font(.headline)
+            case .skipped:
+                Text(OnboardingStrings(language: self.language).wizardSkippedTitle)
+                    .foregroundStyle(.secondary)
             case .waiting:
                 Text(OnboardingStrings(language: self.language).waitingForWizardTitle)
                     .foregroundStyle(.secondary)

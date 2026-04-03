@@ -3,6 +3,7 @@ import { isValidEnvSecretRefId } from "../../../config/types.secrets.js";
 import type { RuntimeEnv } from "../../../runtime.js";
 import { resolveDefaultSecretProviderAlias } from "../../../secrets/ref-contract.js";
 import { normalizeGatewayTokenInput, randomToken } from "../../onboard-helpers.js";
+import { applyOnboardingTailscaleGatewayAuth } from "../../onboard-gateway-tailscale-auth.js";
 import type { OnboardOptions } from "../../onboard-types.js";
 
 export function applyNonInteractiveGatewayConfig(params: {
@@ -10,6 +11,7 @@ export function applyNonInteractiveGatewayConfig(params: {
   opts: OnboardOptions;
   runtime: RuntimeEnv;
   defaultPort: number;
+  detectedTailscaleMode?: "off" | "serve" | "funnel";
 }): {
   nextConfig: MaumauConfig;
   port: number;
@@ -37,7 +39,7 @@ export function applyNonInteractiveGatewayConfig(params: {
     return null;
   }
   let authMode = authModeRaw;
-  const tailscaleMode = opts.tailscale ?? "off";
+  const tailscaleMode = opts.tailscale ?? params.detectedTailscaleMode ?? "off";
   const tailscaleResetOnExit = Boolean(opts.tailscaleResetOnExit);
 
   // Tighten config to safe combos:
@@ -145,6 +147,11 @@ export function applyNonInteractiveGatewayConfig(params: {
       },
     },
   };
+  nextConfig = applyOnboardingTailscaleGatewayAuth({
+    cfg: nextConfig,
+    tailscaleMode,
+    authMode: authMode as "token" | "password",
+  });
 
   return {
     nextConfig,

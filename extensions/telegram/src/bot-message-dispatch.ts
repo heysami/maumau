@@ -38,6 +38,7 @@ import type { TelegramBotOptions } from "./bot.js";
 import { deliverReplies, emitInternalMessageSentHook } from "./bot/delivery.js";
 import type { TelegramStreamMode } from "./bot/types.js";
 import type { TelegramInlineButtons } from "./button-types.js";
+import { normalizeTelegramReplyPayload } from "./bot/reply-normalize.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { shouldSuppressLocalTelegramExecApprovalPrompt } from "./exec-approvals.js";
 import { renderTelegramHtmlText } from "./format.js";
@@ -596,6 +597,10 @@ export const dispatchTelegramMessage = async ({
       dispatcherOptions: {
         ...replyPipeline,
         deliver: async (payload, info) => {
+          const normalizedPayload = normalizeTelegramReplyPayload(payload);
+          if (!normalizedPayload) {
+            return;
+          }
           if (payload.isError === true) {
             hadErrorReplyFailureOrSkip = true;
           }
@@ -608,18 +613,20 @@ export const dispatchTelegramMessage = async ({
             shouldSuppressLocalTelegramExecApprovalPrompt({
               cfg,
               accountId: route.accountId,
-              payload,
+              payload: normalizedPayload,
             })
           ) {
             queuedFinal = true;
             return;
           }
           const previewButtons = (
-            payload.channelData?.telegram as { buttons?: TelegramInlineButtons } | undefined
+            normalizedPayload.channelData?.telegram as
+              | { buttons?: TelegramInlineButtons }
+              | undefined
           )?.buttons;
-          const split = splitTextIntoLaneSegments(payload.text);
+          const split = splitTextIntoLaneSegments(normalizedPayload.text);
           const segments = split.segments;
-          const reply = resolveSendableOutboundReplyParts(payload);
+          const reply = resolveSendableOutboundReplyParts(normalizedPayload);
           const hasMedia = reply.hasMedia;
 
           const flushBufferedFinalAnswer = async () => {
@@ -649,7 +656,7 @@ export const dispatchTelegramMessage = async ({
               reasoningStepState.shouldBufferFinalAnswer()
             ) {
               reasoningStepState.bufferFinalAnswer({
-                payload,
+                payload: normalizedPayload,
                 text: segment.text,
               });
               continue;
@@ -660,7 +667,7 @@ export const dispatchTelegramMessage = async ({
             const result = await deliverLaneText({
               laneName: segment.lane,
               text: segment.text,
-              payload,
+              payload: normalizedPayload,
               infoKind: info.kind,
               previewButtons,
               allowPreviewUpdateForNonFinal: segment.lane === "reasoning",
@@ -689,7 +696,9 @@ export const dispatchTelegramMessage = async ({
           if (split.suppressedReasoningOnly) {
             if (reply.hasMedia) {
               const payloadWithoutSuppressedReasoning =
-                typeof payload.text === "string" ? { ...payload, text: "" } : payload;
+                typeof normalizedPayload.text === "string"
+                  ? { ...normalizedPayload, text: "" }
+                  : normalizedPayload;
               await sendPayload(payloadWithoutSuppressedReasoning);
             }
             if (info.kind === "final") {
@@ -710,7 +719,7 @@ export const dispatchTelegramMessage = async ({
             }
             return;
           }
-          await sendPayload(payload);
+          await sendPayload(normalizedPayload);
           if (info.kind === "final") {
             await flushBufferedFinalAnswer();
           }

@@ -446,6 +446,112 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.internalEvents?.[0]?.result).toContain("Worker executed successfully");
   });
 
+  it("hides git details by default for direct owner-channel completion delivery", async () => {
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "requester-session-owner",
+        requesterSenderIsOwner: true,
+        lastChannel: "telegram",
+      },
+    };
+    readLatestAssistantReplyMock.mockResolvedValueOnce(`Done.
+
+Changed files:
+- index.html
+
+Execution receipt:
+- Mode: delegated
+- Worker/Team used: main-worker
+- QA state: completed
+- Capability path used: subagent
+- Preview/share state: n/a
+
+Git:
+- Commit succeeded
+- Commit: \`abc1234\`
+- Message: \`Ship site\`
+
+Relevant detail:
+- The first git commit attempt failed before succeeding.`);
+
+    await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:worker",
+      childRunId: "run-owner-git-hidden",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "telegram", to: "telegram:1234" },
+      expectsCompletionMessage: true,
+      ...defaultOutcomeAnnounce,
+    });
+
+    const call = agentSpy.mock.calls[0]?.[0] as {
+      params?: {
+        message?: string;
+        internalEvents?: Array<{
+          result?: string;
+          followupDetails?: string;
+          replyInstruction?: string;
+        }>;
+      };
+    };
+    const event = call?.params?.internalEvents?.[0];
+    expect(event?.result).toContain("Changed files:");
+    expect(event?.result).not.toContain("Execution receipt:");
+    expect(event?.result).not.toContain("Worker/Team used:");
+    expect(event?.result).not.toContain("Git:");
+    expect(event?.result).not.toContain("Commit:");
+    expect(event?.followupDetails).toContain("Execution receipt:");
+    expect(event?.followupDetails).toContain("Worker/Team used:");
+    expect(event?.followupDetails).toContain("Git:");
+    expect(event?.followupDetails).toContain("Relevant detail:");
+    expect(event?.replyInstruction).toContain("Do not include Git details or execution receipt details");
+    expect(call?.params?.message).toContain("<<<BEGIN_INTERNAL_FOLLOWUP_DETAILS>>>");
+  });
+
+  it("keeps git details in the default completion context for non-owner routes", async () => {
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "requester-session-non-owner",
+        requesterSenderIsOwner: false,
+        lastChannel: "telegram",
+      },
+    };
+    readLatestAssistantReplyMock.mockResolvedValueOnce(`Done.
+
+Execution receipt:
+- Mode: delegated
+- Worker/Team used: main-worker
+
+Git:
+- Commit: \`abc1234\`
+- Message: \`Ship site\``);
+
+    await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:worker",
+      childRunId: "run-non-owner-git-visible",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "telegram", to: "telegram:1234" },
+      expectsCompletionMessage: true,
+      ...defaultOutcomeAnnounce,
+    });
+
+    const call = agentSpy.mock.calls[0]?.[0] as {
+      params?: {
+        internalEvents?: Array<{
+          result?: string;
+          followupDetails?: string;
+          replyInstruction?: string;
+        }>;
+      };
+    };
+    const event = call?.params?.internalEvents?.[0];
+    expect(event?.result).toContain("Execution receipt:");
+    expect(event?.result).toContain("Git:");
+    expect(event?.followupDetails).toBeUndefined();
+    expect(event?.replyInstruction).not.toContain("Do not include Git details or execution receipt details");
+  });
+
   it("uses child-run announce identity for direct idempotency", async () => {
     await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:worker",

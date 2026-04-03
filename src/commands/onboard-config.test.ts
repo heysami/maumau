@@ -1,13 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../config/config.js";
+const readTailscaleStatusJson = vi.hoisted(() => vi.fn(async () => ({})));
+vi.mock("../infra/tailscale.js", () => ({
+  readTailscaleStatusJson,
+}));
 import {
   applyLocalSetupWorkspaceConfig,
+  detectFreshInstallTailscaleMode,
   ONBOARDING_DEFAULT_DM_SCOPE,
   ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS,
   ONBOARDING_DEFAULT_TOOLS_PROFILE,
 } from "./onboard-config.js";
 
 describe("applyLocalSetupWorkspaceConfig", () => {
+  beforeEach(() => {
+    readTailscaleStatusJson.mockReset();
+    readTailscaleStatusJson.mockResolvedValue({});
+  });
+
   it("defaults local setup tool profile to coding", () => {
     expect(ONBOARDING_DEFAULT_TOOLS_PROFILE).toBe("coding");
   });
@@ -109,5 +119,104 @@ describe("applyLocalSetupWorkspaceConfig", () => {
       enabled: false,
       allow: ["ops"],
     });
+  });
+
+  it("makes existing-session the default browser lane on fresh local installs", () => {
+    const result = applyLocalSetupWorkspaceConfig(
+      {},
+      "/tmp/workspace",
+      { freshInstall: true },
+    );
+
+    expect(result.browser?.defaultProfile).toBe("user");
+    expect(result.browser?.profiles?.desktop).toEqual(
+      expect.objectContaining({
+        driver: "clawd",
+      }),
+    );
+    expect(typeof result.browser?.profiles?.desktop?.cdpPort).toBe("number");
+  });
+
+  it("preserves an existing clawd fallback profile on fresh installs", () => {
+    const baseConfig: MaumauConfig = {
+      browser: {
+        defaultProfile: "custom-browser",
+        profiles: {
+          desktop: {
+            driver: "clawd",
+            cdpPort: 18901,
+            color: "#123456",
+          },
+        },
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(
+      baseConfig,
+      "/tmp/workspace",
+      { freshInstall: true },
+    );
+
+    expect(result.browser?.defaultProfile).toBe("custom-browser");
+    expect(result.browser?.profiles?.desktop).toEqual({
+      driver: "clawd",
+      cdpPort: 18901,
+      color: "#123456",
+    });
+  });
+
+  it("writes the bundled orchestrator defaults onto an existing fresh-install main agent", () => {
+    const baseConfig: MaumauConfig = {
+      agents: {
+        list: [{ id: "main", default: true, name: "Main" }],
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace", {
+      freshInstall: true,
+    });
+
+    expect(result.agents?.defaults).toMatchObject({
+      workspace: "/tmp/workspace",
+      executionStyle: "orchestrator",
+      executionWorkerAgentId: "main-worker",
+    });
+    expect(result.agents?.list?.find((agent) => agent.id === "main")).toEqual(
+      expect.objectContaining({
+        id: "main",
+        default: true,
+        name: "Main",
+        executionStyle: "orchestrator",
+        executionWorkerAgentId: "main-worker",
+        subagents: {
+          allowAgents: ["main-worker"],
+        },
+        tools: expect.objectContaining({
+          profile: "messaging",
+          alsoAllow: expect.arrayContaining([
+            "sessions_spawn",
+            "sessions_yield",
+            "teams_run",
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("detects serve as the fresh-install default when Tailscale is running", async () => {
+    readTailscaleStatusJson.mockResolvedValue({
+      BackendState: "Running",
+      Self: {
+        DNSName: "samiadjis-mac-mini.tailnet.ts.net.",
+      },
+    });
+
+    await expect(detectFreshInstallTailscaleMode({})).resolves.toBe("serve");
+  });
+
+  it("keeps off as the fresh-install default when Tailscale is unavailable", async () => {
+    readTailscaleStatusJson.mockRejectedValue(new Error("tailscale unavailable"));
+
+    await expect(detectFreshInstallTailscaleMode({})).resolves.toBe("off");
   });
 });

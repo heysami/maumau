@@ -24,6 +24,12 @@ actor GatewayEndpointStore {
     ]
     private static let remoteConnectingDetail = "Connecting to remote gateway…"
     private static let staticLogger = Logger(subsystem: "ai.maumau", category: "gateway-endpoint")
+    private enum LocalGatewayAuthMode {
+        case token
+        case password
+        case none
+        case trustedProxy
+    }
     private enum EnvOverrideWarningKind {
         case token
         case password
@@ -84,6 +90,29 @@ actor GatewayEndpointStore {
         env: [String: String],
         launchdSnapshot: LaunchAgentPlistSnapshot?) -> String?
     {
+        if !isRemote {
+            switch self.resolveLocalGatewayAuthMode(
+                root: root,
+                env: env,
+                launchdSnapshot: launchdSnapshot)
+            {
+            case .password:
+                if let launchdPassword = launchdSnapshot?.password?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   !launchdPassword.isEmpty
+                {
+                    return launchdPassword
+                }
+                if let configPassword = self.resolveConfigPassword(isRemote: false, root: root),
+                   !configPassword.isEmpty
+                {
+                    return configPassword
+                }
+            case .token, .none, .trustedProxy:
+                return nil
+            }
+        }
+
         let raw = env["MAUMAU_GATEWAY_PASSWORD"] ?? ""
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -152,6 +181,32 @@ actor GatewayEndpointStore {
         env: [String: String],
         launchdSnapshot: LaunchAgentPlistSnapshot?) -> String?
     {
+        if !isRemote {
+            switch self.resolveLocalGatewayAuthMode(
+                root: root,
+                env: env,
+                launchdSnapshot: launchdSnapshot)
+            {
+            case .token:
+                // The macOS app should follow the supervised local gateway first:
+                // launchd-embedded creds (when present) win, then persisted config.
+                // Process env is only a last-resort fallback for ad-hoc local runs.
+                if let launchdToken = launchdSnapshot?.token?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   !launchdToken.isEmpty
+                {
+                    return launchdToken
+                }
+                if let configToken = self.resolveConfigToken(isRemote: false, root: root),
+                   !configToken.isEmpty
+                {
+                    return configToken
+                }
+            case .password, .none, .trustedProxy:
+                return nil
+            }
+        }
+
         let raw = env["MAUMAU_GATEWAY_TOKEN"] ?? ""
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -198,6 +253,67 @@ actor GatewayEndpointStore {
             return token.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return nil
+    }
+
+    private static func resolveLocalGatewayAuthMode(
+        root: [String: Any],
+        env: [String: String],
+        launchdSnapshot: LaunchAgentPlistSnapshot?) -> LocalGatewayAuthMode
+    {
+        let explicitMode = self.resolveExplicitLocalGatewayAuthMode(root: root)
+        if let explicitMode {
+            return explicitMode
+        }
+
+        if self.hasLocalPasswordCandidate(root: root, env: env, launchdSnapshot: launchdSnapshot) {
+            return .password
+        }
+
+        return .token
+    }
+
+    private static func resolveExplicitLocalGatewayAuthMode(root: [String: Any]) -> LocalGatewayAuthMode? {
+        guard let gateway = root["gateway"] as? [String: Any],
+              let auth = gateway["auth"] as? [String: Any],
+              let rawMode = auth["mode"] as? String
+        else {
+            return nil
+        }
+
+        switch rawMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "password":
+            return .password
+        case "none":
+            return LocalGatewayAuthMode.none
+        case "trusted-proxy":
+            return .trustedProxy
+        case "token":
+            return .token
+        default:
+            return nil
+        }
+    }
+
+    private static func hasLocalPasswordCandidate(
+        root: [String: Any],
+        env: [String: String],
+        launchdSnapshot: LaunchAgentPlistSnapshot?) -> Bool
+    {
+        if let configPassword = self.resolveConfigPassword(isRemote: false, root: root),
+           !configPassword.isEmpty
+        {
+            return true
+        }
+
+        let envPassword = env["MAUMAU_GATEWAY_PASSWORD"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !envPassword.isEmpty {
+            return true
+        }
+
+        let launchdPassword = launchdSnapshot?.password?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !launchdPassword.isEmpty
     }
 
     private static func warnEnvOverrideOnce(

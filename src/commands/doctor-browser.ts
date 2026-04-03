@@ -98,8 +98,9 @@ export async function noteChromeMcpBrowserReadiness(
   if (!chrome) {
     const lines = [
       `- Chrome MCP existing-session is configured for profile(s): ${profileLabel}.`,
-      `- Google Chrome was not found on this host for auto-connect profile(s): ${autoProfileLabel}. Maumau does not bundle Chrome.`,
-      `- Install Google Chrome ${CHROME_MCP_MIN_MAJOR}+ on the same host as the Gateway or node, or set browser.profiles.<name>.userDataDir for a different Chromium-based browser.`,
+      `- Google Chrome was not found on this host for auto-connect profile(s): ${autoProfileLabel}.`,
+      `- Fresh local onboarding can install Google Chrome ${CHROME_MCP_MIN_MAJOR}+ for this lane, or you can install it manually now.`,
+      `- Keep Google Chrome ${CHROME_MCP_MIN_MAJOR}+ on the same host as the Gateway or node, or set browser.profiles.<name>.userDataDir for a different Chromium-based browser.`,
       `- Enable remote debugging in the browser inspect page (${REMOTE_DEBUGGING_PAGES}).`,
       "- Keep the browser running and accept the attach consent prompt the first time Maumau connects.",
       "- Docker, headless, and sandbox browser flows stay on raw CDP; this check only applies to host-local Chrome MCP attach.",

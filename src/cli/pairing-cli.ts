@@ -1,7 +1,8 @@
 import type { Command } from "commander";
 import { normalizeChannelId } from "../channels/plugins/index.js";
+import { bootstrapOwnerAllowFromIfUnset } from "../channels/owner-bootstrap.js";
 import { listPairingChannels, notifyPairingApproved } from "../channels/plugins/pairing.js";
-import { loadConfig } from "../config/config.js";
+import { loadConfig, writeConfigFile } from "../config/config.js";
 import { resolvePairingIdLabel } from "../pairing/pairing-labels.js";
 import {
   approveChannelPairingCode,
@@ -47,6 +48,25 @@ function parseChannel(raw: unknown, channels: PairingChannel[]): PairingChannel 
 async function notifyApproved(channel: PairingChannel, id: string) {
   const cfg = loadConfig();
   await notifyPairingApproved({ channelId: channel, id, cfg });
+}
+
+async function maybeBootstrapPairingOwner(params: {
+  channel: PairingChannel;
+  accountId?: string;
+  approvedId: string;
+}): Promise<boolean> {
+  const cfg = loadConfig();
+  const bootstrapped = bootstrapOwnerAllowFromIfUnset({
+    cfg,
+    channelId: params.channel,
+    accountId: params.accountId,
+    allowFrom: [params.approvedId],
+  });
+  if (!bootstrapped.bootstrapped) {
+    return false;
+  }
+  await writeConfigFile(bootstrapped.cfg);
+  return true;
 }
 
 export function registerPairingCli(program: Command) {
@@ -162,6 +182,16 @@ export function registerPairingCli(program: Command) {
       defaultRuntime.log(
         `${theme.success("Approved")} ${theme.muted(channel)} sender ${theme.command(approved.id)}.`,
       );
+      const ownerBootstrapped = await maybeBootstrapPairingOwner({
+        channel,
+        accountId: accountId || undefined,
+        approvedId: approved.id,
+      });
+      if (ownerBootstrapped) {
+        defaultRuntime.log(
+          `${theme.muted("Bootstrapped owner access for")} ${theme.command(`${channel}:${approved.id}`)}.`,
+        );
+      }
 
       if (!opts.notify) {
         return;

@@ -242,6 +242,22 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInMaumauGroup: true,
   },
   {
+    id: "capabilities_list",
+    label: "capabilities_list",
+    description: "List truthful capability readiness",
+    sectionId: "agents",
+    profiles: ["coding", "messaging"],
+    includeInMaumauGroup: true,
+  },
+  {
+    id: "preview_publish",
+    label: "preview_publish",
+    description: "Publish a workspace preview or share",
+    sectionId: "agents",
+    profiles: ["coding"],
+    includeInMaumauGroup: true,
+  },
+  {
     id: "image",
     label: "image",
     description: "Image understanding",

@@ -242,7 +242,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       label?: string;
       inputProvenance?: InputProvenance;
     };
-    const senderIsOwner = resolveSenderIsOwnerFromClient(client);
+    const callerSenderIsOwner = resolveSenderIsOwnerFromClient(client);
     const allowModelOverride = resolveAllowModelOverrideFromClient(client);
     const canResetSession = resolveCanResetSessionFromClient(client);
     const requestedModelOverride = Boolean(request.provider || request.model);
@@ -717,7 +717,11 @@ export const agentHandlers: GatewayRequestHandlers = {
           spawnedBy: spawnedByValue,
           workspaceDir: sessionEntry?.spawnedWorkspaceDir,
         }),
-        senderIsOwner,
+        senderName: client?.connect?.client?.displayName,
+        senderUsername: client?.connect?.client?.displayName,
+        requesterTailscaleLogin:
+          client?.internal?.requesterTailscaleLogin ?? sessionEntry?.requesterTailscaleLogin,
+        senderIsOwner: callerSenderIsOwner || sessionEntry?.requesterSenderIsOwner === true,
         allowModelOverride,
       },
       runId,

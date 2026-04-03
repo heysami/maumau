@@ -4,7 +4,11 @@ import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { DEFAULT_GATEWAY_DAEMON_RUNTIME } from "../daemon-runtime.js";
-import { applyLocalSetupWorkspaceConfig } from "../onboard-config.js";
+import {
+  applyLocalSetupWorkspaceConfig,
+  detectFreshInstallTailscaleMode,
+} from "../onboard-config.js";
+import { ensureFreshInstallBundledTools } from "../onboard-bundled-tools.js";
 import {
   applyWizardMetadata,
   DEFAULT_WORKSPACE,
@@ -14,6 +18,7 @@ import {
 } from "../onboard-helpers.js";
 import { ensureOnboardedMultiUserMemoryArtifacts } from "../onboard-multi-user-memory.js";
 import { ensureOnboardedReflectionReviewerArtifacts } from "../onboard-reflection-reviewer.js";
+import { applyOnboardingTailscaleGatewayAuth } from "../onboard-gateway-tailscale-auth.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { inferAuthChoiceFromFlags } from "./local/auth-choice-inference.js";
 import { applyNonInteractiveGatewayConfig } from "./local/gateway-config.js";
@@ -117,16 +122,53 @@ export async function runNonInteractiveLocalSetup(params: {
   }
 
   const gatewayBasePort = resolveGatewayPort(baseConfig);
+  const detectedFreshInstallTailscaleMode =
+    freshInstall && opts.tailscale === undefined
+      ? await detectFreshInstallTailscaleMode(baseConfig)
+      : undefined;
   const gatewayResult = applyNonInteractiveGatewayConfig({
     nextConfig,
     opts,
     runtime,
     defaultPort: gatewayBasePort,
+    detectedTailscaleMode: detectedFreshInstallTailscaleMode,
   });
   if (!gatewayResult) {
     return;
   }
   nextConfig = gatewayResult.nextConfig;
+  let effectiveTailscaleMode = gatewayResult.tailscaleMode;
+  if (gatewayResult.tailscaleMode === "serve" || gatewayResult.tailscaleMode === "funnel") {
+    const { probeTailscaleExposure } = await import("../../infra/tailscale.js");
+    const exposure = await probeTailscaleExposure(gatewayResult.tailscaleMode).catch(() => null);
+    if (exposure?.blockedReason === "doctor_failed") {
+      const lines = [
+        `Tailscale ${gatewayResult.tailscaleMode} is not enabled on this tailnet yet.`,
+        exposure.suggestedFix ?? "Enable the requested Tailscale exposure mode and rerun onboarding.",
+      ];
+      if (opts.tailscale !== undefined) {
+        runtime.error(lines.join("\n"));
+        runtime.exit(1);
+        return;
+      }
+      runtime.log([...lines, "Keeping Tailscale exposure off until this is enabled."].join("\n"));
+      nextConfig = applyOnboardingTailscaleGatewayAuth({
+        cfg: {
+          ...nextConfig,
+          gateway: {
+            ...nextConfig.gateway,
+            tailscale: {
+              ...nextConfig.gateway?.tailscale,
+              mode: "off",
+            },
+          },
+        },
+        tailscaleMode: "off",
+        authMode: gatewayResult.authMode as "token" | "password",
+      });
+      effectiveTailscaleMode = "off";
+    }
+  }
 
   nextConfig = applyNonInteractiveSkillsConfig({ nextConfig, opts, runtime });
 
@@ -145,6 +187,21 @@ export async function runNonInteractiveLocalSetup(params: {
     config: nextConfig,
     runtime,
   });
+
+  const bundledTools = await ensureFreshInstallBundledTools({
+    freshInstall,
+    runtime,
+  });
+  if (bundledTools.attempted && !bundledTools.ok) {
+    runtime.log(
+      [
+        "Fresh-install bundled tool setup needs attention:",
+        ...bundledTools.results
+          .filter((result) => result.status === "failed")
+          .map((result) => `- ${result.id}: ${result.detail}`),
+      ].join("\n"),
+    );
+  }
 
   const daemonRuntimeRaw = opts.daemonRuntime ?? DEFAULT_GATEWAY_DAEMON_RUNTIME;
   let daemonInstallStatus:
@@ -262,13 +319,14 @@ export async function runNonInteractiveLocalSetup(params: {
       port: gatewayResult.port,
       bind: gatewayResult.bind,
       authMode: gatewayResult.authMode,
-      tailscaleMode: gatewayResult.tailscaleMode,
+      tailscaleMode: effectiveTailscaleMode,
     },
     installDaemon: Boolean(opts.installDaemon),
     daemonInstall: daemonInstallStatus,
     daemonRuntime: opts.installDaemon ? daemonRuntimeRaw : undefined,
     skipSkills: Boolean(opts.skipSkills),
     skipHealth: Boolean(opts.skipHealth),
+    bundledTools: bundledTools.attempted ? bundledTools.results : undefined,
   });
 
   if (!opts.json) {

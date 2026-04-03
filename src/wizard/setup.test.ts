@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createWizardPrompter as buildWizardPrompter } from "../../test/helpers/wizard-prompter.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../agents/workspace.js";
 import type { PluginCompatibilityNotice } from "../plugins/status.js";
@@ -63,6 +63,10 @@ const finalizeSetupWizard = vi.hoisted(() =>
 const listChannelPlugins = vi.hoisted(() => vi.fn(() => []));
 const logConfigUpdated = vi.hoisted(() => vi.fn(() => {}));
 const setupInternalHooks = vi.hoisted(() => vi.fn(async (cfg) => cfg));
+const applyLocalSetupMultiUserMemoryDefaults = vi.hoisted(() => vi.fn((cfg) => cfg));
+const ensureOnboardedMultiUserMemoryArtifacts = vi.hoisted(() => vi.fn(async () => {}));
+const applyLocalSetupReflectionReviewerDefaults = vi.hoisted(() => vi.fn((cfg) => cfg));
+const ensureOnboardedReflectionReviewerArtifacts = vi.hoisted(() => vi.fn(async () => {}));
 
 const setupChannels = vi.hoisted(() => vi.fn(async (cfg) => cfg));
 const setupSkills = vi.hoisted(() => vi.fn(async (cfg) => cfg));
@@ -90,6 +94,14 @@ const runTui = vi.hoisted(() => vi.fn(async (_options: unknown) => {}));
 const setupWizardShellCompletion = vi.hoisted(() => vi.fn(async () => {}));
 const ensureSetupDefaultModelSelected = vi.hoisted(() => vi.fn(async (args) => args.config));
 const probeGatewayReachable = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+const ensureFreshInstallBundledTools = vi.hoisted(() =>
+  vi.fn(async () => ({
+    attempted: true,
+    ok: true,
+    results: [],
+  })),
+);
+const readTailscaleStatusJson = vi.hoisted(() => vi.fn(async () => ({})));
 const buildPluginCompatibilityNotices = vi.hoisted(() =>
   vi.fn((): PluginCompatibilityNotice[] => []),
 );
@@ -132,8 +144,26 @@ vi.mock("../commands/health.js", () => ({
   healthCommand,
 }));
 
+vi.mock("../commands/onboard-bundled-tools.js", () => ({
+  ensureFreshInstallBundledTools,
+}));
+
+vi.mock("../infra/tailscale.js", () => ({
+  readTailscaleStatusJson,
+}));
+
 vi.mock("../commands/onboard-hooks.js", () => ({
   setupInternalHooks,
+}));
+
+vi.mock("../commands/onboard-multi-user-memory.js", () => ({
+  applyLocalSetupMultiUserMemoryDefaults,
+  ensureOnboardedMultiUserMemoryArtifacts,
+}));
+
+vi.mock("../commands/onboard-reflection-reviewer.js", () => ({
+  applyLocalSetupReflectionReviewerDefaults,
+  ensureOnboardedReflectionReviewerArtifacts,
 }));
 
 vi.mock("../config/config.js", () => ({
@@ -212,6 +242,16 @@ vi.mock("./setup.completion.js", () => ({
 vi.mock("./setup.default-model.js", () => ({
   ensureSetupDefaultModelSelected,
 }));
+
+afterEach(() => {
+  ensureFreshInstallBundledTools.mockClear();
+  applyLocalSetupMultiUserMemoryDefaults.mockClear();
+  ensureOnboardedMultiUserMemoryArtifacts.mockClear();
+  applyLocalSetupReflectionReviewerDefaults.mockClear();
+  ensureOnboardedReflectionReviewerArtifacts.mockClear();
+  readTailscaleStatusJson.mockReset();
+  readTailscaleStatusJson.mockResolvedValue({});
+});
 
 function createRuntime(opts?: { throwsOnExit?: boolean }): RuntimeEnv {
   if (opts?.throwsOnExit) {
@@ -422,6 +462,9 @@ describe("runSetupWizard", () => {
 
     expect(note).not.toHaveBeenCalledWith("summary", "Existing config detected");
     expect(select).not.toHaveBeenCalled();
+    expect(ensureFreshInstallBundledTools).toHaveBeenCalledWith(
+      expect.objectContaining({ freshInstall: true }),
+    );
   });
 
   it("ignores loader-injected defaults when checking embedded bootstrap config", async () => {
@@ -1259,6 +1302,43 @@ describe("runSetupWizard", () => {
     expect(configureGatewayForSetup).toHaveBeenCalledWith(
       expect.objectContaining({
         secretInputMode: "ref", // pragma: allowlist secret
+      }),
+    );
+  });
+
+  it("defaults fresh local quickstart to Tailscale Serve when Tailscale is running", async () => {
+    configureGatewayForSetup.mockClear();
+    readTailscaleStatusJson.mockResolvedValue({
+      BackendState: "Running",
+      Self: {
+        DNSName: "samiadjis-mac-mini.tailnet.ts.net.",
+      },
+    });
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(configureGatewayForSetup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quickstartGateway: expect.objectContaining({
+          tailscaleMode: "serve",
+        }),
       }),
     );
   });

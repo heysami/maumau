@@ -61,6 +61,12 @@ final class OnboardingWizardModel {
         let value: AnyCodable?
     }
 
+    enum LocalGatewayWizardReadiness: Equatable {
+        case authReady
+        case processReady
+        case notReady
+    }
+
     private enum StartRoute: Equatable {
         case onboarding(mode: AppState.ConnectionMode, workspace: String?)
         case modelAuth(authChoice: String?)
@@ -69,6 +75,9 @@ final class OnboardingWizardModel {
     typealias WizardStartParams = [String: AnyCodable]
     private static let maxAutomaticStepFetches = 8
     private static let progressPollingIntervalNanoseconds: UInt64 = 500_000_000
+    private static let localGatewayAuthWarmupTimeout: TimeInterval = 15
+    private static let localGatewayProcessProbeIntervalNanoseconds: UInt64 = 300_000_000
+    private static let localGatewayAuthProbeTimeoutMs: Double = 2_000
 
     private(set) var sessionId: String?
     private(set) var currentStep: WizardStep?
@@ -98,6 +107,15 @@ final class OnboardingWizardModel {
 
     var isComplete: Bool {
         self.status == "done"
+    }
+
+    var isSkippedForNow: Bool {
+        self.status == "cancelled" && self.sessionId == nil && self.currentStep == nil &&
+            self.errorMessage == nil
+    }
+
+    var isSatisfiedForOnboarding: Bool {
+        self.isComplete || self.isSkippedForNow
     }
 
     var isBlocking: Bool {
@@ -218,6 +236,9 @@ final class OnboardingWizardModel {
             }
             self.applyStartResult(res)
         } catch {
+            if self.restartIfSessionLost(error: error) {
+                return
+            }
             self.status = "error"
             self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
             onboardingWizardLogger.error("start failed: \(error.localizedDescription, privacy: .public)")
@@ -227,10 +248,43 @@ final class OnboardingWizardModel {
     private func ensureLocalGatewayReady() async throws {
         GatewayProcessManager.shared.clearLastFailure()
         GatewayProcessManager.shared.setActive(true)
-        if await GatewayProcessManager.shared.waitForGatewayReady(
-            timeout: GatewayProcessManager.localGatewayStartupTimeout)
-        {
+        let port = GatewayEnvironment.gatewayPort()
+        let readiness = await Self.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: GatewayProcessManager.localGatewayStartupTimeout,
+            authWarmupTimeout: Self.localGatewayAuthWarmupTimeout,
+            port: port,
+            probeAuthReady: {
+                do {
+                    _ = try await AsyncTimeout.withTimeoutMs(
+                        timeoutMs: Int(Self.localGatewayAuthProbeTimeoutMs),
+                        onTimeout: {
+                            NSError(
+                                domain: "Gateway",
+                                code: 5,
+                                userInfo: [NSLocalizedDescriptionKey: "gateway auth probe timed out"])
+                        },
+                        operation: {
+                            try await GatewayConnection.shared.requestRawWithoutRecovery(
+                                method: .health,
+                                timeoutMs: Self.localGatewayAuthProbeTimeoutMs)
+                        })
+                    return true
+                } catch {
+                    return false
+                }
+            },
+            probeGatewayHealth: { port in
+                await PortGuardian.shared.probeGatewayHealth(port: port, timeout: 1.0)
+            })
+        switch readiness {
+        case .authReady:
             return
+        case .processReady:
+            onboardingWizardLogger.notice(
+                "wizard local gateway proceeding after raw health probe while auth-ready wait catches up")
+            return
+        case .notReady:
+            break
         }
 
         let fallback = "Gateway did not become ready. Check that it is running."
@@ -240,6 +294,42 @@ final class OnboardingWizardModel {
             domain: "Gateway",
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: reason?.isEmpty == false ? reason! : fallback])
+    }
+
+    static func evaluateLocalWizardGatewayReadiness(
+        totalTimeout: TimeInterval,
+        authWarmupTimeout: TimeInterval,
+        port: Int,
+        probeAuthReady: @escaping @Sendable () async -> Bool,
+        probeGatewayHealth: @escaping @Sendable (Int) async -> Bool) async -> LocalGatewayWizardReadiness
+    {
+        let totalBudget = max(0, totalTimeout)
+        let deadline = Date().addingTimeInterval(totalBudget)
+        let authDeadline = Date().addingTimeInterval(min(max(0, authWarmupTimeout), totalBudget))
+        repeat {
+            if Date() < authDeadline, await probeAuthReady() {
+                return .authReady
+            }
+            if await probeGatewayHealth(port) {
+                return .processReady
+            }
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            let sleepSeconds = min(
+                Double(Self.localGatewayProcessProbeIntervalNanoseconds) / 1_000_000_000,
+                remaining)
+            let sleepNanoseconds = UInt64(max(0, sleepSeconds) * 1_000_000_000)
+            if sleepNanoseconds == 0 {
+                break
+            }
+            do {
+                try await Task.sleep(nanoseconds: sleepNanoseconds)
+            } catch {
+                return .notReady
+            }
+        } while Date() < deadline
+
+        return .notReady
     }
 
     private func resolveStartResult(_ result: WizardStartResult) async throws -> WizardStartResult {
@@ -546,10 +636,7 @@ final class OnboardingWizardModel {
     }
 
     private func restartIfSessionLost(error: Error) -> Bool {
-        guard let gatewayError = error as? GatewayResponseError else { return false }
-        guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
-        let message = gatewayError.message.lowercased()
-        guard message.contains("wizard not found") || message.contains("wizard not running") else { return false }
+        guard Self.isWizardSessionLostError(error) else { return false }
         guard let route = self.lastStartRoute else {
             return false
         }
@@ -569,6 +656,13 @@ final class OnboardingWizardModel {
         self.errorMessage = macLocalized("Wizard session lost. Restarting…", language: self.language)
         Task { await self.startIfNeeded(route: route) }
         return true
+    }
+
+    static func isWizardSessionLostError(_ error: Error) -> Bool {
+        guard let gatewayError = error as? GatewayResponseError else { return false }
+        guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
+        let message = gatewayError.message.lowercased()
+        return message.contains("wizard not found") || message.contains("wizard not running")
     }
 
     private func markCompleteFromPersistedSetup() {

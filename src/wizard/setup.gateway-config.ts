@@ -18,12 +18,13 @@ import {
   TAILSCALE_MISSING_BIN_NOTE_LINES,
 } from "../gateway/gateway-config-prompts.shared.js";
 import { DEFAULT_DANGEROUS_NODE_COMMANDS } from "../gateway/node-command-policy.js";
-import { findTailscaleBinary } from "../infra/tailscale.js";
+import { findTailscaleBinary, probeTailscaleExposure } from "../infra/tailscale.js";
 import { resolveSecretInputModeForEnvSelection } from "../plugins/provider-auth-mode.js";
 import { promptSecretRefForSetup } from "../plugins/provider-auth-ref.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { validateIPv4AddressInput } from "../shared/net/ipv4.js";
 import type { WizardPrompter } from "./prompts.js";
+import { applyOnboardingTailscaleGatewayAuth } from "../commands/onboard-gateway-tailscale-auth.js";
 import { resolveSetupSecretInputString } from "./setup.secret-input.js";
 import type {
   GatewayWizardSettings,
@@ -111,7 +112,7 @@ export async function configureGatewayForSetup(
           initialValue: "token",
         })) as GatewayAuthChoice);
 
-  const tailscaleMode: GatewayWizardSettings["tailscaleMode"] =
+  let tailscaleMode: GatewayWizardSettings["tailscaleMode"] =
     flow === "quickstart"
       ? quickstartGateway.tailscaleMode
       : await prompter.select<GatewayWizardSettings["tailscaleMode"]>({
@@ -126,6 +127,22 @@ export async function configureGatewayForSetup(
     tailscaleBin = await findTailscaleBinary();
     if (!tailscaleBin) {
       await prompter.note(TAILSCALE_MISSING_BIN_NOTE_LINES.join("\n"), "Tailscale Warning");
+    } else {
+      const exposure = await probeTailscaleExposure(
+        tailscaleMode as "serve" | "funnel",
+      ).catch(() => null);
+      if (exposure?.blockedReason === "doctor_failed") {
+        const label = tailscaleMode === "funnel" ? "Funnel" : "Serve";
+        await prompter.note(
+          [
+            `Tailscale ${label} is not enabled on this tailnet yet.`,
+            exposure.suggestedFix ?? `Enable Tailscale ${label} and retry setup.`,
+            "Keeping Tailscale exposure off until this is enabled.",
+          ].join("\n"),
+          "Tailscale Warning",
+        );
+        tailscaleMode = "off";
+      }
     }
   }
 
@@ -293,6 +310,11 @@ export async function configureGatewayForSetup(
       },
     },
   };
+  nextConfig = applyOnboardingTailscaleGatewayAuth({
+    cfg: nextConfig,
+    tailscaleMode: tailscaleMode as "off" | "serve" | "funnel",
+    authMode,
+  });
 
   nextConfig = ensureControlUiAllowedOriginsForNonLoopbackBind(nextConfig, {
     requireControlUiEnabled: true,

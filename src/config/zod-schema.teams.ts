@@ -30,6 +30,14 @@ export const TeamWorkflowBaseSchema = z
     description: z.string().optional(),
     managerPrompt: z.string().optional(),
     synthesisPrompt: z.string().optional(),
+    contract: z
+      .object({
+        requiredRoles: z.array(z.string()).optional(),
+        requiredQaRoles: z.array(z.string()).optional(),
+        requireDelegation: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     default: z.boolean().optional(),
   })
   .strict();
@@ -44,6 +52,7 @@ export const TeamSchema = z
     name: z.string().optional(),
     description: z.string().optional(),
     managerAgentId: z.string(),
+    implicitForManagerSessions: z.boolean().optional(),
     members: z.array(TeamMemberSchema).optional(),
     crossTeamLinks: z.array(TeamCrossTeamLinkSchema).optional(),
     workflows: z.array(TeamWorkflowSchema).optional(),
