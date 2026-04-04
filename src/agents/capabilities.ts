@@ -1,21 +1,18 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs/promises";
 import os from "node:os";
-import { browserStatus } from "../browser/client.js";
 import { ensureChromeMcpAvailable, listChromeMcpTabs } from "../browser/chrome-mcp.js";
+import { browserStatus } from "../browser/client.js";
 import { resolveBrowserConfig, resolveProfile } from "../browser/config.js";
-import { findClawdCursorBinaryOnHost } from "../commands/onboard-bundled-tools.js";
-import type { MaumauConfig } from "../config/config.js";
-import { readTailscaleStatusJson } from "../infra/tailscale.js";
 import {
-  resolvePrivatePreviewAccess,
-  resolvePublicShareAccess,
-} from "../gateway/previews.js";
-import { isRequesterTrustedForPrivatePreview } from "../utils/private-preview-route.js";
-import { isOwnerOnlyToolName, mergeAlsoAllowPolicy, resolveToolProfilePolicy } from "./tool-policy.js";
-import { isToolAllowedByPolicies } from "./tool-policy-match.js";
-import { listCoreToolSections } from "./tool-catalog.js";
-import { resolveEffectiveToolPolicy } from "./pi-tools.policy.js";
-import { resolveSessionAgentId } from "./agent-scope.js";
+  findClawdCursorBinaryOnHost,
+  hasClawdCursorManagedConfig,
+  readClawdCursorConsentAccepted,
+} from "../commands/onboard-bundled-tools.js";
+import type { MaumauConfig } from "../config/config.js";
+import { resolvePrivatePreviewAccess, resolvePublicShareAccess } from "../gateway/previews.js";
+import { readTailscaleStatusJson } from "../infra/tailscale.js";
+import { normalizeAgentId } from "../routing/session-key.js";
 import { evaluateTeamWorkflowContractReadiness } from "../teams/contracts.js";
 import {
   findTeamWorkflow,
@@ -23,6 +20,17 @@ import {
   listConfiguredTeams,
   resolveDefaultTeamWorkflowId,
 } from "../teams/model.js";
+import { resolveSessionTeamContext, resolveTeamAgentAccess } from "../teams/runtime.js";
+import { isRequesterTrustedForPrivatePreview } from "../utils/private-preview-route.js";
+import { resolveAgentConfig, resolveSessionAgentId } from "./agent-scope.js";
+import { resolveEffectiveToolPolicy } from "./pi-tools.policy.js";
+import { listCoreToolSections } from "./tool-catalog.js";
+import { isToolAllowedByPolicies } from "./tool-policy-match.js";
+import {
+  isOwnerOnlyToolName,
+  mergeAlsoAllowPolicy,
+  resolveToolProfilePolicy,
+} from "./tool-policy.js";
 
 export type CapabilityBlockedReason =
   | "not_in_profile"
@@ -54,6 +62,7 @@ export type CapabilityRow = {
   doctorPassed?: boolean;
   permissionGranted?: boolean;
   providerConfigured?: boolean;
+  delegatedAgentId?: string;
   routeAllowed?: boolean;
   ownerDmOnly?: boolean;
   userOnTailscale?: boolean;
@@ -82,7 +91,16 @@ function isOwnerDmRoute(opts: SessionCapabilityOptions): boolean {
   return opts.senderIsOwner === true && isDirectRoute(opts);
 }
 
-function isToolExposedToSession(opts: SessionCapabilityOptions, toolName: string): boolean {
+function normalizeOptionalAgentId(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? normalizeAgentId(trimmed) : undefined;
+}
+
+function isToolExposedForAgent(
+  opts: SessionCapabilityOptions,
+  toolName: string,
+  agentId?: string,
+): boolean {
   const cfg = opts.config ?? {};
   const {
     globalPolicy,
@@ -96,10 +114,12 @@ function isToolExposedToSession(opts: SessionCapabilityOptions, toolName: string
   } = resolveEffectiveToolPolicy({
     config: cfg,
     sessionKey: opts.agentSessionKey,
-    agentId: resolveSessionAgentId({
-      config: cfg,
-      sessionKey: opts.agentSessionKey,
-    }),
+    agentId:
+      agentId ??
+      resolveSessionAgentId({
+        config: cfg,
+        sessionKey: opts.agentSessionKey,
+      }),
   });
   const profilePolicy = mergeAlsoAllowPolicy(resolveToolProfilePolicy(profile), profileAlsoAllow);
   const providerProfilePolicy = mergeAlsoAllowPolicy(
@@ -121,6 +141,97 @@ function isToolExposedToSession(opts: SessionCapabilityOptions, toolName: string
     return false;
   }
   return true;
+}
+
+function isToolExposedToSession(opts: SessionCapabilityOptions, toolName: string): boolean {
+  return isToolExposedForAgent(opts, toolName);
+}
+
+function canSessionDelegateToAgent(params: {
+  cfg: MaumauConfig;
+  sessionKey?: string;
+  requesterAgentId: string;
+  targetAgentId: string;
+}): boolean {
+  const teamContext = resolveSessionTeamContext({
+    cfg: params.cfg,
+    sessionKey: params.sessionKey,
+  });
+  if (teamContext?.teamId) {
+    return resolveTeamAgentAccess({
+      cfg: params.cfg,
+      sourceTeamId: teamContext.teamId,
+      targetAgentId: params.targetAgentId,
+    }).allowed;
+  }
+  if (normalizeAgentId(params.requesterAgentId) === normalizeAgentId(params.targetAgentId)) {
+    return true;
+  }
+  const allowAgents =
+    resolveAgentConfig(params.cfg, params.requesterAgentId)?.subagents?.allowAgents ?? [];
+  if (allowAgents.some((value) => value.trim() === "*")) {
+    return true;
+  }
+  const allowSet = new Set(
+    allowAgents
+      .filter((value) => value.trim() && value.trim() !== "*")
+      .map((value) => normalizeAgentId(value)),
+  );
+  return allowSet.has(normalizeAgentId(params.targetAgentId));
+}
+
+function resolveDelegatedToolAccess(
+  opts: SessionCapabilityOptions,
+  toolName: string,
+): { agentId?: string } {
+  const cfg = opts.config;
+  if (!cfg) {
+    return {};
+  }
+  const requesterAgentId = resolveSessionAgentId({
+    config: cfg,
+    sessionKey: opts.agentSessionKey,
+  });
+  const requesterAgentConfig = resolveAgentConfig(cfg, requesterAgentId);
+  if (requesterAgentConfig?.executionStyle !== "orchestrator") {
+    return {};
+  }
+  if (!isToolExposedToSession(opts, "sessions_spawn")) {
+    return {};
+  }
+  const executionWorkerAgentId = normalizeOptionalAgentId(
+    requesterAgentConfig.executionWorkerAgentId,
+  );
+  if (!executionWorkerAgentId || !resolveAgentConfig(cfg, executionWorkerAgentId)) {
+    return {};
+  }
+  if (
+    !canSessionDelegateToAgent({
+      cfg,
+      sessionKey: opts.agentSessionKey,
+      requesterAgentId,
+      targetAgentId: executionWorkerAgentId,
+    })
+  ) {
+    return {};
+  }
+  if (!isToolExposedForAgent(opts, toolName, executionWorkerAgentId)) {
+    return {};
+  }
+  return { agentId: executionWorkerAgentId };
+}
+
+function buildDelegatedToolSuggestedFix(toolId: string, agentId: string): string {
+  if (toolId === "browser") {
+    return (
+      `Direct ${toolId} use is unavailable on this orchestrator session. ` +
+      `Use sessions_spawn with agentId="${agentId}" for browser/account work instead.`
+    );
+  }
+  return (
+    `Direct ${toolId} use is unavailable on this orchestrator session. ` +
+    `Use sessions_spawn with agentId="${agentId}" instead.`
+  );
 }
 
 function resolveBrowserRouteAllowed(opts: SessionCapabilityOptions) {
@@ -147,30 +258,6 @@ function runCommand(
   };
 }
 
-function findBinaryOnPath(names: string[]): string | undefined {
-  if (process.platform === "win32") {
-    for (const name of names) {
-      const result = runCommand("where", [name], { timeoutMs: 1000 });
-      const match = result.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find(Boolean);
-      if (result.ok && match) {
-        return match;
-      }
-    }
-    return undefined;
-  }
-  for (const name of names) {
-    const result = runCommand("sh", ["-lc", `command -v ${name}`], { timeoutMs: 1000 });
-    const match = result.stdout.trim();
-    if (result.ok && match) {
-      return match;
-    }
-  }
-  return undefined;
-}
-
 function isClawdProviderConfigured(cfg: MaumauConfig | undefined): boolean {
   const profiles = cfg?.browser?.profiles;
   if (!profiles || typeof profiles !== "object") {
@@ -194,6 +281,25 @@ function probeAccessibilityPermission(): boolean | undefined {
   return result.stdout.trim().toLowerCase() === "true";
 }
 
+async function probeClawdCursorRunning(homeDir: string): Promise<boolean> {
+  const tokenPath = `${homeDir}/.clawdcursor/token`;
+  try {
+    const token = (await fs.readFile(tokenPath, "utf8")).trim();
+    if (!token) {
+      return false;
+    }
+    const response = await fetch("http://127.0.0.1:3847/status", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(1_500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function buildBrowserCapability(params: {
   cfg: MaumauConfig;
   profileName: string;
@@ -203,7 +309,10 @@ async function buildBrowserCapability(params: {
 }): Promise<CapabilityRow> {
   const browserCfg = resolveBrowserConfig(params.cfg.browser, params.cfg);
   const profile = resolveProfile(browserCfg, params.profileName);
-  const exposedToSession = isToolExposedToSession(params.opts, "browser");
+  const directExposure = isToolExposedToSession(params.opts, "browser");
+  const delegatedAccess = directExposure ? {} : resolveDelegatedToolAccess(params.opts, "browser");
+  const delegatedAgentId = delegatedAccess.agentId;
+  const exposedToSession = directExposure || Boolean(delegatedAgentId);
   const routeAllowed = resolveBrowserRouteAllowed(params.opts);
   const declared = browserCfg.enabled && profile?.driver === params.driver;
   const providerConfigured = declared;
@@ -219,6 +328,7 @@ async function buildBrowserCapability(params: {
       blockedReason: "not_configured",
       suggestedFix: `Configure a browser profile for driver "${params.driver}".`,
       driver: params.driver,
+      delegatedAgentId,
       providerConfigured,
       routeAllowed,
       ownerDmOnly: true,
@@ -235,6 +345,7 @@ async function buildBrowserCapability(params: {
       blockedReason: "not_in_profile",
       suggestedFix: "Allow the browser tool for this agent session.",
       driver: params.driver,
+      delegatedAgentId,
       providerConfigured,
       routeAllowed,
       ownerDmOnly: true,
@@ -251,6 +362,7 @@ async function buildBrowserCapability(params: {
       blockedReason: "route_blocked",
       suggestedFix: "Use this workflow from an owner direct chat.",
       driver: params.driver,
+      delegatedAgentId,
       providerConfigured,
       routeAllowed,
       ownerDmOnly: true,
@@ -273,6 +385,7 @@ async function buildBrowserCapability(params: {
         suggestedFix: "Install a supported local Chrome/Chromium browser.",
         driver: params.driver,
         running,
+        delegatedAgentId,
         providerConfigured,
         routeAllowed,
         ownerDmOnly: true,
@@ -293,6 +406,7 @@ async function buildBrowserCapability(params: {
             : "Start the managed browser profile before using it.",
         driver: params.driver,
         running,
+        delegatedAgentId,
         providerConfigured,
         routeAllowed,
         ownerDmOnly: true,
@@ -314,6 +428,7 @@ async function buildBrowserCapability(params: {
           driver: params.driver,
           running,
           doctorPassed: true,
+          delegatedAgentId,
           providerConfigured,
           routeAllowed,
           ownerDmOnly: true,
@@ -327,10 +442,14 @@ async function buildBrowserCapability(params: {
           installed,
           ready: false,
           blockedReason: "doctor_failed",
-          suggestedFix: err instanceof Error ? err.message : "Reconnect Chrome MCP to the signed-in browser session.",
+          suggestedFix:
+            err instanceof Error
+              ? err.message
+              : "Reconnect Chrome MCP to the signed-in browser session.",
           driver: params.driver,
           running,
           doctorPassed: false,
+          delegatedAgentId,
           providerConfigured,
           routeAllowed,
           ownerDmOnly: true,
@@ -347,10 +466,13 @@ async function buildBrowserCapability(params: {
       installed,
       ready: doctorPassed,
       blockedReason: doctorPassed ? undefined : "doctor_failed",
-      suggestedFix: doctorPassed ? undefined : "Bring the managed browser profile to a CDP-ready state.",
+      suggestedFix: doctorPassed
+        ? undefined
+        : "Bring the managed browser profile to a CDP-ready state.",
       driver: params.driver,
       running,
       doctorPassed,
+      delegatedAgentId,
       providerConfigured,
       routeAllowed,
       ownerDmOnly: true,
@@ -371,6 +493,7 @@ async function buildBrowserCapability(params: {
           : "Start the browser control service on this host.",
       driver: params.driver,
       running: false,
+      delegatedAgentId,
       providerConfigured,
       routeAllowed,
       ownerDmOnly: true,
@@ -382,14 +505,18 @@ async function buildClawdCursorCapability(
   cfg: MaumauConfig,
   opts: SessionCapabilityOptions,
 ): Promise<CapabilityRow> {
-  const exposedToSession = isToolExposedToSession(opts, "browser");
+  const directExposure = isToolExposedToSession(opts, "browser");
+  const delegatedAccess = directExposure ? {} : resolveDelegatedToolAccess(opts, "browser");
+  const delegatedAgentId = delegatedAccess.agentId;
+  const exposedToSession = directExposure || Boolean(delegatedAgentId);
   const routeAllowed = resolveBrowserRouteAllowed(opts);
   const binaryPath = await findClawdCursorBinaryOnHost();
-  const providerConfigured = isClawdProviderConfigured(cfg);
+  const homeDir = os.homedir();
+  const managedConfigured = await hasClawdCursorManagedConfig({ homeDir });
+  const providerConfigured = managedConfigured || isClawdProviderConfigured(cfg);
+  const consentAccepted = await readClawdCursorConsentAccepted({ homeDir });
   const permissionGranted = probeAccessibilityPermission();
-  const running =
-    Boolean(findBinaryOnPath(["pgrep"])) &&
-    runCommand("sh", ["-lc", "pgrep -f 'clawdcursor|clawd-cursor'"], { timeoutMs: 1000 }).ok;
+  const running = managedConfigured ? await probeClawdCursorRunning(homeDir) : false;
 
   if (!exposedToSession) {
     return {
@@ -403,6 +530,7 @@ async function buildClawdCursorCapability(
       suggestedFix: "Allow the browser/desktop automation lane for this session.",
       routeAllowed,
       ownerDmOnly: true,
+      delegatedAgentId,
       providerConfigured,
       permissionGranted,
       running,
@@ -420,6 +548,7 @@ async function buildClawdCursorCapability(
       suggestedFix: "Use Clawd Cursor only from an owner direct chat.",
       routeAllowed,
       ownerDmOnly: true,
+      delegatedAgentId,
       providerConfigured,
       permissionGranted,
       running,
@@ -437,12 +566,13 @@ async function buildClawdCursorCapability(
       suggestedFix: "Install the clawd-cursor desktop helper binary.",
       routeAllowed,
       ownerDmOnly: true,
+      delegatedAgentId,
       providerConfigured,
       permissionGranted,
       running: false,
     };
   }
-  if (!providerConfigured) {
+  if (!managedConfigured || !consentAccepted) {
     return {
       id: "clawd-cursor",
       kind: "desktop",
@@ -451,9 +581,11 @@ async function buildClawdCursorCapability(
       installed: true,
       ready: false,
       blockedReason: "not_configured",
-      suggestedFix: 'Configure a browser profile with driver "clawd" for this fallback lane.',
+      suggestedFix:
+        "Rerun local onboarding so Maumau can pre-consent Clawd Cursor and stage a no-intervention local model for desktop control.",
       routeAllowed,
       ownerDmOnly: true,
+      delegatedAgentId,
       providerConfigured,
       permissionGranted,
       running,
@@ -471,45 +603,9 @@ async function buildClawdCursorCapability(
       suggestedFix: "Grant macOS Accessibility permission to the desktop automation helper.",
       routeAllowed,
       ownerDmOnly: true,
+      delegatedAgentId,
       providerConfigured,
       permissionGranted,
-      running,
-    };
-  }
-  const doctor = runCommand(binaryPath, ["doctor"], { timeoutMs: 2500 });
-  if (!doctor.ok) {
-    return {
-      id: "clawd-cursor",
-      kind: "desktop",
-      declared: true,
-      exposedToSession,
-      installed: true,
-      ready: false,
-      blockedReason: "doctor_failed",
-      suggestedFix: doctor.stderr.trim() || doctor.stdout.trim() || "Run clawdcursor doctor and fix the reported issue.",
-      routeAllowed,
-      ownerDmOnly: true,
-      providerConfigured,
-      permissionGranted,
-      doctorPassed: false,
-      running,
-    };
-  }
-  if (!running) {
-    return {
-      id: "clawd-cursor",
-      kind: "desktop",
-      declared: true,
-      exposedToSession,
-      installed: true,
-      ready: false,
-      blockedReason: "service_not_running",
-      suggestedFix: "Start the Clawd Cursor desktop service before retrying.",
-      routeAllowed,
-      ownerDmOnly: true,
-      providerConfigured,
-      permissionGranted,
-      doctorPassed: true,
       running,
     };
   }
@@ -522,9 +618,10 @@ async function buildClawdCursorCapability(
     ready: true,
     routeAllowed,
     ownerDmOnly: true,
+    delegatedAgentId,
     providerConfigured,
     permissionGranted,
-    doctorPassed: true,
+    doctorPassed: consentAccepted,
     running,
   };
 }
@@ -620,6 +717,7 @@ export async function listSessionCapabilities(
   for (const section of listCoreToolSections()) {
     for (const tool of section.tools) {
       const exposedToSession = isToolExposedToSession(opts, tool.id);
+      const delegatedAccess = exposedToSession ? {} : resolveDelegatedToolAccess(opts, tool.id);
       rows.push({
         id: tool.id,
         kind: "tool",
@@ -627,8 +725,13 @@ export async function listSessionCapabilities(
         exposedToSession,
         installed: true,
         ready: exposedToSession,
+        delegatedAgentId: delegatedAccess.agentId,
         blockedReason: exposedToSession ? undefined : "not_in_profile",
-        suggestedFix: exposedToSession ? undefined : `Allow the ${tool.id} tool for this agent session.`,
+        suggestedFix: exposedToSession
+          ? undefined
+          : delegatedAccess.agentId
+            ? buildDelegatedToolSuggestedFix(tool.id, delegatedAccess.agentId)
+            : `Allow the ${tool.id} tool for this agent session.`,
       });
     }
   }
@@ -655,12 +758,11 @@ export async function listSessionCapabilities(
           : readiness.contractReady
             ? undefined
             : "provider_unavailable",
-      suggestedFix:
-        !runnable
-          ? "Use a team that is linked to the current team or run from a non-team session."
-          : readiness.contractReady
-            ? undefined
-            : readiness.blockingReasons[0],
+      suggestedFix: !runnable
+        ? "Use a team that is linked to the current team or run from a non-team session."
+        : readiness.contractReady
+          ? undefined
+          : readiness.blockingReasons[0],
     });
   }
 
@@ -705,21 +807,35 @@ export async function summarizeCapabilitiesForPrompt(
 }
 
 export function formatCapabilityPromptSummaryLine(row: CapabilityRow): string {
-  const status = row.ready ? "ready" : row.blockedReason ?? "blocked";
+  const status = row.ready ? "ready" : (row.blockedReason ?? "blocked");
   const suggestedFix = row.suggestedFix ? ` ${row.suggestedFix}` : "";
   switch (row.id) {
     case "browser-existing-session":
-      return row.ready
-        ? "Capability browser-existing-session: ready. Use this as the primary browser/account automation lane before managed browser or desktop fallback."
-        : `Capability browser-existing-session: ${status}.${suggestedFix}`;
+      if (row.ready) {
+        return row.delegatedAgentId
+          ? `Capability browser-existing-session: ready via execution worker "${row.delegatedAgentId}". Use sessions_spawn with agentId="${row.delegatedAgentId}" for browser/account automation, and prefer this lane before managed browser or desktop fallback.`
+          : "Capability browser-existing-session: ready. Use this as the primary browser/account automation lane before managed browser or desktop fallback.";
+      }
+      return `Capability browser-existing-session: ${status}.${suggestedFix}`;
     case "browser-maumau":
-      return row.ready
-        ? "Capability browser-maumau: ready. Use this managed browser lane when an existing signed-in browser session is unavailable or insufficient."
-        : `Capability browser-maumau: ${status}.${suggestedFix}`;
+      if (row.ready) {
+        return row.delegatedAgentId
+          ? `Capability browser-maumau: ready via execution worker "${row.delegatedAgentId}". Use sessions_spawn with agentId="${row.delegatedAgentId}" for this managed browser lane when an existing signed-in browser session is unavailable or insufficient.`
+          : "Capability browser-maumau: ready. Use this managed browser lane when an existing signed-in browser session is unavailable or insufficient.";
+      }
+      return `Capability browser-maumau: ${status}.${suggestedFix}`;
     case "clawd-cursor":
-      return row.ready
-        ? "Capability clawd-cursor: ready. Use it only as the desktop fallback when browser-only automation or dedicated integrations are insufficient."
-        : `Capability clawd-cursor: ${status}.${suggestedFix}`;
+      if (row.ready && row.running) {
+        return row.delegatedAgentId
+          ? `Capability clawd-cursor: ready via execution worker "${row.delegatedAgentId}". Use sessions_spawn with agentId="${row.delegatedAgentId}" only as the desktop fallback when browser-only automation or dedicated integrations are insufficient.`
+          : "Capability clawd-cursor: ready. Use it only as the desktop fallback when browser-only automation or dedicated integrations are insufficient.";
+      }
+      if (row.ready) {
+        return row.delegatedAgentId
+          ? `Capability clawd-cursor: ready via execution worker "${row.delegatedAgentId}". It is pre-consented and staged for unattended launches; start it from the Maumau-managed Clawd config when desktop control is needed.`
+          : "Capability clawd-cursor: ready. It is pre-consented and staged for unattended launches; start it from the Maumau-managed Clawd config when desktop control is needed.";
+      }
+      return `Capability clawd-cursor: ${status}.${suggestedFix}`;
     case "preview-private":
       if (row.ready) {
         return "Capability preview-private: ready. If you produce a previewable HTML/static web artifact for a chat or mobile requester, proactively publish a private preview link instead of replying with only local paths or LAN URLs. On external messaging routes, localhost and 127.0.0.1 still do not count as delivered preview links. If you also mention the local artifact, include a standalone FILE:<workspace-relative-path> line so delivery can recognize it.";

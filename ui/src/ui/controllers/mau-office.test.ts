@@ -466,7 +466,9 @@ Need help recovering the shared workspace password.`,
             return [];
           }
           if (method === "tools.catalog") {
-            return { groups: [{ label: "Support", tools: [{ id: "sessions_send", label: "Reply" }] }] };
+            return {
+              groups: [{ label: "Support", tools: [{ id: "sessions_send", label: "Reply" }] }],
+            };
           }
           throw new Error(`unexpected method ${method}`);
         }),
@@ -484,9 +486,10 @@ Need help recovering the shared workspace password.`,
     expect(host.mauOfficeState.actors["worker:main"]?.snapshotActivity?.bubbleText).toBe(
       "I can help with that. Let me check your access.",
     );
-    expect(host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"]?.snapshotActivity?.bubbleText).toBe(
-      "Need help recovering the shared workspace password.",
-    );
+    expect(
+      host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"]?.snapshotActivity
+        ?.bubbleText,
+    ).toBe("Need help recovering the shared workspace password.");
   });
 
   it("hydrates delegated subagent sessions as meeting-room work instead of support", async () => {
@@ -529,7 +532,11 @@ Need help recovering the shared workspace password.`,
             return [];
           }
           if (method === "tools.catalog") {
-            return { groups: [{ label: "Coordination", tools: [{ id: "sessions_spawn", label: "Delegate" }] }] };
+            return {
+              groups: [
+                { label: "Coordination", tools: [{ id: "sessions_spawn", label: "Delegate" }] },
+              ],
+            };
           }
           throw new Error(`unexpected method ${method}`);
         }),
@@ -546,9 +553,10 @@ Need help recovering the shared workspace password.`,
 
     expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.kind).toBe("meeting");
     expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.roomId).toBe("meeting");
-    expect(host.mauOfficeState.actors["visitor:agent:ops:subagent:delegate-review"]?.snapshotActivity?.kind).toBe(
-      "meeting",
-    );
+    expect(
+      host.mauOfficeState.actors["visitor:agent:ops:subagent:delegate-review"]?.snapshotActivity
+        ?.kind,
+    ).toBe("meeting");
   });
 
   it("does not roll a support worker back to an older preview when a fresher assistant bubble already exists", async () => {
@@ -894,7 +902,9 @@ Need help recovering the shared workspace password.`,
     await loadMauOffice(host as never);
 
     const visitor = host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"]!;
-    expect(visitor.snapshotActivity?.bubbleText).toBe("This is the actual newest customer request.");
+    expect(visitor.snapshotActivity?.bubbleText).toBe(
+      "This is the actual newest customer request.",
+    );
     expect(visitor.latestSupportDialogue?.text).toBe("This is the actual newest customer request.");
   });
 
@@ -1435,7 +1445,13 @@ describe("advanceMauOfficeState", () => {
             x: volleyAnchors[0].x,
             y: volleyAnchors[0].y,
             currentActivity: {
-              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_1", "Passing the ball"),
+              ...makeActivity(
+                "idle-ball",
+                "idle_package",
+                "break",
+                "break_volley_1",
+                "Passing the ball",
+              ),
               source: "idle",
             },
             idleAssignment: {
@@ -1459,7 +1475,13 @@ describe("advanceMauOfficeState", () => {
             x: volleyAnchors[1].x,
             y: volleyAnchors[1].y,
             currentActivity: {
-              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_2", "Passing the ball"),
+              ...makeActivity(
+                "idle-ball",
+                "idle_package",
+                "break",
+                "break_volley_2",
+                "Passing the ball",
+              ),
               source: "idle",
             },
             idleAssignment: {
@@ -1483,7 +1505,13 @@ describe("advanceMauOfficeState", () => {
             x: volleyAnchors[2].x,
             y: volleyAnchors[2].y,
             currentActivity: {
-              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_3", "Passing the ball"),
+              ...makeActivity(
+                "idle-ball",
+                "idle_package",
+                "break",
+                "break_volley_3",
+                "Passing the ball",
+              ),
               source: "idle",
             },
             idleAssignment: {
@@ -1507,7 +1535,13 @@ describe("advanceMauOfficeState", () => {
             x: volleyAnchors[3].x,
             y: volleyAnchors[3].y,
             currentActivity: {
-              ...makeActivity("idle-ball", "idle_package", "break", "break_volley_4", "Passing the ball"),
+              ...makeActivity(
+                "idle-ball",
+                "idle_package",
+                "break",
+                "break_volley_4",
+                "Passing the ball",
+              ),
               source: "idle",
             },
             idleAssignment: {
@@ -1654,7 +1688,13 @@ describe("advanceMauOfficeState", () => {
             anchorId: "break_arcade",
             nodeId: "break_center",
             currentActivity: {
-              ...makeActivity("idle-arcade", "idle_package", "break", "break_arcade", "Playing arcade"),
+              ...makeActivity(
+                "idle-arcade",
+                "idle_package",
+                "break",
+                "break_arcade",
+                "Playing arcade",
+              ),
               source: "idle",
             },
             idleAssignment: {
@@ -1698,7 +1738,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:2": makeActor({
             id: "worker:2",
@@ -1706,7 +1752,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:3": makeActor({
             id: "worker:3",
@@ -1714,7 +1766,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:4": makeActor({
             id: "worker:4",
@@ -1722,7 +1780,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
         },
       },
@@ -1769,7 +1833,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:2": makeActor({
             id: "worker:2",
@@ -1777,7 +1847,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:3": makeActor({
             id: "worker:3",
@@ -1785,7 +1861,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
           "worker:4": makeActor({
             id: "worker:4",
@@ -1793,7 +1875,13 @@ describe("advanceMauOfficeState", () => {
             nodeId: "break_center",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
         },
       },
@@ -1824,13 +1912,7 @@ describe("advanceMauOfficeState", () => {
             x: chaseAnchor.x,
             y: chaseAnchor.y,
             currentActivity: {
-              ...makeActivity(
-                "idle-chase",
-                "idle_package",
-                "break",
-                "break_chase_1",
-                "Chasing",
-              ),
+              ...makeActivity("idle-chase", "idle_package", "break", "break_chase_1", "Chasing"),
               source: "idle",
             },
             idleAssignment: {
@@ -2065,7 +2147,13 @@ describe("applyMauOfficeSessionToolEvent", () => {
             nodeId: "break_center",
             homeAnchorId: "desk_worker_1",
             currentRoomId: "break",
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
         },
       },
@@ -2139,7 +2227,14 @@ describe("applyMauOfficeSessionToolEvent", () => {
               anchorId: "support_customer_1",
               source: "snapshot",
             },
-            bubbles: [{ id: "visitor:bubble", text: "Can you reset my workspace access?", atMs: 0, kind: "customer_support" }],
+            bubbles: [
+              {
+                id: "visitor:bubble",
+                text: "Can you reset my workspace access?",
+                atMs: 0,
+                kind: "customer_support",
+              },
+            ],
           }),
         },
       },
@@ -2277,7 +2372,14 @@ describe("applyMauOfficeAgentEvent", () => {
               anchorId: "support_customer_2",
               source: "snapshot",
             },
-            bubbles: [{ id: "visitor:bubble", text: "Can you reset my workspace access?", atMs: 0, kind: "customer_support" }],
+            bubbles: [
+              {
+                id: "visitor:bubble",
+                text: "Can you reset my workspace access?",
+                atMs: 0,
+                kind: "customer_support",
+              },
+            ],
           }),
         },
       },
@@ -2317,7 +2419,13 @@ describe("applyMauOfficeAgentEvent", () => {
             currentRoomId: "break",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
         },
       },
@@ -2523,7 +2631,13 @@ describe("applyMauOfficeSessionMessageEvent", () => {
             currentRoomId: "break",
             x: breakAnchor.x,
             y: breakAnchor.y,
-            currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
           }),
         },
       },
@@ -2708,7 +2822,14 @@ Need an invoice update for this account before Friday.`,
               "support_staff_1",
               "Helping a customer",
             ),
-            bubbles: [{ id: "worker:bubble", text: "Let me check that for you.", atMs: 1_000, kind: "customer_support" }],
+            bubbles: [
+              {
+                id: "worker:bubble",
+                text: "Let me check that for you.",
+                atMs: 1_000,
+                kind: "customer_support",
+              },
+            ],
           }),
         },
       },
@@ -2748,7 +2869,13 @@ Need an invoice update for this account before Friday.`,
           anchorId: "desk_worker_1",
           nodeId: "desk_center",
           homeAnchorId: "desk_worker_1",
-          currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          currentActivity: makeActivity(
+            "idle",
+            "idle",
+            "break",
+            "break_arcade",
+            "Taking a breather",
+          ),
         }),
       },
     };
@@ -2789,7 +2916,13 @@ Need an invoice update for this account before Friday.`,
           anchorId: "desk_worker_1",
           nodeId: "desk_center",
           homeAnchorId: "desk_worker_1",
-          currentActivity: makeActivity("idle", "idle", "break", "break_arcade", "Taking a breather"),
+          currentActivity: makeActivity(
+            "idle",
+            "idle",
+            "break",
+            "break_arcade",
+            "Taking a breather",
+          ),
         }),
       },
     };
@@ -2875,7 +3008,9 @@ Need an invoice update for this account before Friday.`,
   });
 
   it("keeps customer visitors on the user-facing side of the support desk", () => {
-    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "support-counter:center");
+    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "support-counter:center",
+    );
     expect(MAU_OFFICE_LAYOUT.anchors.outside_support).toMatchObject({
       tileX: 20,
       tileY: 20,
@@ -2976,39 +3111,41 @@ describe("mau-office contract", () => {
     expect(wallMountedProps.length).toBeGreaterThan(0);
     expect(
       wallMountedProps.every((sprite) => {
-        const room = sprite.roomId === "desk" ? MAU_OFFICE_LAYOUT.rooms.desk : MAU_OFFICE_LAYOUT.rooms.meeting;
+        const room =
+          sprite.roomId === "desk" ? MAU_OFFICE_LAYOUT.rooms.desk : MAU_OFFICE_LAYOUT.rooms.meeting;
         return sprite.tileY > room.tileY;
       }),
     ).toBe(true);
     expect(
       wallMountedProps.every((sprite) => {
-        const room = sprite.roomId === "desk" ? MAU_OFFICE_LAYOUT.rooms.desk : MAU_OFFICE_LAYOUT.rooms.meeting;
+        const room =
+          sprite.roomId === "desk" ? MAU_OFFICE_LAYOUT.rooms.desk : MAU_OFFICE_LAYOUT.rooms.meeting;
         return sprite.tileY + sprite.tileHeight <= room.tileY + 3.5;
       }),
     ).toBe(true);
 
     const deskWallFixtures = MAU_OFFICE_LAYOUT.map.propSprites.filter((sprite) =>
-      [
-        "desk-kanban",
-        "desk-roadmap",
-        "desk-calendar",
-        "desk-clocks",
-        "desk-camera",
-      ].includes(sprite.id),
+      ["desk-kanban", "desk-roadmap", "desk-calendar", "desk-clocks", "desk-camera"].includes(
+        sprite.id,
+      ),
     );
     expect(deskWallFixtures.length).toBe(5);
-    expect(
-      Object.fromEntries(deskWallFixtures.map((sprite) => [sprite.id, sprite.tileX])),
-    ).toEqual({
-      "desk-kanban": 2,
-      "desk-roadmap": 6,
-      "desk-calendar": 10,
-      "desk-clocks": 11,
-      "desk-camera": 14,
-    });
+    expect(Object.fromEntries(deskWallFixtures.map((sprite) => [sprite.id, sprite.tileX]))).toEqual(
+      {
+        "desk-kanban": 2,
+        "desk-roadmap": 6,
+        "desk-calendar": 10,
+        "desk-clocks": 11,
+        "desk-camera": 14,
+      },
+    );
     for (let index = 0; index < deskWallFixtures.length; index += 1) {
       const current = deskWallFixtures[index]!;
-      for (let compareIndex = index + 1; compareIndex < deskWallFixtures.length; compareIndex += 1) {
+      for (
+        let compareIndex = index + 1;
+        compareIndex < deskWallFixtures.length;
+        compareIndex += 1
+      ) {
         const other = deskWallFixtures[compareIndex]!;
         const overlapsX =
           current.tileX < other.tileX + other.tileWidth &&
@@ -3028,32 +3165,44 @@ describe("mau-office contract", () => {
     expect(breakRugSprites.length).toBe(9);
     const breakRugMinY = Math.min(...breakRugSprites.map((sprite) => sprite.tileY));
     const breakRugMinX = Math.min(...breakRugSprites.map((sprite) => sprite.tileX));
-    const breakRugMaxY = Math.max(...breakRugSprites.map((sprite) => sprite.tileY + sprite.tileHeight));
-    const breakRugMaxX = Math.max(...breakRugSprites.map((sprite) => sprite.tileX + sprite.tileWidth));
-    expect(breakRugMinY).toBeGreaterThan(
-      MAU_OFFICE_LAYOUT.rooms.break.tileY + 3,
+    const breakRugMaxY = Math.max(
+      ...breakRugSprites.map((sprite) => sprite.tileY + sprite.tileHeight),
     );
+    const breakRugMaxX = Math.max(
+      ...breakRugSprites.map((sprite) => sprite.tileX + sprite.tileWidth),
+    );
+    expect(breakRugMinY).toBeGreaterThan(MAU_OFFICE_LAYOUT.rooms.break.tileY + 3);
     expect(breakRugMaxY).toBeLessThanOrEqual(
       MAU_OFFICE_LAYOUT.rooms.break.tileY + MAU_OFFICE_LAYOUT.rooms.break.tileHeight - 1,
     );
     expect(breakRugMinX).toBe(3);
     expect(breakRugMaxX - breakRugMinX).toBe(4);
 
-    const breakArcade = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "break-arcade");
+    const breakArcade = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "break-arcade",
+    );
     expect(breakArcade).toMatchObject({ tileX: 1, tileY: 15 });
-    const breakTable = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "break-round-table");
+    const breakTable = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "break-round-table",
+    );
     expect(breakTable).toMatchObject({ tileX: 4, tileY: 16 });
-    const breakFoosball = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "break-foosball");
+    const breakFoosball = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "break-foosball",
+    );
     expect(breakFoosball).toMatchObject({ tileX: 10, tileY: 16 });
     expect(MAU_OFFICE_LAYOUT.anchors.break_jukebox.tileY).toBeGreaterThan(
       MAU_OFFICE_LAYOUT.rooms.break.tileY + 2,
     );
     expect(MAU_OFFICE_LAYOUT.anchors.break_snack.tileY).toBeGreaterThan(
-      (MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "break-shelf")?.tileY ?? 0) + 1,
+      (MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "break-shelf")?.tileY ??
+        0) + 1,
     );
     expect(
       MAU_OFFICE_LAYOUT.map.propSprites.some(
-        (sprite) => sprite.id === "break-stool-a" || sprite.id === "break-stool-b" || sprite.id === "break-plant",
+        (sprite) =>
+          sprite.id === "break-stool-a" ||
+          sprite.id === "break-stool-b" ||
+          sprite.id === "break-plant",
       ),
     ).toBe(false);
 
@@ -3062,8 +3211,12 @@ describe("mau-office contract", () => {
     );
     const meetingMinX = Math.min(...meetingTableSprites.map((sprite) => sprite.tileX));
     const meetingMinY = Math.min(...meetingTableSprites.map((sprite) => sprite.tileY));
-    const meetingMaxX = Math.max(...meetingTableSprites.map((sprite) => sprite.tileX + sprite.tileWidth));
-    const meetingMaxY = Math.max(...meetingTableSprites.map((sprite) => sprite.tileY + sprite.tileHeight));
+    const meetingMaxX = Math.max(
+      ...meetingTableSprites.map((sprite) => sprite.tileX + sprite.tileWidth),
+    );
+    const meetingMaxY = Math.max(
+      ...meetingTableSprites.map((sprite) => sprite.tileY + sprite.tileHeight),
+    );
     expect(meetingMinX).toBe(18.5);
     expect(meetingMinY).toBe(4);
     expect(meetingMaxX - meetingMinX).toBe(4);
@@ -3077,8 +3230,12 @@ describe("mau-office contract", () => {
     );
     const supportMinX = Math.min(...supportCounterSprites.map((sprite) => sprite.tileX));
     const supportMinY = Math.min(...supportCounterSprites.map((sprite) => sprite.tileY));
-    const supportMaxX = Math.max(...supportCounterSprites.map((sprite) => sprite.tileX + sprite.tileWidth));
-    const supportMaxY = Math.max(...supportCounterSprites.map((sprite) => sprite.tileY + sprite.tileHeight));
+    const supportMaxX = Math.max(
+      ...supportCounterSprites.map((sprite) => sprite.tileX + sprite.tileWidth),
+    );
+    const supportMaxY = Math.max(
+      ...supportCounterSprites.map((sprite) => sprite.tileY + sprite.tileHeight),
+    );
     expect(supportMinX).toBe(17.5);
     expect(supportMinY).toBe(14);
     expect(supportMaxX - supportMinX).toBe(6);
@@ -3093,10 +3250,16 @@ describe("mau-office contract", () => {
     expect(counterCenter?.tileWidth).toBe(4);
     expect(counterCenter?.tileHeight).toBe(2);
 
-    const counterCaps = supportCounterSprites.filter((sprite) => sprite.id !== "support-counter:center");
-    expect(counterCaps.every((sprite) => sprite.tileWidth === 1 && sprite.tileHeight === 2)).toBe(true);
+    const counterCaps = supportCounterSprites.filter(
+      (sprite) => sprite.id !== "support-counter:center",
+    );
+    expect(counterCaps.every((sprite) => sprite.tileWidth === 1 && sprite.tileHeight === 2)).toBe(
+      true,
+    );
 
-    const meetingBoard = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "meeting-board");
+    const meetingBoard = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "meeting-board",
+    );
     expect(meetingBoard).toBeDefined();
     expect(meetingBoard!.tileX + meetingBoard!.tileWidth / 2).toBe(
       MAU_OFFICE_LAYOUT.rooms.meeting.tileX + MAU_OFFICE_LAYOUT.rooms.meeting.tileWidth / 2,
@@ -3107,15 +3270,20 @@ describe("mau-office contract", () => {
     const accessories = MAU_OFFICE_LAYOUT.map.propSprites.filter(
       (sprite) =>
         sprite.kind === "accessory" &&
-        (sprite.roomId === "desk" || (sprite.roomId === "support" && sprite.id.startsWith("support-"))),
+        (sprite.roomId === "desk" ||
+          (sprite.roomId === "support" && sprite.id.startsWith("support-"))),
     );
 
     expect(accessories.length).toBeGreaterThan(0);
     expect(
-      accessories.some((sprite) => !Number.isInteger(sprite.tileX) || !Number.isInteger(sprite.tileY)),
+      accessories.some(
+        (sprite) => !Number.isInteger(sprite.tileX) || !Number.isInteger(sprite.tileY),
+      ),
     ).toBe(true);
     expect(
-      accessories.every((sprite) => Number.isInteger(sprite.tileX * 2) && Number.isInteger(sprite.tileY * 2)),
+      accessories.every(
+        (sprite) => Number.isInteger(sprite.tileX * 2) && Number.isInteger(sprite.tileY * 2),
+      ),
     ).toBe(true);
   });
 
@@ -3146,7 +3314,9 @@ describe("mau-office contract", () => {
     expect(
       supportWallProps.every(
         (sprite) =>
-          !(sprite.tileX <= supportDoorColumn && sprite.tileX + sprite.tileWidth > supportDoorColumn),
+          !(
+            sprite.tileX <= supportDoorColumn && sprite.tileX + sprite.tileWidth > supportDoorColumn
+          ),
       ),
     ).toBe(true);
   });
@@ -3266,7 +3436,10 @@ describe("mau-office contract", () => {
       facingOverride: "north",
     });
     expect(MAU_OFFICE_LAYOUT.nodes.outside_mauHome.neighbors).toEqual(["break_entry"]);
-    expect(MAU_OFFICE_LAYOUT.nodes.break_entry.neighbors).toEqual(["outside_mauHome", "break_center"]);
+    expect(MAU_OFFICE_LAYOUT.nodes.break_entry.neighbors).toEqual([
+      "outside_mauHome",
+      "break_center",
+    ]);
   });
 
   it("keeps meeting chairs one tile away from the room walls", () => {
@@ -3276,13 +3449,15 @@ describe("mau-office contract", () => {
     );
     expect(chairs.length).toBeGreaterThan(0);
     expect(chairs.every((sprite) => sprite.tileX >= room.tileX + 1)).toBe(true);
-    expect(chairs.every((sprite) => sprite.tileX + sprite.tileWidth <= room.tileX + room.tileWidth - 1)).toBe(
-      true,
-    );
+    expect(
+      chairs.every((sprite) => sprite.tileX + sprite.tileWidth <= room.tileX + room.tileWidth - 1),
+    ).toBe(true);
     expect(chairs.every((sprite) => sprite.tileY >= room.tileY + 1)).toBe(true);
-    expect(chairs.every((sprite) => sprite.tileY + sprite.tileHeight <= room.tileY + room.tileHeight - 1)).toBe(
-      true,
-    );
+    expect(
+      chairs.every(
+        (sprite) => sprite.tileY + sprite.tileHeight <= room.tileY + room.tileHeight - 1,
+      ),
+    ).toBe(true);
   });
 
   it("places one upward-facing chair under each desk worker seat", () => {
@@ -3291,9 +3466,14 @@ describe("mau-office contract", () => {
     );
     expect(deskChairs).toHaveLength(6);
     expect(deskChairs.every((sprite) => sprite.asset.includes("chair-front-v1.png"))).toBe(true);
-    expect(
-      deskChairs.map((sprite) => `${sprite.tileX},${sprite.tileY}`).toSorted(),
-    ).toEqual(["12,5", "12,8", "4,5", "4,8", "8,5", "8,8"]);
+    expect(deskChairs.map((sprite) => `${sprite.tileX},${sprite.tileY}`).toSorted()).toEqual([
+      "12,5",
+      "12,8",
+      "4,5",
+      "4,8",
+      "8,5",
+      "8,8",
+    ]);
   });
 
   it("keeps seated desk workers snapped to the chair row instead of floating above it", () => {
@@ -3365,7 +3545,9 @@ describe("mau-office contract", () => {
         continue;
       }
       expect(accessory.tileX).toBeGreaterThanOrEqual(desk.tileX);
-      expect(accessory.tileX + accessory.tileWidth).toBeLessThanOrEqual(desk.tileX + desk.tileWidth);
+      expect(accessory.tileX + accessory.tileWidth).toBeLessThanOrEqual(
+        desk.tileX + desk.tileWidth,
+      );
       expect(accessory.tileY).toBe(desk.tileY);
     }
   });
@@ -3379,7 +3561,10 @@ describe("mau-office contract", () => {
     const machines = MAU_OFFICE_LAYOUT.map.propSprites.filter(
       (sprite) => sprite.roomId === "desk" && /^(desk-rack|desk-fax)-/.test(sprite.id),
     );
-    expect(machines.map((sprite) => sprite.id).toSorted()).toEqual(["desk-rack-bottom", "desk-rack-top"]);
+    expect(machines.map((sprite) => sprite.id).toSorted()).toEqual([
+      "desk-rack-bottom",
+      "desk-rack-top",
+    ]);
     expect(machines.every((sprite) => !chairColumns.has(sprite.tileX))).toBe(true);
     expect(machines.find((sprite) => sprite.id === "desk-rack-top")?.tileY).toBe(
       MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "desk-a")?.tileY,
@@ -3390,7 +3575,9 @@ describe("mau-office contract", () => {
   });
 
   it("keeps the support counter accessories sparse and centered on the counter", () => {
-    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "support-counter:center");
+    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "support-counter:center",
+    );
     expect(counter).toBeDefined();
     const accessories = MAU_OFFICE_LAYOUT.map.propSprites.filter(
       (sprite) => sprite.roomId === "support" && /^support-(monitor|paper)/.test(sprite.id),
@@ -3410,7 +3597,9 @@ describe("mau-office contract", () => {
   });
 
   it("keeps support staff anchors behind the customer counter", () => {
-    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find((sprite) => sprite.id === "support-counter:center");
+    const counter = MAU_OFFICE_LAYOUT.map.propSprites.find(
+      (sprite) => sprite.id === "support-counter:center",
+    );
     expect(counter).toBeDefined();
     const anchors = [
       MAU_OFFICE_LAYOUT.anchors.support_staff_1,
@@ -3418,7 +3607,9 @@ describe("mau-office contract", () => {
       MAU_OFFICE_LAYOUT.anchors.support_staff_3,
     ];
     expect(anchors.every((anchor) => anchor.tileY === 14)).toBe(true);
-    expect(anchors.every((anchor) => anchor.tileY < (counter?.tileY ?? 0) + (counter?.tileHeight ?? 0))).toBe(true);
+    expect(
+      anchors.every((anchor) => anchor.tileY < (counter?.tileY ?? 0) + (counter?.tileHeight ?? 0)),
+    ).toBe(true);
   });
 
   it("keeps every referenced asset on the shared 64px source grid with manifest coverage", async () => {
@@ -3427,8 +3618,12 @@ describe("mau-office contract", () => {
       expect(spec, `missing MauOffice scale spec for ${asset}`).not.toBeNull();
       const size = await readPngSize(asset);
       expect(size).toEqual(spec?.sourceCanvas);
-      expect(spec?.slotTiles.width).toBe(spec!.sourceCanvas.width / MAU_OFFICE_ASSET_PIXELS_PER_TILE);
-      expect(spec?.slotTiles.height).toBe(spec!.sourceCanvas.height / MAU_OFFICE_ASSET_PIXELS_PER_TILE);
+      expect(spec?.slotTiles.width).toBe(
+        spec!.sourceCanvas.width / MAU_OFFICE_ASSET_PIXELS_PER_TILE,
+      );
+      expect(spec?.slotTiles.height).toBe(
+        spec!.sourceCanvas.height / MAU_OFFICE_ASSET_PIXELS_PER_TILE,
+      );
     }
   });
 
@@ -3466,7 +3661,9 @@ describe("mau-office contract", () => {
   });
 
   it("keeps prop semantics believable relative to the worker and door references", async () => {
-    const workerBounds = await readPngOpaqueBounds(MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0]!);
+    const workerBounds = await readPngOpaqueBounds(
+      MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0]!,
+    );
     const doorBounds = await readPngOpaqueBounds("mau-office/tiles/door-top.png");
 
     for (const spec of MAU_OFFICE_ASSET_SCALE_SPECS) {
@@ -3482,7 +3679,9 @@ describe("mau-office contract", () => {
         );
       }
       if (spec.semantic.maxDoorHeightRatio !== undefined) {
-        expect(bounds.height / doorBounds.height).toBeLessThanOrEqual(spec.semantic.maxDoorHeightRatio);
+        expect(bounds.height / doorBounds.height).toBeLessThanOrEqual(
+          spec.semantic.maxDoorHeightRatio,
+        );
       }
     }
   });
@@ -3525,14 +3724,22 @@ describe("mau-office contract", () => {
         continue;
       }
       const bounds = await readPngOpaqueBounds(asset);
-      expectWithinRange(bounds.width, MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.width, `${asset} width`);
+      expectWithinRange(
+        bounds.width,
+        MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.width,
+        `${asset} width`,
+      );
       expectWithinRange(
         bounds.height,
         MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.height,
         `${asset} height`,
       );
-      expect(bounds.offsetX).toBeLessThanOrEqual(MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetX ?? 64);
-      expect(bounds.offsetY).toBeLessThanOrEqual(MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetY ?? 64);
+      expect(bounds.offsetX).toBeLessThanOrEqual(
+        MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetX ?? 64,
+      );
+      expect(bounds.offsetY).toBeLessThanOrEqual(
+        MAU_OFFICE_WORKER_FRAME_SPEC.visibleBounds!.maxOffsetY ?? 64,
+      );
       // Worker rigs can vary slightly in head silhouette, but they should still share one foot row.
       expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeGreaterThanOrEqual(58);
       expect(bounds.offsetY + bounds.height, `${asset} bottom`).toBeLessThanOrEqual(61);
@@ -3540,7 +3747,9 @@ describe("mau-office contract", () => {
   });
 
   it("keeps sleep-floor worker placeholders inside their own horizontal scale band", async () => {
-    const sleepFloorAssets = collectWorkerFrameAssets().filter((asset) => asset.includes("/sleep-floor/"));
+    const sleepFloorAssets = collectWorkerFrameAssets().filter((asset) =>
+      asset.includes("/sleep-floor/"),
+    );
 
     for (const asset of sleepFloorAssets) {
       const bounds = await readPngOpaqueBounds(asset);
@@ -3648,7 +3857,7 @@ describe("mau-office contract", () => {
 });
 
 describe("mau-office view", () => {
-  it("renders a layered stage with pixel chrome and snapped path markers", () => {
+  it("renders a layered stage with pixel chrome and hides route breadcrumbs", () => {
     installMatchMediaStub(false);
     installViewportWidthStub(1600);
     const container = document.createElement("div");
@@ -3702,7 +3911,13 @@ describe("mau-office view", () => {
           anchorId: "outside_support",
           nodeId: "outside_support",
           currentRoomId: "outside",
-          currentActivity: makeActivity("walk", "walking", "support", "support_customer_1", "Walking"),
+          currentActivity: makeActivity(
+            "walk",
+            "walking",
+            "support",
+            "support_customer_1",
+            "Walking",
+          ),
           path: walkingPath,
           x: MAU_OFFICE_LAYOUT.nodes.outside_support.x,
           y: MAU_OFFICE_LAYOUT.nodes.outside_support.y,
@@ -3728,22 +3943,22 @@ describe("mau-office view", () => {
       MAU_OFFICE_LAYOUT.map.floorTiles.length,
     );
     expect(container.querySelector(".mau-office__sign-image")).toBeNull();
-    expect(container.querySelectorAll(".mau-office__bubble-slice").length).toBeGreaterThanOrEqual(9);
-    expect(container.querySelectorAll(".mau-office__bubble-tail").length).toBeGreaterThanOrEqual(1);
-    expect(container.querySelectorAll(".mau-office__path-marker").length).toBeGreaterThan(0);
-    const pathMarkerSources = Array.from(container.querySelectorAll<HTMLImageElement>(".mau-office__path-marker")).map(
-      (marker) => marker.getAttribute("src") ?? "",
+    expect(container.querySelectorAll(".mau-office__bubble-slice").length).toBeGreaterThanOrEqual(
+      9,
     );
-    expect(pathMarkerSources.some((src) => src.includes("path-dots-north.png"))).toBe(true);
-    expect(pathMarkerSources.some((src) => src.includes("path-turn-nw.png"))).toBe(true);
-    expect(pathMarkerSources.some((src) => src.includes("path-target-west.png"))).toBe(true);
-    expect(container.querySelector(".mau-office__bubble-text")?.textContent).toContain("heads down");
+    expect(container.querySelectorAll(".mau-office__bubble-tail").length).toBeGreaterThanOrEqual(1);
+    expect(container.querySelectorAll(".mau-office__path-marker").length).toBe(0);
+    expect(container.querySelector(".mau-office__bubble-text")?.textContent).toContain(
+      "heads down",
+    );
     const sitWorker = container.querySelector(".mau-office__worker--sit");
     expect(sitWorker).not.toBeNull();
     expect(sitWorker?.getAttribute("title")).toBeNull();
     const sitWorkerStyle = normalizeStyle(sitWorker?.getAttribute("style"));
     expect(sitWorkerStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalWidthPx}px`);
-    expect(sitWorkerStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx}px`);
+    expect(sitWorkerStyle).toContain(
+      `height:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx}px`,
+    );
     expect(sitWorkerStyle).toContain(
       `transform:translate(-50%,calc(-100%+${MAU_OFFICE_WORKER_RENDER_METRICS.poseOffsetYPx.sit}px))`,
     );
@@ -3751,7 +3966,9 @@ describe("mau-office view", () => {
     const deskSprite = container.querySelector(".mau-office__sprite--desk");
     expect(deskSprite).not.toBeNull();
     const deskStyle = normalizeStyle(deskSprite?.getAttribute("style"));
-    expect(deskStyle).toContain(`width:${sourcePxToLogicalPx(MAU_OFFICE_ASSET_PIXELS_PER_TILE * 3)}px`);
+    expect(deskStyle).toContain(
+      `width:${sourcePxToLogicalPx(MAU_OFFICE_ASSET_PIXELS_PER_TILE * 3)}px`,
+    );
     expect(deskStyle).toContain(
       `height:${sourcePxToLogicalPx(MAU_OFFICE_ASSET_PIXELS_PER_TILE * 2)}px`,
     );
@@ -3768,9 +3985,6 @@ describe("mau-office view", () => {
     expect(
       parseStyleNumber(normalizeStyle(workerOverlay?.getAttribute("style")), "z-index"),
     ).toBeGreaterThan(parseStyleNumber(deskStyle, "z-index"));
-    expect(
-      normalizeStyle(container.querySelector(".mau-office__path-marker")?.getAttribute("style")),
-    ).not.toContain("rotate(");
 
     const deskMonitor = container.querySelector(
       '.mau-office__sprite[src*="desktop-monitor-v1.png"]',
@@ -3782,27 +3996,41 @@ describe("mau-office view", () => {
 
     const wallSprite = container.querySelector(".mau-office__sprite--wall");
     expect(wallSprite).not.toBeNull();
-    expect(parseStyleNumber(normalizeStyle(wallSprite?.getAttribute("style")), "height")).toBeGreaterThan(
-      MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx,
-    );
+    expect(
+      parseStyleNumber(normalizeStyle(wallSprite?.getAttribute("style")), "height"),
+    ).toBeGreaterThan(MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx);
 
     expect(container.querySelector(".mau-office__worker-badge")).toBeNull();
-    expect(container.querySelector(".mau-office__history-copy strong")?.textContent).toBe("Mau Worker");
-    expect(container.querySelector(".mau-office__history-copy span")?.textContent).toContain("heads down");
+    expect(container.querySelector(".mau-office__history-copy strong")?.textContent).toBe(
+      "Mau Worker",
+    );
+    expect(container.querySelector(".mau-office__history-copy span")?.textContent).toContain(
+      "heads down",
+    );
 
-    const bubbleStyle = normalizeStyle(container.querySelector(".mau-office__bubble")?.getAttribute("style"));
+    const bubbleStyle = normalizeStyle(
+      container.querySelector(".mau-office__bubble")?.getAttribute("style"),
+    );
     expect(bubbleStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.minWidthPx}px`);
-    expect(bubbleStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.minHeightPx}px`);
     expect(bubbleStyle).toContain(
-      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 20}px`,
+      `height:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.minHeightPx}px`,
+    );
+    expect(bubbleStyle).toContain(
+      `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 5}px`,
     );
     expect(bubbleStyle).toContain(
       `transform:translate(-50%,${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.offsetYPx}px)`,
     );
     expect(bubbleStyle).toContain("--mau-bubble-lines:4");
-    const historyStyle = normalizeStyle(container.querySelector(".mau-office__history")?.getAttribute("style"));
-    expect(historyStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minWidthPx}px`);
-    expect(historyStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minHeightPx}px`);
+    const historyStyle = normalizeStyle(
+      container.querySelector(".mau-office__history")?.getAttribute("style"),
+    );
+    expect(historyStyle).toContain(
+      `width:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minWidthPx}px`,
+    );
+    expect(historyStyle).toContain(
+      `height:${MAU_OFFICE_WORKER_RENDER_METRICS.history.minHeightPx}px`,
+    );
     expect(historyStyle).toContain(
       `bottom:${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + 20}px`,
     );
@@ -3915,7 +4143,9 @@ describe("mau-office view", () => {
     const rugZ = parseStyleNumber(
       normalizeStyle(
         container
-          .querySelector('[data-id="break-rug:middle-center"], .mau-office__sprite[src*="rug-r2c2.png"]')
+          .querySelector(
+            '[data-id="break-rug:middle-center"], .mau-office__sprite[src*="rug-r2c2.png"]',
+          )
           ?.getAttribute("style"),
       ),
       "z-index",
@@ -3969,11 +4199,19 @@ describe("mau-office view", () => {
     );
 
     const workerElements = Array.from(container.querySelectorAll(".mau-office__worker"));
-    const staffZ = parseStyleNumber(normalizeStyle(workerElements[0]?.getAttribute("style")), "z-index");
-    const customerZ = parseStyleNumber(normalizeStyle(workerElements[1]?.getAttribute("style")), "z-index");
+    const staffZ = parseStyleNumber(
+      normalizeStyle(workerElements[0]?.getAttribute("style")),
+      "z-index",
+    );
+    const customerZ = parseStyleNumber(
+      normalizeStyle(workerElements[1]?.getAttribute("style")),
+      "z-index",
+    );
     const counterZ = parseStyleNumber(
       normalizeStyle(
-        container.querySelector('.mau-office__sprite[src*="counter-mid-v1.png"]')?.getAttribute("style"),
+        container
+          .querySelector('.mau-office__sprite[src*="counter-mid-v1.png"]')
+          ?.getAttribute("style"),
       ),
       "z-index",
     );
@@ -4203,9 +4441,9 @@ describe("mau-office view", () => {
       sprite?.dispatchEvent(new Event("error"));
 
       expect(worker?.classList.contains("mau-office__worker--fallback")).toBe(true);
-      expect(worker?.querySelector(".mau-office__worker-sprite-fallback")?.textContent?.trim()).toBe(
-        "DANCE",
-      );
+      expect(
+        worker?.querySelector(".mau-office__worker-sprite-fallback")?.textContent?.trim(),
+      ).toBe("DANCE");
     } finally {
       danceFrames.splice(0, danceFrames.length, ...originalFrames);
     }
@@ -4244,7 +4482,9 @@ describe("mau-office view", () => {
       }),
       container,
     );
-    const firstFrame = container.querySelector<HTMLImageElement>(".mau-office__worker-sprite")?.getAttribute("src");
+    const firstFrame = container
+      .querySelector<HTMLImageElement>(".mau-office__worker-sprite")
+      ?.getAttribute("src");
 
     render(
       renderMauOffice({
@@ -4258,7 +4498,9 @@ describe("mau-office view", () => {
       }),
       container,
     );
-    const secondFrame = container.querySelector<HTMLImageElement>(".mau-office__worker-sprite")?.getAttribute("src");
+    const secondFrame = container
+      .querySelector<HTMLImageElement>(".mau-office__worker-sprite")
+      ?.getAttribute("src");
 
     expect(firstFrame).not.toBeNull();
     expect(secondFrame).not.toBeNull();
@@ -4303,9 +4545,13 @@ describe("mau-office view", () => {
       container,
     );
 
-    const bubbleStyle = normalizeStyle(container.querySelector(".mau-office__bubble")?.getAttribute("style"));
+    const bubbleStyle = normalizeStyle(
+      container.querySelector(".mau-office__bubble")?.getAttribute("style"),
+    );
     expect(bubbleStyle).toContain(`width:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.maxWidthPx}px`);
-    expect(bubbleStyle).toContain(`height:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.maxHeightPx}px`);
+    expect(bubbleStyle).toContain(
+      `height:${MAU_OFFICE_WORKER_RENDER_METRICS.bubble.maxHeightPx}px`,
+    );
     expect(bubbleStyle).toContain("--mau-bubble-lines:6");
 
     const bubbleText = container.querySelector(".mau-office__bubble-text")?.textContent ?? "";
@@ -4342,8 +4588,7 @@ describe("mau-office view", () => {
                 id: "snapshot-support",
                 kind: "customer_support",
                 label: "Handling support",
-                bubbleText:
-                  "Need help recovering the shared workspace password.",
+                bubbleText: "Need help recovering the shared workspace password.",
                 priority: 70,
                 roomId: "support",
                 anchorId: "support_customer_2",
@@ -4361,7 +4606,9 @@ describe("mau-office view", () => {
       container,
     );
 
-    const historyStyle = normalizeStyle(container.querySelector(".mau-office__history")?.getAttribute("style"));
+    const historyStyle = normalizeStyle(
+      container.querySelector(".mau-office__history")?.getAttribute("style"),
+    );
     expect(parseStyleNumber(historyStyle, "width")).toBeGreaterThan(
       MAU_OFFICE_WORKER_RENDER_METRICS.history.minWidthPx,
     );
@@ -4411,7 +4658,9 @@ describe("mau-office view", () => {
       container,
     );
 
-    const maxHistoryStyle = normalizeStyle(container.querySelector(".mau-office__history")?.getAttribute("style"));
+    const maxHistoryStyle = normalizeStyle(
+      container.querySelector(".mau-office__history")?.getAttribute("style"),
+    );
     expect(maxHistoryStyle).toContain(
       `width:${MAU_OFFICE_WORKER_RENDER_METRICS.history.maxWidthPx}px`,
     );

@@ -192,6 +192,7 @@ extension OnboardingView {
                     self.localSetupStatusSection()
                 }
             }
+
         }
         .onChange(of: self.state.connectionMode) { _, newValue in
             guard Self.shouldResetRemoteProbeFeedback(
@@ -1186,7 +1187,8 @@ extension OnboardingView {
                     presentation: .onboarding,
                     isActive: Self.shouldActivateOnboardingPageSideEffects(
                         activePageIndex: self.activePageIndex,
-                        pageIndex: self.privateAccessPageIndex))
+                        pageIndex: self.privateAccessPageIndex),
+                    draftStore: self.onboardingChannelsStore)
 
                 self.onboardingCard {
                     self.featureActionRow(
@@ -1198,6 +1200,37 @@ extension OnboardingView {
                         self.openSettings(tab: .general)
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    func managedBrowserSignInSection() -> some View {
+        if Self.shouldOfferManagedBrowserSignIn(
+            mode: self.state.connectionMode,
+            browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+        {
+            self.featureActionRow(
+                title: self.strings.managedBrowserSignInTitle,
+                subtitle: self.strings.managedBrowserSignInSubtitle,
+                systemImage: "globe",
+                buttonTitle: self.managedBrowserSignInLaunching
+                    ? self.strings.managedBrowserSignInOpeningButtonTitle
+                    : self.strings.managedBrowserSignInButtonTitle,
+                disabled: self.managedBrowserSignInLaunching)
+            {
+                Task {
+                    _ = await self.openManagedBrowserForSignIn()
+                }
+            }
+
+            if let managedBrowserSignInStatus,
+               !managedBrowserSignInStatus.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                Text(managedBrowserSignInStatus)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -1333,6 +1366,14 @@ extension OnboardingView {
                         .padding(.vertical, 6)
                 }
                 if self.state.connectionMode == .local {
+                    if Self.shouldOfferManagedBrowserSignIn(
+                        mode: self.state.connectionMode,
+                        browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+                    {
+                        self.managedBrowserSignInSection()
+                        Divider()
+                            .padding(.vertical, 6)
+                    }
                     self.featureActionRow(
                         title: macLocalized("Change Mac access or tools later", language: self.state.effectiveOnboardingLanguage),
                         subtitle: macLocalized(

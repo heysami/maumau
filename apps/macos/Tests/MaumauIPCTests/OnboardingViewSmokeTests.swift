@@ -1,5 +1,6 @@
 import Foundation
 import MaumauDiscovery
+import MaumauKit
 import SwiftUI
 import Testing
 @testable import Maumau
@@ -146,6 +147,61 @@ struct OnboardingViewSmokeTests {
         #expect(OnboardingStrings(language: .en).memorySubtitle.contains("Open Users later"))
         #expect(OnboardingStrings(language: .id).memorySubtitle.contains("privat untuk tiap pengguna"))
         #expect(OnboardingStrings(language: .id).memorySubtitle.contains("Buka Users nanti"))
+    }
+
+    @Test func `managed browser sign-in appears for local onboarding flows`() {
+        #expect(OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: false))
+        #expect(!OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .remote,
+            browserControlEnabled: true))
+    }
+
+    @Test func `local onboarding uses a deferred config draft store`() {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        #expect(view.onboardingChannelsStore.defersConfigSaves)
+    }
+
+    @Test func `managed browser sign-in waits for the brain step to finish`() {
+        #expect(!OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .local,
+            wizardSatisfied: false,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .local,
+            wizardSatisfied: true,
+            browserControlEnabled: true))
+        #expect(!OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .remote,
+            wizardSatisfied: true,
+            browserControlEnabled: true))
+    }
+
+    @Test func `local wizard completion stays on the brain page for browser sign-in`() {
+        #expect(!OnboardingView.shouldAutoAdvanceAfterWizardCompletion(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldAutoAdvanceAfterWizardCompletion(
+            mode: .remote,
+            browserControlEnabled: true))
+    }
+
+    @Test func `managed browser sign-in request targets the managed profile`() {
+        let params = OnboardingView.managedBrowserStartParams()
+        #expect(params["method"] == AnyCodable("POST"))
+        #expect(params["path"] == AnyCodable("/start"))
+        #expect(params["profile"] == AnyCodable("maumau"))
+        #expect(params["timeoutMs"] == AnyCodable(15000))
     }
 
     @Test func `wizard start waits until the wizard page is active`() {

@@ -493,11 +493,12 @@ public actor GatewayChannelActor {
                 self.pendingDeviceTokenRetry = true
                 self.deviceTokenRetryBudgetUsed = true
                 self.backoffMs = min(self.backoffMs, 250)
-            } else if selectedAuth.authDeviceToken != nil,
-                let identity,
-                self.shouldClearStoredDeviceTokenAfterRetry(error)
+            } else if let identity,
+                self.shouldClearStoredDeviceTokenAfterAuthFailure(
+                    error,
+                    selectedAuth: selectedAuth)
             {
-                // Retry failed with an explicit device-token mismatch; clear stale local token.
+                // A stored device token was rejected, so clear the local copy before the next connect.
                 DeviceAuthStore.clearToken(
                     deviceId: identity.deviceId,
                     role: role,
@@ -809,11 +810,21 @@ public actor GatewayChannelActor {
         return false
     }
 
-    private func shouldClearStoredDeviceTokenAfterRetry(_ error: Error) -> Bool {
+    private func shouldClearStoredDeviceTokenAfterAuthFailure(
+        _ error: Error,
+        selectedAuth: SelectedConnectAuth) -> Bool
+    {
         guard let authError = error as? GatewayConnectAuthError else {
             return false
         }
-        return authError.detail == .authDeviceTokenMismatch
+        if selectedAuth.authSource == .deviceToken {
+            return authError.detail == .authTokenMismatch ||
+                authError.detail == .authDeviceTokenMismatch
+        }
+        if selectedAuth.authDeviceToken != nil {
+            return authError.detail == .authDeviceTokenMismatch
+        }
+        return false
     }
 
     private func isTrustedDeviceRetryEndpoint() -> Bool {

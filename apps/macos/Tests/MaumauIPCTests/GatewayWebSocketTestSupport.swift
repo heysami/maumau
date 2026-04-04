@@ -94,7 +94,7 @@ enum GatewayWebSocketTestSupport {
         return obj["id"] as? String
     }
 
-    private static func requestFrameObject(from message: URLSessionWebSocketTask.Message) -> [String: Any]? {
+    fileprivate static func requestFrameObject(from message: URLSessionWebSocketTask.Message) -> [String: Any]? {
         let data: Data? = switch message {
         case let .data(d): d
         case let .string(s): s.data(using: .utf8)
@@ -134,6 +134,7 @@ final class GatewayTestWebSocketTask: WebSocketTasking, @unchecked Sendable {
     private let receiveHook: ReceiveHook?
     private var _state: URLSessionTask.State = .suspended
     private var connectRequestID: String?
+    private var connectAuth: [String: Any]?
     private var sendCount = 0
     private var receiveCount = 0
     private var cancelCount = 0
@@ -155,6 +156,10 @@ final class GatewayTestWebSocketTask: WebSocketTasking, @unchecked Sendable {
 
     func snapshotConnectRequestID() -> String? {
         self.lock.withLock { self.connectRequestID }
+    }
+
+    func snapshotConnectAuth() -> [String: Any]? {
+        self.lock.withLock { self.connectAuth }
     }
 
     func resume() {
@@ -181,8 +186,15 @@ final class GatewayTestWebSocketTask: WebSocketTasking, @unchecked Sendable {
             self.sendCount += 1
             return current
         }
-        if sendIndex == 0, let id = GatewayWebSocketTestSupport.connectRequestID(from: message) {
-            self.lock.withLock { self.connectRequestID = id }
+        if sendIndex == 0,
+           let object = GatewayWebSocketTestSupport.requestFrameObject(from: message),
+           let id = object["id"] as? String
+        {
+            let auth = ((object["params"] as? [String: Any])?["auth"] as? [String: Any]) ?? [:]
+            self.lock.withLock {
+                self.connectRequestID = id
+                self.connectAuth = auth
+            }
         }
         try await self.sendHook?(self, message, sendIndex)
     }

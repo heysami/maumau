@@ -134,9 +134,15 @@ extension OnboardingView {
                 self.currentPage = max(0, self.pageOrder.count - 1)
             }
         }
-        .onChange(of: self.onboardingWizard.isSatisfiedForOnboarding) { _, newValue in
-            guard newValue, self.activePageIndex == self.wizardPageIndex else { return }
+        .onChange(of: self.onboardingWizard.isSatisfiedForOnboarding) { oldValue, newValue in
+            guard !oldValue, newValue, self.activePageIndex == self.wizardPageIndex else { return }
             self.refreshBootstrapStatus()
+            guard Self.shouldAutoAdvanceAfterWizardCompletion(
+                mode: self.state.connectionMode,
+                browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+            else {
+                return
+            }
             self.handleNext()
         }
         .onDisappear {
@@ -238,42 +244,51 @@ extension OnboardingView {
                 .padding(.bottom, 13)
                 .frame(minHeight: 86, alignment: .bottom)
             } else {
-                HStack(spacing: 20) {
-                    ZStack(alignment: .leading) {
-                        Button(action: {}, label: {
-                            Label(self.strings.backButtonTitle, systemImage: "chevron.left").labelStyle(.iconOnly)
-                        })
-                        .buttonStyle(.plain)
-                        .opacity(0)
-                        .disabled(true)
+                VStack(spacing: 8) {
+                    if let onboardingFinishStatus = self.onboardingFinishStatus, !onboardingFinishStatus.isEmpty {
+                        Text(onboardingFinishStatus)
+                            .font(.caption)
+                            .foregroundStyle(self.onboardingFinishStatusIsError ? .orange : .secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                        if self.currentPage > 0 && !hideBackButton {
-                            Button(action: self.handleBack, label: {
-                                Label(self.strings.backButtonTitle, systemImage: "chevron.left")
-                                    .labelStyle(.iconOnly)
+                    HStack(spacing: 20) {
+                        ZStack(alignment: .leading) {
+                            Button(action: {}, label: {
+                                Label(self.strings.backButtonTitle, systemImage: "chevron.left").labelStyle(.iconOnly)
                             })
                             .buttonStyle(.plain)
-                            .foregroundColor(.secondary)
-                            .opacity(0.8)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            .opacity(0)
+                            .disabled(true)
+
+                            if self.currentPage > 0 && !hideBackButton {
+                                Button(action: self.handleBack, label: {
+                                    Label(self.strings.backButtonTitle, systemImage: "chevron.left")
+                                        .labelStyle(.iconOnly)
+                                })
+                                .buttonStyle(.plain)
+                                .foregroundColor(.secondary)
+                                .opacity(0.8)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            }
                         }
+                        .frame(width: footerSlotWidth, alignment: .leading)
+
+                        Spacer()
+
+                        self.pageDots(wizardLockIndex: wizardLockIndex)
+
+                        Spacer()
+
+                        Button(action: self.handleNext) {
+                            Text(self.buttonTitle)
+                                .frame(minWidth: 88)
+                        }
+                        .keyboardShortcut(.return)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!self.canAdvance)
+                        .frame(width: footerSlotWidth, alignment: .trailing)
                     }
-                    .frame(width: footerSlotWidth, alignment: .leading)
-
-                    Spacer()
-
-                    self.pageDots(wizardLockIndex: wizardLockIndex)
-
-                    Spacer()
-
-                    Button(action: self.handleNext) {
-                        Text(self.buttonTitle)
-                            .frame(minWidth: 88)
-                    }
-                    .keyboardShortcut(.return)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!self.canAdvance)
-                    .frame(width: footerSlotWidth, alignment: .trailing)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 13)
@@ -365,6 +380,7 @@ extension OnboardingView {
         subtitle: String,
         systemImage: String,
         buttonTitle: String,
+        disabled: Bool = false,
         action: @escaping () -> Void) -> some View
     {
         self.featureRowContent(
@@ -374,6 +390,7 @@ extension OnboardingView {
             action: AnyView(
                 Button(buttonTitle, action: action)
                     .buttonStyle(.link)
+                    .disabled(disabled)
                     .padding(.top, 2)))
     }
 

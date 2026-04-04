@@ -181,6 +181,7 @@ describe("buildAgentSystemPrompt", () => {
     );
     expect(prompt).toContain("If something is only planned, suggested, inferred, or still blocked");
     expect(prompt).toContain("contract_failed");
+    expect(prompt).toContain("returned accepted for delegated/background work");
     expect(prompt).toContain("waiting_timed_out");
     expect(prompt).toContain("## Safety");
     expect(prompt).toContain("You have no independent goals");

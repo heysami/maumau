@@ -13,6 +13,7 @@ struct GatewayEndpointStoreTests {
             environment: env,
             stdoutPath: nil,
             stderrPath: nil,
+            configPath: env["MAUMAU_CONFIG_PATH"],
             port: nil,
             bind: nil,
             token: token,
@@ -111,6 +112,41 @@ struct GatewayEndpointStoreTests {
         #expect(token == nil)
     }
 
+    @Test func `resolve local gateway token follows launchd config path before home config`() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let configURL = tempDir.appendingPathComponent("maumau.json")
+        try """
+        {
+          "gateway": {
+            "auth": {
+              "mode": "token",
+              "token": "launchd-config-token"
+            }
+          }
+        }
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let token = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "mode": "token",
+                        "token": "home-config-token",
+                    ],
+                ],
+            ],
+            env: [:],
+            launchdSnapshot: self.makeLaunchAgentSnapshot(
+                env: ["MAUMAU_CONFIG_PATH": configURL.path],
+                token: nil,
+                password: nil))
+        #expect(token == "launchd-config-token")
+    }
+
     @Test func resolveGatewayTokenUsesRemoteConfigToken() {
         let token = GatewayEndpointStore._testResolveGatewayToken(
             isRemote: true,
@@ -193,6 +229,41 @@ struct GatewayEndpointStoreTests {
                 token: nil,
                 password: "launchd-pass"))
         #expect(password == nil)
+    }
+
+    @Test func `resolve local gateway password follows launchd config path before home config`() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let configURL = tempDir.appendingPathComponent("maumau.json")
+        try """
+        {
+          "gateway": {
+            "auth": {
+              "mode": "password",
+              "password": "launchd-config-pass"
+            }
+          }
+        }
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let password = GatewayEndpointStore._testResolveGatewayPassword(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "mode": "password",
+                        "password": "home-config-pass",
+                    ],
+                ],
+            ],
+            env: [:],
+            launchdSnapshot: self.makeLaunchAgentSnapshot(
+                env: ["MAUMAU_CONFIG_PATH": configURL.path],
+                token: nil,
+                password: nil))
+        #expect(password == "launchd-config-pass")
     }
 
     @Test func `connection mode resolver prefers config mode over defaults`() {

@@ -15,6 +15,7 @@ describe("buildAgentRoleContractNotes", () => {
 
     expect(notes.join("\n")).toContain("You are an orchestrator");
     expect(notes.join("\n")).toContain("Never claim actions");
+    expect(notes.join("\n")).toContain("returned accepted for delegated/background work");
     expect(notes.join("\n")).toContain("waiting_timed_out");
     expect(notes.join("\n")).toContain("FILE:<workspace-relative-path>");
     expect(notes.join("\n")).toContain("host-local or tailnet URL");

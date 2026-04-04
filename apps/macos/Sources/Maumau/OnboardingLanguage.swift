@@ -715,6 +715,60 @@ struct OnboardingStrings: Sendable {
         }
     }
 
+    var managedBrowserSignInTitle: String {
+        switch self.language {
+        case .en:
+            "Sign in once to Maumau's browser"
+        case .id:
+            "Masuk sekali ke browser Maumau"
+        }
+    }
+
+    var managedBrowserSignInSubtitle: String {
+        switch self.language {
+        case .en:
+            "This opens Maumau's separate browser profile on this Mac. Sign in there to any sites you want browser automation to reuse later. You can close it afterward."
+        case .id:
+            "Ini membuka profil browser Maumau yang terpisah di Mac ini. Masuklah di sana ke situs apa pun yang ingin Anda pakai lagi nanti oleh automasi browser. Setelah itu browsernya boleh ditutup."
+        }
+    }
+
+    var managedBrowserSignInButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open Maumau browser"
+        case .id:
+            "Buka browser Maumau"
+        }
+    }
+
+    var managedBrowserSignInOpeningButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Opening…"
+        case .id:
+            "Membuka…"
+        }
+    }
+
+    var managedBrowserSignInOpenedStatus: String {
+        switch self.language {
+        case .en:
+            "Maumau's browser profile is open. Sign in there once, and Maumau can reopen that same profile later."
+        case .id:
+            "Profil browser Maumau sudah terbuka. Masuklah sekali di sana, lalu Maumau bisa membuka lagi profil yang sama nanti."
+        }
+    }
+
+    var managedBrowserSignInFailedStatusPrefix: String {
+        switch self.language {
+        case .en:
+            "Couldn’t open Maumau's browser profile yet."
+        case .id:
+            "Belum bisa membuka profil browser Maumau."
+        }
+    }
+
     var configureLaterTitle: String {
         switch self.language {
         case .en:

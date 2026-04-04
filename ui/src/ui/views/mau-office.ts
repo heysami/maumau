@@ -1,22 +1,16 @@
 import { html, nothing } from "lit";
+import { guard } from "lit/directives/guard.js";
+import { repeat } from "lit/directives/repeat.js";
 import { styleMap } from "lit/directives/style-map.js";
 import {
   MAU_OFFICE_CHASING_LOOP_CYCLE_MS,
   MAU_OFFICE_PASSING_BALL_BEAT_MS,
   MAU_OFFICE_SUPPORT_DIALOGUE_WINDOW_MS,
 } from "../controllers/mau-office.ts";
-import type {
-  MauOfficeState,
-  OfficeActor,
-  OfficeBubbleEntry,
-  OfficePath,
-} from "../controllers/mau-office.ts";
+import type { MauOfficeState, OfficeActor, OfficeBubbleEntry } from "../controllers/mau-office.ts";
 import {
   MAU_OFFICE_BUBBLE_FRAME_ASSETS,
   MAU_OFFICE_BUBBLE_TAIL_ASSET,
-  MAU_OFFICE_PATH_DOT_ASSETS,
-  MAU_OFFICE_PATH_TARGET_ASSETS,
-  MAU_OFFICE_PATH_TURN_ASSETS,
   MAU_OFFICE_WORKER_RENDER_METRICS,
   MAU_OFFICE_FOCUS_PADDING_TILES,
   MAU_OFFICE_LAYOUT,
@@ -34,14 +28,14 @@ import {
 
 const ROOM_ORDER: Array<MauOfficeRoomId | "all"> = ["all", ...MAU_OFFICE_ROOM_IDS];
 const RECENT_BUBBLE_WINDOW_MS = 9_000;
-const PATH_MARKER_LIMIT = 10;
 const MAU_OFFICE_CARD_PADDING_PX = 36;
 const MAU_OFFICE_VIEWPORT_GUTTER_PX = 96;
 const MAU_OFFICE_MAX_FULL_SCENE_SCALE = 1;
 const MAU_OFFICE_MAX_ROOM_SCALE = 1.25;
 const MAU_OFFICE_MIN_CAMERA_SCALE = 0.25;
 const MAU_OFFICE_CAMERA_SCALE_STEP = 0.25;
-const MAU_OFFICE_WORKER_BUBBLE_CLEARANCE_PX = 20;
+const MAU_OFFICE_WORKER_BUBBLE_CLEARANCE_PX = 5;
+const MAU_OFFICE_WORKER_HISTORY_CLEARANCE_PX = 20;
 const PIXEL_TEXT_GLYPH_WIDTH_RATIO = 0.78;
 const BUBBLE_SIZE_STEP_PX = 8;
 const BUBBLE_TEXT_SIDE_PADDING_PX = 20;
@@ -220,7 +214,10 @@ function resolveSupportDialogueText(actor: OfficeActor, nowMs: number): string |
   return dialogue.text;
 }
 
-function resolveLatestSupportDialogueBubble(actor: OfficeActor, nowMs: number): OfficeBubbleEntry | null {
+function resolveLatestSupportDialogueBubble(
+  actor: OfficeActor,
+  nowMs: number,
+): OfficeBubbleEntry | null {
   const text = resolveSupportDialogueText(actor, nowMs);
   const dialogue = actor.latestSupportDialogue;
   if (!text || !dialogue || dialogue.updatedAtMs < nowMs - RECENT_BUBBLE_WINDOW_MS) {
@@ -296,7 +293,10 @@ function resolvePassingBallPhase(
   };
 }
 
-function resolveIdleWorkerPlacement(actor: OfficeActor, nowMs: number): WorkerRenderPlacement | null {
+function resolveIdleWorkerPlacement(
+  actor: OfficeActor,
+  nowMs: number,
+): WorkerRenderPlacement | null {
   const anchor = MAU_OFFICE_LAYOUT.anchors[actor.anchorId];
   if (!anchor || !actor.idleAssignment) {
     return null;
@@ -341,7 +341,7 @@ function resolveIdleWorkerPlacement(actor: OfficeActor, nowMs: number): WorkerRe
         Math.max(...slotAnchors.map((entry) => Math.abs(entry.y - centerY))) + 12,
       );
       const orbitPhase =
-        (((nowMs % MAU_OFFICE_CHASING_LOOP_CYCLE_MS) / MAU_OFFICE_CHASING_LOOP_CYCLE_MS) +
+        ((nowMs % MAU_OFFICE_CHASING_LOOP_CYCLE_MS) / MAU_OFFICE_CHASING_LOOP_CYCLE_MS +
           participantIndex / actor.idleAssignment.participantIds.length) %
         1;
       const angle = orbitPhase * Math.PI * 2 - Math.PI / 2;
@@ -397,45 +397,6 @@ function directionBetween(
   return dy >= 0 ? "south" : "north";
 }
 
-function resolvePathTurnKey(
-  incoming: MauOfficeDirection,
-  outgoing: MauOfficeDirection,
-): keyof typeof MAU_OFFICE_PATH_TURN_ASSETS | null {
-  const directions = new Set([incoming, outgoing]);
-  if (directions.has("north") && directions.has("east")) {
-    return "ne";
-  }
-  if (directions.has("north") && directions.has("west")) {
-    return "nw";
-  }
-  if (directions.has("south") && directions.has("east")) {
-    return "se";
-  }
-  if (directions.has("south") && directions.has("west")) {
-    return "sw";
-  }
-  return null;
-}
-
-function resolvePathMarkerAsset(
-  points: Array<{ x: number; y: number }>,
-  markerIndex: number,
-): string {
-  const previous = points[markerIndex]!;
-  const current = points[markerIndex + 1]!;
-  const next = points[markerIndex + 2] ?? null;
-  const incoming = directionBetween(previous, current);
-  if (!next) {
-    return MAU_OFFICE_PATH_TARGET_ASSETS[incoming];
-  }
-  const outgoing = directionBetween(current, next);
-  if (incoming === outgoing) {
-    return MAU_OFFICE_PATH_DOT_ASSETS[outgoing];
-  }
-  const turnKey = resolvePathTurnKey(incoming, outgoing);
-  return turnKey ? MAU_OFFICE_PATH_TURN_ASSETS[turnKey] : MAU_OFFICE_PATH_DOT_ASSETS[outgoing];
-}
-
 function positionForTile(tile: MauOfficeTilePlacement) {
   return styleMap({
     left: `${tile.tileX * MAU_OFFICE_TILE_SIZE}px`,
@@ -476,11 +437,7 @@ function positionForWorker(
   animationId: MauOfficeWorkerAnimationId,
 ) {
   const pose =
-    animationId === "sleep-floor"
-      ? "sleepFloor"
-      : animationId === "sit"
-        ? "sit"
-        : "stand";
+    animationId === "sleep-floor" ? "sleepFloor" : animationId === "sit" ? "sit" : "stand";
   const metrics = MAU_OFFICE_WORKER_RENDER_METRICS;
   return styleMap({
     left: `${placement.x}px`,
@@ -573,19 +530,12 @@ function resolveResponsiveTextBox(options: {
     options.lineHeight,
   );
   const startWidthPx = clamp(
-    roundUpToStep(
-      Math.max(options.minWidthPx, options.minTargetWidthPx ?? 0),
-      BUBBLE_SIZE_STEP_PX,
-    ),
+    roundUpToStep(Math.max(options.minWidthPx, options.minTargetWidthPx ?? 0), BUBBLE_SIZE_STEP_PX),
     options.minWidthPx,
     options.maxWidthPx,
   );
 
-  for (
-    let widthPx = startWidthPx;
-    widthPx <= options.maxWidthPx;
-    widthPx += BUBBLE_SIZE_STEP_PX
-  ) {
+  for (let widthPx = startWidthPx; widthPx <= options.maxWidthPx; widthPx += BUBBLE_SIZE_STEP_PX) {
     const innerWidthPx = Math.max(1, widthPx - options.paddingXPx * 2);
     const charsPerLine = Math.max(1, Math.floor(innerWidthPx / charWidthPx));
     if (wrapTextLineCount(normalized, charsPerLine) <= minLineClamp) {
@@ -681,7 +631,8 @@ function resolveHistoryBox(title: string, summary: string): ResponsiveTextBox {
     paddingBottomPx: HISTORY_TEXT_BOTTOM_PADDING_PX,
     fontPx: HISTORY_BODY_FONT_PX,
     lineHeight: HISTORY_BODY_LINE_HEIGHT,
-    minTargetWidthPx: HISTORY_TEXT_SIDE_PADDING_PX * 2 + estimateTextWidth(title, HISTORY_LABEL_FONT_PX),
+    minTargetWidthPx:
+      HISTORY_TEXT_SIDE_PADDING_PX * 2 + estimateTextWidth(title, HISTORY_LABEL_FONT_PX),
   });
 }
 
@@ -689,7 +640,7 @@ function positionForWorkerHistory(box: ResponsiveTextBox) {
   const history = MAU_OFFICE_WORKER_RENDER_METRICS.history;
   return styleMap({
     left: "50%",
-    bottom: `${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + MAU_OFFICE_WORKER_BUBBLE_CLEARANCE_PX}px`,
+    bottom: `${MAU_OFFICE_WORKER_RENDER_METRICS.logicalHeightPx + MAU_OFFICE_WORKER_HISTORY_CLEARANCE_PX}px`,
     width: `${box.widthPx}px`,
     height: `${box.heightPx}px`,
     transform: `translate(-50%, ${history.offsetYPx}px)`,
@@ -703,9 +654,12 @@ function viewportStyle(crop: Rect) {
       ? MAU_OFFICE_MAX_FULL_SCENE_SCALE
       : MAU_OFFICE_MAX_ROOM_SCALE;
   const widthFitScale = resolveViewportAvailableWidth() / Math.max(crop.width, 1);
-  const quantizedScale = Math.floor(widthFitScale / MAU_OFFICE_CAMERA_SCALE_STEP) * MAU_OFFICE_CAMERA_SCALE_STEP;
+  const quantizedScale =
+    Math.floor(widthFitScale / MAU_OFFICE_CAMERA_SCALE_STEP) * MAU_OFFICE_CAMERA_SCALE_STEP;
   const scale = clamp(
-    Number.isFinite(quantizedScale) && quantizedScale > 0 ? quantizedScale : MAU_OFFICE_MIN_CAMERA_SCALE,
+    Number.isFinite(quantizedScale) && quantizedScale > 0
+      ? quantizedScale
+      : MAU_OFFICE_MIN_CAMERA_SCALE,
     MAU_OFFICE_MIN_CAMERA_SCALE,
     maxScale,
   );
@@ -744,42 +698,6 @@ function renderProp(sprite: MauOfficeSpritePlacement, basePath: string) {
       draggable="false"
     />
   `;
-}
-
-function pathPoints(path: OfficePath, actor: OfficeActor): Array<{ x: number; y: number }> {
-  const points = [{ x: actor.x, y: actor.y }];
-  for (let index = path.segmentIndex + 1; index < path.waypoints.length; index += 1) {
-    const waypoint = path.waypoints[index];
-    if (waypoint) {
-      points.push({ x: waypoint.x, y: waypoint.y });
-    }
-  }
-  return points;
-}
-
-function renderPathMarkers(actor: OfficeActor, basePath: string) {
-  if (!actor.path) {
-    return nothing;
-  }
-  const points = pathPoints(actor.path, actor);
-  return points.slice(1, PATH_MARKER_LIMIT + 1).map((point, index) => {
-    const asset = resolveMauOfficeAssetUrl(basePath, resolvePathMarkerAsset(points, index));
-    return html`
-      <img
-        class="mau-office__path-marker"
-        style=${styleMap({
-          left: `${point.x - MAU_OFFICE_TILE_SIZE / 2}px`,
-          top: `${point.y - MAU_OFFICE_TILE_SIZE / 2}px`,
-          width: `${MAU_OFFICE_TILE_SIZE}px`,
-          height: `${MAU_OFFICE_TILE_SIZE}px`,
-          zIndex: String(18 + index),
-        })}
-        src=${asset}
-        alt=""
-        draggable="false"
-      />
-    `;
-  });
 }
 
 function renderBubble(bubble: OfficeBubbleEntry, basePath: string) {
@@ -881,7 +799,11 @@ function renderIdleGroupOverlays(actors: OfficeActor[], nowMs: number) {
   const overlays = [];
   for (const actor of actors) {
     const assignment = actor.idleAssignment;
-    if (!assignment || assignment.packageId !== "passing_ball_court" || assignment.participantIds.length < 4) {
+    if (
+      !assignment ||
+      assignment.packageId !== "passing_ball_court" ||
+      assignment.participantIds.length < 4
+    ) {
       continue;
     }
     const key = idleGroupKey(actor);
@@ -953,6 +875,14 @@ function renderWorker(
   `;
 }
 
+function renderStaticStage(basePath: string) {
+  return html`
+    ${MAU_OFFICE_LAYOUT.map.floorTiles.map((tile) => renderTile(tile, basePath))}
+    ${MAU_OFFICE_LAYOUT.map.wallSprites.map((sprite) => renderProp(sprite, basePath))}
+    ${MAU_OFFICE_LAYOUT.map.propSprites.map((sprite) => renderProp(sprite, basePath))}
+  `;
+}
+
 export function renderMauOffice(props: MauOfficeProps) {
   const narrowViewport = isNarrowViewport();
   const effectiveRoomFocus = resolveEffectiveRoomFocus(props.state);
@@ -1004,17 +934,11 @@ export function renderMauOffice(props: MauOfficeProps) {
       >
         <div class="mau-office__camera">
           <div class="mau-office__stage">
-            ${MAU_OFFICE_LAYOUT.map.floorTiles.map((tile) => renderTile(tile, props.basePath))}
-            ${MAU_OFFICE_LAYOUT.map.wallSprites.map((sprite) => renderProp(sprite, props.basePath))}
-            ${MAU_OFFICE_LAYOUT.map.propSprites.map((sprite) => renderProp(sprite, props.basePath))}
-            ${actors.map((actor) => renderPathMarkers(actor, props.basePath))}
-            ${actors.map((actor) =>
-              renderWorker(
-                actor,
-                props.basePath,
-                props.state.nowMs,
-                props.onActorOpen,
-              ),
+            ${guard(props.basePath, () => renderStaticStage(props.basePath))}
+            ${repeat(
+              actors,
+              (actor) => actor.id,
+              (actor) => renderWorker(actor, props.basePath, props.state.nowMs, props.onActorOpen),
             )}
             ${renderIdleGroupOverlays(actors, props.state.nowMs)}
           </div>

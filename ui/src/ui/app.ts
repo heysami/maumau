@@ -463,6 +463,7 @@ export class MaumauApp extends LitElement {
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;
   private mauOfficeTicker: number | null = null;
+  private mauOfficeTickerLastStepAt: number | null = null;
   private logsScrollFrame: number | null = null;
   private toolStreamById = new Map<string, ToolStreamEntry>();
   private toolStreamOrder: string[] = [];
@@ -757,8 +758,9 @@ export class MaumauApp extends LitElement {
     if (this.mauOfficeTicker == null) {
       return;
     }
-    window.clearInterval(this.mauOfficeTicker);
+    window.cancelAnimationFrame(this.mauOfficeTicker);
     this.mauOfficeTicker = null;
+    this.mauOfficeTickerLastStepAt = null;
   }
 
   syncMauOfficeTicker() {
@@ -772,15 +774,26 @@ export class MaumauApp extends LitElement {
     if (this.mauOfficeTicker != null) {
       return;
     }
-    this.mauOfficeTicker = window.setInterval(() => {
+    const stepIntervalMs = 1000 / 30;
+    const tick = (frameAt: number) => {
       if (this.tab !== "mauOffice" || this.mauOfficeState.loaded !== true) {
+        this.mauOfficeTicker = window.requestAnimationFrame(tick);
         return;
       }
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        this.mauOfficeTicker = window.requestAnimationFrame(tick);
         return;
       }
-      this.mauOfficeState = advanceMauOfficeState(this.mauOfficeState, Date.now());
-    }, 180);
+      const previousStepAt = this.mauOfficeTickerLastStepAt ?? frameAt - stepIntervalMs;
+      const elapsedMs = frameAt - previousStepAt;
+      if (elapsedMs >= stepIntervalMs) {
+        // Preserve a stable cadence even when a frame lands late.
+        this.mauOfficeTickerLastStepAt = frameAt - (elapsedMs % stepIntervalMs);
+        this.mauOfficeState = advanceMauOfficeState(this.mauOfficeState, Date.now());
+      }
+      this.mauOfficeTicker = window.requestAnimationFrame(tick);
+    };
+    this.mauOfficeTicker = window.requestAnimationFrame(tick);
   }
 
   render() {

@@ -23,6 +23,7 @@ const ensureFreshInstallBundledToolsMock = vi.hoisted(() =>
   vi.fn(async () => ({
     attempted: true,
     ok: true,
+    fullyReady: true,
     results: [
       {
         id: "chrome",
@@ -31,8 +32,8 @@ const ensureFreshInstallBundledToolsMock = vi.hoisted(() =>
       },
       {
         id: "clawd-cursor",
-        status: "installed",
-        detail: "Installed Clawd Cursor.",
+        status: "configured",
+        detail: "Configured Clawd Cursor.",
       },
     ],
   })),
@@ -337,7 +338,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       expect(parsed.ok).toBe(true);
       expect(parsed.bundledTools).toEqual([
         expect.objectContaining({ id: "chrome", status: "installed" }),
-        expect.objectContaining({ id: "clawd-cursor", status: "installed" }),
+        expect.objectContaining({ id: "clawd-cursor", status: "configured" }),
       ]);
     });
   });
@@ -658,6 +659,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
           installDaemon: false,
           gatewayPort: port,
           gatewayBind: "lan",
+          tailscale: "off",
         },
         runtime,
       );

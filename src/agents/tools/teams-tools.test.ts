@@ -309,6 +309,119 @@ describe("teams tools", () => {
     expect(hoisted.handoffSubagentCompletionToRequesterMock).toHaveBeenCalledWith("run-team-1");
   });
 
+  it("defaults remote root orchestrators to async team runs", async () => {
+    const rootConfig = {
+      ...TEST_CONFIG,
+      teams: {
+        list: [
+          {
+            id: "main",
+            name: "Main Orchestration",
+            managerAgentId: "main",
+            implicitForManagerSessions: true,
+            members: [],
+            crossTeamLinks: [{ type: "team", targetId: "alpha" }],
+            workflows: [{ id: "default", default: true }],
+          },
+          ...TEST_CONFIG.teams.list,
+        ],
+      },
+    };
+    hoisted.resolveSessionTeamContextMock.mockReturnValue({
+      teamId: "main",
+      teamRole: "manager",
+      team: rootConfig.teams.list[0],
+      sessionAgentId: "main",
+    });
+
+    const tool = createTeamsRunTool({
+      agentSessionKey: "main",
+      agentChannel: "telegram",
+      config: rootConfig,
+      callGateway: (request) => hoisted.callGatewayMock(request),
+      subagentRegistry: {
+        countPendingDescendantRuns: (sessionKey) =>
+          hoisted.countPendingDescendantRunsMock(sessionKey),
+        getLatestSubagentRunByChildSessionKey: (sessionKey) =>
+          hoisted.getLatestSubagentRunByChildSessionKeyMock(sessionKey),
+        handoffSubagentCompletionToRequester: (runId) =>
+          hoisted.handoffSubagentCompletionToRequesterMock(runId),
+        listDescendantRunsForRequester: (sessionKey) =>
+          hoisted.listDescendantRunsForRequesterMock(sessionKey),
+      },
+    });
+
+    const result = await tool.execute("call-run-root-async", {
+      teamId: "alpha",
+      workflowId: "feature-build",
+      task: "Build the feature",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "accepted",
+      teamId: "alpha",
+      workflowId: "feature-build",
+      managerSessionKey: "agent:alpha-manager:subagent:1",
+      runId: "run-team-1",
+    });
+    expect(hoisted.handoffSubagentCompletionToRequesterMock).toHaveBeenCalledWith("run-team-1");
+    expect(
+      hoisted.callGatewayMock.mock.calls.some(
+        ([request]) => (request as { method?: string }).method === "agent.wait",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps explicit team managers on the waiting path unless they opt into async", async () => {
+    hoisted.resolveSessionTeamContextMock.mockReturnValue({
+      teamId: "alpha",
+      teamRole: "manager",
+      team: TEST_CONFIG.teams.list[0],
+      sessionAgentId: "alpha-manager",
+    });
+    hoisted.materializeGeneratedTeamProgramMock.mockResolvedValue({
+      ok: true,
+      team: TEST_CONFIG.teams.list[1],
+      workflow: TEST_CONFIG.teams.list[1].workflows[0],
+      program: 'agent manager:\n  prompt: "Run the beta team"',
+      absolutePath: "/tmp/.maumau/teams/beta/default.generated.prose",
+      relativePath: ".maumau/teams/beta/default.generated.prose",
+    });
+
+    const tool = createTeamsRunTool({
+      agentSessionKey: "agent:alpha-manager:main",
+      agentChannel: "telegram",
+      config: TEST_CONFIG,
+      callGateway: (request) => hoisted.callGatewayMock(request),
+      subagentRegistry: {
+        countPendingDescendantRuns: (sessionKey) =>
+          hoisted.countPendingDescendantRunsMock(sessionKey),
+        getLatestSubagentRunByChildSessionKey: (sessionKey) =>
+          hoisted.getLatestSubagentRunByChildSessionKeyMock(sessionKey),
+        handoffSubagentCompletionToRequester: (runId) =>
+          hoisted.handoffSubagentCompletionToRequesterMock(runId),
+        listDescendantRunsForRequester: (sessionKey) =>
+          hoisted.listDescendantRunsForRequesterMock(sessionKey),
+      },
+    });
+
+    const result = await tool.execute("call-run-team-manager", {
+      teamId: "beta",
+      task: "Escalate the feature",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "ok",
+      teamId: "beta",
+      workflowId: "default",
+    });
+    expect(
+      hoisted.callGatewayMock.mock.calls.some(
+        ([request]) => (request as { method?: string }).method === "agent.wait",
+      ),
+    ).toBe(true);
+  });
+
   it("follows manager wake continuations before grading the team contract", async () => {
     let waitCalls = 0;
     hoisted.callGatewayMock.mockImplementation(async (request: unknown) => {
@@ -381,12 +494,13 @@ describe("teams tools", () => {
       status: "ok",
       usedAgentIds: ["alpha-manager", "alpha-coder"],
     });
-    expect(
-      hoisted.callGatewayMock.mock.calls
-        .map(([request]) => request as { method?: string; params?: { runId?: string } })
-        .filter((request) => request.method === "agent.wait")
-        .map((request) => request.params?.runId),
-    ).toEqual(["run-team-1", "run-team-2"]);
+    const waitedRunIds = hoisted.callGatewayMock.mock.calls
+      .map(([request]) => request as { method?: string; params?: { runId?: string } })
+      .filter((request) => request.method === "agent.wait")
+      .map((request) => request.params?.runId);
+    expect(waitedRunIds).toHaveLength(2);
+    expect(waitedRunIds.at(0)).toEqual(expect.any(String));
+    expect(waitedRunIds.at(1)).toBe("run-team-2");
   });
 
   it("grades team contracts from preserved run metadata after child cleanup deletes the session", async () => {

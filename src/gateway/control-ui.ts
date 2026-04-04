@@ -11,6 +11,7 @@ import { isWithinDir } from "../infra/path-safety.js";
 import { openVerifiedFileSync } from "../infra/safe-open-sync.js";
 import { AVATAR_MAX_BYTES } from "../shared/avatar-policy.js";
 import { resolveRuntimeServiceVersion } from "../version.js";
+import { isLocalDirectRequest, resolveGatewayAuth } from "./auth.js";
 import { DEFAULT_ASSISTANT_IDENTITY, resolveAssistantIdentity } from "./assistant-identity.js";
 import {
   CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
@@ -39,6 +40,8 @@ export type ControlUiRequestOptions = {
   config?: MaumauConfig;
   agentId?: string;
   root?: ControlUiRootState;
+  trustedProxies?: string[];
+  allowRealIpFallback?: boolean;
 };
 
 export type ControlUiRootState =
@@ -349,6 +352,13 @@ export function handleControlUiHttpRequest(
     const identity = config
       ? resolveAssistantIdentity({ cfg: config, agentId: opts?.agentId })
       : DEFAULT_ASSISTANT_IDENTITY;
+    const resolvedAuth = config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null;
+    const loopbackGatewayToken =
+      resolvedAuth &&
+      resolvedAuth.mode === "token" &&
+      isLocalDirectRequest(req, opts?.trustedProxies, opts?.allowRealIpFallback)
+        ? resolvedAuth.token?.trim() || undefined
+        : undefined;
     const avatarValue = resolveAssistantAvatarUrl({
       avatar: identity.avatar,
       agentId: identity.agentId,
@@ -367,6 +377,9 @@ export function handleControlUiHttpRequest(
       assistantAvatar: avatarValue ?? identity.avatar,
       assistantAgentId: identity.agentId,
       serverVersion: resolveRuntimeServiceVersion(process.env),
+      // Only direct loopback requests get the shared token so an already-open
+      // local Control UI tab can recover after onboarding rotates auth.
+      loopbackGatewayToken,
     } satisfies ControlUiBootstrapConfig);
     return true;
   }

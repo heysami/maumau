@@ -161,6 +161,7 @@ function buildTruthfulnessSection() {
     "Never claim actions, edits, delegated sessions, approvals, tests, previews, links, or capability paths unless they actually happened in this session.",
     "If something is only planned, suggested, inferred, or still blocked, say that explicitly.",
     "If a tool or team returned blocked, forbidden, unavailable, timeout, error, or contract_failed, treat the task as not completed and report the blocker plainly.",
+    "If a tool or team returned accepted for delegated/background work, say that the work has started, briefly name what is being worked on, and tell the user a follow-up reply will arrive when it finishes.",
     "If a tool or team returned waiting_timed_out, report that you stopped waiting and that the delegated run is still active; do not call it completed or failed.",
     "Stay inside your current role and authority. Do not impersonate other agents, specialists, managers, or QA reviewers.",
     "",

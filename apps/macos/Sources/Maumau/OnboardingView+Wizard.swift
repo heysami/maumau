@@ -50,6 +50,16 @@ extension OnboardingView {
                         language: self.state.effectiveOnboardingLanguage)
                 }
 
+                if Self.shouldShowManagedBrowserSignInOnWizard(
+                    mode: self.state.connectionMode,
+                    wizardSatisfied: self.onboardingWizard.isSatisfiedForOnboarding,
+                    browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+                {
+                    self.onboardingCard {
+                        self.managedBrowserSignInSection()
+                    }
+                }
+
                 self.onboardingCard(spacing: 14, padding: 16) {
                     if self.shouldWaitForLocalSetupBeforeWizard {
                         self.localSetupPreparationCard()
@@ -116,6 +126,25 @@ extension OnboardingView {
         shouldWaitForLocalSetup: Bool) -> Bool
     {
         activePageIndex == wizardPageIndex && !shouldWaitForLocalSetup
+    }
+
+    static func shouldShowManagedBrowserSignInOnWizard(
+        mode: AppState.ConnectionMode,
+        wizardSatisfied: Bool,
+        browserControlEnabled: Bool) -> Bool
+    {
+        wizardSatisfied && self.shouldOfferManagedBrowserSignIn(
+            mode: mode,
+            browserControlEnabled: browserControlEnabled)
+    }
+
+    static func shouldAutoAdvanceAfterWizardCompletion(
+        mode: AppState.ConnectionMode,
+        browserControlEnabled: Bool) -> Bool
+    {
+        !self.shouldOfferManagedBrowserSignIn(
+            mode: mode,
+            browserControlEnabled: browserControlEnabled)
     }
 }
 

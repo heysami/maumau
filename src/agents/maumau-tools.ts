@@ -9,8 +9,8 @@ import type { SpawnedToolContext } from "./spawned-context.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";
 import { createAgentsListTool } from "./tools/agents-list-tool.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
-import { createCapabilitiesListTool } from "./tools/capabilities-list-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
+import { createCapabilitiesListTool } from "./tools/capabilities-list-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
 import { createCronTool } from "./tools/cron-tool.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
@@ -295,6 +295,7 @@ export function createMaumauTools(
       requesterTailscaleLogin: options?.requesterTailscaleLogin,
       sandboxed: options?.sandboxed,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
+      config: resolvedConfig,
       workspaceDir: spawnWorkspaceDir,
     }),
     createSubagentsTool({

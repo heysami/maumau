@@ -4,6 +4,7 @@ import path from "node:path";
 import { inspect } from "node:util";
 import { cancel, isCancel } from "@clack/prompts";
 import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../agents/workspace.js";
+import { DEFAULT_MAUMAU_BROWSER_PROFILE_NAME } from "../browser/constants.js";
 import type { MaumauConfig } from "../config/config.js";
 import { CONFIG_PATH } from "../config/config.js";
 import { resolveAgentModelPrimaryValue } from "../config/model-input.js";
@@ -423,6 +424,31 @@ export async function waitForGatewayReachable(params: {
   }
 
   return { ok: false, detail: lastDetail };
+}
+
+export async function openManagedBrowserProfile(params?: {
+  config?: MaumauConfig;
+  token?: string;
+  password?: string;
+  profile?: string;
+}): Promise<{ ok: true; profile: string }> {
+  const profile = params?.profile?.trim() || DEFAULT_MAUMAU_BROWSER_PROFILE_NAME;
+  await callGateway({
+    config: params?.config,
+    token: params?.token,
+    password: params?.password,
+    method: "browser.request",
+    params: {
+      method: "POST",
+      path: "/start",
+      query: { profile },
+      timeoutMs: 15_000,
+    },
+    timeoutMs: 20_000,
+    clientName: GATEWAY_CLIENT_NAMES.CLI,
+    mode: GATEWAY_CLIENT_MODES.CLI,
+  });
+  return { ok: true, profile };
 }
 
 function summarizeError(err: unknown): string {

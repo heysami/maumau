@@ -179,7 +179,7 @@ struct OnboardingWizardStepViewTests {
             port: 18789,
             probeAuthReady: {
                 await recorder.recordAuthProbe()
-                return false
+                return .pending
             },
             probeGatewayHealth: { _ in
                 await recorder.recordProbe()
@@ -200,7 +200,7 @@ struct OnboardingWizardStepViewTests {
             port: 18789,
             probeAuthReady: {
                 await recorder.recordAuthProbe()
-                return true
+                return .ready
             },
             probeGatewayHealth: { _ in
                 await recorder.recordProbe()
@@ -220,7 +220,7 @@ struct OnboardingWizardStepViewTests {
             port: 18789,
             probeAuthReady: {
                 await recorder.recordAuthProbe()
-                return false
+                return .pending
             },
             probeGatewayHealth: { _ in
                 await recorder.recordProbe()
@@ -230,6 +230,41 @@ struct OnboardingWizardStepViewTests {
         #expect(readiness == .notReady)
         #expect(await recorder.authProbeCalls > 0)
         #expect(await recorder.probeCalls > 0)
+    }
+
+    @Test func `local wizard readiness does not treat auth rejection as raw-health warmup`() async {
+        let recorder = WizardReadinessProbeRecorder()
+
+        let readiness = await OnboardingWizardModel.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: 0.2,
+            authWarmupTimeout: 0.05,
+            port: 18789,
+            probeAuthReady: {
+                await recorder.recordAuthProbe()
+                return .rejected("unauthorized: gateway token mismatch")
+            },
+            probeGatewayHealth: { _ in
+                await recorder.recordProbe()
+                return true
+            })
+
+        #expect(readiness == .authRejected("unauthorized: gateway token mismatch"))
+        #expect(await recorder.authProbeCalls == 1)
+        #expect(await recorder.probeCalls == 0)
+    }
+
+    @Test func `gateway auth failure classifier ignores auth probe timeout wording`() {
+        let timeout = NSError(
+            domain: "Gateway",
+            code: 5,
+            userInfo: [NSLocalizedDescriptionKey: "gateway auth probe timed out"])
+        let mismatch = NSError(
+            domain: "Gateway",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "unauthorized: gateway token mismatch"])
+
+        #expect(!GatewayAuthFailureClassifier.isAuthFailure(timeout))
+        #expect(GatewayAuthFailureClassifier.isAuthFailure(mismatch))
     }
 
     @Test func `persisted local onboard metadata counts as completed setup`() {

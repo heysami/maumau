@@ -27,7 +27,7 @@ and there is no better native integration already available.
 
 ```bash
 curl -fsSL https://clawdcursor.com/install.sh | bash
-clawdcursor doctor
+clawdcursor consent --accept
 ```
 
 ## macOS note
@@ -41,17 +41,20 @@ System Settings -> Privacy & Security -> Accessibility
 ## Start
 
 ```bash
-clawdcursor start
+cd ~/.maumau/clawdcursor && clawdcursor start
 ```
 
 ## Typical flow
 
-1. Run `clawdcursor doctor` once to validate screen access and provider setup.
-2. Start the local service with `clawdcursor start`.
-3. Use Clawd Cursor for UI-heavy tasks that need native desktop control.
+1. Prefer Maumau's managed bootstrap path first. Fresh local onboarding should pre-consent Clawd Cursor and stage a managed config under `~/.maumau/clawdcursor`.
+2. Start the local service from that managed config directory: `cd ~/.maumau/clawdcursor && clawdcursor start`.
+3. Verify the service is up with `curl -H "Authorization: Bearer $(cat ~/.clawdcursor/token)" http://127.0.0.1:3847/status`.
+4. Use Clawd Cursor for UI-heavy tasks that need native desktop control.
+5. Treat `clawdcursor doctor` as an optional interactive deep-dive, not the default automation path.
 
 ## Notes
 
-- Clawd Cursor works with the AI provider the user already configured.
-- Local models via Ollama are supported upstream if the user wants a local-first setup.
+- `clawdcursor doctor` is interactive-only upstream; do not depend on it for unattended setup.
+- Maumau's managed bootstrap currently prefers a working local Ollama text model for no-intervention setup when available.
+- If the managed config is missing, onboarding was incomplete and should be fixed before assuming desktop control is ready.
 - Linux support is more limited upstream and focuses on browser/CDP-style control.

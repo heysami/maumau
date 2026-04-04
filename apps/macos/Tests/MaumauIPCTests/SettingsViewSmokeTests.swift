@@ -187,6 +187,18 @@ struct SettingsViewSmokeTests {
         #expect(window.contentViewController === controller)
     }
 
+    @Test func `general settings shows managed browser action for local flows`() {
+        #expect(GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: false))
+        #expect(!GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .remote,
+            browserControlEnabled: true))
+    }
+
     @Test func `sessions settings builds body`() {
         let view = SessionsSettings(rows: SessionRow.previewRows, isPreview: true)
         _ = view.body

@@ -39,6 +39,7 @@ struct TailscaleIntegrationSection: View {
     let isPaused: Bool
     let presentation: TailscaleIntegrationPresentation
     let isActive: Bool
+    let draftStore: ChannelsStore?
     private var tailscaleService: TailscaleService
 
     @State private var hasLoadedConfig = false
@@ -62,12 +63,14 @@ struct TailscaleIntegrationSection: View {
         isPaused: Bool,
         presentation: TailscaleIntegrationPresentation = .settings,
         isActive: Bool = true,
+        draftStore: ChannelsStore? = nil,
         service: TailscaleService = .shared)
     {
         self.connectionMode = connectionMode
         self.isPaused = isPaused
         self.presentation = presentation
         self.isActive = isActive
+        self.draftStore = draftStore
         self.tailscaleService = service
     }
 
@@ -77,6 +80,10 @@ struct TailscaleIntegrationSection: View {
 
     private var language: OnboardingLanguage {
         AppStateStore.shared.effectiveOnboardingLanguage
+    }
+
+    private var defersOnboardingConfigSave: Bool {
+        self.draftStore?.defersConfigSaves == true
     }
 
     var body: some View {
@@ -490,7 +497,7 @@ struct TailscaleIntegrationSection: View {
     }
 
     private func loadConfig() async {
-        let root = await Self.loadPersistedConfigRoot(connectionMode: self.connectionMode)
+        let root = await self.loadEffectiveConfigRoot()
         let gateway = root["gateway"] as? [String: Any] ?? [:]
         let auth = gateway["auth"] as? [String: Any] ?? [:]
         let appliedMode = GatewayTailscaleMode(
@@ -525,13 +532,13 @@ struct TailscaleIntegrationSection: View {
     }
 
     @MainActor
-    private static func buildAndSaveTailscaleConfig(
+    private func persistTailscaleConfig(
         tailscaleMode: GatewayTailscaleMode,
         requireCredentialsForServe: Bool,
         password: String,
-        connectionMode: AppState.ConnectionMode) async -> (Bool, String?)
+    ) async -> (Bool, String?)
     {
-        let existingRoot = await Self.loadPersistedConfigRoot(connectionMode: connectionMode)
+        let existingRoot = await self.loadEffectiveConfigRoot()
         let root = Self.buildTailscaleConfigRoot(
             existingRoot: existingRoot,
             tailscaleMode: tailscaleMode,
@@ -539,11 +546,28 @@ struct TailscaleIntegrationSection: View {
             password: password)
 
         do {
-            try await ConfigStore.save(root)
+            try await self.saveEffectiveConfigRoot(root)
             return (true, nil)
         } catch {
             return (false, error.localizedDescription)
         }
+    }
+
+    @MainActor
+    private func loadEffectiveConfigRoot() async -> [String: Any] {
+        let persisted = await Self.loadPersistedConfigRoot(connectionMode: self.connectionMode)
+        guard let draftStore else { return persisted }
+        return draftStore.editableConfigRoot(fallback: persisted)
+    }
+
+    @MainActor
+    private func saveEffectiveConfigRoot(_ root: [String: Any]) async throws {
+        if let draftStore {
+            draftStore.replaceConfigDraft(root, dirty: true)
+            draftStore.configStatus = nil
+            return
+        }
+        try await ConfigStore.save(root)
     }
 
     private func startStatusTimer() {
@@ -638,11 +662,10 @@ struct TailscaleIntegrationSection: View {
         let previousMode = self.lastAppliedTailscaleMode
         let previousRequireCredentials = self.lastAppliedRequireCredentialsForServe
         let previousPassword = self.lastAppliedPassword
-        let (success, errorMessage) = await TailscaleIntegrationSection.buildAndSaveTailscaleConfig(
+        let (success, errorMessage) = await self.persistTailscaleConfig(
             tailscaleMode: .off,
             requireCredentialsForServe: false,
-            password: self.password.trimmingCharacters(in: .whitespacesAndNewlines),
-            connectionMode: self.connectionMode)
+            password: self.password.trimmingCharacters(in: .whitespacesAndNewlines))
 
         guard success else {
             self.statusMessage = macLocalized(
@@ -667,12 +690,18 @@ struct TailscaleIntegrationSection: View {
             if !applyResult.ok, let message = applyResult.message, !message.isEmpty {
                 self.statusMessage = macLocalized(message, language: self.language)
             } else {
-                self.statusMessage = macLocalized("Saved private access settings.", language: self.language)
+                self.statusMessage = macLocalized(
+                    self.defersOnboardingConfigSave
+                        ? "Private access settings are ready. Maumau will apply them when you finish setup."
+                        : "Saved private access settings.",
+                    language: self.language)
             }
             await self.effectiveService.checkTailscaleStatus()
         } else {
             self.statusMessage = macLocalized(
-                "Saved private access settings. Restart the gateway to apply.",
+                self.defersOnboardingConfigSave
+                    ? "Private access settings are ready. Maumau will apply them when you finish setup."
+                    : "Saved private access settings. Restart the gateway to apply.",
                 language: self.language)
         }
     }
@@ -772,11 +801,10 @@ struct TailscaleIntegrationSection: View {
         }
 
         if hasConfigChanges {
-            let saveResult = await TailscaleIntegrationSection.buildAndSaveTailscaleConfig(
+            let saveResult = await self.persistTailscaleConfig(
                 tailscaleMode: self.tailscaleMode,
                 requireCredentialsForServe: self.requireCredentialsForServe,
-                password: trimmedPassword,
-                connectionMode: self.connectionMode)
+                password: trimmedPassword)
             guard saveResult.0 else {
                 if needsExposureApply, self.tailscaleMode != self.lastAppliedTailscaleMode {
                     _ = await self.effectiveService.applyExposureSelection(
@@ -800,9 +828,11 @@ struct TailscaleIntegrationSection: View {
         self.lastAppliedPassword = self.password
         if hasConfigChanges {
             self.statusMessage = macLocalized(
-                self.connectionMode == .local && !self.isPaused
-                    ? "Saved private access settings."
-                    : "Saved private access settings. Restart the gateway to apply.",
+                self.defersOnboardingConfigSave
+                    ? "Private access settings are ready. Maumau will apply them when you finish setup."
+                    : self.connectionMode == .local && !self.isPaused
+                        ? "Saved private access settings."
+                        : "Saved private access settings. Restart the gateway to apply.",
                 language: self.language)
         } else {
             self.statusMessage = nil

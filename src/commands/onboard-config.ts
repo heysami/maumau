@@ -1,11 +1,16 @@
 import { resolveBrowserConfig } from "../browser/config.js";
-import { allocateCdpPort, allocateColor, getUsedColors, getUsedPorts } from "../browser/profiles.js";
+import {
+  allocateCdpPort,
+  allocateColor,
+  getUsedColors,
+  getUsedPorts,
+} from "../browser/profiles.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { BrowserProfileConfig } from "../config/config.js";
-import type { GatewayTailscaleMode } from "../config/types.gateway.js";
-import { readTailscaleStatusJson } from "../infra/tailscale.js";
 import type { DmScope } from "../config/types.base.js";
+import type { GatewayTailscaleMode } from "../config/types.gateway.js";
 import type { ToolProfileId } from "../config/types.tools.js";
+import { readTailscaleStatusJson } from "../infra/tailscale.js";
 import { applyStarterTeamOnFreshInstall } from "../teams/presets.js";
 import { applyLocalSetupMultiUserMemoryDefaults } from "./onboard-multi-user-memory.js";
 import { applyLocalSetupReflectionReviewerDefaults } from "./onboard-reflection-reviewer.js";
@@ -13,7 +18,11 @@ import { applyLocalSetupReflectionReviewerDefaults } from "./onboard-reflection-
 export const ONBOARDING_DEFAULT_DM_SCOPE: DmScope = "per-channel-peer";
 export const ONBOARDING_DEFAULT_TOOLS_PROFILE: ToolProfileId = "coding";
 export const ONBOARDING_DEFAULT_OPTIONAL_PLUGIN_TOOLS = ["lobster", "llm-task"] as const;
-const DEFAULT_CLAWD_BROWSER_PROFILE_NAMES = ["desktop", "desktop-fallback", "clawd-desktop"] as const;
+const DEFAULT_CLAWD_BROWSER_PROFILE_NAMES = [
+  "desktop",
+  "desktop-fallback",
+  "clawd-desktop",
+] as const;
 
 function hasUsableTailscaleIdentity(status: Record<string, unknown>): boolean {
   const backendState = typeof status.BackendState === "string" ? status.BackendState : "";
@@ -24,9 +33,10 @@ function hasUsableTailscaleIdentity(status: Record<string, unknown>): boolean {
   if (!self || typeof self !== "object") {
     return false;
   }
-  const dnsName = typeof (self as { DNSName?: unknown }).DNSName === "string"
-    ? ((self as { DNSName?: string }).DNSName ?? "").trim()
-    : "";
+  const dnsName =
+    typeof (self as { DNSName?: unknown }).DNSName === "string"
+      ? ((self as { DNSName?: string }).DNSName ?? "").trim()
+      : "";
   if (dnsName) {
     return true;
   }
@@ -85,25 +95,22 @@ function applyFreshInstallBrowserDefaults(config: MaumauConfig): MaumauConfig {
       ...config,
       browser: {
         ...config.browser,
-        defaultProfile: config.browser?.defaultProfile ?? "user",
+        defaultProfile: config.browser?.defaultProfile ?? "maumau",
       },
     };
   }
 
   const resolvedBrowser = resolveBrowserConfig(config.browser, config);
-  const cdpPort = allocateCdpPort(
-    getUsedPorts(resolvedBrowser.profiles),
-    {
-      start: resolvedBrowser.cdpPortRangeStart,
-      end: resolvedBrowser.cdpPortRangeEnd,
-    },
-  );
+  const cdpPort = allocateCdpPort(getUsedPorts(resolvedBrowser.profiles), {
+    start: resolvedBrowser.cdpPortRangeStart,
+    end: resolvedBrowser.cdpPortRangeEnd,
+  });
   if (cdpPort === null) {
     return {
       ...config,
       browser: {
         ...config.browser,
-        defaultProfile: config.browser?.defaultProfile ?? "user",
+        defaultProfile: config.browser?.defaultProfile ?? "maumau",
       },
     };
   }
@@ -112,7 +119,7 @@ function applyFreshInstallBrowserDefaults(config: MaumauConfig): MaumauConfig {
     ...config,
     browser: {
       ...config.browser,
-      defaultProfile: config.browser?.defaultProfile ?? "user",
+      defaultProfile: config.browser?.defaultProfile ?? "maumau",
       profiles: {
         ...(config.browser?.profiles ?? {}),
         [profileName]: config.browser?.profiles?.[profileName] ?? {

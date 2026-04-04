@@ -446,7 +446,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.internalEvents?.[0]?.result).toContain("Worker executed successfully");
   });
 
-  it("hides git details by default for direct owner-channel completion delivery", async () => {
+  it("hides git and execution receipt details by default for owner completion delivery", async () => {
     sessionStore = {
       "agent:main:main": {
         sessionId: "requester-session-owner",
@@ -508,7 +508,7 @@ Relevant detail:
     expect(call?.params?.message).toContain("<<<BEGIN_INTERNAL_FOLLOWUP_DETAILS>>>");
   });
 
-  it("keeps git details in the default completion context for non-owner routes", async () => {
+  it("hides git and execution receipt details by default for non-owner completion delivery", async () => {
     sessionStore = {
       "agent:main:main": {
         sessionId: "requester-session-non-owner",
@@ -546,10 +546,14 @@ Git:
       };
     };
     const event = call?.params?.internalEvents?.[0];
-    expect(event?.result).toContain("Execution receipt:");
-    expect(event?.result).toContain("Git:");
-    expect(event?.followupDetails).toBeUndefined();
-    expect(event?.replyInstruction).not.toContain("Do not include Git details or execution receipt details");
+    expect(event?.result).not.toContain("Execution receipt:");
+    expect(event?.result).not.toContain("Worker/Team used:");
+    expect(event?.result).not.toContain("Git:");
+    expect(event?.result).not.toContain("Commit:");
+    expect(event?.followupDetails).toContain("Execution receipt:");
+    expect(event?.followupDetails).toContain("Worker/Team used:");
+    expect(event?.followupDetails).toContain("Git:");
+    expect(event?.replyInstruction).toContain("Do not include Git details or execution receipt details");
   });
 
   it("uses child-run announce identity for direct idempotency", async () => {

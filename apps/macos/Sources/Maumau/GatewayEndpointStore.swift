@@ -91,8 +91,11 @@ actor GatewayEndpointStore {
         launchdSnapshot: LaunchAgentPlistSnapshot?) -> String?
     {
         if !isRemote {
+            let localRoot = self.resolveSupervisedLocalGatewayRoot(
+                fallbackRoot: root,
+                launchdSnapshot: launchdSnapshot)
             switch self.resolveLocalGatewayAuthMode(
-                root: root,
+                root: localRoot,
                 env: env,
                 launchdSnapshot: launchdSnapshot)
             {
@@ -103,7 +106,7 @@ actor GatewayEndpointStore {
                 {
                     return launchdPassword
                 }
-                if let configPassword = self.resolveConfigPassword(isRemote: false, root: root),
+                if let configPassword = self.resolveConfigPassword(isRemote: false, root: localRoot),
                    !configPassword.isEmpty
                 {
                     return configPassword
@@ -182,8 +185,11 @@ actor GatewayEndpointStore {
         launchdSnapshot: LaunchAgentPlistSnapshot?) -> String?
     {
         if !isRemote {
+            let localRoot = self.resolveSupervisedLocalGatewayRoot(
+                fallbackRoot: root,
+                launchdSnapshot: launchdSnapshot)
             switch self.resolveLocalGatewayAuthMode(
-                root: root,
+                root: localRoot,
                 env: env,
                 launchdSnapshot: launchdSnapshot)
             {
@@ -197,7 +203,7 @@ actor GatewayEndpointStore {
                 {
                     return launchdToken
                 }
-                if let configToken = self.resolveConfigToken(isRemote: false, root: root),
+                if let configToken = self.resolveConfigToken(isRemote: false, root: localRoot),
                    !configToken.isEmpty
                 {
                     return configToken
@@ -270,6 +276,16 @@ actor GatewayEndpointStore {
         }
 
         return .token
+    }
+
+    private static func resolveSupervisedLocalGatewayRoot(
+        fallbackRoot: [String: Any],
+        launchdSnapshot: LaunchAgentPlistSnapshot?) -> [String: Any]
+    {
+        guard let configPath = launchdSnapshot?.configPath else { return fallbackRoot }
+        let configURL = URL(fileURLWithPath: configPath)
+        guard FileManager().fileExists(atPath: configURL.path) else { return fallbackRoot }
+        return MaumauConfigFile.loadDict(at: configURL)
     }
 
     private static func resolveExplicitLocalGatewayAuthMode(root: [String: Any]) -> LocalGatewayAuthMode? {

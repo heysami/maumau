@@ -98,6 +98,7 @@ const ensureFreshInstallBundledTools = vi.hoisted(() =>
   vi.fn(async () => ({
     attempted: true,
     ok: true,
+    fullyReady: true,
     results: [],
   })),
 );

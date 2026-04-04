@@ -121,14 +121,10 @@ describe("applyLocalSetupWorkspaceConfig", () => {
     });
   });
 
-  it("makes existing-session the default browser lane on fresh local installs", () => {
-    const result = applyLocalSetupWorkspaceConfig(
-      {},
-      "/tmp/workspace",
-      { freshInstall: true },
-    );
+  it("makes the managed browser lane the default on fresh local installs", () => {
+    const result = applyLocalSetupWorkspaceConfig({}, "/tmp/workspace", { freshInstall: true });
 
-    expect(result.browser?.defaultProfile).toBe("user");
+    expect(result.browser?.defaultProfile).toBe("maumau");
     expect(result.browser?.profiles?.desktop).toEqual(
       expect.objectContaining({
         driver: "clawd",
@@ -151,11 +147,9 @@ describe("applyLocalSetupWorkspaceConfig", () => {
       },
     };
 
-    const result = applyLocalSetupWorkspaceConfig(
-      baseConfig,
-      "/tmp/workspace",
-      { freshInstall: true },
-    );
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace", {
+      freshInstall: true,
+    });
 
     expect(result.browser?.defaultProfile).toBe("custom-browser");
     expect(result.browser?.profiles?.desktop).toEqual({
@@ -193,11 +187,7 @@ describe("applyLocalSetupWorkspaceConfig", () => {
         },
         tools: expect.objectContaining({
           profile: "messaging",
-          alsoAllow: expect.arrayContaining([
-            "sessions_spawn",
-            "sessions_yield",
-            "teams_run",
-          ]),
+          alsoAllow: expect.arrayContaining(["sessions_spawn", "sessions_yield", "teams_run"]),
         }),
       }),
     );

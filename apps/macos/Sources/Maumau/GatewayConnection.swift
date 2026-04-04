@@ -191,6 +191,23 @@ actor GatewayConnection {
         do {
             return try await client.request(method: method, params: params, timeoutMs: timeoutMs)
         } catch {
+            let mode = await MainActor.run { AppStateStore.shared.connectionMode }
+            if recoveryBehavior != .disabled,
+               mode == .local,
+               await GatewayProcessManager.shared.recoverManagedGatewayAfterAuthFailureIfNeeded(error)
+            {
+                await MainActor.run { GatewayProcessManager.shared.setActive(true) }
+                let gatewayReady = await GatewayProcessManager.shared.waitForGatewayReady(
+                    timeout: GatewayProcessManager.localGatewayStartupTimeout)
+                if gatewayReady {
+                    return try await self.retryRequestWithFreshConfig(
+                        method: method,
+                        params: params,
+                        timeoutMs: timeoutMs,
+                        delaysMs: [0, 150, 400, 900])
+                }
+            }
+
             if recoveryBehavior == .disabled ||
                 error is GatewayResponseError ||
                 error is GatewayDecodingError ||
@@ -201,7 +218,6 @@ actor GatewayConnection {
 
             // Auto-recover in local mode by spawning/attaching a gateway and retrying a few times.
             // Canvas interactions should "just work" even if the local gateway isn't running yet.
-            let mode = await MainActor.run { AppStateStore.shared.connectionMode }
             switch mode {
             case .local:
                 await MainActor.run { GatewayProcessManager.shared.setActive(true) }
@@ -478,10 +494,49 @@ actor GatewayConnection {
                 clientId: "maumau-macos",
                 clientMode: "ui",
                 clientDisplayName: InstanceIdentity.displayName,
-                deviceIdentityNamespace: "ui"))
+                deviceIdentityNamespace: "ui"),
+            disconnectHandler: { [weak self] reason in
+                await self?.handleChannelDisconnect(reason)
+            })
         self.configuredURL = url
         self.configuredToken = token
         self.configuredPassword = password
+    }
+
+    private func handleChannelDisconnect(_ reason: String) async {
+        guard let currentURL = self.configuredURL,
+              let host = currentURL.host,
+              LoopbackHost.isLoopback(host)
+        else {
+            return
+        }
+
+        let reconnectReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldForceReconfigure = GatewayAuthFailureClassifier.isAuthFailure(
+            NSError(
+                domain: "Gateway",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: reconnectReason]))
+
+        let previousURL = self.configuredURL
+        let previousToken = self.configuredToken
+        let previousPassword = self.configuredPassword
+
+        do {
+            let cfg = try await self.configProvider()
+            let configChanged =
+                cfg.url != previousURL ||
+                cfg.token != previousToken ||
+                cfg.password != previousPassword
+            guard configChanged || shouldForceReconfigure else { return }
+
+            await self.configure(url: cfg.url, token: cfg.token, password: cfg.password)
+            guard let client = self.client else { return }
+            try await client.connect()
+        } catch {
+            gatewayConnectionLogger.debug(
+                "channel disconnect refresh skipped \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func retryRequestWithFreshConfig(

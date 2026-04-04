@@ -64,7 +64,14 @@ final class OnboardingWizardModel {
     enum LocalGatewayWizardReadiness: Equatable {
         case authReady
         case processReady
+        case authRejected(String)
         case notReady
+    }
+
+    enum LocalGatewayAuthProbeReadiness: Equatable {
+        case ready
+        case pending
+        case rejected(String)
     }
 
     private enum StartRoute: Equatable {
@@ -268,9 +275,14 @@ final class OnboardingWizardModel {
                                 method: .health,
                                 timeoutMs: Self.localGatewayAuthProbeTimeoutMs)
                         })
-                    return true
+                    return .ready
                 } catch {
-                    return false
+                    let message = error.localizedDescription
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !message.isEmpty, Self.isGatewayAuthFailure(error) {
+                        return .rejected(message)
+                    }
+                    return .pending
                 }
             },
             probeGatewayHealth: { port in
@@ -283,6 +295,11 @@ final class OnboardingWizardModel {
             onboardingWizardLogger.notice(
                 "wizard local gateway proceeding after raw health probe while auth-ready wait catches up")
             return
+        case let .authRejected(reason):
+            throw NSError(
+                domain: "Gateway",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: reason])
         case .notReady:
             break
         }
@@ -300,15 +317,22 @@ final class OnboardingWizardModel {
         totalTimeout: TimeInterval,
         authWarmupTimeout: TimeInterval,
         port: Int,
-        probeAuthReady: @escaping @Sendable () async -> Bool,
+        probeAuthReady: @escaping @Sendable () async -> LocalGatewayAuthProbeReadiness,
         probeGatewayHealth: @escaping @Sendable (Int) async -> Bool) async -> LocalGatewayWizardReadiness
     {
         let totalBudget = max(0, totalTimeout)
         let deadline = Date().addingTimeInterval(totalBudget)
         let authDeadline = Date().addingTimeInterval(min(max(0, authWarmupTimeout), totalBudget))
         repeat {
-            if Date() < authDeadline, await probeAuthReady() {
-                return .authReady
+            if Date() < authDeadline {
+                switch await probeAuthReady() {
+                case .ready:
+                    return .authReady
+                case .rejected(let reason):
+                    return .authRejected(reason)
+                case .pending:
+                    break
+                }
             }
             if await probeGatewayHealth(port) {
                 return .processReady
@@ -330,6 +354,10 @@ final class OnboardingWizardModel {
         } while Date() < deadline
 
         return .notReady
+    }
+
+    private nonisolated static func isGatewayAuthFailure(_ error: Error) -> Bool {
+        GatewayAuthFailureClassifier.isAuthFailure(error)
     }
 
     private func resolveStartResult(_ result: WizardStartResult) async throws -> WizardStartResult {

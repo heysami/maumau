@@ -61,6 +61,22 @@ struct GatewayProcessManagerTests {
             instance: unrelatedListener))
     }
 
+    @Test func `does not replace managed listener when auth probe times out`() {
+        let timeout = NSError(
+            domain: "Gateway",
+            code: 5,
+            userInfo: [NSLocalizedDescriptionKey: "gateway auth probe timed out"])
+        let managedListener = PortGuardian.Descriptor(
+            pid: 42,
+            command: "node",
+            fullCommand: "maumau-gateway",
+            executablePath: "/usr/local/bin/node")
+
+        #expect(!GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            timeout,
+            instance: managedListener))
+    }
+
     @Test func `clears last failure when health succeeds`() async throws {
         let session = GatewayTestWebSocketSession(
             taskFactory: {

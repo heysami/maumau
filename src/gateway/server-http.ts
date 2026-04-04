@@ -981,6 +981,8 @@ export function createGatewayHttpServer(opts: {
               basePath: controlUiBasePath,
               config: configSnapshot,
               root: controlUiRoot,
+              trustedProxies,
+              allowRealIpFallback,
             }),
         });
       }

@@ -23,6 +23,7 @@ import {
   resolveTeamRunTarget,
 } from "../../teams/runtime.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
+import { isRequesterRemoteMessagingChannel } from "../../utils/message-channel.js";
 import type { SpawnedToolContext } from "../spawned-context.js";
 import { spawnSubagentDirect } from "../subagent-spawn.js";
 import type { AnyAgentTool } from "./common.js";
@@ -42,6 +43,17 @@ const TeamsRunToolSchema = Type.Object({
 
 const QA_APPROVAL_RE = /^QA_APPROVAL:\s*(approved|blocked)\s*$/im;
 const TEAM_MANAGER_MAX_SPAWN_DEPTH = 2;
+
+function shouldDefaultToAsyncTeamRun(params: {
+  requesterTeamContext?: ReturnType<typeof resolveSessionTeamContext>;
+  messageChannel?: GatewayMessageChannel;
+}): boolean {
+  return (
+    isRequesterRemoteMessagingChannel(params.messageChannel) &&
+    params.requesterTeamContext?.teamRole?.trim().toLowerCase() === "manager" &&
+    params.requesterTeamContext.team?.implicitForManagerSessions === true
+  );
+}
 
 function buildTeamRunTask(params: {
   teamId: string;
@@ -297,12 +309,6 @@ export function createTeamsRunTool(
       const teamId = readStringParam(params, "teamId", { required: true });
       const workflowId = readStringParam(params, "workflowId");
       const task = readStringParam(params, "task", { required: true });
-      const timeoutSeconds =
-        typeof params.timeoutSeconds === "number" && Number.isFinite(params.timeoutSeconds)
-          ? Math.max(0, Math.floor(params.timeoutSeconds))
-          : 90;
-      const timeoutMs = timeoutSeconds * 1000;
-
       const { effectiveRequesterKey } = resolveSessionToolContext({
         agentSessionKey: opts?.agentSessionKey,
         sandboxed: opts?.sandboxed,
@@ -312,6 +318,16 @@ export function createTeamsRunTool(
         cfg,
         sessionKey: effectiveRequesterKey,
       });
+      const timeoutSeconds =
+        typeof params.timeoutSeconds === "number" && Number.isFinite(params.timeoutSeconds)
+          ? Math.max(0, Math.floor(params.timeoutSeconds))
+          : shouldDefaultToAsyncTeamRun({
+                requesterTeamContext,
+                messageChannel: opts?.agentChannel,
+              })
+            ? 0
+            : 90;
+      const timeoutMs = timeoutSeconds * 1000;
       const teamTarget = resolveTeamRunTarget({
         cfg,
         teamId,

@@ -28,6 +28,7 @@ describe("handleControlUiHttpRequest", () => {
       assistantName: string;
       assistantAvatar: string;
       assistantAgentId: string;
+      loopbackGatewayToken?: string;
     };
   }
 
@@ -47,14 +48,27 @@ describe("handleControlUiHttpRequest", () => {
     rootPath: string;
     basePath?: string;
     rootKind?: "resolved" | "bundled";
+    hostHeader?: string;
+    remoteAddress?: string;
+    config?: Parameters<typeof handleControlUiHttpRequest>[2]["config"];
+    trustedProxies?: string[];
+    allowRealIpFallback?: boolean;
   }) {
     const { res, end } = makeMockHttpResponse();
     const handled = handleControlUiHttpRequest(
-      { url: params.url, method: params.method } as IncomingMessage,
+      {
+        url: params.url,
+        method: params.method,
+        headers: params.hostHeader ? { host: params.hostHeader } : undefined,
+        socket: params.remoteAddress ? { remoteAddress: params.remoteAddress } : undefined,
+      } as IncomingMessage,
       res,
       {
         ...(params.basePath ? { basePath: params.basePath } : {}),
         root: { kind: params.rootKind ?? "resolved", path: params.rootPath },
+        config: params.config,
+        trustedProxies: params.trustedProxies,
+        allowRealIpFallback: params.allowRealIpFallback,
       },
     );
     return { res, end, handled };
@@ -223,6 +237,48 @@ describe("handleControlUiHttpRequest", () => {
         expect(parsed.assistantName).toBe("Ops");
         expect(parsed.assistantAvatar).toBe("/maumau/avatar/main");
         expect(parsed.assistantAgentId).toBe("main");
+      },
+    });
+  });
+
+  it("includes the current token for direct loopback bootstrap requests", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const { end, handled } = runControlUiRequest({
+          url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+          method: "GET",
+          rootPath: tmp,
+          hostHeader: "127.0.0.1:18789",
+          remoteAddress: "127.0.0.1",
+          config: {
+            gateway: { auth: { mode: "token", token: "loopback-secret" } },
+          },
+        });
+        expect(handled).toBe(true);
+        const parsed = parseBootstrapPayload(end);
+        expect(parsed.loopbackGatewayToken).toBe("loopback-secret");
+      },
+    });
+  });
+
+  it("omits the token for non-loopback bootstrap requests", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const { end, handled } = runControlUiRequest({
+          url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+          method: "GET",
+          rootPath: tmp,
+          hostHeader: "gateway.example.com",
+          remoteAddress: "10.0.0.20",
+          config: {
+            gateway: { auth: { mode: "token", token: "loopback-secret" } },
+          },
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        expect(handled).toBe(true);
+        const parsed = parseBootstrapPayload(end);
+        expect(parsed.loopbackGatewayToken).toBeUndefined();
       },
     });
   });

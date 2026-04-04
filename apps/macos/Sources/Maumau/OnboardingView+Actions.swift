@@ -2,9 +2,14 @@ import AppKit
 import Foundation
 import MaumauDiscovery
 import MaumauIPC
+import MaumauKit
 import SwiftUI
 
 extension OnboardingView {
+    static func managedBrowserStartParams(profile: String = "maumau") -> [String: AnyCodable] {
+        ManagedBrowserSignInLauncher.startParams(profile: profile)
+    }
+
     private func resetWizardAfterNavigation() {
         Task {
             await self.onboardingWizard.cancelIfRunning()
@@ -56,6 +61,7 @@ extension OnboardingView {
     }
 
     func handleBack() {
+        guard !self.onboardingFinishing else { return }
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
         if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             self.resetWizardAfterNavigation()
@@ -66,7 +72,7 @@ extension OnboardingView {
     }
 
     func handleNext() {
-        if self.isWizardBlocking { return }
+        if self.isWizardBlocking || self.onboardingFinishing { return }
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
         if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             self.resetWizardAfterNavigation()
@@ -79,10 +85,33 @@ extension OnboardingView {
     }
 
     func finish() {
-        AppStateStore.shared.onboardingSeen = true
-        UserDefaults.standard.set(true, forKey: "maumau.onboardingSeen")
-        UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
-        OnboardingController.shared.close()
+        guard !self.onboardingFinishing else { return }
+        self.onboardingFinishing = true
+        self.onboardingFinishStatus = macLocalized(
+            "Applying setup changes...",
+            language: self.state.effectiveOnboardingLanguage)
+        self.onboardingFinishStatusIsError = false
+
+        Task { @MainActor in
+            let applied = await self.onboardingChannelsStore.applyDeferredConfigChanges()
+            guard applied else {
+                self.onboardingFinishing = false
+                self.onboardingFinishStatus =
+                    self.onboardingChannelsStore.configStatus
+                    ?? macLocalized(
+                        "Could not finish setup. Review the saved settings and try again.",
+                        language: self.state.effectiveOnboardingLanguage)
+                self.onboardingFinishStatusIsError = true
+                return
+            }
+
+            AppStateStore.shared.onboardingSeen = true
+            UserDefaults.standard.set(true, forKey: "maumau.onboardingSeen")
+            UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
+            self.onboardingFinishStatus = nil
+            self.onboardingFinishStatusIsError = false
+            OnboardingController.shared.close()
+        }
     }
 
     func copyToPasteboard(_ text: String) {
@@ -95,5 +124,22 @@ extension OnboardingView {
 
     func skipWizardForLater() {
         Task { await self.onboardingWizard.skipForNow() }
+    }
+
+    @discardableResult
+    func openManagedBrowserForSignIn(profile: String = "maumau") async -> Bool {
+        guard !self.managedBrowserSignInLaunching else { return false }
+        self.managedBrowserSignInLaunching = true
+        defer { self.managedBrowserSignInLaunching = false }
+
+        do {
+            try await ManagedBrowserSignInLauncher.start(profile: profile)
+            self.managedBrowserSignInStatus = self.strings.managedBrowserSignInOpenedStatus
+            return true
+        } catch {
+            self.managedBrowserSignInStatus =
+                "\(self.strings.managedBrowserSignInFailedStatusPrefix) \(error.localizedDescription)"
+            return false
+        }
     }
 }

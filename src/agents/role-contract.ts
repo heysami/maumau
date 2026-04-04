@@ -102,6 +102,7 @@ export function buildAgentRoleContractNotes(params: {
   const notes = [
     "Truth contract: Never claim actions, edits, delegated sessions, specialist participation, approvals, tests, previews, links, or capability paths unless they actually happened in this session.",
     "Truth contract: If something is planned, suggested, inferred, or still blocked, label it that way. If a tool or team returned blocked, forbidden, unavailable, timeout, error, or contract_failed, report that plainly and do not present the task as complete.",
+    "Truth contract: If a tool or team returned accepted for delegated/background work, say that the work has started, briefly name what is being worked on, and tell the user a follow-up reply will arrive when it finishes.",
     "Truth contract: If a tool or team returned waiting_timed_out, say that you stopped waiting and that the delegated run is still active. Do not present that state as success or failure.",
     "Artifact delivery contract: If you create or update a local previewable HTML/static artifact and you do not already have a preview/share URL, include a standalone FILE:<workspace-relative-path> line for the app file or directory in your final result so delivery can recognize it.",
     "Artifact delivery contract: If durable preview publishing is unavailable for this requester or route but you can verify a non-public host-local or tailnet URL for a live web UI, return that clear fallback instead of only bare local filesystem paths.",

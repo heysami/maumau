@@ -411,7 +411,8 @@ export async function runSetupWizard(
   const shouldCreateStarterTeam =
     !snapshot.exists || treatBootstrapOnlyEmbeddedConfigAsFresh || existingConfigAction === "reset";
   const detectedFreshInstallTailscaleMode =
-    shouldCreateStarterTeam && (opts.mode ?? (flow === "quickstart" ? "local" : undefined)) === "local"
+    shouldCreateStarterTeam &&
+    (opts.mode ?? (flow === "quickstart" ? "local" : undefined)) === "local"
       ? await (async () => {
           const { detectFreshInstallTailscaleMode } = await import("../commands/onboard-config.js");
           return await detectFreshInstallTailscaleMode(baseConfig);
@@ -503,7 +504,9 @@ export async function runSetupWizard(
       return "Funnel";
     };
     const formatTailscaleWithSource = (value: "off" | "serve" | "funnel") =>
-      !quickstartGateway.hasExisting && value === detectedFreshInstallTailscaleMode && value !== "off"
+      !quickstartGateway.hasExisting &&
+      value === detectedFreshInstallTailscaleMode &&
+      value !== "off"
         ? `${formatTailscale(value)} (detected)`
         : formatTailscale(value);
     const quickstartLines = quickstartGateway.hasExisting
@@ -887,24 +890,32 @@ export async function runSetupWizard(
         progress.update("Installing Google Chrome and Clawd Cursor…");
         const result = await ensureFreshInstallBundledTools({
           freshInstall: true,
+          config: nextConfig,
           runtime: {
             log: (message) => progress.update(String(message)),
           },
         });
-        bundledToolsDoneMessage = result.ok
+        bundledToolsDoneMessage = result.fullyReady
           ? "Included tools are ready."
-          : "Included tools need attention.";
+          : result.ok
+            ? "Included tools were installed, but some still need setup."
+            : "Included tools need attention.";
         return result;
       } finally {
         progress.stop(bundledToolsDoneMessage);
       }
     })();
-    if (!bundledTools.ok) {
+    if (!bundledTools.fullyReady) {
       await prompter.note(
         [
           "Fresh-install bundled tool setup needs attention:",
           ...bundledTools.results
-            .filter((result) => result.status === "failed")
+            .filter(
+              (result) =>
+                result.status === "failed" ||
+                result.status === "installed" ||
+                (result.id === "clawd-cursor" && result.status !== "configured"),
+            )
             .map((result) => `- ${result.id}: ${result.detail}`),
         ].join("\n"),
         "Included tools",

@@ -52,6 +52,7 @@ final class GatewayProcessManager {
     private var readinessWait: (id: UUID, deadline: Date, task: Task<Bool, Never>)?
     #if DEBUG
     private var testingConnection: GatewayConnection?
+    private var testingManagedAuthRecoveryHandler: ((Error) async -> Bool)?
     #endif
     private let logger = Logger(subsystem: "ai.maumau", category: "gateway.process")
 
@@ -348,13 +349,7 @@ final class GatewayProcessManager {
     }
 
     private static func isGatewayAuthFailure(_ error: Error) -> Bool {
-        if let urlError = error as? URLError, urlError.code == .dataNotAllowed {
-            return true
-        }
-        let ns = error as NSError
-        if ns.domain == "Gateway", ns.code == 1008 { return true }
-        let lower = ns.localizedDescription.lowercased()
-        return lower.contains("unauthorized") || lower.contains("auth")
+        GatewayAuthFailureClassifier.isAuthFailure(error)
     }
 
     static func shouldReplaceExistingManagedGatewayAfterAuthFailure(
@@ -549,6 +544,55 @@ final class GatewayProcessManager {
         self.logger.debug("gateway log cleared")
     }
 
+    func recoverManagedGatewayAfterAuthFailureIfNeeded(_ error: Error) async -> Bool {
+        #if DEBUG
+        if let handler = self.testingManagedAuthRecoveryHandler {
+            return await handler(error)
+        }
+        #endif
+
+        guard !CommandResolver.connectionModeIsRemote() else { return false }
+        guard !GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() else {
+            self.appendLog("[gateway] auth recovery skipped because launchd writes are disabled\n")
+            return false
+        }
+
+        let port = GatewayEnvironment.gatewayPort()
+        let instance = await PortGuardian.shared.describe(port: port)
+        guard Self.shouldReplaceExistingManagedGatewayAfterAuthFailure(error, instance: instance) else {
+            return false
+        }
+
+        self.existingGatewayDetails = instance.map { self.describe(instance: $0) }
+        self.status = .starting
+        self.clearLastFailure()
+        if let instance {
+            let terminated = await PortGuardian.shared.terminate(pid: instance.pid)
+            let action = terminated ? "terminated" : "could not terminate"
+            self.appendLog(
+                "[gateway] managed listener on port \(port) rejected auth during recovery; \(action) pid \(instance.pid) before reinstalling launchd gateway\n")
+        } else {
+            self.appendLog(
+                "[gateway] managed listener on port \(port) rejected auth during recovery; reinstalling launchd gateway\n")
+        }
+
+        let bundlePath = Bundle.main.bundleURL.path
+        if let launchdError = await GatewayLaunchAgentManager.set(
+            enabled: true,
+            bundlePath: bundlePath,
+            port: port)
+        {
+            self.lastFailureReason = launchdError
+            self.appendLog("[gateway] auth recovery failed: \(launchdError)\n")
+            self.logger.error("gateway auth recovery failed: \(launchdError, privacy: .public)")
+            return false
+        }
+
+        self.logger.notice(
+            "gateway auth recovery reinstalled managed listener on port \(port, privacy: .public)")
+        return true
+    }
+
     func setProjectRoot(path: String) {
         CommandResolver.setProjectRoot(path)
     }
@@ -570,6 +614,10 @@ final class GatewayProcessManager {
 extension GatewayProcessManager {
     func setTestingConnection(_ connection: GatewayConnection?) {
         self.testingConnection = connection
+    }
+
+    func setTestingManagedAuthRecoveryHandler(_ handler: ((Error) async -> Bool)?) {
+        self.testingManagedAuthRecoveryHandler = handler
     }
 
     func setTestingStatus(_ status: Status) {

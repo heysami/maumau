@@ -5,6 +5,7 @@ import type { PluginWebSearchProviderEntry } from "../plugins/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 
 const runTui = vi.hoisted(() => vi.fn(async () => {}));
+const openManagedBrowserProfile = vi.hoisted(() => vi.fn(async () => ({ ok: true, profile: "maumau" })));
 const probeGatewayReachable = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const waitForGatewayReachable = vi.hoisted(() => vi.fn(async () => {}));
 const setupWizardShellCompletion = vi.hoisted(() => vi.fn(async () => {}));
@@ -54,6 +55,7 @@ const listConfiguredWebSearchProviders = vi.hoisted(() =>
 vi.mock("../commands/onboard-helpers.js", () => ({
   detectBrowserOpenSupport: vi.fn(async () => ({ ok: false })),
   formatControlUiSshHint: vi.fn(() => "ssh hint"),
+  openManagedBrowserProfile,
   openUrl: vi.fn(async () => false),
   probeGatewayReachable,
   resolveControlUiLinks: vi.fn(() => ({
@@ -267,6 +269,7 @@ function createAdvancedFinalizeArgs(params: AdvancedFinalizeArgs = {}) {
 describe("finalizeSetupWizard", () => {
   beforeEach(() => {
     runTui.mockClear();
+    openManagedBrowserProfile.mockClear();
     probeGatewayReachable.mockClear();
     waitForGatewayReachable.mockClear();
     setupWizardShellCompletion.mockClear();
@@ -676,6 +679,79 @@ describe("finalizeSetupWizard", () => {
         "Web search is enabled, so your agent can look things up online when needed.",
       ),
       "Web search",
+    );
+  });
+
+  it("offers to open the managed automation browser for local onboarding", async () => {
+    const confirm = vi.fn(async (params: { message: string }) => {
+      if (params.message === "Open Maumau's automation browser now (recommended)") {
+        return true;
+      }
+      return false;
+    });
+    const prompter = buildWizardPrompter({
+      confirm: confirm as never,
+    });
+
+    await finalizeSetupWizard({
+      ...createAdvancedFinalizeArgs({ prompter }),
+      nextConfig: {
+        gateway: {
+          mode: "local",
+        },
+      },
+      settings: {
+        port: 18789,
+        bind: "loopback",
+        authMode: "token",
+        gatewayToken: "test-token",
+        tailscaleMode: "off",
+        tailscaleResetOnExit: false,
+      },
+    });
+
+    expect(prompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("You can close it later; Maumau will reopen the same profile"),
+      "Automation browser",
+    );
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Open Maumau's automation browser now (recommended)",
+        initialValue: true,
+      }),
+    );
+    expect(openManagedBrowserProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: "maumau",
+        token: "test-token",
+      }),
+    );
+  });
+
+  it("does not offer the managed automation browser for remote onboarding", async () => {
+    const confirm = vi.fn(async () => false);
+    const prompter = buildWizardPrompter({
+      confirm: confirm as never,
+    });
+
+    await finalizeSetupWizard({
+      ...createAdvancedFinalizeArgs({ prompter }),
+      nextConfig: {
+        gateway: {
+          mode: "remote",
+        },
+      },
+    });
+
+    expect(prompter.note).not.toHaveBeenCalledWith(
+      expect.stringContaining("Browser automation uses Maumau's own browser profile"),
+      "Automation browser",
+    );
+    expect(openManagedBrowserProfile).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Open Maumau's automation browser now (recommended)",
+      }),
     );
   });
 });

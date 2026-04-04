@@ -109,4 +109,62 @@ struct GatewayChannelConnectTests {
             Issue.record("unexpected error: \(error)")
         }
     }
+
+    @Test func `connect clears stale stored device token after mismatch`() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let previousStateDir = ProcessInfo.processInfo.environment["MAUMAU_STATE_DIR"]
+        setenv("MAUMAU_STATE_DIR", tempDir.path, 1)
+        defer {
+            if let previousStateDir {
+                setenv("MAUMAU_STATE_DIR", previousStateDir, 1)
+            } else {
+                unsetenv("MAUMAU_STATE_DIR")
+            }
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        let namespace = "ui-test"
+        let identity = DeviceIdentityStore.loadOrCreate(namespace: namespace)
+        _ = DeviceAuthStore.storeToken(
+            deviceId: identity.deviceId,
+            role: "operator",
+            token: "stale-device-token",
+            namespace: namespace)
+
+        let session = self.makeSession(response: .authFailed(
+            delayMs: 0,
+            detailCode: GatewayConnectAuthDetailCode.authTokenMismatch.rawValue,
+            canRetryWithDeviceToken: false,
+            recommendedNextStep: GatewayConnectRecoveryNextStep.reviewAuthConfiguration.rawValue))
+        let channel = try GatewayChannelActor(
+            url: #require(URL(string: "ws://example.invalid")),
+            token: nil,
+            session: WebSocketSessionBox(session: session),
+            connectOptions: GatewayConnectOptions(
+                role: "operator",
+                scopes: ["operator.read"],
+                caps: [],
+                commands: [],
+                permissions: [:],
+                clientId: "maumau-macos-test",
+                clientMode: "ui",
+                clientDisplayName: "Test Mac",
+                deviceIdentityNamespace: namespace))
+
+        do {
+            try await channel.connect()
+            Issue.record("expected GatewayConnectAuthError")
+        } catch let error as GatewayConnectAuthError {
+            #expect(error.detail == .authTokenMismatch)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+
+        #expect(DeviceAuthStore.loadToken(
+            deviceId: identity.deviceId,
+            role: "operator",
+            namespace: namespace) == nil)
+    }
 }

@@ -2,7 +2,6 @@ import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { loadConfig } from "../config/config.js";
-import type { SessionEntry } from "../config/sessions/types.js";
 import {
   loadSessionStore,
   resolveAgentIdFromSessionKey,
@@ -29,7 +28,6 @@ import {
   INTERNAL_MESSAGE_CHANNEL,
   isDeliverableMessageChannel,
   isInternalMessageChannel,
-  isRequesterRemoteMessagingChannel,
   normalizeMessageChannel,
 } from "../utils/message-channel.js";
 import {
@@ -696,26 +694,6 @@ const EXECUTION_RECEIPT_HEADER_RE = /^execution receipt\s*:\s*$/i;
 const EXECUTION_RECEIPT_LINE_RE =
   /^(?:[-*]\s*)?(?:mode|worker\/team used|qa state|capability path used|preview\/share state)\s*:/i;
 const STRUCTURED_SECTION_HEADER_RE = /^[A-Za-z][A-Za-z /_-]*:\s*$/;
-
-function isOwnerDirectRemoteRoute(params: {
-  entry?: SessionEntry;
-  deliveryOrigin?: DeliveryContext;
-}): boolean {
-  const entry = params.entry;
-  if (entry?.requesterSenderIsOwner !== true) {
-    return false;
-  }
-  if (entry.groupId?.trim() || entry.groupChannel?.trim() || entry.space?.trim()) {
-    return false;
-  }
-  const channel = normalizeMessageChannel(
-    params.deliveryOrigin?.channel ??
-      entry.deliveryContext?.channel ??
-      entry.lastChannel ??
-      entry.channel,
-  );
-  return isRequesterRemoteMessagingChannel(channel);
-}
 
 function isGitDetailsParagraph(paragraph: string): boolean {
   const normalized = paragraph.trim();
@@ -1733,11 +1711,9 @@ export async function runSubagentAnnounceFlow(params: {
 
     // Send to the requester session. For nested subagents this is an internal
     // follow-up injection (deliver=false) so the orchestrator receives it.
-    let requesterEntry: SessionEntry | undefined;
     let directOrigin = targetRequesterOrigin;
     if (!requesterIsSubagent) {
       const loaded = loadRequesterSessionEntry(targetRequesterSessionKey);
-      requesterEntry = loaded.entry;
       directOrigin = resolveAnnounceOrigin(loaded.entry, targetRequesterOrigin);
     }
     const completionDirectOrigin =
@@ -1753,10 +1729,7 @@ export async function runSubagentAnnounceFlow(params: {
         : targetRequesterOrigin;
     const presentation = buildChildResultPresentation({
       findings,
-      hideGitDetailsByDefault: isOwnerDirectRemoteRoute({
-        entry: requesterEntry,
-        deliveryOrigin: completionDirectOrigin ?? directOrigin,
-      }),
+      hideGitDetailsByDefault: expectsCompletionMessage && !requesterIsSubagent,
     });
     const replyInstruction = buildAnnounceReplyInstruction({
       requesterIsSubagent,

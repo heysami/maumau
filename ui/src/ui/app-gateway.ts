@@ -2,6 +2,7 @@ import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
 } from "../../../src/gateway/events.js";
+import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
 import { CHAT_SESSIONS_ACTIVE_MINUTES, flushChatQueueForEvent } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import {
@@ -19,6 +20,7 @@ import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
 import { loadDevices } from "./controllers/devices.ts";
+import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import {
   addExecApproval,
@@ -56,7 +58,30 @@ function isGenericBrowserFetchFailure(message: string): boolean {
   return /^(?:typeerror:\s*)?(?:fetch failed|failed to fetch)$/i.test(message.trim());
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "127.0.0.1" ||
+    normalized.startsWith("127.")
+  );
+}
+
+function isLoopbackGatewayTarget(url: string, pageUrl?: string): boolean {
+  try {
+    const resolved = new URL(
+      url,
+      pageUrl ?? (typeof window === "undefined" ? undefined : window.location.href),
+    );
+    return isLoopbackHostname(resolved.hostname);
+  } catch {
+    return false;
+  }
+}
+
 type GatewayHost = {
+  basePath: string;
   settings: UiSettings;
   password: string;
   clientInstanceId: string;
@@ -105,6 +130,30 @@ type SessionDefaultsSnapshot = {
 type GatewayHostWithShutdownMessage = GatewayHost & {
   pendingShutdownMessage?: string | null;
 };
+
+async function refreshLoopbackGatewayTokenFromBootstrap(
+  host: GatewayHost,
+  client: GatewayBrowserClient,
+) {
+  if (!isLoopbackGatewayTarget(host.settings.gatewayUrl)) {
+    return;
+  }
+  const bootstrap = await loadControlUiBootstrapConfig(
+    host as unknown as Parameters<typeof loadControlUiBootstrapConfig>[0],
+  );
+  const nextToken = bootstrap?.loopbackGatewayToken?.trim() ?? "";
+  if (!nextToken || nextToken === host.settings.token.trim()) {
+    return;
+  }
+  if (host.client !== client) {
+    return;
+  }
+  applySettings(host as unknown as Parameters<typeof applySettings>[0], {
+    ...host.settings,
+    token: nextToken,
+  });
+  connectGateway(host);
+}
 
 function hasMauOfficeState(
   host: GatewayHost,
@@ -249,6 +298,9 @@ export function connectGateway(host: GatewayHost) {
       host.lastErrorCode =
         resolveGatewayErrorDetailCode(error) ??
         (typeof error?.code === "string" ? error.code : null);
+      if (host.lastErrorCode === ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH) {
+        void refreshLoopbackGatewayTokenFromBootstrap(host, client);
+      }
       if (code !== 1012) {
         if (error?.message) {
           host.lastError =

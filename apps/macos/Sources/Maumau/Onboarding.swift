@@ -172,10 +172,15 @@ struct OnboardingView: View {
     @State var suppressRemoteProbeReset = false
     @State var gatewayDiscovery: GatewayDiscoveryModel
     @State var onboardingChatModel: MaumauChatViewModel
-    @State var onboardingChannelsStore = ChannelsStore()
+    @State var onboardingChannelsStore: ChannelsStore
     @State var onboardingSkillsModel = SkillsSettingsModel()
     @State var onboardingWizard = OnboardingWizardModel()
     @State var didLoadOnboardingSkills = false
+    @State var managedBrowserSignInStatus: String?
+    @State var managedBrowserSignInLaunching = false
+    @State var onboardingFinishing = false
+    @State var onboardingFinishStatus: String?
+    @State var onboardingFinishStatusIsError = false
     @State var localGatewayProbe: LocalGatewayProbe?
     @State var localRuntimeAvailable: Bool?
     @State var didAutoInstallCLI = false
@@ -327,7 +332,12 @@ struct OnboardingView: View {
     }
 
     var buttonTitle: String {
-        self.currentPage == self.pageCount - 1 ? self.strings.finishButtonTitle : self.strings.nextButtonTitle
+        if self.onboardingFinishing {
+            return macLocalized("Applying setup changes...", language: self.state.effectiveOnboardingLanguage)
+        }
+        return self.currentPage == self.pageCount - 1
+            ? self.strings.finishButtonTitle
+            : self.strings.nextButtonTitle
     }
 
     var strings: OnboardingStrings {
@@ -367,6 +377,7 @@ struct OnboardingView: View {
             && !self.isCLIBlocking
             && !self.isWorkspaceBlocking
             && !self.isPrivateAccessBlocking
+            && !self.onboardingFinishing
     }
 
     var isCheckingLocalGatewaySetup: Bool {
@@ -445,6 +456,13 @@ struct OnboardingView: View {
             hasSkills
     }
 
+    static func shouldOfferManagedBrowserSignIn(
+        mode: AppState.ConnectionMode,
+        browserControlEnabled _: Bool) -> Bool
+    {
+        mode == .local
+    }
+
     static func shouldWaitForLocalSetupBeforeWizard(
         mode: AppState.ConnectionMode,
         installingCLI: Bool,
@@ -499,6 +517,7 @@ struct OnboardingView: View {
         self.state = state
         self.permissionMonitor = permissionMonitor
         self._gatewayDiscovery = State(initialValue: discoveryModel)
+        self._onboardingChannelsStore = State(initialValue: ChannelsStore(deferConfigSaves: true))
         self._onboardingChatModel = State(
             initialValue: MaumauChatViewModel(
                 sessionKey: "onboarding",
