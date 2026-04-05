@@ -1561,6 +1561,31 @@
       "hasChildren": false
     },
     {
+      "path": "agents.defaults.executionStyle",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "direct",
+        "hybrid",
+        "orchestrator"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.executionWorkerAgentId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
       "path": "agents.defaults.heartbeat",
       "kind": "core",
       "type": "object",
@@ -4239,6 +4264,31 @@
       "path": "agents.list.*.default",
       "kind": "core",
       "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.executionStyle",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "direct",
+        "hybrid",
+        "orchestrator"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.executionWorkerAgentId",
+      "kind": "core",
+      "type": "string",
       "required": false,
       "deprecated": false,
       "sensitive": false,
@@ -52051,6 +52101,195 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.automation-runner",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Automation Runner",
+      "help": "Bounded browser-first automation with sender allowlists and approval-gated side effects. (plugin: automation-runner)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Automation Runner Config",
+      "help": "Plugin-defined config payload for automation-runner.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.allowFrom",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.allowFrom.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "disabled",
+        "owner",
+        "allowlist"
+      ],
+      "defaultValue": "owner",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.requireApproval",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Automation Runner",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.bluebubbles",
       "kind": "plugin",
       "type": "object",
@@ -62742,6 +62981,65 @@
       "hasChildren": true
     },
     {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.apiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "advanced",
+        "auth",
+        "security"
+      ],
+      "label": "Deepgram Realtime API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.endpointingMs",
+      "kind": "plugin",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.interimResults",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.model",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "models"
+      ],
+      "label": "Deepgram Realtime Model",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.voice-call.config.streaming.enabled",
       "kind": "plugin",
       "type": "boolean",
@@ -62752,6 +63050,19 @@
         "advanced"
       ],
       "label": "Enable Streaming",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.languageCode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Realtime Language Code",
       "hasChildren": false
     },
     {
@@ -62785,7 +63096,17 @@
       "hasChildren": false
     },
     {
-      "path": "plugins.entries.voice-call.config.streaming.openaiApiKey",
+      "path": "plugins.entries.voice-call.config.streaming.openai",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.apiKey",
       "kind": "plugin",
       "type": "string",
       "required": false,
@@ -62797,6 +63118,50 @@
         "security"
       ],
       "label": "OpenAI Realtime API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.model",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "models"
+      ],
+      "label": "OpenAI Realtime Model",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.silenceDurationMs",
+      "kind": "plugin",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.vadThreshold",
+      "kind": "plugin",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openaiApiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
       "hasChildren": false
     },
     {
@@ -62840,11 +63205,7 @@
       "required": false,
       "deprecated": false,
       "sensitive": false,
-      "tags": [
-        "advanced",
-        "media"
-      ],
-      "label": "Realtime STT Model",
+      "tags": [],
       "hasChildren": false
     },
     {
@@ -62853,11 +63214,16 @@
       "type": "string",
       "required": false,
       "enumValues": [
-        "openai-realtime"
+        "openai-realtime",
+        "deepgram-realtime"
       ],
       "deprecated": false,
       "sensitive": false,
-      "tags": [],
+      "tags": [
+        "advanced",
+        "media"
+      ],
+      "label": "Realtime STT Provider",
       "hasChildren": false
     },
     {
@@ -67029,6 +67395,20 @@
       "hasChildren": false
     },
     {
+      "path": "teams.list.*.implicitForManagerSessions",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "storage"
+      ],
+      "label": "Implicit Manager Team Sessions",
+      "help": "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
+      "hasChildren": false
+    },
+    {
       "path": "teams.list.*.managerAgentId",
       "kind": "core",
       "type": "string",
@@ -67193,6 +67573,66 @@
       "hasChildren": true
     },
     {
+      "path": "teams.list.*.workflow.contract",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requireDelegation",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredQaRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredQaRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
       "path": "teams.list.*.workflow.default",
       "kind": "core",
       "type": "boolean",
@@ -67273,6 +67713,66 @@
       "sensitive": false,
       "tags": [],
       "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requireDelegation",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredQaRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredQaRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
     },
     {
       "path": "teams.list.*.workflows.*.default",

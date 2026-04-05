@@ -18,6 +18,10 @@ import {
 } from "../../teams/contracts.js";
 import { canTeamUseTeam, findTeamConfig } from "../../teams/model.js";
 import {
+  formatLifecycleProgressLabel,
+  resolveTeamWorkflowLifecycleStages,
+} from "../../teams/lifecycle.js";
+import {
   materializeGeneratedTeamProgram,
   resolveSessionTeamContext,
   resolveTeamRunTarget,
@@ -60,17 +64,33 @@ function buildTeamRunTask(params: {
   teamName: string;
   workflowId: string;
   workflowName?: string;
+  rootSessionKey: string;
   requiredRoles: string[];
   requiredQaRoles: string[];
   requireDelegation: boolean;
   programPath: string;
   program: string;
   task: string;
+  lifecycleStages: ReturnType<typeof resolveTeamWorkflowLifecycleStages>;
   deliveryRouteNotes?: string[];
 }): string {
+  const lifecycleSummary =
+    params.lifecycleStages.length > 0
+      ? params.lifecycleStages
+          .map((stage, index) => {
+            const progressLabel = formatLifecycleProgressLabel({
+              completedStepCount: index,
+              totalStepCount: params.lifecycleStages.length,
+              currentStageLabel: stage.name ?? stage.id,
+            });
+            return `${stage.id} (${progressLabel ?? stage.id}, status=${stage.status})`;
+          })
+          .join(" -> ")
+      : "none";
   return [
     `[Team Runtime] Team: ${params.teamName} (${params.teamId})`,
     `[Team Runtime] Workflow: ${params.workflowName?.trim() || params.workflowId} (${params.workflowId})`,
+    `[Team Runtime] Root requester session: ${params.rootSessionKey}`,
     "[Team Runtime] Execution runtime: openprose.",
     `[Team Runtime] Generated OpenProse file: ${params.programPath}`,
     "[Team Runtime] Execute the generated OpenProse workflow using the existing Maumau delegation primitives in this session.",
@@ -81,6 +101,9 @@ function buildTeamRunTask(params: {
     `[Team Runtime] Contract requires delegation: ${params.requireDelegation ? "yes" : "no"}.`,
     `[Team Runtime] Required roles: ${params.requiredRoles.join(", ") || "none"}.`,
     `[Team Runtime] Required QA roles: ${params.requiredQaRoles.join(", ") || "none"}.`,
+    `[Team Runtime] Lifecycle stages: ${lifecycleSummary}.`,
+    "[Team Runtime] Emit lifecycle updates as standalone WORK_ITEM JSON lines at run start, stage enter, stage completion, blocked transitions, and final completion.",
+    '[Team Runtime] Lifecycle envelope shape: WORK_ITEM:{"teamRun":{"kind":"team_run","teamId":"<team-id>","workflowId":"<workflow-id>","rootSessionKey":"<root-session-key>","event":"started|stage_enter|stage_complete|blocked|completed","currentStageId":"<stage-id>","currentStageName":"<stage-name>","completedStageIds":["<stage-id>"],"status":"in_progress|review|blocked|done|idle"}}',
     "[Team Runtime] If the task creates or updates a previewable local HTML/static artifact, the final manager result must either return a preview/share URL or include a standalone FILE:<workspace-relative-path> line for the app file or directory.",
     "[Team Runtime] If durable preview publishing is unavailable for this requester or route but the requester still needs a live previewable UI now, proactively arrange a simple host-local server, verify it, and return a requester-openable non-loopback URL instead of only localhost instructions or filesystem paths.",
     ...(params.deliveryRouteNotes?.map((line) => `[Team Runtime] ${line}`) ?? []),
@@ -402,17 +425,19 @@ export function createTeamsRunTool(
             teamName: targetTeam.name?.trim() || targetTeam.id,
             workflowId: generatedProgram.workflow.id,
             workflowName: generatedProgram.workflow.name,
+            rootSessionKey: effectiveRequesterKey,
             requiredRoles: teamTarget.target.requiredRoles,
             requiredQaRoles: teamTarget.target.requiredQaRoles,
-          requireDelegation: teamTarget.target.requireDelegation,
-          programPath: generatedProgram.relativePath,
-          program: generatedProgram.program,
-          task,
-          deliveryRouteNotes: buildDeliveryRouteContractNotes({
-            messageChannel: opts?.agentChannel,
-            requesterTailscaleLogin: opts?.requesterTailscaleLogin,
+            requireDelegation: teamTarget.target.requireDelegation,
+            programPath: generatedProgram.relativePath,
+            program: generatedProgram.program,
+            task,
+            lifecycleStages: resolveTeamWorkflowLifecycleStages(targetWorkflow),
+            deliveryRouteNotes: buildDeliveryRouteContractNotes({
+              messageChannel: opts?.agentChannel,
+              requesterTailscaleLogin: opts?.requesterTailscaleLogin,
+            }),
           }),
-        }),
           label: `${targetTeam.name?.trim() || targetTeam.id} manager`,
           agentId: targetTeam.managerAgentId,
           intent: "team_manager",

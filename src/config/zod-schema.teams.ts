@@ -30,6 +30,31 @@ export const TeamWorkflowBaseSchema = z
     description: z.string().optional(),
     managerPrompt: z.string().optional(),
     synthesisPrompt: z.string().optional(),
+    lifecycle: z
+      .object({
+        stages: z
+          .array(
+            z
+              .object({
+                id: z.string(),
+                name: z.string().optional(),
+                status: z
+                  .union([
+                    z.literal("blocked"),
+                    z.literal("in_progress"),
+                    z.literal("review"),
+                    z.literal("done"),
+                    z.literal("idle"),
+                  ])
+                  .optional(),
+                roles: z.array(z.string()).optional(),
+              })
+              .strict(),
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
     contract: z
       .object({
         requiredRoles: z.array(z.string()).optional(),

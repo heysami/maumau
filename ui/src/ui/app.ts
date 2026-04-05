@@ -278,6 +278,16 @@ export class MaumauApp extends LitElement {
   @state() agentsSelectedId: string | null = null;
   @state() teamsSelectedId: string | null = null;
   @state() teamsSelectedWorkflowId: string | null = null;
+  @state() teamPromptDialogOpen = false;
+  @state() teamPromptTeamId: string | null = null;
+  @state() teamPromptTeamLabel = "";
+  @state() teamPromptWorkflowId: string | null = null;
+  @state() teamPromptWorkflowLabel = "";
+  @state() teamPromptDraft = "";
+  @state() teamPromptBusy = false;
+  @state() teamPromptError: string | null = null;
+  @state() teamPromptSummary: string | null = null;
+  @state() teamPromptWarnings: string[] = [];
   @state() toolsCatalogLoading = false;
   @state() toolsCatalogError: string | null = null;
   @state() toolsCatalogResult: ToolsCatalogResult | null = null;
@@ -319,7 +329,11 @@ export class MaumauApp extends LitElement {
   @state() dashboardTeamsLoading = false;
   @state() dashboardTeamsError: string | null = null;
   @state() dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null = null;
+  @state() dashboardTeamRunsLoading = false;
+  @state() dashboardTeamRunsError: string | null = null;
+  @state() dashboardTeamRuns: import("./types.js").DashboardTeamRunsResult | null = null;
   @state() dashboardTaskFilter: string | null = null;
+  @state() dashboardTaskGroupSelection: string | null = null;
   @state() dashboardDoneFromDate = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

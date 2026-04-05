@@ -1,12 +1,15 @@
 import type { Tab } from "../navigation.ts";
 import { dashboardPageForTab } from "../navigation.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
+import { serializeConfigForm } from "./config/form-utils.ts";
 import type {
+  ConfigSnapshot,
   DashboardCalendarResult,
   DashboardMemoriesResult,
   DashboardRoutinesResult,
   DashboardSnapshot,
   DashboardTasksResult,
+  DashboardTeamRunsResult,
   DashboardTeamSnapshotsResult,
   DashboardTodaySnapshot,
   DashboardWorkshopResult,
@@ -25,7 +28,15 @@ type DashboardHost = {
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading: boolean;
+  dashboardTeamRunsError: string | null;
+  dashboardTeamRuns: DashboardTeamRunsResult | null;
   dashboardReloadTimer: number | null;
+  configForm: Record<string, unknown> | null;
+  configSnapshot: ConfigSnapshot | null;
+  configFormDirty: boolean;
+  configFormMode: "form" | "raw";
+  configRaw: string;
 };
 
 function clearReloadTimer(host: DashboardHost) {
@@ -91,6 +102,24 @@ function applyMemories(snapshot: DashboardSnapshot, result: DashboardMemoriesRes
   snapshot.generatedAtMs = Math.max(snapshot.generatedAtMs, result.generatedAtMs);
 }
 
+function resolveDashboardDraftConfigRaw(host: DashboardHost): string | undefined {
+  if (!host.configFormDirty) {
+    return undefined;
+  }
+  if (host.configFormMode === "raw") {
+    const raw = host.configRaw.trim();
+    return raw ? host.configRaw : undefined;
+  }
+  if (host.configForm) {
+    return serializeConfigForm(host.configForm);
+  }
+  const snapshotConfig = host.configSnapshot?.config;
+  if (snapshotConfig && typeof snapshotConfig === "object") {
+    return serializeConfigForm(snapshotConfig as Record<string, unknown>);
+  }
+  return undefined;
+}
+
 async function loadDashboardPageData(
   host: DashboardHost,
 ): Promise<void> {
@@ -151,9 +180,10 @@ export async function loadDashboardTeamSnapshots(
     host.dashboardTeamsError = null;
   }
   try {
+    const rawConfig = resolveDashboardDraftConfigRaw(host);
     const res = await host.client.request<DashboardTeamSnapshotsResult>(
       "dashboard.teams.snapshot",
-      {},
+      rawConfig ? { rawConfig } : {},
     );
     host.dashboardTeamSnapshots = res;
     host.dashboardTeamsError = null;
@@ -161,6 +191,31 @@ export async function loadDashboardTeamSnapshots(
     host.dashboardTeamsError = String(error);
   } finally {
     host.dashboardTeamsLoading = false;
+  }
+}
+
+export async function loadDashboardTeamRuns(
+  host: DashboardHost,
+  opts?: { quiet?: boolean },
+): Promise<void> {
+  if (!host.client || !host.connected || (host.dashboardTeamRunsLoading && !opts?.quiet)) {
+    return;
+  }
+  host.dashboardTeamRunsLoading = true;
+  if (!opts?.quiet) {
+    host.dashboardTeamRunsError = null;
+  }
+  try {
+    const res = await host.client.request<DashboardTeamRunsResult>(
+      "dashboard.teams.runs",
+      {},
+    );
+    host.dashboardTeamRuns = res;
+    host.dashboardTeamRunsError = null;
+  } catch (error) {
+    host.dashboardTeamRunsError = String(error);
+  } finally {
+    host.dashboardTeamRunsLoading = false;
   }
 }
 
@@ -183,8 +238,9 @@ export async function loadDashboardData(
   } finally {
     host.dashboardLoading = false;
   }
-  if (opts?.includeTeams || host.tab === "dashboardTeams") {
+  if (opts?.includeTeams || host.tab === "dashboardTasks") {
     await loadDashboardTeamSnapshots(host, opts);
+    await loadDashboardTeamRuns(host, opts);
   }
 }
 

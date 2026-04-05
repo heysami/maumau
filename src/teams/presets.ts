@@ -222,6 +222,40 @@ export function createStarterTeamConfig(): TeamConfig {
         description:
           "General-purpose stage-gated architecture, execution, and QA collaboration for the vibe-coder team.",
         default: true,
+        lifecycle: {
+          stages: [
+            {
+              id: "planning",
+              name: "Planning",
+              status: "in_progress",
+              roles: [],
+            },
+            {
+              id: "architecture",
+              name: "Architecture",
+              status: "in_progress",
+              roles: ["system architect"],
+            },
+            {
+              id: "execution",
+              name: "Execution",
+              status: "in_progress",
+              roles: ["developer", "ui/ux designer", "content/visual designer"],
+            },
+            {
+              id: "qa",
+              name: "QA",
+              status: "in_progress",
+              roles: ["technical qa", "visual/ux qa"],
+            },
+            {
+              id: "manager_confirmation",
+              name: "Manager Confirmation",
+              status: "review",
+              roles: [],
+            },
+          ],
+        },
         managerPrompt:
           "Run the default lifecycle with explicit stage statuses: architecture first, then execution, then QA verification, then done. The system architect goes first. Developer, UI/UX designer, and content/visual designer work only after architecture approval. Technical QA and visual/UX QA only verify completed work. If QA blocks, send the task back to rework before another QA pass.",
         synthesisPrompt:
@@ -272,6 +306,16 @@ export function createMainOrchestrationTeamConfig(): TeamConfig {
         description:
           "Root orchestration workflow for triage, delegation, and execution routing across bundled workers and linked teams.",
         default: true,
+        lifecycle: {
+          stages: [
+            {
+              id: "working",
+              name: "Working",
+              status: "in_progress",
+              roles: [],
+            },
+          ],
+        },
         managerPrompt:
           "Treat this team as the root orchestrator for the default chat agent. Keep direct replies to casual or lightweight read-only requests. Delegate bounded execution to the execution worker. Route UI, human-facing, or staged product work to the linked specialist teams configured on this root team. Always report which execution path was used.",
         synthesisPrompt:

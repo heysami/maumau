@@ -62,6 +62,7 @@ import {
   ConfigSchemaParamsSchema,
   ConfigSchemaResponseSchema,
   ConfigSetParamsSchema,
+  DashboardTeamsSnapshotParamsSchema,
   UpdateRunParamsSchema,
 } from "./config.js";
 import {
@@ -166,6 +167,18 @@ import {
   WizardStatusResultSchema,
   WizardStepSchema,
 } from "./wizard.js";
+import {
+  TeamPromptEditAgentIdentityPatchSchema,
+  TeamPromptEditAgentPatchSchema,
+  TeamPromptEditCrossTeamLinkSchema,
+  TeamPromptEditLifecycleStageSchema,
+  TeamPromptEditMemberSchema,
+  TeamPromptEditParamsSchema,
+  TeamPromptEditResultSchema,
+  TeamPromptEditTeamPatchSchema,
+  TeamPromptEditWorkflowContractSchema,
+  TeamPromptEditWorkflowPatchSchema,
+} from "./teams.js";
 
 export const ProtocolSchemas = {
   ConnectParams: ConnectParamsSchema,
@@ -223,6 +236,7 @@ export const ProtocolSchemas = {
   SessionsCompactParams: SessionsCompactParamsSchema,
   SessionsUsageParams: SessionsUsageParamsSchema,
   ConfigGetParams: ConfigGetParamsSchema,
+  DashboardTeamsSnapshotParams: DashboardTeamsSnapshotParamsSchema,
   ConfigSetParams: ConfigSetParamsSchema,
   ConfigApplyParams: ConfigApplyParamsSchema,
   ConfigPatchParams: ConfigPatchParamsSchema,
@@ -238,6 +252,16 @@ export const ProtocolSchemas = {
   WizardNextResult: WizardNextResultSchema,
   WizardStartResult: WizardStartResultSchema,
   WizardStatusResult: WizardStatusResultSchema,
+  TeamPromptEditParams: TeamPromptEditParamsSchema,
+  TeamPromptEditResult: TeamPromptEditResultSchema,
+  TeamPromptEditTeamPatch: TeamPromptEditTeamPatchSchema,
+  TeamPromptEditMember: TeamPromptEditMemberSchema,
+  TeamPromptEditCrossTeamLink: TeamPromptEditCrossTeamLinkSchema,
+  TeamPromptEditWorkflowPatch: TeamPromptEditWorkflowPatchSchema,
+  TeamPromptEditWorkflowContract: TeamPromptEditWorkflowContractSchema,
+  TeamPromptEditLifecycleStage: TeamPromptEditLifecycleStageSchema,
+  TeamPromptEditAgentPatch: TeamPromptEditAgentPatchSchema,
+  TeamPromptEditAgentIdentityPatch: TeamPromptEditAgentIdentityPatchSchema,
   TalkModeParams: TalkModeParamsSchema,
   TalkConfigParams: TalkConfigParamsSchema,
   TalkConfigResult: TalkConfigResultSchema,

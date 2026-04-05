@@ -64,6 +64,11 @@ describe("ensureStarterTeamConfig", () => {
           description:
             "Root orchestration workflow for triage, delegation, and execution routing across bundled workers and linked teams.",
           managerPrompt: expect.stringContaining("root orchestrator"),
+          lifecycle: expect.objectContaining({
+            stages: expect.arrayContaining([
+              expect.objectContaining({ id: "working", status: "in_progress" }),
+            ]),
+          }),
         }),
       ],
     });
@@ -90,6 +95,27 @@ describe("ensureStarterTeamConfig", () => {
           description:
             "General-purpose stage-gated architecture, execution, and QA collaboration for the vibe-coder team.",
           managerPrompt: expect.stringContaining("QA verification"),
+          lifecycle: expect.objectContaining({
+            stages: expect.arrayContaining([
+              expect.objectContaining({ id: "planning", status: "in_progress" }),
+              expect.objectContaining({
+                id: "architecture",
+                status: "in_progress",
+                roles: ["system architect"],
+              }),
+              expect.objectContaining({
+                id: "execution",
+                status: "in_progress",
+                roles: ["developer", "ui/ux designer", "content/visual designer"],
+              }),
+              expect.objectContaining({
+                id: "qa",
+                status: "in_progress",
+                roles: ["technical qa", "visual/ux qa"],
+              }),
+              expect.objectContaining({ id: "manager_confirmation", status: "review" }),
+            ]),
+          }),
           contract: {
             requiredRoles: [
               "system architect",

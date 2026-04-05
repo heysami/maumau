@@ -77,6 +77,18 @@ export const FIELD_HELP: Record<string, string> = {
     "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
   "teams.list[].workflows[].synthesisPrompt":
     "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+  "teams.list[].workflows[].lifecycle":
+    "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+  "teams.list[].workflows[].lifecycle.stages":
+    "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+  "teams.list[].workflows[].lifecycle.stages[].id":
+    "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+  "teams.list[].workflows[].lifecycle.stages[].name":
+    "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+  "teams.list[].workflows[].lifecycle.stages[].status":
+    'Coarse task-status bucket for this stage: "in_progress", "review", "done", "blocked", or "idle". This controls how the dashboard maps the active stage into the global task board.',
+  "teams.list[].workflows[].lifecycle.stages[].roles":
+    "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
   "teams.list[].workflow":
     "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
   "teams.list[].workflow.managerPrompt":

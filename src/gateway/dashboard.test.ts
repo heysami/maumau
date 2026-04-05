@@ -9,11 +9,19 @@ import {
   __testing,
   collectDashboardCalendar,
   collectDashboardSnapshot,
+  collectDashboardTeamSnapshots,
+  collectDashboardTeamRuns,
   collectDashboardTasks,
+  ensureStoredDashboardTeamSnapshots,
   readStoredDashboardTeamSnapshots,
   refreshStoredDashboardTeamSnapshots,
 } from "./dashboard.js";
-import { ensureStarterTeamConfig } from "../teams/presets.js";
+import {
+  ensureStarterTeamConfig,
+  STARTER_TEAM_MANAGER_AGENT_ID,
+  STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID,
+  STARTER_TEAM_TECHNICAL_QA_AGENT_ID,
+} from "../teams/presets.js";
 
 function buildCronJob(params: {
   id: string;
@@ -411,6 +419,413 @@ describe("dashboard aggregations", () => {
 
     const persisted = await readStoredDashboardTeamSnapshots({ stateDir: tempRoot });
     expect(persisted).toEqual(result);
+  });
+
+  it("can preview draft team snapshots without overwriting the stored dashboard snapshot file", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-team-preview-"));
+    tempDirs.push(tempRoot);
+    const cfg = ensureStarterTeamConfig({} as MaumauConfig);
+    const vibeCoder = cfg.teams?.list?.find((team) => team.id === "vibe-coder");
+    const defaultWorkflow = vibeCoder?.workflows?.find((workflow) => workflow.id === "default");
+    const managerConfirmationStage = defaultWorkflow?.lifecycle?.stages?.find(
+      (stage) => stage.id === "manager_confirmation",
+    );
+    if (managerConfirmationStage) {
+      managerConfirmationStage.name = "Final Review";
+    }
+
+    __testing.setDepsForTests({
+      prepareSimpleCompletionModelForAgent: vi.fn(async () => ({
+        error: "no simple completion model available",
+      })),
+    });
+
+    const preview = await collectDashboardTeamSnapshots({
+      cfg,
+      nowMs: 1_717_171_718_000,
+    });
+
+    const previewSnapshot = preview.snapshots.find((snapshot) => snapshot.teamId === "vibe-coder");
+    expect(previewSnapshot?.lifecycleStages?.find((stage) => stage.id === "manager_confirmation"))
+      .toEqual(
+        expect.objectContaining({
+          name: "Final Review",
+        }),
+      );
+
+    const persisted = await readStoredDashboardTeamSnapshots({ stateDir: tempRoot });
+    expect(persisted).toEqual({ generatedAtMs: 0, snapshots: [] });
+  });
+
+  it("refreshes stale stored team snapshots when the saved teams config changed", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-team-fingerprint-"));
+    tempDirs.push(tempRoot);
+    const baseCfg = ensureStarterTeamConfig({} as MaumauConfig);
+    const updatedCfg = ensureStarterTeamConfig({} as MaumauConfig);
+    const updatedTeam = updatedCfg.teams?.list?.find((team) => team.id === "vibe-coder");
+    const updatedWorkflow = updatedTeam?.workflows?.find((workflow) => workflow.id === "default");
+    const updatedStage = updatedWorkflow?.lifecycle?.stages?.find(
+      (stage) => stage.id === "manager_confirmation",
+    );
+    if (updatedStage) {
+      updatedStage.name = "Final Review";
+    }
+
+    __testing.setDepsForTests({
+      prepareSimpleCompletionModelForAgent: vi.fn(async () => ({
+        error: "no simple completion model available",
+      })),
+    });
+
+    await refreshStoredDashboardTeamSnapshots({
+      cfg: baseCfg,
+      stateDir: tempRoot,
+      nowMs: 1_717_171_719_000,
+    });
+
+    const refreshed = await ensureStoredDashboardTeamSnapshots({
+      cfg: updatedCfg,
+      stateDir: tempRoot,
+      nowMs: 1_717_171_720_000,
+    });
+
+    expect(
+      refreshed.snapshots
+        .find((snapshot) => snapshot.teamId === "vibe-coder")
+        ?.lifecycleStages?.find((stage) => stage.id === "manager_confirmation")?.name,
+    ).toBe("Final Review");
+  });
+
+  it("rolls delegated team lifecycle progress into the root task and keeps child team tasks in team detail", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-team-runs-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 5, 11, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const rootSessionKey = "agent:main:main";
+    const managerSessionKey = `agent:${STARTER_TEAM_MANAGER_AGENT_ID}:subagent:run-1`;
+    const architectSessionKey = `agent:${STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID}:subagent:run-1`;
+    const qaSessionKey = `agent:${STARTER_TEAM_TECHNICAL_QA_AGENT_ID}:subagent:run-1`;
+
+    await writeSessionStore(storePath, {
+      [rootSessionKey]: {
+        sessionId: "sess-main-team-run",
+        sessionFile: "sess-main-team-run.jsonl",
+        updatedAt: nowMs - 500,
+        startedAt: nowMs - 120_000,
+        status: "running",
+        childSessions: [managerSessionKey],
+      },
+      [managerSessionKey]: {
+        sessionId: "sess-vibe-manager",
+        sessionFile: "sess-vibe-manager.jsonl",
+        updatedAt: nowMs - 300,
+        startedAt: nowMs - 90_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "manager",
+        parentSessionKey: rootSessionKey,
+        spawnedBy: rootSessionKey,
+        childSessions: [architectSessionKey, qaSessionKey],
+      },
+      [architectSessionKey]: {
+        sessionId: "sess-vibe-architect",
+        sessionFile: "sess-vibe-architect.jsonl",
+        updatedAt: nowMs - 10_000,
+        startedAt: nowMs - 80_000,
+        endedAt: nowMs - 8_000,
+        status: "done",
+        teamId: "vibe-coder",
+        teamRole: "system architect",
+        parentSessionKey: managerSessionKey,
+        spawnedBy: managerSessionKey,
+      },
+      [qaSessionKey]: {
+        sessionId: "sess-vibe-qa",
+        sessionFile: "sess-vibe-qa.jsonl",
+        updatedAt: nowMs - 200,
+        startedAt: nowMs - 15_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "technical qa",
+        parentSessionKey: managerSessionKey,
+        spawnedBy: managerSessionKey,
+      },
+    });
+
+    await writeTranscriptMessages(storePath, "sess-main-team-run.jsonl", [
+      {
+        role: "user",
+        text: "Build the subscription upgrade checkout flow with a clear confirmation page.",
+      },
+      {
+        role: "assistant",
+        text: "Delegating the staged implementation to the vibe-coder team.",
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-vibe-manager.jsonl", [
+      {
+        role: "assistant",
+        text:
+          'WORK_ITEM:{"title":"Build the subscription upgrade checkout flow","summary":"Architecture is complete and QA is verifying the implementation.","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"qa","currentStageName":"QA","completedStageIds":["planning","architecture","execution"],"status":"in_progress"}}',
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-vibe-architect.jsonl", [
+      {
+        role: "user",
+        text: "Plan the subscription upgrade checkout flow.",
+      },
+      {
+        role: "assistant",
+        text: "Completed the checkout architecture and handoff notes.",
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-vibe-qa.jsonl", [
+      {
+        role: "user",
+        text: "Verify the checkout flow before release.",
+      },
+      {
+        role: "assistant",
+        text: "Running final QA verification on the checkout flow.",
+      },
+    ]);
+
+    const cfg = ensureStarterTeamConfig({
+      agents: {
+        defaults: {
+          workspace: tempRoot,
+        },
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig);
+
+    const tasks = await collectDashboardTasks({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+    const teamRuns = await collectDashboardTeamRuns({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(tasks.items.map((item) => item.sessionKey)).toContain(rootSessionKey);
+    expect(tasks.items.map((item) => item.sessionKey)).toContain(managerSessionKey);
+    expect(tasks.items.map((item) => item.sessionKey)).toContain(qaSessionKey);
+
+    const rootTask = tasks.items.find((item) => item.sessionKey === rootSessionKey);
+    expect(rootTask).toEqual(
+      expect.objectContaining({
+        delegatedTeamRunId: `team-run:${managerSessionKey}`,
+        currentStageId: "qa",
+        currentStageLabel: "QA",
+        completedStepCount: 3,
+        totalStepCount: 6,
+        progressLabel: "3/6 · QA",
+        progressPercent: 50,
+        status: "in_progress",
+      }),
+    );
+    expect(tasks.items.find((item) => item.sessionKey === managerSessionKey)).toEqual(
+      expect.objectContaining({
+        visibilityScope: "team_detail",
+        currentStageId: "qa",
+        progressLabel: "3/6 · QA",
+      }),
+    );
+    expect(tasks.items.find((item) => item.sessionKey === qaSessionKey)).toEqual(
+      expect.objectContaining({
+        visibilityScope: "team_detail",
+        currentStageId: "qa",
+        currentStageLabel: "QA",
+      }),
+    );
+
+    const vibeRun = teamRuns.items.find((item) => item.teamId === "vibe-coder");
+    expect(vibeRun).toEqual(
+      expect.objectContaining({
+        managerSessionKey,
+        rootTaskId: `task:${rootSessionKey}`,
+        currentStageId: "qa",
+        completedStepCount: 3,
+        totalStepCount: 6,
+        progressLabel: "3/6 · QA",
+        status: "in_progress",
+      }),
+    );
+    expect(vibeRun?.items.map((item) => item.sessionKey)).toEqual(
+      expect.arrayContaining([managerSessionKey, architectSessionKey, qaSessionKey]),
+    );
+    expect(vibeRun?.items.every((item) => item.visibilityScope === "team_detail")).toBe(true);
+  });
+
+  it("maps review only from lifecycle stages instead of child session fanout", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-review-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 5, 12, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const rootSessionKey = "agent:main:main";
+    const managerSessionKey = `agent:${STARTER_TEAM_MANAGER_AGENT_ID}:subagent:run-review`;
+    const architectSessionKey = `agent:${STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID}:subagent:run-review`;
+
+    await writeSessionStore(storePath, {
+      [rootSessionKey]: {
+        sessionId: "sess-main-review",
+        sessionFile: "sess-main-review.jsonl",
+        updatedAt: nowMs - 500,
+        startedAt: nowMs - 120_000,
+        status: "running",
+        childSessions: [managerSessionKey],
+      },
+      [managerSessionKey]: {
+        sessionId: "sess-vibe-manager-review",
+        sessionFile: "sess-vibe-manager-review.jsonl",
+        updatedAt: nowMs - 300,
+        startedAt: nowMs - 90_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "manager",
+        parentSessionKey: rootSessionKey,
+        spawnedBy: rootSessionKey,
+        childSessions: [architectSessionKey],
+      },
+      [architectSessionKey]: {
+        sessionId: "sess-vibe-architect-review",
+        sessionFile: "sess-vibe-architect-review.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 40_000,
+        endedAt: nowMs - 800,
+        status: "done",
+        teamId: "vibe-coder",
+        teamRole: "system architect",
+        parentSessionKey: managerSessionKey,
+        spawnedBy: managerSessionKey,
+      },
+    });
+
+    await writeTranscriptMessages(storePath, "sess-main-review.jsonl", [
+      {
+        role: "user",
+        text: "Ship the billing settings refresh.",
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-vibe-manager-review.jsonl", [
+      {
+        role: "assistant",
+        text:
+          'WORK_ITEM:{"title":"Ship the billing settings refresh","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"manager_confirmation","currentStageName":"Manager Confirmation","completedStageIds":["planning","architecture","execution","qa"]}}',
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-vibe-architect-review.jsonl", [
+      {
+        role: "assistant",
+        text: "Architecture complete.",
+      },
+    ]);
+
+    const cfg = ensureStarterTeamConfig({
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig);
+
+    const tasks = await collectDashboardTasks({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(tasks.items.find((item) => item.sessionKey === rootSessionKey)).toEqual(
+      expect.objectContaining({
+        currentStageId: "manager_confirmation",
+        status: "review",
+      }),
+    );
+  });
+
+  it("falls back to a single visible stage for legacy teams without lifecycle config", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-legacy-team-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 5, 13, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+
+    await writeSessionStore(storePath, {
+      "agent:alpha-manager:main": {
+        sessionId: "sess-alpha-manager",
+        sessionFile: "sess-alpha-manager.jsonl",
+        updatedAt: nowMs - 500,
+        startedAt: nowMs - 20_000,
+        status: "running",
+        teamId: "alpha",
+        teamRole: "manager",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-alpha-manager.jsonl", [
+      {
+        role: "user",
+        text: "Handle the legacy alpha task.",
+      },
+      {
+        role: "assistant",
+        text: "Working through the legacy team flow.",
+      },
+    ]);
+
+    const tasks = await collectDashboardTasks({
+      cfg: {
+        agents: {
+          list: [{ id: "alpha-manager", name: "Alpha Manager" }],
+        },
+        teams: {
+          list: [
+            {
+              id: "alpha",
+              name: "Alpha",
+              managerAgentId: "alpha-manager",
+              members: [],
+            },
+          ],
+        },
+        session: {
+          store: storePath,
+        },
+      } as MaumauConfig,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(tasks.items[0]).toEqual(
+      expect.objectContaining({
+        sessionKey: "agent:alpha-manager:main",
+        totalStepCount: 2,
+        completedStepCount: 0,
+        progressLabel: "0/2",
+        status: "in_progress",
+      }),
+    );
   });
 
   it("does not crash workshop item derivation when dashboard callers omit cfg", async () => {

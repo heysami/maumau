@@ -1,4 +1,5 @@
 export type DashboardWorkItemStatus = "blocked" | "in_progress" | "review" | "done" | "idle";
+export type DashboardWorkItemVisibilityScope = "global" | "team_detail";
 
 export type DashboardWorkItemSource =
   | "team_session"
@@ -41,12 +42,15 @@ export type DashboardWorkItem = {
   title: string;
   summary?: string;
   status: DashboardWorkItemStatus;
+  visibilityScope?: DashboardWorkItemVisibilityScope;
   source: DashboardWorkItemSource;
   agentId?: string;
   assigneeLabel?: string;
   teamId?: string;
   teamLabel?: string;
   teamRole?: string;
+  teamWorkflowId?: string;
+  teamWorkflowLabel?: string;
   updatedAtMs?: number;
   startedAtMs?: number;
   endedAtMs?: number;
@@ -55,6 +59,14 @@ export type DashboardWorkItem = {
   parentSessionKey?: string;
   childSessionKeys?: string[];
   blockerIds?: string[];
+  delegatedTeamRunId?: string;
+  currentStageId?: string;
+  currentStageLabel?: string;
+  completedStageIds?: string[];
+  completedStepCount?: number;
+  totalStepCount?: number;
+  progressLabel?: string;
+  progressPercent?: number;
   sessionLinks: DashboardWorkItemSessionLink[];
   blockerLinks: DashboardWorkItemBlockerLink[];
   previewLinks: DashboardWorkshopPreviewLink[];
@@ -219,6 +231,13 @@ export type DashboardTeamEdge = {
 
 export type DashboardTeamSnapshotStatus = "generated" | "fallback";
 
+export type DashboardTeamLifecycleStage = {
+  id: string;
+  name?: string;
+  status: DashboardWorkItemStatus;
+  roles: string[];
+};
+
 export type DashboardTeamSnapshot = {
   teamId: string;
   teamName?: string;
@@ -229,6 +248,7 @@ export type DashboardTeamSnapshot = {
   warnings: string[];
   summary: string;
   openProsePreview: string;
+  lifecycleStages?: DashboardTeamLifecycleStage[];
   nodes: DashboardTeamNode[];
   edges: DashboardTeamEdge[];
 };
@@ -236,6 +256,37 @@ export type DashboardTeamSnapshot = {
 export type DashboardTeamSnapshotsResult = {
   generatedAtMs: number;
   snapshots: DashboardTeamSnapshot[];
+};
+
+export type DashboardTeamRun = {
+  id: string;
+  managerSessionKey: string;
+  rootSessionKey?: string;
+  rootTaskId?: string;
+  title: string;
+  summary?: string;
+  status: DashboardWorkItemStatus;
+  teamId: string;
+  teamName?: string;
+  workflowId: string;
+  workflowName?: string;
+  updatedAtMs?: number;
+  startedAtMs?: number;
+  endedAtMs?: number;
+  currentStageId?: string;
+  currentStageLabel?: string;
+  completedStageIds: string[];
+  completedStepCount: number;
+  totalStepCount: number;
+  progressLabel?: string;
+  progressPercent?: number;
+  blockerLinks: DashboardWorkItemBlockerLink[];
+  items: DashboardWorkItem[];
+};
+
+export type DashboardTeamRunsResult = {
+  generatedAtMs: number;
+  items: DashboardTeamRun[];
 };
 
 export type DashboardSnapshot = {

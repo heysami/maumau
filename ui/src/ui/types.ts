@@ -11,6 +11,8 @@ import type {
   DashboardSnapshot as SharedDashboardSnapshot,
   DashboardTask as SharedDashboardTask,
   DashboardTasksResult as SharedDashboardTasksResult,
+  DashboardTeamRun as SharedDashboardTeamRun,
+  DashboardTeamRunsResult as SharedDashboardTeamRunsResult,
   DashboardTeamSnapshot as SharedDashboardTeamSnapshot,
   DashboardTeamSnapshotsResult as SharedDashboardTeamSnapshotsResult,
   DashboardTodaySnapshot as SharedDashboardTodaySnapshot,
@@ -19,6 +21,9 @@ import type {
   DashboardWorkItem as SharedDashboardWorkItem,
   DashboardCalendarEvent as SharedDashboardCalendarEvent,
 } from "../../../src/gateway/dashboard-types.ts";
+import type {
+  TeamPromptEditResult as SharedTeamPromptEditResult,
+} from "../../../src/gateway/protocol/index.js";
 import type {
   SessionPreviewItem as SharedSessionPreviewItem,
   SessionsPreviewEntry as SharedSessionsPreviewEntry,
@@ -35,6 +40,8 @@ export type DashboardTodaySnapshot = SharedDashboardTodaySnapshot;
 export type DashboardTask = SharedDashboardTask;
 export type DashboardWorkItem = SharedDashboardWorkItem;
 export type DashboardTasksResult = SharedDashboardTasksResult;
+export type DashboardTeamRun = SharedDashboardTeamRun;
+export type DashboardTeamRunsResult = SharedDashboardTeamRunsResult;
 export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
 export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
 export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
@@ -46,6 +53,7 @@ export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
 export type DashboardMemoriesResult = SharedDashboardMemoriesResult;
 export type DashboardTeamSnapshot = SharedDashboardTeamSnapshot;
 export type DashboardTeamSnapshotsResult = SharedDashboardTeamSnapshotsResult;
+export type TeamPromptEditResult = SharedTeamPromptEditResult;
 
 export type ChannelsStatusSnapshot = {
   ts: number;

@@ -49,6 +49,11 @@ import {
   removeConfigFormValue,
 } from "./controllers/config.ts";
 import {
+  closeTeamPromptDialog,
+  openTeamPromptDialog,
+  submitTeamPromptDialog,
+} from "./controllers/team-prompt.ts";
+import {
   loadCronRuns,
   loadMoreCronJobs,
   loadMoreCronRuns,
@@ -67,7 +72,7 @@ import {
   updateCronJobsFilter,
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
-import { loadDashboardData } from "./controllers/dashboard.ts";
+import { loadDashboardData, loadDashboardTeamSnapshots } from "./controllers/dashboard.ts";
 import { loadDebug, callDebugMethod } from "./controllers/debug.ts";
 import {
   approveDevicePairing,
@@ -542,9 +547,13 @@ export function renderApp(state: AppViewState) {
         teamsLoading: state.dashboardTeamsLoading,
         teamsError: state.dashboardTeamsError,
         teamSnapshots: state.dashboardTeamSnapshots,
+        teamRunsLoading: state.dashboardTeamRunsLoading,
+        teamRunsError: state.dashboardTeamRunsError,
+        teamRunsResult: state.dashboardTeamRuns,
         attentionItems: state.attentionItems,
         basePath: state.basePath,
         taskFilter: state.dashboardTaskFilter,
+        taskGroupSelection: state.dashboardTaskGroupSelection,
         doneFromDate: state.dashboardDoneFromDate,
         doneToDate: state.dashboardDoneToDate,
         workshopSelectedId: state.dashboardWorkshopSelectedId,
@@ -591,6 +600,9 @@ export function renderApp(state: AppViewState) {
           state.dashboardTaskFilter = taskId;
           state.setTab("dashboardTasks");
         },
+        onSelectTaskGroup: (selection) => {
+          state.dashboardTaskGroupSelection = selection;
+        },
         onDoneDateRangeChange: ({ fromDate, toDate }) => {
           if (typeof fromDate === "string") {
             state.dashboardDoneFromDate = fromDate;
@@ -628,6 +640,17 @@ export function renderApp(state: AppViewState) {
         },
         onSelectTeam: (selection) => {
           state.dashboardTeamSelection = selection;
+        },
+        onPromptTeamEdit: ({ teamId, teamLabel, workflowId, workflowLabel }) => {
+          state.teamsSelectedId = teamId;
+          state.teamsSelectedWorkflowId = workflowId;
+          state.setTab("teams");
+          openTeamPromptDialog(state, {
+            teamId,
+            teamLabel,
+            workflowId,
+            workflowLabel,
+          });
         },
         onSelectMemoryAgent: (agentId) => {
           state.dashboardMemoryAgentId = agentId;
@@ -951,7 +974,10 @@ export function renderApp(state: AppViewState) {
                   saving: state.configSaving,
                   applying: state.configApplying,
                   onStateChange: updateConversationAutomationPreset,
-                  onSave: () => saveConfig(state),
+                  onSave: async () => {
+                    await saveConfig(state);
+                    await loadDashboardTeamSnapshots(state, { quiet: true });
+                  },
                   onApply: () => applyConfig(state),
                   onReload: () => loadConfig(state),
                 },
@@ -1998,10 +2024,16 @@ export function renderApp(state: AppViewState) {
                   selectedTeamId: state.teamsSelectedId ?? getCurrentTeams()[0]?.id ?? null,
                   selectedWorkflowId: state.teamsSelectedWorkflowId,
                   onSelectTeam: (teamId) => {
+                    if (state.teamsSelectedId !== teamId) {
+                      closeTeamPromptDialog(state);
+                    }
                     state.teamsSelectedId = teamId;
                     state.teamsSelectedWorkflowId = null;
                   },
                   onSelectWorkflow: (workflowId) => {
+                    if (state.teamsSelectedWorkflowId !== workflowId) {
+                      closeTeamPromptDialog(state);
+                    }
                     state.teamsSelectedWorkflowId = workflowId;
                   },
                   onCreateTeam: (preset) => {
@@ -2042,6 +2074,9 @@ export function renderApp(state: AppViewState) {
                   onDeleteTeam: (teamId) => {
                     const nextTeams = getCurrentTeams().filter((team) => team.id !== teamId);
                     const deletingSelectedTeam = state.teamsSelectedId === teamId;
+                    if (deletingSelectedTeam) {
+                      closeTeamPromptDialog(state);
+                    }
                     updateTeamsList(nextTeams);
                     state.teamsSelectedId = deletingSelectedTeam
                       ? (nextTeams[0]?.id ?? null)
@@ -2049,6 +2084,31 @@ export function renderApp(state: AppViewState) {
                     state.teamsSelectedWorkflowId = deletingSelectedTeam
                       ? null
                       : state.teamsSelectedWorkflowId;
+                  },
+                  onOpenPrompt: (teamId, workflowId, labels) => {
+                    openTeamPromptDialog(state, {
+                      teamId,
+                      workflowId,
+                      teamLabel: labels.teamLabel,
+                      workflowLabel: labels.workflowLabel,
+                    });
+                  },
+                  promptOpen: state.teamPromptDialogOpen,
+                  promptTeamId: state.teamPromptTeamId,
+                  promptWorkflowId: state.teamPromptWorkflowId,
+                  promptDraft: state.teamPromptDraft,
+                  promptBusy: state.teamPromptBusy,
+                  promptError: state.teamPromptError,
+                  promptSummary: state.teamPromptSummary,
+                  promptWarnings: state.teamPromptWarnings,
+                  onPromptChange: (value) => {
+                    state.teamPromptDraft = value;
+                  },
+                  onPromptSubmit: () => {
+                    void submitTeamPromptDialog(state);
+                  },
+                  onPromptClose: () => {
+                    closeTeamPromptDialog(state);
                   },
                   onSave: () => saveConfig(state),
                   onApply: () => applyConfig(state),
@@ -2544,7 +2604,6 @@ export function renderApp(state: AppViewState) {
       </main>
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
-      ${nothing}
     </div>
   `;
 }

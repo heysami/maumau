@@ -7,6 +7,7 @@ import type {
   TeamWorkflowConfig,
 } from "../config/types.teams.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
+import { resolveConfiguredTeamWorkflowLifecycleStages } from "./lifecycle.js";
 
 export const DEFAULT_TEAM_WORKFLOW_ID = "default";
 
@@ -102,6 +103,12 @@ function normalizeTeamWorkflowFromBase(
     description: normalizeOptionalText(workflow.description),
     managerPrompt: normalizeOptionalText(workflow.managerPrompt),
     synthesisPrompt: normalizeOptionalText(workflow.synthesisPrompt),
+    lifecycle:
+      resolveConfiguredTeamWorkflowLifecycleStages(workflow).length > 0
+        ? {
+            stages: resolveConfiguredTeamWorkflowLifecycleStages(workflow),
+          }
+        : undefined,
     contract:
       workflow.contract && typeof workflow.contract === "object"
         ? {

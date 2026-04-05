@@ -30,6 +30,8 @@ const BASE_METHODS = [
   "dashboard.routines",
   "dashboard.memories",
   "dashboard.teams.snapshot",
+  "dashboard.teams.runs",
+  "teams.promptEdit",
   "exec.approvals.get",
   "exec.approvals.set",
   "exec.approvals.node.get",

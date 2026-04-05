@@ -23,6 +23,8 @@ import type {
   DashboardRecentMemoryEntry,
   DashboardSnapshot,
   DashboardTask,
+  DashboardTeamRun,
+  DashboardTeamRunsResult,
   DashboardTeamSnapshot,
   DashboardTeamSnapshotsResult,
 } from "../types.ts";
@@ -38,9 +40,13 @@ type DashboardProps = {
   teamsLoading: boolean;
   teamsError: string | null;
   teamSnapshots: DashboardTeamSnapshotsResult | null;
+  teamRunsLoading: boolean;
+  teamRunsError: string | null;
+  teamRunsResult: DashboardTeamRunsResult | null;
   attentionItems: AttentionItem[];
   basePath: string;
   taskFilter: string | null;
+  taskGroupSelection: string | null;
   doneFromDate: string;
   doneToDate: string;
   workshopSelectedId: string | null;
@@ -75,6 +81,7 @@ type DashboardProps = {
   onRefreshTeams: () => void;
   onOpenTask: (task: DashboardTask) => void;
   onFilterTasks: (taskId: string | null) => void;
+  onSelectTaskGroup: (selection: string | null) => void;
   onDoneDateRangeChange: (params: { fromDate?: string; toDate?: string }) => void;
   onSelectWorkshop: (itemId: string) => void;
   onCalendarViewChange: (view: "month" | "week" | "day") => void;
@@ -82,6 +89,12 @@ type DashboardProps = {
   onCalendarJumpToday: () => void;
   onCalendarSelectDay: (anchorAtMs: number, view?: "month" | "week" | "day") => void;
   onSelectTeam: (selection: string | null) => void;
+  onPromptTeamEdit: (params: {
+    teamId: string;
+    teamLabel: string;
+    workflowId: string;
+    workflowLabel: string;
+  }) => void;
   onSelectMemoryAgent: (agentId: string) => void;
   onMemoryDraftChange: (name: string, content: string) => void;
   onSaveMemoryFile: (name: string) => void;
@@ -399,6 +412,25 @@ function taskSummaryLine(task: DashboardTask): string | null {
   return summary;
 }
 
+function renderProgressBar(params: {
+  label?: string;
+  percent?: number;
+  compact?: boolean;
+}) {
+  if (typeof params.percent !== "number" || !Number.isFinite(params.percent)) {
+    return nothing;
+  }
+  const clamped = Math.max(0, Math.min(100, params.percent));
+  return html`
+    <div class="dashboard-progress ${params.compact ? "dashboard-progress--compact" : ""}">
+      <div class="dashboard-progress__track" aria-hidden="true">
+        <div class="dashboard-progress__fill" style=${`width:${clamped}%`}></div>
+      </div>
+      ${params.label ? html`<div class="dashboard-progress__label">${params.label}</div>` : nothing}
+    </div>
+  `;
+}
+
 function calendarKindLabel(kind: DashboardCalendarEvent["kind"]): string {
   switch (kind) {
     case "routine_occurrence":
@@ -416,6 +448,32 @@ function resolveTaskList(snapshot: DashboardSnapshot | null, filter: string | nu
   const tasks = snapshot?.tasks ?? [];
   if (!filter) {
     return tasks;
+  }
+  const matchedSessionKeys = new Set(
+    tasks
+      .filter((task) => task.id === filter || task.sessionKey === filter)
+      .map((task) => task.sessionKey),
+  );
+  if (matchedSessionKeys.size > 0) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const task of tasks) {
+        if (
+          task.parentSessionKey &&
+          matchedSessionKeys.has(task.parentSessionKey) &&
+          !matchedSessionKeys.has(task.sessionKey)
+        ) {
+          matchedSessionKeys.add(task.sessionKey);
+          changed = true;
+        }
+      }
+    }
+    return tasks.filter((task) =>
+      task.id === filter ||
+      task.sessionKey === filter ||
+      matchedSessionKeys.has(task.sessionKey)
+    );
   }
   return tasks.filter(
     (task) =>
@@ -471,6 +529,145 @@ function resolveMemoryAgentList(agentsList: AgentsListResult | null) {
 
 function selectionKeyForTeam(snapshot: DashboardTeamSnapshot): string {
   return `${snapshot.teamId}:${snapshot.workflowId}`;
+}
+
+type DashboardLifecycleStageLike = NonNullable<DashboardTeamSnapshot["lifecycleStages"]>[number];
+const DISPLAY_DONE_STAGE_ID = "done";
+
+type DashboardTaskGroup = {
+  key: string;
+  kind: "main" | "team";
+  title: string;
+  subtitle?: string;
+  tasks: DashboardTask[];
+  lifecycleStages: DashboardLifecycleStageLike[];
+  runs: DashboardTeamRun[];
+};
+
+function resolveDisplayLifecycleStages(
+  stages: DashboardLifecycleStageLike[],
+): DashboardLifecycleStageLike[] {
+  const hasDoneStage = stages.some(
+    (stage) => stage.id.trim().toLowerCase() === DISPLAY_DONE_STAGE_ID,
+  );
+  if (hasDoneStage) {
+    return stages;
+  }
+  return [
+    ...stages,
+    {
+      id: DISPLAY_DONE_STAGE_ID,
+      name: statusLabel("done"),
+      status: "done",
+      roles: [],
+    },
+  ];
+}
+
+function resolveTaskGroupKey(
+  task: Pick<DashboardTask, "teamId" | "teamWorkflowId">,
+  snapshots: DashboardTeamSnapshot[],
+): string {
+  const teamId = task.teamId?.trim();
+  const workflowId = task.teamWorkflowId?.trim();
+  if (teamId && workflowId) {
+    return `${teamId}:${workflowId}`;
+  }
+  if (teamId) {
+    const matchingSnapshots = snapshots.filter((snapshot) => snapshot.teamId === teamId);
+    if (matchingSnapshots.length === 1) {
+      return selectionKeyForTeam(matchingSnapshots[0]);
+    }
+    return `${teamId}:default`;
+  }
+  return "team:default";
+}
+
+function compareTaskGroups(a: DashboardTaskGroup, b: DashboardTaskGroup): number {
+  if (a.kind !== b.kind) {
+    return a.kind === "main" ? -1 : 1;
+  }
+  return a.title.localeCompare(b.title);
+}
+
+function compareTeamRunsByFreshness(a: DashboardTeamRun, b: DashboardTeamRun): number {
+  return (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0);
+}
+
+function shouldShowStandaloneTeamTaskGroup(snapshot: DashboardTeamSnapshot): boolean {
+  const normalizedTeamId = snapshot.teamId.trim().toLowerCase();
+  const normalizedTeamName = (snapshot.teamName ?? "").trim().toLowerCase();
+  return normalizedTeamId !== "main" && normalizedTeamName !== "main orchestration";
+}
+
+function resolveTaskGroups(props: DashboardProps, tasks: DashboardTask[]): DashboardTaskGroup[] {
+  const teamSnapshots = props.teamSnapshots?.snapshots ?? [];
+  const snapshotsByKey = new Map(teamSnapshots.map((snapshot) => [selectionKeyForTeam(snapshot), snapshot]));
+  const teamRunsByKey = new Map<string, DashboardTeamRun[]>();
+  for (const run of props.teamRunsResult?.items ?? []) {
+    const key = `${run.teamId}:${run.workflowId}`;
+    const bucket = teamRunsByKey.get(key) ?? [];
+    bucket.push(run);
+    teamRunsByKey.set(key, bucket);
+  }
+
+  const groups: DashboardTaskGroup[] = [
+    {
+      key: "main",
+      kind: "main",
+      title: dt("tasks.mainSectionTitle"),
+      subtitle: dt("tasks.mainSectionSubtitle"),
+      tasks: tasks.filter((task) => task.visibilityScope !== "team_detail"),
+      lifecycleStages: [],
+      runs: [],
+    },
+  ];
+  const teamTasksByKey = new Map<string, DashboardTask[]>();
+  for (const task of tasks) {
+    if (task.visibilityScope !== "team_detail") {
+      continue;
+    }
+    const key = resolveTaskGroupKey(task, teamSnapshots);
+    const bucket = teamTasksByKey.get(key) ?? [];
+    bucket.push(task);
+    teamTasksByKey.set(key, bucket);
+  }
+
+  for (const [key, groupTasks] of teamTasksByKey) {
+    const snapshot = snapshotsByKey.get(key);
+    const sample = groupTasks[0];
+    const teamName = snapshot?.teamName ?? sample?.teamLabel ?? sample?.teamId ?? "Team";
+    const workflowName = snapshot?.workflowName ?? sample?.teamWorkflowLabel ?? sample?.teamWorkflowId;
+    groups.push({
+      key,
+      kind: "team",
+      title: dt("tasks.teamSectionTitle", { team: teamName }),
+      subtitle: workflowName,
+      tasks: groupTasks,
+      lifecycleStages: snapshot?.lifecycleStages ?? [],
+      runs: (teamRunsByKey.get(key) ?? []).slice().sort(compareTeamRunsByFreshness),
+    });
+  }
+
+  const knownGroupKeys = new Set(groups.map((group) => group.key));
+  for (const snapshot of teamSnapshots) {
+    const key = selectionKeyForTeam(snapshot);
+    if (knownGroupKeys.has(key) || !shouldShowStandaloneTeamTaskGroup(snapshot)) {
+      continue;
+    }
+    groups.push({
+      key,
+      kind: "team",
+      title: dt("tasks.teamSectionTitle", { team: snapshot.teamName ?? snapshot.teamId }),
+      subtitle: snapshot.workflowName ?? snapshot.workflowId,
+      tasks: [],
+      lifecycleStages: snapshot.lifecycleStages ?? [],
+      runs: (teamRunsByKey.get(key) ?? []).slice().sort(compareTeamRunsByFreshness),
+    });
+    knownGroupKeys.add(key);
+  }
+
+  return groups.toSorted(compareTaskGroups);
 }
 
 function nodeTargetsSelectedTeam(nodeId: string, teamId: string): boolean {
@@ -573,6 +770,120 @@ function stageDescriptionForTeam(stage: DashboardTeamStage): string {
     default:
       return "";
   }
+}
+
+function compareDashboardTeamRunItems(a: DashboardTask, b: DashboardTask): number {
+  const aIsManager = normalizeTeamRoleLabel(a.teamRole) === "manager";
+  const bIsManager = normalizeTeamRoleLabel(b.teamRole) === "manager";
+  if (aIsManager !== bIsManager) {
+    return aIsManager ? -1 : 1;
+  }
+  const updatedDelta = (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+  return a.title.localeCompare(b.title);
+}
+
+function teamRunRootTaskTitle(
+  run: DashboardTeamRun,
+  snapshot: DashboardSnapshot | null,
+): string | undefined {
+  if (!run.rootTaskId) {
+    return undefined;
+  }
+  return snapshot?.tasks.find((task) => task.id === run.rootTaskId)?.title;
+}
+
+function renderTeamRunCard(props: DashboardProps, run: DashboardTeamRun) {
+  const rootTaskTitle = teamRunRootTaskTitle(run, props.snapshot);
+  const items = run.items.slice().sort(compareDashboardTeamRunItems);
+  return html`
+    <article class="dashboard-task dashboard-team-run">
+      <div class="dashboard-task__header">
+        <div class="dashboard-task__header-copy">
+          <div class="dashboard-task__eyebrow">${run.workflowName ?? run.workflowId}</div>
+          <div class="dashboard-task__title">${run.title}</div>
+          <div class="dashboard-task__meta">
+            <span>${statusLabel(run.status)}</span>
+            ${run.updatedAtMs
+              ? html`<span>${dt("teams.updated", { time: formatRelativeTimestamp(run.updatedAtMs) })}</span>`
+              : nothing}
+            ${rootTaskTitle
+              ? html`<span>${dt("teams.rootTask")}: ${rootTaskTitle}</span>`
+              : nothing}
+          </div>
+        </div>
+        <div class="dashboard-task__signals">
+          ${run.currentStageLabel
+            ? html`<span class="dashboard-task__signal">${dt("teams.currentStage")}: ${run.currentStageLabel}</span>`
+            : nothing}
+          <span class="dashboard-task__signal">
+            ${dt("teams.roleTaskCount", { count: String(items.length) })}
+          </span>
+          ${run.blockerLinks.length > 0
+            ? html`
+                <span class="dashboard-task__signal dashboard-task__signal--warn">
+                  ${run.blockerLinks.length} ${dt("teams.blockers")}
+                </span>
+              `
+            : nothing}
+        </div>
+      </div>
+      ${run.summary ? html`<div class="dashboard-task__summary">${run.summary}</div>` : nothing}
+      ${renderProgressBar({
+        label: run.progressLabel,
+        percent: run.progressPercent,
+      })}
+      ${run.blockerLinks.length > 0
+        ? html`
+            <div class="dashboard-team-run__blockers">
+              <div class="dashboard-org-chart__label">${dt("teams.blockers")}</div>
+              ${run.blockerLinks.map(
+                (blocker) => html`
+                  <article class="dashboard-note dashboard-note--warning">
+                    <div class="dashboard-note__title">${blocker.title}</div>
+                    <div class="dashboard-note__body">${blocker.description}</div>
+                  </article>
+                `,
+              )}
+            </div>
+          `
+        : nothing}
+      <div class="dashboard-team-run__items">
+        <div class="dashboard-org-chart__label">${dt("teams.roleTasks")}</div>
+        <div class="dashboard-team-run__items-grid">
+          ${items.map((item) => {
+            const summary = taskSummaryLine(item);
+            return html`
+              <article class="dashboard-note dashboard-team-run__item">
+                <div class="dashboard-team-run__item-head">
+                  <div>
+                    <div class="dashboard-org-chart__label">
+                      ${item.teamRole ?? item.assigneeLabel ?? item.agentId ?? dt("task.unassigned")}
+                    </div>
+                    <div class="dashboard-note__title">${item.title}</div>
+                  </div>
+                  <span class="pill">${statusLabel(item.status)}</span>
+                </div>
+                <div class="dashboard-note__meta">
+                  <span>${item.assigneeLabel ?? item.agentId ?? dt("task.unassigned")}</span>
+                  ${item.currentStageLabel ? html`<span>${item.currentStageLabel}</span>` : nothing}
+                  <span>${taskTimestampLabel(item)}</span>
+                </div>
+                ${summary ? html`<div class="dashboard-note__body">${summary}</div>` : nothing}
+                ${renderProgressBar({
+                  label: item.progressLabel,
+                  percent: item.progressPercent,
+                  compact: true,
+                })}
+              </article>
+            `;
+          })}
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function renderDashboardNav(props: DashboardProps, page: DashboardPage) {
@@ -696,6 +1007,11 @@ function renderTodayPage(props: DashboardProps) {
                     </button>
                   </div>
                   ${task.summary ? html`<div class="dashboard-task__summary">${task.summary}</div>` : nothing}
+                  ${renderProgressBar({
+                    label: task.progressLabel,
+                    percent: task.progressPercent,
+                    compact: true,
+                  })}
                 </article>
               `,
             )}
@@ -741,9 +1057,196 @@ function renderTodayPage(props: DashboardProps) {
   `;
 }
 
+function renderWorkflowLifecycle(params: {
+  stages: DashboardLifecycleStageLike[];
+  currentStageId?: string;
+  completedStageIds?: string[];
+  status?: DashboardTask["status"] | DashboardTeamRun["status"];
+}) {
+  if (params.stages.length === 0) {
+    return nothing;
+  }
+  const stages = resolveDisplayLifecycleStages(params.stages);
+  const completedStageIds = new Set(
+    (params.completedStageIds ?? []).map((stageId) => stageId.trim().toLowerCase()),
+  );
+  const currentStageId = params.currentStageId?.trim().toLowerCase();
+  const isDone = params.status === "done";
+  return html`
+    <div class="dashboard-lifecycle">
+      ${stages.map((stage) => {
+        const normalizedStageId = stage.id.trim().toLowerCase();
+        const isCurrent = !isDone && normalizedStageId === currentStageId;
+        const isCompleted = isDone || completedStageIds.has(normalizedStageId);
+        const stateClass = isCurrent
+          ? "dashboard-lifecycle__stage--current"
+          : isCompleted
+            ? "dashboard-lifecycle__stage--complete"
+            : "dashboard-lifecycle__stage--pending";
+        const rolesLabel = stage.roles
+          .map((role) => role.trim())
+          .filter(Boolean)
+          .join(" · ");
+        return html`
+          <article class="dashboard-lifecycle__stage ${stateClass}">
+            <strong>${stage.name?.trim() || stage.id}</strong>
+            ${rolesLabel ? html`<div class="dashboard-note__meta"><span>${rolesLabel}</span></div>` : nothing}
+          </article>
+        `;
+      })}
+    </div>
+  `;
+}
+
+function renderTaskCard(props: DashboardProps, task: DashboardTask) {
+  const preview = task.previewLinks[0];
+  const summary = taskSummaryLine(task);
+  return html`
+    <article class="dashboard-task">
+      <div class="dashboard-task__header">
+        <div class="dashboard-task__header-copy">
+          <div class="dashboard-task__title">${task.title}</div>
+          <div class="dashboard-task__meta">${taskContextLine(task)}</div>
+        </div>
+        <div class="dashboard-task__signals">
+          ${preview ? html`<span class="dashboard-task__signal">${dt("tasks.preview")}</span>` : nothing}
+          ${(task.blockerLinks?.length ?? 0) > 0
+            ? html`
+                <span class="dashboard-task__signal dashboard-task__signal--warn">
+                  ${task.blockerLinks.length}
+                  ${dt("tasks.blockers")}
+                </span>
+              `
+            : nothing}
+        </div>
+      </div>
+      ${summary ? html`<div class="dashboard-task__summary">${summary}</div>` : nothing}
+      ${renderProgressBar({
+        label: task.progressLabel,
+        percent: task.progressPercent,
+      })}
+      <div class="dashboard-task__footer">
+        <div class="dashboard-task__actions">
+          <button class="btn btn--sm" @click=${() => props.onOpenTask(task)}>
+            ${dt("tasks.openSession")}
+          </button>
+          ${preview
+            ? html`
+                <button
+                  class="btn btn--sm"
+                  @click=${() => {
+                    props.onSelectWorkshop(preview.id);
+                    props.onNavigate("workshop");
+                  }}
+                >
+                  ${dt("tasks.preview")}
+                </button>
+              `
+            : nothing}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function resolveLifecycleStageIdForTask(
+  task: DashboardTask,
+  stages: DashboardLifecycleStageLike[],
+): string | null {
+  const displayStages = resolveDisplayLifecycleStages(stages);
+  if (task.status === "done") {
+    return displayStages.some((stage) => stage.id.trim().toLowerCase() === DISPLAY_DONE_STAGE_ID)
+      ? DISPLAY_DONE_STAGE_ID
+      : null;
+  }
+  const currentStageId = task.currentStageId?.trim().toLowerCase();
+  if (
+    currentStageId &&
+    displayStages.some((stage) => stage.id.trim().toLowerCase() === currentStageId)
+  ) {
+    return currentStageId;
+  }
+  const normalizedRole = task.teamRole?.trim().toLowerCase();
+  if (!normalizedRole) {
+    return null;
+  }
+  const matchedStage = displayStages.find((stage) =>
+    stage.roles.some((role) => role.trim().toLowerCase() === normalizedRole)
+  );
+  return matchedStage?.id?.trim().toLowerCase() ?? null;
+}
+
+function renderTaskKanban(props: DashboardProps, tasks: DashboardTask[]) {
+  const grouped = groupTasks(tasks, props.doneFromDate, props.doneToDate);
+  return html`
+    <div class="dashboard-kanban">
+      ${grouped.map(
+        (column) => html`
+          <section class="dashboard-kanban__column card">
+            <header class="dashboard-kanban__header">
+              <div class="dashboard-kanban__header-copy">
+                <span>${statusLabel(column.status)}</span>
+                <span class="dashboard-kanban__hint">${statusDescription(column.status)}</span>
+              </div>
+              <span class="pill">${column.tasks.length}</span>
+            </header>
+            <div class="dashboard-kanban__stack">
+              ${column.tasks.map((task) => renderTaskCard(props, task))}
+              ${column.tasks.length === 0 ? html`<div class="dashboard-empty">${dt("tasks.empty")}</div>` : nothing}
+            </div>
+          </section>
+        `,
+      )}
+    </div>
+  `;
+}
+
+function renderLifecycleTaskBoard(
+  props: DashboardProps,
+  group: DashboardTaskGroup,
+) {
+  const stages = resolveDisplayLifecycleStages(group.lifecycleStages);
+  return html`
+    <div class="dashboard-kanban">
+      ${stages.map((stage) => {
+        const stageId = stage.id.trim().toLowerCase();
+        const stageTasks = group.tasks
+          .filter((task) => resolveLifecycleStageIdForTask(task, stages) === stageId)
+          .toSorted(compareDashboardTeamRunItems);
+        const rolesLabel = stage.roles
+          .map((role) => role.trim())
+          .filter(Boolean)
+          .join(" · ");
+        return html`
+          <section class="dashboard-kanban__column card">
+            <header class="dashboard-kanban__header">
+              <div class="dashboard-kanban__header-copy">
+                <span>${stage.name?.trim() || stage.id}</span>
+                ${rolesLabel
+                  ? html`<span class="dashboard-kanban__hint">${rolesLabel}</span>`
+                  : nothing}
+              </div>
+              <span class="pill">${stageTasks.length}</span>
+            </header>
+            <div class="dashboard-kanban__stack">
+              ${stageTasks.map((task) => renderTaskCard(props, task))}
+              ${stageTasks.length === 0 ? html`<div class="dashboard-empty">${dt("tasks.empty")}</div>` : nothing}
+            </div>
+          </section>
+        `;
+      })}
+    </div>
+  `;
+}
+
 function renderTasksPage(props: DashboardProps) {
   const tasks = resolveTaskList(props.snapshot, props.taskFilter);
-  const grouped = groupTasks(tasks, props.doneFromDate, props.doneToDate);
+  const groups = resolveTaskGroups(props, tasks);
+  const selectedGroup =
+    groups.find((group) => group.key === props.taskGroupSelection) ??
+    groups.find((group) => group.tasks.length > 0) ??
+    groups[0] ??
+    null;
   return html`
     <section class="dashboard-page">
       <div class="dashboard-page__header">
@@ -809,69 +1312,71 @@ function renderTasksPage(props: DashboardProps) {
           </label>
         </div>
       </div>
-      <div class="dashboard-kanban">
-        ${grouped.map(
-          (column) => html`
-            <section class="dashboard-kanban__column card">
-              <header class="dashboard-kanban__header">
-                <div class="dashboard-kanban__header-copy">
-                  <span>${statusLabel(column.status)}</span>
-                  <span class="dashboard-kanban__hint">${statusDescription(column.status)}</span>
-                </div>
-                <span class="pill">${column.tasks.length}</span>
-              </header>
-              <div class="dashboard-kanban__stack">
-                ${column.tasks.map((task) => {
-                  const preview = task.previewLinks[0];
-                  const summary = taskSummaryLine(task);
-                  return html`
-                    <article class="dashboard-task">
-                      <div class="dashboard-task__header">
-                        <div class="dashboard-task__header-copy">
-                          <div class="dashboard-task__title">${task.title}</div>
-                          <div class="dashboard-task__meta">${taskContextLine(task)}</div>
-                        </div>
-                        <div class="dashboard-task__signals">
-                          ${preview ? html`<span class="dashboard-task__signal">${dt("tasks.preview")}</span>` : nothing}
-                          ${(task.blockerLinks?.length ?? 0) > 0
-                            ? html`
-                                <span class="dashboard-task__signal dashboard-task__signal--warn">
-                                  ${task.blockerLinks.length}
-                                  ${dt("tasks.blockers")}
-                                </span>
-                              `
-                            : nothing}
-                        </div>
-                      </div>
-                      ${summary ? html`<div class="dashboard-task__summary">${summary}</div>` : nothing}
-                      <div class="dashboard-task__footer">
-                        <div class="dashboard-task__actions">
-                          <button class="btn btn--sm" @click=${() => props.onOpenTask(task)}>
-                            ${dt("tasks.openSession")}
-                          </button>
-                          ${preview
-                            ? html`
-                                <button
-                                  class="btn btn--sm"
-                                  @click=${() => {
-                                    props.onSelectWorkshop(preview.id);
-                                    props.onNavigate("workshop");
-                                  }}
-                                >
-                                  ${dt("tasks.preview")}
-                                </button>
-                              `
-                            : nothing}
-                        </div>
-                      </div>
-                    </article>
-                  `;
-                })}
-                ${column.tasks.length === 0 ? html`<div class="dashboard-empty">${dt("tasks.empty")}</div>` : nothing}
-              </div>
-            </section>
-          `,
-        )}
+      <div class="dashboard-task-layout">
+        <aside class="dashboard-task-list">
+          ${groups.map((group) => {
+            const latestRun = group.runs[0];
+            const isActive = selectedGroup?.key === group.key;
+            return html`
+              <button
+                type="button"
+                class="dashboard-task-list__item ${isActive ? "dashboard-task-list__item--active" : ""}"
+                @click=${() => props.onSelectTaskGroup(group.key)}
+              >
+                <span>${group.title}</span>
+                ${group.subtitle ? html`<span>${group.subtitle}</span>` : nothing}
+                <span class="dashboard-note__meta">
+                  <span>${dt("tasks.taskCount", { count: String(group.tasks.length) })}</span>
+                  ${group.lifecycleStages.length > 0
+                    ? html`
+                        <span>
+                          ${dt("teams.stageCount", {
+                            count: String(resolveDisplayLifecycleStages(group.lifecycleStages).length),
+                          })}
+                        </span>
+                      `
+                    : nothing}
+                </span>
+                ${latestRun?.progressLabel
+                  ? html`<span class="dashboard-note__meta"><span>${latestRun.progressLabel}</span></span>`
+                  : nothing}
+              </button>
+            `;
+          })}
+        </aside>
+        <section class="dashboard-task-detail card">
+          ${selectedGroup
+            ? html`
+                <header class="dashboard-task-group__header">
+                  <div>
+                    <div class="card-title">${selectedGroup.title}</div>
+                    ${selectedGroup.subtitle ? html`<div class="card-sub">${selectedGroup.subtitle}</div>` : nothing}
+                  </div>
+                  <div class="dashboard-page__actions">
+                    <span class="pill">${dt("tasks.taskCount", { count: String(selectedGroup.tasks.length) })}</span>
+                    ${selectedGroup.lifecycleStages.length > 0
+                      ? html`
+                          <span class="pill">
+                            ${dt("teams.stageCount", {
+                              count: String(resolveDisplayLifecycleStages(selectedGroup.lifecycleStages).length),
+                            })}
+                          </span>
+                        `
+                      : nothing}
+                    ${selectedGroup.runs.length > 0
+                      ? html`<span class="pill">${dt("tasks.runCount", { count: String(selectedGroup.runs.length) })}</span>`
+                      : nothing}
+                    ${selectedGroup.runs[0]?.progressLabel
+                      ? html`<span class="pill">${selectedGroup.runs[0].progressLabel}</span>`
+                      : nothing}
+                  </div>
+	                </header>
+	                ${selectedGroup.kind === "team" && selectedGroup.lifecycleStages.length > 0
+	                  ? renderLifecycleTaskBoard(props, selectedGroup)
+	                  : renderTaskKanban(props, selectedGroup.tasks)}
+              `
+            : html`<div class="dashboard-empty">${dt("tasks.empty")}</div>`}
+        </section>
       </div>
     </section>
   `;
@@ -1300,8 +1805,21 @@ function renderTeamsPage(props: DashboardProps) {
               ),
           )
       : [];
+  const lifecycleStages = selected?.lifecycleStages ?? [];
   const delegateCount = members.length;
-  const stageCount = workflowStages.length > 0 ? workflowStages.length : members.length > 0 ? 1 : 0;
+  const selectedRuns = selected
+    ? (props.teamRunsResult?.items ?? []).filter(
+        (run) => run.teamId === selected.teamId && run.workflowId === selected.workflowId,
+      )
+    : [];
+  const latestRun = selectedRuns[0];
+  const stageCount = lifecycleStages.length > 0
+    ? resolveDisplayLifecycleStages(lifecycleStages).length
+    : workflowStages.length > 0
+      ? workflowStages.length
+      : members.length > 0
+        ? 1
+        : 0;
   return html`
     <section class="dashboard-page">
       <div class="dashboard-page__header">
@@ -1344,11 +1862,47 @@ function renderTeamsPage(props: DashboardProps) {
                     </div>
                   </div>
                   <div class="dashboard-page__actions">
+                    <button
+                      class="btn btn--sm"
+                      type="button"
+                      @click=${() =>
+                        props.onPromptTeamEdit({
+                          teamId: selected.teamId,
+                          teamLabel: selected.teamName ?? selected.teamId,
+                          workflowId: selected.workflowId,
+                          workflowLabel: selected.workflowName ?? selected.workflowId,
+                        })}
+                    >
+                      Prompt Changes
+                    </button>
                     <span class="pill">${manager?.label ?? dt("teams.noManager")}</span>
                     <span class="pill">${dt("teams.delegateCount", { count: String(delegateCount) })}</span>
                     <span class="pill">${dt("teams.stageCount", { count: String(stageCount) })}</span>
                   </div>
                 </div>
+                ${lifecycleStages.length > 0
+                  ? html`
+                      <section class="dashboard-team-runs card">
+                        <div class="dashboard-page__header">
+                          <div>
+                            <div class="card-title">${dt("teams.lifecycleTitle")}</div>
+                            <div class="card-sub">${dt("teams.lifecycleSubtitle")}</div>
+                          </div>
+                          <div class="dashboard-page__actions">
+                            ${latestRun?.progressLabel
+                              ? html`<span class="pill">${latestRun.progressLabel}</span>`
+                              : nothing}
+                          </div>
+                        </div>
+                        ${renderWorkflowLifecycle({
+                          stages: lifecycleStages,
+                          currentStageId: latestRun?.currentStageId,
+                          completedStageIds: latestRun?.completedStageIds,
+                          status: latestRun?.status,
+                        })}
+                      </section>
+                    `
+                  : nothing}
                 <div class="dashboard-org-chart">
                   <section class="dashboard-org-chart__core">
                     ${inboundLinks.length > 0

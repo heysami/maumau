@@ -129,6 +129,9 @@ type GatewayHost = {
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading: boolean;
+  dashboardTeamRunsError: string | null;
+  dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
   dashboardReloadTimer: number | null;
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;

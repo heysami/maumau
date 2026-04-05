@@ -302,6 +302,44 @@
   color: color-mix(in srgb, var(--text) 92%, white 4%);
 }
 
+.dashboard-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.dashboard-progress--compact {
+  gap: 4px;
+}
+
+.dashboard-progress__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--bg) 90%, black 6%);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.dashboard-progress--compact .dashboard-progress__track {
+  height: 6px;
+}
+
+.dashboard-progress__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 80%, white 6%),
+    color-mix(in srgb, var(--accent) 54%, white 18%)
+  );
+}
+
+.dashboard-progress__label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .dashboard-task__footer {
   display: flex;
   align-items: center;
@@ -360,6 +398,81 @@
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.dashboard-task-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.dashboard-task-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.dashboard-task-list__item {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  appearance: none;
+}
+
+.dashboard-task-list__item--active {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+}
+
+.dashboard-task-detail {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-task-group__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-task-group__lifecycle {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-lifecycle {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-lifecycle__stage {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+}
+
+.dashboard-lifecycle__stage--current {
+  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+}
+
+.dashboard-lifecycle__stage--complete {
+  border-color: color-mix(in srgb, var(--success) 34%, transparent);
+}
+
+.dashboard-lifecycle__stage--pending {
+  opacity: 0.86;
 }
 
 .dashboard-empty {
@@ -836,6 +949,44 @@
   gap: 18px;
 }
 
+.dashboard-team-runs {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-team-runs__list {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-team-run {
+  gap: 12px;
+}
+
+.dashboard-team-run__blockers,
+.dashboard-team-run__items {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-team-run__items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-team-run__item {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-team-run__item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .dashboard-team-summary {
   padding: 16px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
@@ -1003,7 +1154,8 @@
 @media (max-width: 900px) {
   .dashboard-org-chart__stage-nodes,
   .dashboard-org-chart__stage-nodes--compact,
-  .dashboard-org-chart__stage-nodes--single {
+  .dashboard-org-chart__stage-nodes--single,
+  .dashboard-team-run__items-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1060,6 +1212,7 @@
   .dashboard-grid,
   .dashboard-workshop,
   .dashboard-calendar-month-shell,
+  .dashboard-task-layout,
   .dashboard-team-layout,
   .dashboard-memory-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -1081,6 +1234,7 @@
 
   .dashboard-shell__header,
   .dashboard-page__header,
+  .dashboard-task-group__header,
   .dashboard-hero {
     align-items: stretch;
     flex-direction: column;

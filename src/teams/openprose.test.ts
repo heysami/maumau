@@ -58,6 +58,8 @@ describe("generateTeamOpenProsePreview", () => {
 
     expect(preview).toContain("# cross-team-links: team:qa");
     expect(preview).toContain("# workflow-id: default");
+    expect(preview).toContain("Structured lifecycle stages: Working.");
+    expect(preview).toContain("Emit lifecycle updates as standalone `WORK_ITEM:` JSON lines");
     expect(preview).toContain("# Step 1: the manager plans the work");
     expect(preview).toContain("# Step 2: specialists work in parallel");
     expect(preview).toContain("# Step 3: the manager synthesizes the team result");
@@ -152,6 +154,7 @@ describe("generateTeamOpenProsePreview", () => {
     expect(preview).toContain(
       "When spawning same-team specialist work, target the bound specialist instead of the manager.",
     );
+    expect(preview).toContain('`teamRun.kind="team_run"`');
     expect(preview).toContain(
       "prefer a durable preview link over only local paths or LAN URLs whenever capability truth says private preview is ready.",
     );

@@ -9,6 +9,13 @@ const ConfigSchemaLookupPathString = Type.String({
 
 export const ConfigGetParamsSchema = Type.Object({}, { additionalProperties: false });
 
+export const DashboardTeamsSnapshotParamsSchema = Type.Object(
+  {
+    rawConfig: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 export const ConfigSetParamsSchema = Type.Object(
   {
     raw: NonEmptyString,

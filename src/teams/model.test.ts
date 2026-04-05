@@ -109,4 +109,38 @@ describe("team model access rules", () => {
       name: "Design Review",
     });
   });
+
+  it("normalizes structured lifecycle stages and preserves fallback workflows", () => {
+    const team = {
+      id: "alpha",
+      managerAgentId: "alpha-manager",
+      members: [{ agentId: "alpha-coder", role: "Coder" }],
+      workflows: [
+        {
+          id: "feature-build",
+          lifecycle: {
+            stages: [
+              { id: " Planning ", name: "Planning", status: "in_progress" },
+              {
+                id: "Execution",
+                status: "review",
+                roles: ["Coder", "Coder", "  "],
+              },
+              { id: "Execution", status: "blocked" },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(listTeamWorkflows(team)[0]).toMatchObject({
+      id: "feature-build",
+      lifecycle: {
+        stages: [
+          { id: "planning", name: "Planning", status: "in_progress", roles: [] },
+          { id: "execution", name: "Execution", status: "review", roles: ["coder"] },
+        ],
+      },
+    });
+  });
 });

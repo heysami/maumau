@@ -180,6 +180,16 @@ export type AppViewState = {
   agentsSelectedId: string | null;
   teamsSelectedId: string | null;
   teamsSelectedWorkflowId: string | null;
+  teamPromptDialogOpen: boolean;
+  teamPromptTeamId: string | null;
+  teamPromptTeamLabel: string;
+  teamPromptWorkflowId: string | null;
+  teamPromptWorkflowLabel: string;
+  teamPromptDraft: string;
+  teamPromptBusy: boolean;
+  teamPromptError: string | null;
+  teamPromptSummary: string | null;
+  teamPromptWarnings: string[];
   toolsCatalogLoading: boolean;
   toolsCatalogError: string | null;
   toolsCatalogResult: ToolsCatalogResult | null;
@@ -220,7 +230,11 @@ export type AppViewState = {
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading: boolean;
+  dashboardTeamRunsError: string | null;
+  dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
   dashboardTaskFilter: string | null;
+  dashboardTaskGroupSelection: string | null;
   dashboardDoneFromDate: string;
   dashboardDoneToDate: string;
   dashboardWorkshopSelectedId: string | null;

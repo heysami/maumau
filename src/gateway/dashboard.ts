@@ -31,6 +31,8 @@ import type {
   DashboardTaskStatus,
   DashboardTeamEdge,
   DashboardTeamNode,
+  DashboardTeamRun,
+  DashboardTeamRunsResult,
   DashboardTeamSnapshot,
   DashboardTeamSnapshotsResult,
   DashboardTodaySnapshot,
@@ -40,6 +42,7 @@ import type {
   DashboardWorkItem,
   DashboardWorkItemBlockerLink,
   DashboardWorkItemSessionLink,
+  DashboardWorkItemVisibilityScope,
 } from "./dashboard-types.js";
 import {
   buildPreviewEmbedPathFromPreviewUrl,
@@ -55,11 +58,19 @@ import {
 import { parseAgentSessionKey } from "../routing/session-key.js";
 import {
   findTeamWorkflow,
+  findTeamConfig,
   listConfiguredTeams,
   listTeamMembers,
   listTeamWorkflows,
   resolveAgentDisplayName,
 } from "../teams/model.js";
+import { resolveSessionTeamContext } from "../teams/runtime.js";
+import {
+  findLifecycleStageById,
+  findLifecycleStageByRole,
+  formatLifecycleProgressLabel,
+  resolveTeamWorkflowLifecycleStages,
+} from "../teams/lifecycle.js";
 import { generateTeamOpenProsePreview } from "../teams/openprose.js";
 
 const DASHBOARD_DIRNAME = "dashboard";
@@ -117,8 +128,9 @@ export const __testing = {
 };
 
 type TeamSnapshotStore = {
-  version: 1;
+  version: 1 | 2;
   generatedAtMs: number;
+  teamsConfigFingerprint?: string;
   snapshots: DashboardTeamSnapshot[];
 };
 
@@ -573,28 +585,43 @@ async function writeTeamSnapshotStore(
   await fs.rename(tmpPath, filePath);
 }
 
-export async function readStoredDashboardTeamSnapshots(params?: {
+async function readStoredTeamSnapshotStore(params?: {
   stateDir?: string;
-}): Promise<DashboardTeamSnapshotsResult> {
+}): Promise<TeamSnapshotStore | null> {
   const filePath = resolveDashboardTeamsSnapshotsPath(params?.stateDir);
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as Partial<TeamSnapshotStore>;
     if (!parsed || !Array.isArray(parsed.snapshots)) {
-      return { generatedAtMs: 0, snapshots: [] };
+      return null;
     }
     return {
+      version: parsed.version === 2 ? 2 : 1,
       generatedAtMs: typeof parsed.generatedAtMs === "number" ? parsed.generatedAtMs : 0,
+      teamsConfigFingerprint:
+        typeof parsed.teamsConfigFingerprint === "string" ? parsed.teamsConfigFingerprint : undefined,
       snapshots: parsed.snapshots as DashboardTeamSnapshot[],
     };
   } catch {
-    return { generatedAtMs: 0, snapshots: [] };
+    return null;
   }
 }
 
-export async function refreshStoredDashboardTeamSnapshots(params?: {
-  cfg?: MaumauConfig;
+export async function readStoredDashboardTeamSnapshots(params?: {
   stateDir?: string;
+}): Promise<DashboardTeamSnapshotsResult> {
+  const store = await readStoredTeamSnapshotStore(params);
+  if (!store) {
+    return { generatedAtMs: 0, snapshots: [] };
+  }
+  return {
+    generatedAtMs: store.generatedAtMs,
+    snapshots: store.snapshots,
+  };
+}
+
+export async function collectDashboardTeamSnapshots(params?: {
+  cfg?: MaumauConfig;
   nowMs?: number;
   logger?: LoggerLike;
 }): Promise<DashboardTeamSnapshotsResult> {
@@ -603,6 +630,12 @@ export async function refreshStoredDashboardTeamSnapshots(params?: {
   const snapshots: DashboardTeamSnapshot[] = [];
   for (const team of listConfiguredTeams(cfg)) {
     for (const workflow of listTeamWorkflows(team)) {
+      const lifecycleStages = resolveTeamWorkflowLifecycleStages(workflow).map((stage) => ({
+        id: stage.id,
+        name: stage.name,
+        status: stage.status,
+        roles: [...stage.roles],
+      }));
       const openProsePreview = generateTeamOpenProsePreview({
         config: cfg,
         team,
@@ -634,21 +667,38 @@ export async function refreshStoredDashboardTeamSnapshots(params?: {
         warnings: generatedSummary.warning ? [generatedSummary.warning] : [],
         summary: generatedSummary.summary,
         openProsePreview,
+        lifecycleStages,
         nodes: graph.nodes,
         edges: graph.edges,
       });
     }
   }
-  const store: TeamSnapshotStore = {
-    version: 1,
-    generatedAtMs,
-    snapshots,
-  };
-  await writeTeamSnapshotStore(store, params?.stateDir);
   return {
     generatedAtMs,
     snapshots,
   };
+}
+
+export async function refreshStoredDashboardTeamSnapshots(params?: {
+  cfg?: MaumauConfig;
+  stateDir?: string;
+  nowMs?: number;
+  logger?: LoggerLike;
+}): Promise<DashboardTeamSnapshotsResult> {
+  const cfg = params?.cfg ?? loadConfig();
+  const result = await collectDashboardTeamSnapshots({
+    cfg,
+    nowMs: params?.nowMs,
+    logger: params?.logger,
+  });
+  const store: TeamSnapshotStore = {
+    version: 2,
+    generatedAtMs: result.generatedAtMs,
+    teamsConfigFingerprint: serializeForChangeCheck(cfg.teams),
+    snapshots: result.snapshots,
+  };
+  await writeTeamSnapshotStore(store, params?.stateDir);
+  return result;
 }
 
 function serializeForChangeCheck(value: unknown): string {
@@ -701,6 +751,17 @@ function parsePreviewArtifacts(messages: unknown[]): { previewUrl?: string; arti
 type TrustedWorkItemEnvelope = {
   title?: string;
   summary?: string;
+  teamRun?: {
+    kind: "team_run";
+    teamId?: string;
+    workflowId?: string;
+    rootSessionKey?: string;
+    event?: "started" | "stage_enter" | "stage_complete" | "blocked" | "completed";
+    currentStageId?: string;
+    currentStageName?: string;
+    completedStageIds?: string[];
+    status?: DashboardTaskStatus;
+  };
 };
 
 type DerivedTaskContext = {
@@ -724,9 +785,47 @@ function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvel
       if (!isObject(parsed)) {
         continue;
       }
+      const teamRunRaw = isObject(parsed.teamRun) ? parsed.teamRun : null;
       return {
         title: normalizeText(parsed.title) || undefined,
         summary: normalizeText(parsed.summary) || undefined,
+        teamRun:
+          teamRunRaw &&
+          normalizeText(teamRunRaw.kind).toLowerCase() === "team_run"
+            ? {
+                kind: "team_run",
+                teamId: normalizeText(teamRunRaw.teamId) || undefined,
+                workflowId: normalizeText(teamRunRaw.workflowId) || undefined,
+                rootSessionKey: normalizeText(teamRunRaw.rootSessionKey) || undefined,
+                event: (() => {
+                  const event = normalizeText(teamRunRaw.event).toLowerCase();
+                  return event === "started" ||
+                      event === "stage_enter" ||
+                      event === "stage_complete" ||
+                      event === "blocked" ||
+                      event === "completed"
+                    ? event
+                    : undefined;
+                })(),
+                currentStageId: normalizeText(teamRunRaw.currentStageId).toLowerCase() || undefined,
+                currentStageName: normalizeText(teamRunRaw.currentStageName) || undefined,
+                completedStageIds: Array.isArray(teamRunRaw.completedStageIds)
+                  ? teamRunRaw.completedStageIds
+                      .map((entry) => normalizeText(entry).toLowerCase())
+                      .filter(Boolean)
+                  : undefined,
+                status: (() => {
+                  const status = normalizeText(teamRunRaw.status);
+                  return status === "blocked" ||
+                      status === "in_progress" ||
+                      status === "review" ||
+                      status === "done" ||
+                      status === "idle"
+                    ? status
+                    : undefined;
+                })(),
+              }
+            : undefined,
       };
     } catch {
       // Ignore malformed envelopes.
@@ -1236,10 +1335,108 @@ function mergeBlockerLinks(
   return [...merged.values()];
 }
 
+function countCompletedLifecycleStages(
+  stageIds: string[] | undefined,
+  workflow: ReturnType<typeof findTeamWorkflow>,
+): number {
+  if (!Array.isArray(stageIds) || stageIds.length === 0) {
+    return 0;
+  }
+  const validStageIds = new Set(resolveTeamWorkflowLifecycleStages(workflow).map((stage) => stage.id));
+  const seen = new Set<string>();
+  for (const stageId of stageIds) {
+    const normalized = normalizeText(stageId).toLowerCase();
+    if (!normalized || seen.has(normalized) || !validStageIds.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+  }
+  return seen.size;
+}
+
+function resolveLifecycleDisplayStepCount(
+  stages: ReturnType<typeof resolveTeamWorkflowLifecycleStages>,
+): number {
+  if (stages.length === 0) {
+    return 0;
+  }
+  const hasDoneStage = stages.some((stage) => normalizeText(stage.id).toLowerCase() === "done");
+  return hasDoneStage ? stages.length : stages.length + 1;
+}
+
+function resolveLifecycleProgressFields(params: {
+  cfg: MaumauConfig;
+  teamId?: string;
+  workflowId?: string;
+  teamRole?: string;
+  envelope: TrustedWorkItemEnvelope | null;
+  fallbackStatus: DashboardTaskStatus;
+  rowStatus?: string;
+}): Pick<
+  DashboardWorkItem,
+  | "teamWorkflowId"
+  | "teamWorkflowLabel"
+  | "currentStageId"
+  | "currentStageLabel"
+  | "completedStageIds"
+  | "completedStepCount"
+  | "totalStepCount"
+  | "progressLabel"
+  | "progressPercent"
+> & { status: DashboardTaskStatus } {
+  const team = params.teamId ? findTeamConfig(params.cfg, params.teamId) : undefined;
+  const workflow = team ? findTeamWorkflow(team, params.workflowId) : undefined;
+  const lifecycleStages = workflow ? resolveTeamWorkflowLifecycleStages(workflow) : [];
+  const currentStageFromEnvelope = workflow
+    ? findLifecycleStageById(workflow, params.envelope?.teamRun?.currentStageId)
+    : undefined;
+  const currentStageFromRole =
+    !currentStageFromEnvelope && workflow
+      ? findLifecycleStageByRole(workflow, params.teamRole)
+      : undefined;
+  const currentStage = currentStageFromEnvelope ?? currentStageFromRole;
+  const currentStageLabel =
+    params.envelope?.teamRun?.currentStageName ||
+    currentStage?.name ||
+    undefined;
+  const completedStageIds =
+    params.envelope?.teamRun?.completedStageIds?.filter(Boolean) ?? [];
+  let completedStepCount = workflow
+    ? countCompletedLifecycleStages(completedStageIds, workflow)
+    : 0;
+  const totalStepCount = resolveLifecycleDisplayStepCount(lifecycleStages);
+  if (params.rowStatus === "done" && totalStepCount > 0) {
+    completedStepCount = totalStepCount;
+  }
+  const progressLabel = formatLifecycleProgressLabel({
+    completedStepCount,
+    totalStepCount,
+    currentStageLabel,
+  });
+  const progressPercent =
+    totalStepCount > 0 ? Math.round((completedStepCount / totalStepCount) * 100) : undefined;
+  const lifecycleStatus =
+    params.envelope?.teamRun?.status ||
+    currentStage?.status ||
+    params.fallbackStatus;
+
+  return {
+    status: lifecycleStatus,
+    teamWorkflowId: workflow?.id,
+    teamWorkflowLabel: workflow?.name?.trim() || workflow?.id,
+    currentStageId: params.envelope?.teamRun?.currentStageId || currentStage?.id,
+    currentStageLabel,
+    completedStageIds,
+    completedStepCount: totalStepCount > 0 ? completedStepCount : undefined,
+    totalStepCount: totalStepCount > 0 ? totalStepCount : undefined,
+    progressLabel,
+    progressPercent,
+  };
+}
+
 function resolveTaskStatus(params: {
   row: {
     status?: string;
-    childSessions?: string[];
   };
   blockerIds: string[];
 }): DashboardTaskStatus {
@@ -1259,13 +1456,11 @@ function resolveTaskStatus(params: {
   if (params.row.status === "done") {
     return "done";
   }
-  if ((params.row.childSessions?.length ?? 0) > 0) {
-    return "review";
-  }
   return "idle";
 }
 
 function resolveTrustedTeamContext(
+  cfg: MaumauConfig,
   sessionKey: string,
   store: Record<string, SessionEntry>,
 ): { teamId?: string; teamRole?: string } | null {
@@ -1280,6 +1475,16 @@ function resolveTrustedTeamContext(
       return { teamId, teamRole };
     }
     current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  const implicit = resolveSessionTeamContext({
+    cfg,
+    sessionKey,
+  });
+  if (implicit?.teamId || implicit?.teamRole) {
+    return {
+      teamId: implicit.teamId,
+      teamRole: implicit.teamRole,
+    };
   }
   return null;
 }
@@ -1477,10 +1682,6 @@ function buildCandidateWorkItem(params: {
   if (!params.row.updatedAt) {
     return null;
   }
-  const teamContext = resolveTrustedTeamContext(params.row.key, params.store);
-  if (!teamContext?.teamId && !teamContext?.teamRole) {
-    return null;
-  }
   const agentId = resolveSessionAgentId(params.cfg, params.row.key);
   const assigneeLabel =
     params.agentLabelById.get(agentId) ?? resolveAgentDisplayName(params.cfg, agentId);
@@ -1502,6 +1703,22 @@ function buildCandidateWorkItem(params: {
     promptContext,
   );
   const envelope = parseTrustedWorkItemEnvelope(orderedMessages);
+  const teamContext = resolveTrustedTeamContext(params.cfg, params.row.key, params.store);
+  const hasExplicitTeamMetadata = Boolean(params.entry?.teamId || params.entry?.teamRole);
+  const hasRelevantImplicitManagerActivity =
+    !hasExplicitTeamMetadata &&
+    teamContext?.teamRole?.toLowerCase() === "manager" &&
+    (Boolean(envelope?.teamRun) || (params.row.childSessions?.length ?? 0) > 0);
+  if (
+    !teamContext?.teamId &&
+    !teamContext?.teamRole &&
+    !envelope?.teamRun
+  ) {
+    return null;
+  }
+  if (!hasExplicitTeamMetadata && !hasRelevantImplicitManagerActivity && !envelope?.teamRun) {
+    return null;
+  }
   const artifacts = parsePreviewArtifacts(orderedMessages);
   const taskId = resolveWorkItemId(params.row.key);
   const title = resolveTrustedTaskTitle({
@@ -1525,6 +1742,15 @@ function buildCandidateWorkItem(params: {
     row: params.row,
     blockerIds: [],
   });
+  const lifecycle = resolveLifecycleProgressFields({
+    cfg: params.cfg,
+    teamId: envelope?.teamRun?.teamId || teamContext.teamId,
+    workflowId: envelope?.teamRun?.workflowId,
+    teamRole: teamContext.teamRole,
+    envelope,
+    fallbackStatus: status,
+    rowStatus: params.row.status,
+  });
   const updatedAtMs = params.row.updatedAt ?? params.nowMs;
   const blockerLinks = buildFailureBlocker({
     taskId,
@@ -1538,24 +1764,37 @@ function buildCandidateWorkItem(params: {
     sessionKey: params.row.key,
     title,
     summary,
-    status: blockerLinks.length > 0 ? "blocked" : status,
+    status: blockerLinks.length > 0 ? "blocked" : lifecycle.status,
+    visibilityScope: "global",
     source: envelope ? "runtime_envelope" : "team_session",
     agentId,
     assigneeLabel,
-    teamId: teamContext.teamId,
-    teamLabel: teamContext.teamId ? params.teamLabelById.get(teamContext.teamId) : undefined,
+    teamId: envelope?.teamRun?.teamId || teamContext.teamId,
+    teamLabel:
+      (envelope?.teamRun?.teamId || teamContext.teamId)
+        ? params.teamLabelById.get(envelope?.teamRun?.teamId || teamContext.teamId || "")
+        : undefined,
     teamRole: teamContext.teamRole,
+    teamWorkflowId: lifecycle.teamWorkflowId,
+    teamWorkflowLabel: lifecycle.teamWorkflowLabel,
     updatedAtMs,
     startedAtMs: params.row.startedAt,
     endedAtMs: params.row.endedAt,
     createdAtMs: params.row.startedAt ?? updatedAtMs,
     retainedUntilMs:
-      status === "done" || status === "blocked"
+      lifecycle.status === "done" || lifecycle.status === "blocked"
         ? (params.row.endedAt ?? updatedAtMs) + WORK_ITEM_RETENTION_MS
         : undefined,
     parentSessionKey: params.row.parentSessionKey,
     childSessionKeys: params.row.childSessions,
     blockerIds: blockerLinks.map((blocker) => blocker.id),
+    currentStageId: lifecycle.currentStageId,
+    currentStageLabel: lifecycle.currentStageLabel,
+    completedStageIds: lifecycle.completedStageIds,
+    completedStepCount: lifecycle.completedStepCount,
+    totalStepCount: lifecycle.totalStepCount,
+    progressLabel: lifecycle.progressLabel,
+    progressPercent: lifecycle.progressPercent,
     sessionLinks: [
       {
         sessionKey: params.row.key,
@@ -1596,6 +1835,233 @@ function resolveTaskIdForSessionKey(
   return null;
 }
 
+function isSessionDescendantOf(
+  sessionKey: string,
+  ancestorSessionKey: string,
+  store: Record<string, SessionEntry>,
+): boolean {
+  let current = normalizeText(sessionKey);
+  const ancestor = normalizeText(ancestorSessionKey);
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    if (current === ancestor) {
+      return true;
+    }
+    seen.add(current);
+    const entry = store[current];
+    current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  return false;
+}
+
+function resolveRootSessionKey(
+  sessionKey: string,
+  store: Record<string, SessionEntry>,
+): string | undefined {
+  let current = normalizeText(sessionKey);
+  let last = current;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    last = current;
+    const entry = store[current];
+    current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  return last || undefined;
+}
+
+function resolveStatusPriority(status: DashboardTaskStatus): number {
+  switch (status) {
+    case "blocked":
+      return 4;
+    case "review":
+      return 3;
+    case "in_progress":
+      return 2;
+    case "done":
+      return 1;
+    case "idle":
+    default:
+      return 0;
+  }
+}
+
+function mergeRollupStatus(current: DashboardTaskStatus, next: DashboardTaskStatus): DashboardTaskStatus {
+  return resolveStatusPriority(next) >= resolveStatusPriority(current) ? next : current;
+}
+
+function findNearestAncestorWorkItem(params: {
+  sessionKey: string;
+  store: Record<string, SessionEntry>;
+  itemsBySessionKey: Map<string, DashboardWorkItem>;
+  excludedTeamId?: string;
+}): DashboardWorkItem | null {
+  let current =
+    normalizeText(params.store[params.sessionKey]?.parentSessionKey) ||
+    normalizeText(params.store[params.sessionKey]?.spawnedBy);
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const item = params.itemsBySessionKey.get(current);
+    if (item && item.teamId !== params.excludedTeamId) {
+      return item;
+    }
+    current =
+      normalizeText(params.store[current]?.parentSessionKey) ||
+      normalizeText(params.store[current]?.spawnedBy);
+  }
+  return null;
+}
+
+function buildTeamRunsFromWorkItems(params: {
+  cfg: MaumauConfig;
+  items: DashboardWorkItem[];
+  store: Record<string, SessionEntry>;
+}): { allItems: DashboardWorkItem[]; teamRuns: DashboardTeamRun[] } {
+  const itemsById = new Map(params.items.map((item) => [item.id, { ...item }]));
+  const itemsBySessionKey = new Map(
+    Array.from(itemsById.values()).map((item) => [item.sessionKey, item]),
+  );
+  const managerItems = Array.from(itemsById.values())
+    .filter((item) => normalizeText(item.teamRole).toLowerCase() === "manager" && item.teamId)
+    .toSorted((left, right) => {
+      const leftDepth = (left.sessionKey.match(/:/g) ?? []).length;
+      const rightDepth = (right.sessionKey.match(/:/g) ?? []).length;
+      return rightDepth - leftDepth;
+    });
+  const teamRuns: DashboardTeamRun[] = [];
+
+  for (const managerItem of managerItems) {
+    const team = managerItem.teamId ? findTeamConfig(params.cfg, managerItem.teamId) : undefined;
+    if (!team) {
+      continue;
+    }
+    const workflow = findTeamWorkflow(team, managerItem.teamWorkflowId);
+    const lifecycleStages = resolveTeamWorkflowLifecycleStages(workflow);
+    const detailItems = Array.from(itemsById.values())
+      .filter(
+        (item) =>
+          item.teamId === managerItem.teamId &&
+          isSessionDescendantOf(item.sessionKey, managerItem.sessionKey, params.store),
+      )
+      .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0));
+    if (detailItems.length === 0) {
+      continue;
+    }
+
+    const completedStageIds = managerItem.completedStageIds ?? [];
+    const totalStepCount =
+      managerItem.totalStepCount ?? resolveLifecycleDisplayStepCount(lifecycleStages);
+    const completedStepCount =
+      managerItem.completedStepCount ??
+      (managerItem.status === "done" ? totalStepCount : 0);
+    const progressLabel =
+      managerItem.progressLabel ??
+      formatLifecycleProgressLabel({
+        completedStepCount,
+        totalStepCount,
+        currentStageLabel: managerItem.currentStageLabel,
+      });
+    const progressPercent =
+      managerItem.progressPercent ??
+      (totalStepCount > 0 ? Math.round((completedStepCount / totalStepCount) * 100) : undefined);
+    const blockerLinks = detailItems.reduce<DashboardWorkItemBlockerLink[]>(
+      (merged, item) => mergeBlockerLinks(merged, item.blockerLinks),
+      [],
+    );
+    const rootTask = findNearestAncestorWorkItem({
+      sessionKey: managerItem.sessionKey,
+      store: params.store,
+      itemsBySessionKey,
+      excludedTeamId: managerItem.teamId,
+    });
+
+    for (const item of detailItems) {
+      if (item.id === managerItem.id && !rootTask) {
+        continue;
+      }
+      const current = itemsById.get(item.id);
+      if (!current) {
+        continue;
+      }
+      current.visibilityScope = "team_detail";
+      itemsById.set(item.id, current);
+      itemsBySessionKey.set(item.sessionKey, current);
+    }
+
+    if (rootTask) {
+      const currentRoot = itemsById.get(rootTask.id);
+      if (currentRoot) {
+        currentRoot.delegatedTeamRunId = `team-run:${managerItem.sessionKey}`;
+        currentRoot.currentStageId = managerItem.currentStageId;
+        currentRoot.currentStageLabel = managerItem.currentStageLabel;
+        currentRoot.completedStepCount = completedStepCount;
+        currentRoot.totalStepCount = totalStepCount || undefined;
+        currentRoot.progressLabel = progressLabel;
+        currentRoot.progressPercent = progressPercent;
+        currentRoot.status = blockerLinks.length > 0
+          ? "blocked"
+          : mergeRollupStatus(currentRoot.status, managerItem.status);
+        currentRoot.blockerLinks = mergeBlockerLinks(currentRoot.blockerLinks, blockerLinks);
+        currentRoot.blockerIds = currentRoot.blockerLinks.map((blocker) => blocker.id);
+        itemsById.set(currentRoot.id, currentRoot);
+        itemsBySessionKey.set(currentRoot.sessionKey, currentRoot);
+      }
+      const currentManager = itemsById.get(managerItem.id);
+      if (currentManager) {
+        currentManager.visibilityScope = "team_detail";
+        itemsById.set(currentManager.id, currentManager);
+        itemsBySessionKey.set(currentManager.sessionKey, currentManager);
+      }
+    } else {
+      const currentManager = itemsById.get(managerItem.id);
+      if (currentManager && !currentManager.delegatedTeamRunId) {
+        currentManager.visibilityScope = "global";
+        currentManager.completedStepCount = completedStepCount;
+        currentManager.totalStepCount = totalStepCount || undefined;
+        currentManager.progressLabel = progressLabel;
+        currentManager.progressPercent = progressPercent;
+        currentManager.blockerLinks = mergeBlockerLinks(currentManager.blockerLinks, blockerLinks);
+        currentManager.blockerIds = currentManager.blockerLinks.map((blocker) => blocker.id);
+        currentManager.status = blockerLinks.length > 0 ? "blocked" : currentManager.status;
+        itemsById.set(currentManager.id, currentManager);
+        itemsBySessionKey.set(currentManager.sessionKey, currentManager);
+      }
+    }
+
+    teamRuns.push({
+      id: `team-run:${managerItem.sessionKey}`,
+      managerSessionKey: managerItem.sessionKey,
+      rootSessionKey: resolveRootSessionKey(managerItem.sessionKey, params.store),
+      rootTaskId: rootTask?.id,
+      title: managerItem.title,
+      summary: managerItem.summary,
+      status: blockerLinks.length > 0 ? "blocked" : managerItem.status,
+      teamId: team.id,
+      teamName: team.name?.trim() || team.id,
+      workflowId: workflow.id,
+      workflowName: workflow.name?.trim() || workflow.id,
+      updatedAtMs: managerItem.updatedAtMs,
+      startedAtMs: managerItem.startedAtMs,
+      endedAtMs: managerItem.endedAtMs,
+      currentStageId: managerItem.currentStageId,
+      currentStageLabel: managerItem.currentStageLabel,
+      completedStageIds,
+      completedStepCount,
+      totalStepCount,
+      progressLabel,
+      progressPercent,
+      blockerLinks,
+      items: detailItems.map((item) => itemsById.get(item.id) ?? item),
+    });
+  }
+
+  return {
+    allItems: Array.from(itemsById.values()),
+    teamRuns: teamRuns.toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0)),
+  };
+}
+
 async function reconcileDashboardWorkItems(params: {
   cfg: MaumauConfig;
   nowMs: number;
@@ -1612,7 +2078,7 @@ async function reconcileDashboardWorkItems(params: {
     childSessions?: string[];
   }>;
   approvals: ReadonlyArray<ExecApprovalRecord>;
-}): Promise<DashboardWorkItem[]> {
+}): Promise<{ allItems: DashboardWorkItem[]; globalItems: DashboardWorkItem[]; teamRuns: DashboardTeamRun[] }> {
   const existingStore = await readStoredDashboardWorkItems({ stateDir: params.stateDir });
   const existingById = new Map(existingStore.items.map((item) => [item.id, item]));
   const nextById = new Map(existingById);
@@ -1668,7 +2134,7 @@ async function reconcileDashboardWorkItems(params: {
     approvalBlockersByTaskId.set(taskId, blockers);
   }
 
-  const finalItems = [...nextById.values()]
+  const allRetainedItems = [...nextById.values()]
     .map((item) => {
       const approvalBlockers = approvalBlockersByTaskId.get(item.id) ?? [];
       const nonApprovalBlockers = item.blockerLinks.filter((blocker) => blocker.kind !== "approval");
@@ -1690,16 +2156,29 @@ async function reconcileDashboardWorkItems(params: {
     .filter((item) => (item.retainedUntilMs ?? Number.MAX_SAFE_INTEGER) >= params.nowMs)
     .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
     .slice(0, MAX_TASKS);
+  const rolledUp = buildTeamRunsFromWorkItems({
+    cfg: params.cfg,
+    items: allRetainedItems,
+    store: params.store,
+  });
+  const globalItems = rolledUp.allItems
+    .filter((item) => (item.visibilityScope ?? "global") !== "team_detail")
+    .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
+    .slice(0, MAX_TASKS);
 
   await writeStoredDashboardWorkItems(
     {
       version: 1,
       updatedAtMs: params.nowMs,
-      items: finalItems,
+      items: rolledUp.allItems,
     },
     params.stateDir,
   );
-  return finalItems;
+  return {
+    allItems: rolledUp.allItems,
+    globalItems,
+    teamRuns: rolledUp.teamRuns,
+  };
 }
 
 async function collectRecentMemoryEntries(params: {
@@ -2082,6 +2561,7 @@ async function collectDashboardDataset(
 ): Promise<{
   snapshot: DashboardSnapshot;
   tasks: DashboardTasksResult;
+  teamRuns: DashboardTeamRunsResult;
   workshop: DashboardWorkshopResult;
   calendar: DashboardCalendarResult;
   routines: DashboardRoutinesResult;
@@ -2103,7 +2583,7 @@ async function collectDashboardDataset(
     },
   });
   const approvals = params.execApprovals ?? [];
-  const tasks = await reconcileDashboardWorkItems({
+  const workItems = await reconcileDashboardWorkItems({
     cfg,
     nowMs,
     stateDir: params.stateDir,
@@ -2112,7 +2592,7 @@ async function collectDashboardDataset(
     sessions: sessionsResult.sessions,
     approvals,
   });
-  const workshopItems = await buildWorkshopItems(tasks, {
+  const workshopItems = await buildWorkshopItems(workItems.allItems, {
     cfg,
     nowMs,
     stateDir: params.stateDir,
@@ -2156,7 +2636,7 @@ async function collectDashboardDataset(
   const recentMemory = await collectRecentMemoryEntries({ cfg, nowMs });
   const approvalBlockers = buildApprovalBlockers(approvals);
   const cronBlockers = buildCronBlockers(cronJobs, nowMs);
-  const taskBlockers: DashboardBlocker[] = tasks
+  const taskBlockers: DashboardBlocker[] = workItems.globalItems
     .flatMap((task) =>
       task.blockerLinks.map((blocker) => ({
         id: blocker.id,
@@ -2171,7 +2651,7 @@ async function collectDashboardDataset(
   const blockers = [...approvalBlockers, ...cronBlockers, ...taskBlockers].slice(0, 32);
   const today: DashboardTodaySnapshot = {
     generatedAtMs: nowMs,
-    inProgressTasks: tasks
+    inProgressTasks: workItems.globalItems
       .filter((task) => task.status === "in_progress" || task.status === "review")
       .slice(0, 8),
     scheduledToday: todayCalendar.events,
@@ -2183,7 +2663,7 @@ async function collectDashboardDataset(
     snapshot: {
       generatedAtMs: nowMs,
       today,
-      tasks,
+      tasks: workItems.allItems,
       workshop: workshopItems,
       calendar: calendarResult.events,
       routines,
@@ -2191,7 +2671,11 @@ async function collectDashboardDataset(
     },
     tasks: {
       generatedAtMs: nowMs,
-      items: tasks,
+      items: workItems.allItems,
+    },
+    teamRuns: {
+      generatedAtMs: nowMs,
+      items: workItems.teamRuns,
     },
     workshop: {
       generatedAtMs: nowMs,
@@ -2242,6 +2726,17 @@ export async function collectDashboardTasks(
   return dataset.tasks;
 }
 
+export async function collectDashboardTeamRuns(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardTeamRunsResult> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.teamRuns;
+}
+
 export async function collectDashboardWorkshop(
   params: CollectDashboardSnapshotParams,
 ): Promise<DashboardWorkshopResult> {
@@ -2288,11 +2783,27 @@ export async function ensureStoredDashboardTeamSnapshots(params?: {
   nowMs?: number;
   logger?: LoggerLike;
 }): Promise<DashboardTeamSnapshotsResult> {
-  const existing = await readStoredDashboardTeamSnapshots({ stateDir: params?.stateDir });
-  if (existing.snapshots.length > 0) {
+  const cfg = params?.cfg ?? loadConfig();
+  const existingStore = await readStoredTeamSnapshotStore({ stateDir: params?.stateDir });
+  const existing = existingStore
+    ? {
+        generatedAtMs: existingStore.generatedAtMs,
+        snapshots: existingStore.snapshots,
+      }
+    : { generatedAtMs: 0, snapshots: [] };
+  const fingerprintMatches =
+    existingStore?.teamsConfigFingerprint === serializeForChangeCheck(cfg.teams);
+  if (
+    fingerprintMatches &&
+    existing.snapshots.length > 0 &&
+    existing.snapshots.every((snapshot) => Array.isArray(snapshot.lifecycleStages))
+  ) {
     return existing;
   }
-  return await refreshStoredDashboardTeamSnapshots(params);
+  return await refreshStoredDashboardTeamSnapshots({
+    ...params,
+    cfg,
+  });
 }
 
 export function resolveDashboardMemoryEditorFiles(): string[] {

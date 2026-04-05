@@ -1,15 +1,19 @@
+import { parseConfigJson5, type MaumauConfig } from "../../config/config.js";
 import {
   collectDashboardCalendar,
   collectDashboardMemories,
   collectDashboardRoutines,
   collectDashboardSnapshot,
   collectDashboardTasks,
+  collectDashboardTeamSnapshots,
+  collectDashboardTeamRuns,
   collectDashboardToday,
   collectDashboardWorkshop,
   ensureStoredDashboardTeamSnapshots,
 } from "../dashboard.js";
 import type { DashboardCalendarView } from "../dashboard-types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
+import { validateDashboardTeamsSnapshotParams } from "../protocol/index.js";
 import { validateConfigGetParams } from "../protocol/index.js";
 import type { GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
@@ -24,6 +28,17 @@ function parseAnchorAtMs(value: unknown): number | undefined {
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseDraftConfigOrThrow(rawConfig: string): MaumauConfig {
+  const parsed = parseConfigJson5(rawConfig);
+  if (!parsed.ok) {
+    throw new Error(parsed.error);
+  }
+  if (!isPlainRecord(parsed.parsed)) {
+    throw new Error("draft config must be an object");
+  }
+  return parsed.parsed as MaumauConfig;
 }
 
 export const dashboardHandlers: GatewayRequestHandlers = {
@@ -111,16 +126,53 @@ export const dashboardHandlers: GatewayRequestHandlers = {
     if (
       !assertValidParams(
         params,
-        validateConfigGetParams,
+        validateDashboardTeamsSnapshotParams,
         "dashboard.teams.snapshot",
         respond,
       )
     ) {
       return;
     }
-    const snapshots = await ensureStoredDashboardTeamSnapshots({
-      logger: context.logGateway,
+    try {
+      const rawConfig = isPlainRecord(params) && typeof params.rawConfig === "string"
+        ? params.rawConfig
+        : undefined;
+      if (rawConfig) {
+        const snapshots = await collectDashboardTeamSnapshots({
+          cfg: parseDraftConfigOrThrow(rawConfig),
+          logger: context.logGateway,
+        });
+        respond(true, snapshots, undefined);
+        return;
+      }
+      const snapshots = await ensureStoredDashboardTeamSnapshots({
+        logger: context.logGateway,
+      });
+      respond(true, snapshots, undefined);
+    } catch (error) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, String(error)),
+      );
+    }
+  },
+  "dashboard.teams.runs": async ({ params, respond, context }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateConfigGetParams,
+        "dashboard.teams.runs",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const result = await collectDashboardTeamRuns({
+      cron: context.cron,
+      cronStorePath: context.cronStorePath,
+      execApprovals: context.execApprovalManager?.listPending() ?? [],
     });
-    respond(true, snapshots, undefined);
+    respond(true, result, undefined);
   },
 };

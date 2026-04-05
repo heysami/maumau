@@ -15,6 +15,7 @@ import {
 import { generateTeamOpenProsePreview } from "../../../../src/teams/openprose.js";
 import { createNextTeamWorkflowConfig, STARTER_TEAM_ID } from "../../../../src/teams/presets.js";
 import type { AgentsListResult } from "../types.ts";
+import { renderTeamPromptDialog } from "./team-prompt-dialog.ts";
 
 type AgentOption = {
   id: string;
@@ -36,6 +37,22 @@ export type TeamsProps = {
   onCreateTeam: (preset: "custom" | "starter") => void;
   onReplaceTeam: (teamId: string, nextTeam: TeamConfig) => void;
   onDeleteTeam: (teamId: string) => void;
+  promptOpen: boolean;
+  promptTeamId: string | null;
+  promptWorkflowId: string | null;
+  promptDraft: string;
+  promptBusy: boolean;
+  promptError: string | null;
+  promptSummary: string | null;
+  promptWarnings: string[];
+  onOpenPrompt: (
+    teamId: string,
+    workflowId: string,
+    labels: { teamLabel: string; workflowLabel: string },
+  ) => void;
+  onPromptChange: (value: string) => void;
+  onPromptSubmit: () => void;
+  onPromptClose: () => void;
   onSave: () => void;
   onApply: () => void;
   onRefresh: () => void;
@@ -431,6 +448,10 @@ export function renderTeams(props: TeamsProps) {
                       const activeWorkflow =
                         selectedWorkflow ??
                         resolveSelectedWorkflow(selectedTeam, props.selectedWorkflowId);
+                      const showPromptEditor =
+                        props.promptOpen &&
+                        props.promptTeamId === selectedTeam.id &&
+                        props.promptWorkflowId === activeWorkflow.id;
                       const activeWorkflowIndex = workflows.findIndex(
                         (workflow) => workflow.id === activeWorkflow.id,
                       );
@@ -486,6 +507,19 @@ export function renderTeams(props: TeamsProps) {
 
                       return html`
                         <section class="stack" style="gap: 18px;">
+                          ${renderTeamPromptDialog({
+                            open: showPromptEditor,
+                            teamLabel: selectedTeam.name?.trim() || selectedTeam.id,
+                            workflowLabel: activeWorkflow.name?.trim() || activeWorkflow.id,
+                            prompt: props.promptDraft,
+                            busy: props.promptBusy,
+                            error: props.promptError,
+                            summary: props.promptSummary,
+                            warnings: props.promptWarnings,
+                            onPromptChange: props.onPromptChange,
+                            onSubmit: props.onPromptSubmit,
+                            onClose: props.onPromptClose,
+                          })}
                           <section class="card">
                             <div class="row" style="justify-content: space-between; align-items: flex-start;">
                               <div>
@@ -494,12 +528,27 @@ export function renderTeams(props: TeamsProps) {
                                   Team ids stay stable so links and generated OpenProse paths stay deterministic.
                                 </div>
                               </div>
-                              <button
-                                class="btn btn--sm danger"
-                                @click=${() => props.onDeleteTeam(selectedTeam.id)}
-                              >
-                                Delete Team
-                              </button>
+                              <div class="row" style="gap: 8px; flex-wrap: wrap;">
+                                <button
+                                  class="btn btn--sm"
+                                  type="button"
+                                  @click=${() =>
+                                    props.onOpenPrompt(selectedTeam.id, activeWorkflow.id, {
+                                      teamLabel: selectedTeam.name?.trim() || selectedTeam.id,
+                                      workflowLabel:
+                                        activeWorkflow.name?.trim() || activeWorkflow.id,
+                                    })}
+                                >
+                                  Prompt Changes
+                                </button>
+                                <button
+                                  class="btn btn--sm danger"
+                                  type="button"
+                                  @click=${() => props.onDeleteTeam(selectedTeam.id)}
+                                >
+                                  Delete Team
+                                </button>
+                              </div>
                             </div>
                             <div class="grid grid-cols-2" style="margin-top: 16px; gap: 12px;">
                               <label class="field">

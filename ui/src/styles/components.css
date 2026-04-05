@@ -2959,6 +2959,10 @@ td.data-table-key-col {
   gap: 8px;
 }
 
+.team-prompt-editor {
+  animation: rise 0.2s var(--ease-out);
+}
+
 /* ===========================================
    Agents
    =========================================== */

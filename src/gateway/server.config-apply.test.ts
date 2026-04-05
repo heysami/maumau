@@ -31,16 +31,16 @@ const openClient = async () => {
   return ws;
 };
 
-const sendConfigApply = async (ws: WebSocket, id: string, raw: unknown) => {
+const sendConfigApply = async (ws: WebSocket, id: string, params: Record<string, unknown>) => {
   ws.send(
     JSON.stringify({
       type: "req",
       id,
       method: "config.apply",
-      params: { raw },
+      params,
     }),
   );
-  return onceMessage<{ ok: boolean; error?: { message?: string } }>(ws, (o) => {
+  return onceMessage<{ ok: boolean; payload?: unknown; error?: { message?: string } }>(ws, (o) => {
     const msg = o as { type?: string; id?: string };
     return msg.type === "res" && msg.id === id;
   });
@@ -51,7 +51,7 @@ describe("gateway config.apply", () => {
     const ws = await openClient();
     try {
       const id = "req-1";
-      const res = await sendConfigApply(ws, id, "{");
+      const res = await sendConfigApply(ws, id, { raw: "{" });
       expect(res.ok).toBe(false);
       expect(res.error?.message ?? "").toMatch(/invalid|SyntaxError/i);
     } finally {
@@ -63,7 +63,7 @@ describe("gateway config.apply", () => {
     const ws = await openClient();
     try {
       const id = "req-2";
-      const res = await sendConfigApply(ws, id, { gateway: { mode: "local" } });
+      const res = await sendConfigApply(ws, id, { raw: { gateway: { mode: "local" } } });
       expect(res.ok).toBe(false);
       expect(res.error?.message ?? "").toContain("raw");
     } finally {

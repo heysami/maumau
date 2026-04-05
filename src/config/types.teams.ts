@@ -23,6 +23,14 @@ export type TeamWorkflowBaseConfig = {
   description?: string;
   managerPrompt?: string;
   synthesisPrompt?: string;
+  lifecycle?: {
+    stages?: Array<{
+      id: string;
+      name?: string;
+      status?: "blocked" | "in_progress" | "review" | "done" | "idle";
+      roles?: string[];
+    }>;
+  };
   contract?: {
     requiredRoles?: string[];
     requiredQaRoles?: string[];

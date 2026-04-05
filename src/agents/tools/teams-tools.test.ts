@@ -273,6 +273,20 @@ describe("teams tools", () => {
       }),
       expect.anything(),
     );
+    expect(hoisted.spawnSubagentDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.stringContaining("[Team Runtime] Root requester session: main"),
+      }),
+      expect.anything(),
+    );
+    expect(hoisted.spawnSubagentDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.stringContaining(
+          'WORK_ITEM:{"teamRun":{"kind":"team_run","teamId":"<team-id>"',
+        ),
+      }),
+      expect.anything(),
+    );
   });
 
   it("enables late completion handoff when teams_run returns immediately", async () => {

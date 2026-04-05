@@ -1,6 +1,7 @@
 import type { MaumauConfig } from "../config/config.js";
 import type { TeamMemberConfig } from "../config/types.teams.js";
 import type { TeamConfig, TeamWorkflowConfig } from "../config/types.teams.js";
+import { resolveTeamWorkflowLifecycleStages } from "./lifecycle.js";
 import { findTeamWorkflow, listTeamMembers, resolveAgentDisplayName } from "./model.js";
 
 function proseMultiline(value: string[]): string[] {
@@ -43,11 +44,23 @@ function toIdentifier(value: string, fallbackIndex: number, used: Set<string>): 
 }
 
 function buildManagerPrompt(team: TeamConfig, workflow: TeamWorkflowConfig): string[] {
+  const lifecycleStages = resolveTeamWorkflowLifecycleStages(workflow);
   const lines = [
     `You are the team manager for "${team.name?.trim() || team.id}".`,
     `Use the Maumau manager agent id \`${team.managerAgentId}\`.`,
     "Keep execution manager-led. Delegate specialist work deliberately and synthesize one final answer.",
   ];
+  if (lifecycleStages.length > 0) {
+    lines.push(
+      `Structured lifecycle stages: ${lifecycleStages.map((stage) => stage.name ?? stage.id).join(" -> ")}.`,
+    );
+    lines.push(
+      "Emit lifecycle updates as standalone `WORK_ITEM:` JSON lines when the team run starts, when you enter a stage, when you complete a stage, if the run becomes blocked, and when the run is done.",
+    );
+    lines.push(
+      "Each lifecycle `WORK_ITEM:` line should include `teamRun.kind=\"team_run\"`, `teamId`, `workflowId`, the current stage id/name, completed stage ids, and the coarse lifecycle status.",
+    );
+  }
   if (workflow.contract?.requireDelegation === true) {
     lines.push("Workflow contract: delegation is required. Do not complete the task without specialist participation.");
   }

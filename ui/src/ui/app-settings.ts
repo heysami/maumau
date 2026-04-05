@@ -74,6 +74,9 @@ type SettingsHost = {
   dashboardTeamsLoading?: boolean;
   dashboardTeamsError?: string | null;
   dashboardTeamSnapshots?: import("./types.ts").DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading?: boolean;
+  dashboardTeamRunsError?: string | null;
+  dashboardTeamRuns?: import("./types.ts").DashboardTeamRunsResult | null;
   dashboardReloadTimer?: number | null;
 };
 

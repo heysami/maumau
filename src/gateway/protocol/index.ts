@@ -48,6 +48,26 @@ import {
   TalkConfigParamsSchema,
   type TalkConfigResult,
   TalkConfigResultSchema,
+  type TeamPromptEditAgentIdentityPatch,
+  TeamPromptEditAgentIdentityPatchSchema,
+  type TeamPromptEditAgentPatch,
+  TeamPromptEditAgentPatchSchema,
+  type TeamPromptEditCrossTeamLink,
+  TeamPromptEditCrossTeamLinkSchema,
+  type TeamPromptEditLifecycleStage,
+  TeamPromptEditLifecycleStageSchema,
+  type TeamPromptEditMember,
+  TeamPromptEditMemberSchema,
+  type TeamPromptEditParams,
+  TeamPromptEditParamsSchema,
+  type TeamPromptEditResult,
+  TeamPromptEditResultSchema,
+  type TeamPromptEditTeamPatch,
+  TeamPromptEditTeamPatchSchema,
+  type TeamPromptEditWorkflowContract,
+  TeamPromptEditWorkflowContractSchema,
+  type TeamPromptEditWorkflowPatch,
+  TeamPromptEditWorkflowPatchSchema,
   type TalkSpeakParams,
   TalkSpeakParamsSchema,
   type TalkSpeakResult,
@@ -68,6 +88,7 @@ import {
   ConfigApplyParamsSchema,
   type ConfigGetParams,
   ConfigGetParamsSchema,
+  type DashboardTeamsSnapshotParams,
   type ConfigPatchParams,
   ConfigPatchParamsSchema,
   type ConfigSchemaLookupParams,
@@ -80,6 +101,7 @@ import {
   ConfigSchemaResponseSchema,
   type ConfigSetParams,
   ConfigSetParamsSchema,
+  DashboardTeamsSnapshotParamsSchema,
   type ConnectParams,
   ConnectParamsSchema,
   type CronAddParams,
@@ -364,6 +386,8 @@ export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
 export const validateSessionsUsageParams =
   ajv.compile<SessionsUsageParams>(SessionsUsageParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
+export const validateDashboardTeamsSnapshotParams =
+  ajv.compile<DashboardTeamsSnapshotParams>(DashboardTeamsSnapshotParamsSchema);
 export const validateConfigSetParams = ajv.compile<ConfigSetParams>(ConfigSetParamsSchema);
 export const validateConfigApplyParams = ajv.compile<ConfigApplyParams>(ConfigApplyParamsSchema);
 export const validateConfigPatchParams = ajv.compile<ConfigPatchParams>(ConfigPatchParamsSchema);
@@ -379,6 +403,10 @@ export const validateWizardNextParams = ajv.compile<WizardNextParams>(WizardNext
 export const validateWizardCancelParams = ajv.compile<WizardCancelParams>(WizardCancelParamsSchema);
 export const validateWizardStatusParams = ajv.compile<WizardStatusParams>(WizardStatusParamsSchema);
 export const validateTalkModeParams = ajv.compile<TalkModeParams>(TalkModeParamsSchema);
+export const validateTeamPromptEditParams =
+  ajv.compile<TeamPromptEditParams>(TeamPromptEditParamsSchema);
+export const validateTeamPromptEditResult =
+  ajv.compile<TeamPromptEditResult>(TeamPromptEditResultSchema);
 export const validateTalkConfigParams = ajv.compile<TalkConfigParams>(TalkConfigParamsSchema);
 export const validateTalkConfigResult = ajv.compile<TalkConfigResult>(TalkConfigResultSchema);
 export const validateTalkSpeakParams = ajv.compile<TalkSpeakParams>(TalkSpeakParamsSchema);
@@ -533,6 +561,7 @@ export {
   SessionsCompactParamsSchema,
   SessionsUsageParamsSchema,
   ConfigGetParamsSchema,
+  DashboardTeamsSnapshotParamsSchema,
   ConfigSetParamsSchema,
   ConfigApplyParamsSchema,
   ConfigPatchParamsSchema,
@@ -548,6 +577,16 @@ export {
   WizardNextResultSchema,
   WizardStartResultSchema,
   WizardStatusResultSchema,
+  TeamPromptEditParamsSchema,
+  TeamPromptEditResultSchema,
+  TeamPromptEditTeamPatchSchema,
+  TeamPromptEditMemberSchema,
+  TeamPromptEditCrossTeamLinkSchema,
+  TeamPromptEditWorkflowPatchSchema,
+  TeamPromptEditWorkflowContractSchema,
+  TeamPromptEditLifecycleStageSchema,
+  TeamPromptEditAgentPatchSchema,
+  TeamPromptEditAgentIdentityPatchSchema,
   TalkConfigParamsSchema,
   TalkConfigResultSchema,
   TalkSpeakParamsSchema,
@@ -627,11 +666,22 @@ export type {
   DevicePairApproveParams,
   DevicePairRejectParams,
   ConfigGetParams,
+  DashboardTeamsSnapshotParams,
   ConfigSetParams,
   ConfigApplyParams,
   ConfigPatchParams,
   ConfigSchemaParams,
   ConfigSchemaResponse,
+  TeamPromptEditAgentIdentityPatch,
+  TeamPromptEditAgentPatch,
+  TeamPromptEditCrossTeamLink,
+  TeamPromptEditLifecycleStage,
+  TeamPromptEditMember,
+  TeamPromptEditParams,
+  TeamPromptEditResult,
+  TeamPromptEditTeamPatch,
+  TeamPromptEditWorkflowContract,
+  TeamPromptEditWorkflowPatch,
   WizardStartParams,
   WizardNextParams,
   WizardCancelParams,
