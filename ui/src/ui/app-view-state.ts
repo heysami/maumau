@@ -23,6 +23,9 @@ import type {
   ChannelsStatusSnapshot,
   ConfigSnapshot,
   ConfigUiHints,
+  DashboardCalendarResult,
+  DashboardSnapshot,
+  DashboardTeamSnapshotsResult,
   HealthSummary,
   LogEntry,
   LogLevel,
@@ -62,6 +65,7 @@ export type AppViewState = {
   assistantName: string;
   assistantAvatar: string | null;
   assistantAgentId: string | null;
+  secureDashboardUrl: string | null;
   sessionKey: string;
   chatLoading: boolean;
   chatSending: boolean;
@@ -208,9 +212,41 @@ export type AppViewState = {
   sessionsPage: number;
   sessionsPageSize: number;
   sessionsSelectedKeys: Set<string>;
+  dashboardLoading: boolean;
+  dashboardError: string | null;
+  dashboardSnapshot: DashboardSnapshot | null;
+  dashboardCalendarResult: DashboardCalendarResult | null;
+  dashboardCalendarAnchorAtMs: number | null;
+  dashboardTeamsLoading: boolean;
+  dashboardTeamsError: string | null;
+  dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTaskFilter: string | null;
+  dashboardDoneFromDate: string;
+  dashboardDoneToDate: string;
+  dashboardWorkshopSelectedId: string | null;
+  dashboardCalendarView: "month" | "week" | "day";
+  dashboardTeamSelection: string | null;
+  dashboardMemoryAgentId: string | null;
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;
   mauOfficeState: MauOfficeState;
+  mauOfficeChatOpen: boolean;
+  mauOfficeChatMinimized: boolean;
+  mauOfficeChatActorId: string | null;
+  mauOfficeChatActorLabel: string;
+  mauOfficeChatSessionKey: string;
+  mauOfficeChatLoading: boolean;
+  mauOfficeChatSending: boolean;
+  mauOfficeChatMessage: string;
+  mauOfficeChatMessages: unknown[];
+  mauOfficeChatThinkingLevel: string | null;
+  mauOfficeChatAttachments: ChatAttachment[];
+  mauOfficeChatRunId: string | null;
+  mauOfficeChatStream: string | null;
+  mauOfficeChatStreamStartedAt: number | null;
+  mauOfficeChatError: string | null;
+  mauOfficeChatPositionX: number | null;
+  mauOfficeChatPositionY: number | null;
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;

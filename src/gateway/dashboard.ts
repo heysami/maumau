@@ -1,0 +1,2300 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import {
+  completeWithPreparedSimpleCompletionModel,
+  prepareSimpleCompletionModelForAgent,
+} from "../agents/simple-completion-runtime.js";
+import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "../agents/workspace.js";
+import { type MaumauConfig, loadConfig } from "../config/config.js";
+import { resolveStateDir } from "../config/paths.js";
+import type { SessionEntry } from "../config/sessions.js";
+import { readCronRunLogEntriesPageAll } from "../cron/run-log.js";
+import { computeNextRunAtMs } from "../cron/schedule.js";
+import type { CronService } from "../cron/service.js";
+import type { CronJob } from "../cron/types.js";
+import type { ExecApprovalRecord } from "./exec-approval-manager.js";
+import { resolveGatewayAuth } from "./auth.js";
+import type {
+  DashboardBlocker,
+  DashboardCalendarResult,
+  DashboardCalendarView,
+  DashboardCalendarEvent,
+  DashboardMemoriesResult,
+  DashboardRecentMemoryEntry,
+  DashboardRoutine,
+  DashboardRoutineVisibility,
+  DashboardRoutinesResult,
+  DashboardSnapshot,
+  DashboardTasksResult,
+  DashboardTaskStatus,
+  DashboardTeamEdge,
+  DashboardTeamNode,
+  DashboardTeamSnapshot,
+  DashboardTeamSnapshotsResult,
+  DashboardTodaySnapshot,
+  DashboardWorkshopItem,
+  DashboardWorkshopPreviewLink,
+  DashboardWorkshopResult,
+  DashboardWorkItem,
+  DashboardWorkItemBlockerLink,
+  DashboardWorkItemSessionLink,
+} from "./dashboard-types.js";
+import {
+  buildPreviewEmbedPathFromPreviewUrl,
+  resolvePreviewArtifactInfoFromPreviewUrl,
+} from "./previews.js";
+import {
+  listAgentsForGateway,
+  listSessionsFromStore,
+  loadCombinedSessionStoreForGateway,
+  readFirstUserMessageFromTranscript,
+  readSessionMessages,
+} from "./session-utils.js";
+import { parseAgentSessionKey } from "../routing/session-key.js";
+import {
+  findTeamWorkflow,
+  listConfiguredTeams,
+  listTeamMembers,
+  listTeamWorkflows,
+  resolveAgentDisplayName,
+} from "../teams/model.js";
+import { generateTeamOpenProsePreview } from "../teams/openprose.js";
+
+const DASHBOARD_DIRNAME = "dashboard";
+const TEAMS_DIRNAME = "teams";
+const TEAM_SNAPSHOTS_FILENAME = "snapshots.json";
+const WORK_ITEMS_FILENAME = "work-items.json";
+const ROUTINE_PREFS_FILENAME = "routine-visibility.json";
+const MEMORY_NOTES_DIRNAME = "memory";
+const MAX_TASKS = 200;
+const MAX_CALENDAR_EVENTS = 300;
+const MAX_MEMORY_ACTIVITY = 24;
+const MAX_SUMMARY_WORDS = 120;
+const SUMMARY_TIMEOUT_MS = 2_500;
+const WORK_ITEM_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+const CALENDAR_DAY_MS = 24 * 60 * 60 * 1_000;
+const MAX_OCCURRENCES_PER_JOB = 96;
+const FILE_ARTIFACT_RE = /^FILE:(.+)$/gm;
+const WORK_ITEM_LINE_RE = /^WORK_ITEM:(.+)$/gm;
+const URL_RE = /https?:\/\/[^\s)>\]]+/gi;
+const USER_FACING_ROUTINE_RE =
+  /\b(reminder|routine|daily|weekly|morning|evening|standup|check-?in|review|habit|personal|today)\b/i;
+const OPS_ROUTINE_RE =
+  /\b(maintenance|cleanup|reindex|refresh|heartbeat|probe|health|build|cache|sync|repair|doctor)\b/i;
+
+type LoggerLike = {
+  info?: (message: string) => void;
+  warn?: (message: string) => void;
+  error?: (message: string) => void;
+};
+
+type DashboardDeps = {
+  prepareSimpleCompletionModelForAgent: typeof prepareSimpleCompletionModelForAgent;
+  completeWithPreparedSimpleCompletionModel: typeof completeWithPreparedSimpleCompletionModel;
+};
+
+const dashboardDeps: DashboardDeps = {
+  prepareSimpleCompletionModelForAgent,
+  completeWithPreparedSimpleCompletionModel,
+};
+
+export const __testing = {
+  setDepsForTests(overrides: Partial<DashboardDeps>) {
+    Object.assign(dashboardDeps, overrides);
+  },
+  resetDepsForTests() {
+    dashboardDeps.prepareSimpleCompletionModelForAgent = prepareSimpleCompletionModelForAgent;
+    dashboardDeps.completeWithPreparedSimpleCompletionModel = completeWithPreparedSimpleCompletionModel;
+  },
+  buildWorkshopItemsForTests(
+    tasks: DashboardWorkItem[],
+    params?: { cfg?: MaumauConfig; nowMs?: number; stateDir?: string },
+  ) {
+    return buildWorkshopItems(tasks, params ?? {});
+  },
+};
+
+type TeamSnapshotStore = {
+  version: 1;
+  generatedAtMs: number;
+  snapshots: DashboardTeamSnapshot[];
+};
+
+type DashboardWorkItemStore = {
+  version: 1;
+  updatedAtMs: number;
+  items: DashboardWorkItem[];
+};
+
+type DashboardRoutineVisibilityPreference = {
+  visibility: DashboardRoutineVisibility;
+  updatedAtMs: number;
+};
+
+type DashboardRoutineVisibilityStore = {
+  version: 1;
+  updatedAtMs: number;
+  preferences: Record<string, DashboardRoutineVisibilityPreference>;
+};
+
+type CollectDashboardSnapshotParams = {
+  cfg?: MaumauConfig;
+  cron: Pick<CronService, "list" | "status">;
+  cronStorePath: string;
+  execApprovals?: ReadonlyArray<ExecApprovalRecord>;
+  nowMs?: number;
+  stateDir?: string;
+};
+
+type CollectDashboardCalendarParams = CollectDashboardSnapshotParams & {
+  view?: DashboardCalendarView;
+  anchorAtMs?: number;
+};
+
+function normalizeText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function clampWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function createTodayBounds(nowMs: number) {
+  const start = new Date(nowMs);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start.getTime());
+  end.setDate(end.getDate() + 1);
+  return {
+    startAtMs: start.getTime(),
+    endAtMs: end.getTime(),
+  };
+}
+
+function extractMessageText(message: unknown): string {
+  if (!isObject(message)) {
+    return "";
+  }
+  const directText = normalizeText(message.text);
+  if (directText) {
+    return directText;
+  }
+  const content = message.content;
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  const parts = content
+    .map((entry) => {
+      if (!isObject(entry)) {
+        return "";
+      }
+      return entry.type === "text" ? normalizeText(entry.text) : "";
+    })
+    .filter(Boolean);
+  return parts.join("\n").trim();
+}
+
+function resolveSessionAgentId(cfg: MaumauConfig, sessionKey: string): string {
+  const parsed = parseAgentSessionKey(sessionKey);
+  return parsed?.agentId?.trim() || resolveDefaultAgentId(cfg);
+}
+
+function buildScheduleLabel(job: CronJob): string {
+  if (job.schedule.kind === "at") {
+    return `Runs once at ${job.schedule.at}`;
+  }
+  if (job.schedule.kind === "every") {
+    const everyMs = job.schedule.everyMs;
+    const minutes = Math.max(1, Math.round(everyMs / 60_000));
+    if (minutes % 60 === 0) {
+      const hours = Math.round(minutes / 60);
+      return `Every ${hours} hour${hours === 1 ? "" : "s"}`;
+    }
+    return `Every ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  const tz = normalizeText(job.schedule.tz);
+  return `Cron: ${job.schedule.expr}${tz ? ` (${tz})` : ""}`;
+}
+
+function buildFallbackTeamSummary(params: {
+  cfg: MaumauConfig;
+  team: ReturnType<typeof listConfiguredTeams>[number];
+  workflowId: string;
+}): string {
+  const workflow = findTeamWorkflow(params.team, params.workflowId);
+  const managerName = resolveAgentDisplayName(params.cfg, params.team.managerAgentId);
+  const specialists = listTeamMembers(params.team).map((member) => member.role.trim()).filter(Boolean);
+  const required = workflow.contract?.requiredRoles?.filter(Boolean) ?? [];
+  const qaRequired = workflow.contract?.requiredQaRoles?.filter(Boolean) ?? [];
+  const specialistLine =
+    specialists.length > 0
+      ? `Specialists: ${specialists.join(", ")}.`
+      : "No specialists are configured yet.";
+  const requiredLine =
+    required.length > 0
+      ? `Required delegated roles: ${required.join(", ")}.`
+      : workflow.contract?.requireDelegation
+        ? "Delegation is required before the manager can finish."
+        : "Delegation is optional for this workflow.";
+  const qaLine =
+    qaRequired.length > 0 ? `Required QA roles: ${qaRequired.join(", ")}.` : "";
+  return clampWords(
+    `${params.team.name?.trim() || params.team.id} is led by ${managerName}. ${workflow.name?.trim() || workflow.id} keeps the manager at the center of delegation. ${specialistLine} ${requiredLine} ${qaLine}`.trim(),
+    MAX_SUMMARY_WORDS,
+  );
+}
+
+function normalizeTeamRole(value: string | undefined): string {
+  return normalizeText(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+function classifyTeamNodeStage(params: {
+  role?: string;
+  requiredRoles: Set<string>;
+  requiredQaRoles: Set<string>;
+}): DashboardTeamNode["stage"] {
+  const normalizedRole = normalizeTeamRole(params.role);
+  if (!normalizedRole) {
+    return "support";
+  }
+  if (params.requiredQaRoles.has(normalizedRole)) {
+    return "qa";
+  }
+  if (!params.requiredRoles.has(normalizedRole)) {
+    return "support";
+  }
+  if (
+    /\b(architect|architecture|planner|planning|strategy|strategist|research)\b/.test(normalizedRole)
+  ) {
+    return "architecture";
+  }
+  return "execution";
+}
+
+function stageIndexForTeamNode(stage: DashboardTeamNode["stage"]): number {
+  switch (stage) {
+    case "upstream":
+      return 0;
+    case "manager":
+      return 1;
+    case "architecture":
+      return 2;
+    case "execution":
+      return 3;
+    case "qa":
+      return 4;
+    case "support":
+    default:
+      return 5;
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+function extractAssistantSummary(message: AssistantMessage): string {
+  const parts = message.content
+    .map((entry) => (entry.type === "text" ? normalizeText(entry.text) : ""))
+    .filter(Boolean);
+  return clampWords(parts.join(" "), MAX_SUMMARY_WORDS);
+}
+
+async function buildGeneratedTeamSummary(params: {
+  cfg: MaumauConfig;
+  team: ReturnType<typeof listConfiguredTeams>[number];
+  workflowId: string;
+  openProsePreview: string;
+}): Promise<{ status: DashboardTeamSnapshot["status"]; summary: string; warning?: string }> {
+  const fallbackSummary = buildFallbackTeamSummary(params);
+  try {
+    const prepared = await dashboardDeps.prepareSimpleCompletionModelForAgent({
+      cfg: params.cfg,
+      agentId: params.team.managerAgentId,
+    });
+    if ("error" in prepared) {
+      return {
+        status: "fallback",
+        summary: fallbackSummary,
+        warning: prepared.error,
+      };
+    }
+    const message = await withTimeout(
+      dashboardDeps.completeWithPreparedSimpleCompletionModel({
+        model: prepared.model,
+        auth: prepared.auth,
+        context: {
+          systemPrompt:
+            "You summarize Maumau team org charts. Return plain text only. Keep it concrete, under 120 words, and emphasize delegation flow, required approvals, and the main specialists involved.",
+          messages: [
+            {
+              role: "user",
+              timestamp: Date.now(),
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    `Team id: ${params.team.id}`,
+                    `Team name: ${params.team.name?.trim() || params.team.id}`,
+                    `Workflow id: ${params.workflowId}`,
+                    `Manager agent id: ${params.team.managerAgentId}`,
+                    "",
+                    params.openProsePreview,
+                  ].join("\n"),
+                },
+              ],
+            },
+          ],
+        },
+        options: {
+          maxTokens: 180,
+          temperature: 0.1,
+        },
+      }),
+      SUMMARY_TIMEOUT_MS,
+      "team summary generation",
+    );
+    const summary = extractAssistantSummary(message);
+    if (!summary) {
+      return {
+        status: "fallback",
+        summary: fallbackSummary,
+        warning: "team summary generation returned an empty response",
+      };
+    }
+    return {
+      status: "generated",
+      summary,
+    };
+  } catch (error) {
+    return {
+      status: "fallback",
+      summary: fallbackSummary,
+      warning: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function buildTeamSnapshotGraph(params: {
+  cfg: MaumauConfig;
+  team: ReturnType<typeof listConfiguredTeams>[number];
+  workflowId: string;
+}): { nodes: DashboardTeamNode[]; edges: DashboardTeamEdge[] } {
+  const workflow = findTeamWorkflow(params.team, params.workflowId);
+  const nodes: DashboardTeamNode[] = [];
+  const edges: DashboardTeamEdge[] = [];
+  const requiredRolesList = workflow.contract?.requiredRoles?.map((role) => normalizeTeamRole(role)) ?? [];
+  const requiredRoles = new Set(requiredRolesList);
+  const requiredQaRoles = new Set(
+    workflow.contract?.requiredQaRoles?.map((role) => normalizeTeamRole(role)) ?? [],
+  );
+  const managerId = `${params.team.id}:${workflow.id}:manager:${params.team.managerAgentId}`;
+  const managerNode: DashboardTeamNode = {
+    id: managerId,
+    kind: "manager",
+    label: resolveAgentDisplayName(params.cfg, params.team.managerAgentId),
+    teamId: params.team.id,
+    workflowId: workflow.id,
+    agentId: params.team.managerAgentId,
+    role: "Manager",
+    description: params.team.description?.trim(),
+    stage: "manager",
+    stageIndex: stageIndexForTeamNode("manager"),
+  };
+  nodes.push(managerNode);
+
+  const memberNodesByRole = new Map<string, DashboardTeamNode>();
+  const supportMemberNodes: DashboardTeamNode[] = [];
+  for (const member of listTeamMembers(params.team)) {
+    const nodeId = `${params.team.id}:${workflow.id}:member:${member.agentId}:${member.role}`;
+    const stage = classifyTeamNodeStage({
+      role: member.role,
+      requiredRoles,
+      requiredQaRoles,
+    });
+    const node: DashboardTeamNode = {
+      id: nodeId,
+      kind: "member",
+      label: resolveAgentDisplayName(params.cfg, member.agentId),
+      teamId: params.team.id,
+      workflowId: workflow.id,
+      agentId: member.agentId,
+      role: member.role,
+      description: member.description?.trim(),
+      stage,
+      stageIndex: stageIndexForTeamNode(stage),
+    };
+    nodes.push(node);
+    memberNodesByRole.set(normalizeTeamRole(member.role), node);
+    if (!requiredRoles.has(normalizeTeamRole(member.role))) {
+      supportMemberNodes.push(node);
+    }
+  }
+
+  for (const link of params.team.crossTeamLinks ?? []) {
+    const nodeId = `${params.team.id}:${workflow.id}:${link.type}:${link.targetId}`;
+    const linkedTeamName =
+      link.type === "team"
+        ? listConfiguredTeams(params.cfg).find((candidate) => candidate.id === link.targetId)?.name?.trim()
+        : undefined;
+    nodes.push({
+      id: nodeId,
+      kind: link.type === "team" ? "linked_team" : "linked_agent",
+      label:
+        link.type === "team"
+          ? linkedTeamName || link.targetId
+          : resolveAgentDisplayName(params.cfg, link.targetId),
+      teamId: params.team.id,
+      workflowId: workflow.id,
+      agentId: link.type === "agent" ? link.targetId : undefined,
+      role: link.type === "team" ? "Linked Team" : "Linked Agent",
+      description: link.description?.trim(),
+      stage: "support",
+      stageIndex: stageIndexForTeamNode("support"),
+    });
+    edges.push({
+      id: `${managerId}->${nodeId}`,
+      from: managerId,
+      to: nodeId,
+      kind: link.type === "team" ? "links" : "delegates",
+      label: link.description?.trim() || (link.type === "team" ? "cross-team" : "borrowed specialist"),
+    });
+  }
+
+  const stageOrder: DashboardTeamNode["stage"][] = ["architecture", "execution", "qa"];
+  const stageNodes = new Map<DashboardTeamNode["stage"], DashboardTeamNode[]>();
+  for (const role of requiredRolesList) {
+    const node = memberNodesByRole.get(role);
+    if (!node?.stage) {
+      continue;
+    }
+    const existing = stageNodes.get(node.stage) ?? [];
+    if (!existing.some((candidate) => candidate.id === node.id)) {
+      existing.push(node);
+      stageNodes.set(node.stage, existing);
+    }
+  }
+
+  const activeStages = stageOrder
+    .map((stage) => ({
+      stage,
+      nodes: stageNodes.get(stage) ?? [],
+    }))
+    .filter((entry) => entry.nodes.length > 0);
+
+  if (activeStages.length > 0) {
+    let previousNodes = [managerNode];
+    for (const entry of activeStages) {
+      for (const fromNode of previousNodes) {
+        for (const toNode of entry.nodes) {
+          edges.push({
+            id: `${fromNode.id}->${toNode.id}:flow`,
+            from: fromNode.id,
+            to: toNode.id,
+            kind: "flow",
+            label: entry.stage,
+          });
+        }
+      }
+      previousNodes = entry.nodes;
+    }
+  } else {
+    for (const node of nodes) {
+      if (node.kind !== "member") {
+        continue;
+      }
+      edges.push({
+        id: `${managerId}->${node.id}`,
+        from: managerId,
+        to: node.id,
+        kind: "delegates",
+        label: node.role?.trim() || "specialist",
+      });
+    }
+  }
+
+  for (const node of supportMemberNodes) {
+    edges.push({
+      id: `${managerId}->${node.id}:support`,
+      from: managerId,
+      to: node.id,
+      kind: "delegates",
+      label: node.role?.trim() || "specialist",
+    });
+  }
+
+  for (const node of stageNodes.get("qa") ?? []) {
+    edges.push({
+      id: `${node.id}->${managerId}:qa`,
+      from: node.id,
+      to: managerId,
+      kind: "reviews",
+      label: "QA approval",
+    });
+  }
+
+  return { nodes, edges };
+}
+
+function resolveDashboardTeamsSnapshotsPath(stateDir = resolveStateDir()): string {
+  return path.join(stateDir, DASHBOARD_DIRNAME, TEAMS_DIRNAME, TEAM_SNAPSHOTS_FILENAME);
+}
+
+async function writeTeamSnapshotStore(
+  store: TeamSnapshotStore,
+  stateDir = resolveStateDir(),
+): Promise<void> {
+  const filePath = resolveDashboardTeamsSnapshotsPath(stateDir);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now().toString(36)}`;
+  const payload = `${JSON.stringify(store, null, 2)}\n`;
+  await fs.writeFile(tmpPath, payload, "utf8");
+  await fs.rename(tmpPath, filePath);
+}
+
+export async function readStoredDashboardTeamSnapshots(params?: {
+  stateDir?: string;
+}): Promise<DashboardTeamSnapshotsResult> {
+  const filePath = resolveDashboardTeamsSnapshotsPath(params?.stateDir);
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as Partial<TeamSnapshotStore>;
+    if (!parsed || !Array.isArray(parsed.snapshots)) {
+      return { generatedAtMs: 0, snapshots: [] };
+    }
+    return {
+      generatedAtMs: typeof parsed.generatedAtMs === "number" ? parsed.generatedAtMs : 0,
+      snapshots: parsed.snapshots as DashboardTeamSnapshot[],
+    };
+  } catch {
+    return { generatedAtMs: 0, snapshots: [] };
+  }
+}
+
+export async function refreshStoredDashboardTeamSnapshots(params?: {
+  cfg?: MaumauConfig;
+  stateDir?: string;
+  nowMs?: number;
+  logger?: LoggerLike;
+}): Promise<DashboardTeamSnapshotsResult> {
+  const cfg = params?.cfg ?? loadConfig();
+  const generatedAtMs = params?.nowMs ?? Date.now();
+  const snapshots: DashboardTeamSnapshot[] = [];
+  for (const team of listConfiguredTeams(cfg)) {
+    for (const workflow of listTeamWorkflows(team)) {
+      const openProsePreview = generateTeamOpenProsePreview({
+        config: cfg,
+        team,
+        workflowId: workflow.id,
+      });
+      const graph = buildTeamSnapshotGraph({
+        cfg,
+        team,
+        workflowId: workflow.id,
+      });
+      const generatedSummary = await buildGeneratedTeamSummary({
+        cfg,
+        team,
+        workflowId: workflow.id,
+        openProsePreview,
+      });
+      if (generatedSummary.warning) {
+        params?.logger?.warn?.(
+          `[dashboard] teams snapshot fallback for ${team.id}/${workflow.id}: ${generatedSummary.warning}`,
+        );
+      }
+      snapshots.push({
+        teamId: team.id,
+        teamName: team.name?.trim() || undefined,
+        workflowId: workflow.id,
+        workflowName: workflow.name?.trim() || undefined,
+        generatedAtMs,
+        status: generatedSummary.status,
+        warnings: generatedSummary.warning ? [generatedSummary.warning] : [],
+        summary: generatedSummary.summary,
+        openProsePreview,
+        nodes: graph.nodes,
+        edges: graph.edges,
+      });
+    }
+  }
+  const store: TeamSnapshotStore = {
+    version: 1,
+    generatedAtMs,
+    snapshots,
+  };
+  await writeTeamSnapshotStore(store, params?.stateDir);
+  return {
+    generatedAtMs,
+    snapshots,
+  };
+}
+
+function serializeForChangeCheck(value: unknown): string {
+  return JSON.stringify(value ?? null);
+}
+
+export function haveTeamsConfigChanged(previous: MaumauConfig | undefined, next: MaumauConfig): boolean {
+  return serializeForChangeCheck(previous?.teams) !== serializeForChangeCheck(next.teams);
+}
+
+function isPublishedPreviewUrl(value: string | undefined): boolean {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return false;
+  }
+  try {
+    const parsed = new URL(normalized, "http://localhost");
+    return /^\/(?:preview|share)\//i.test(parsed.pathname);
+  } catch {
+    return /^\/(?:preview|share)\//i.test(normalized);
+  }
+}
+
+function parsePreviewArtifacts(messages: unknown[]): { previewUrl?: string; artifactPath?: string } {
+  let artifactPath: string | undefined;
+  let previewUrl: string | undefined;
+  for (const message of messages) {
+    const text = extractMessageText(message);
+    if (!text) {
+      continue;
+    }
+    if (!artifactPath) {
+      const match = FILE_ARTIFACT_RE.exec(text);
+      FILE_ARTIFACT_RE.lastIndex = 0;
+      if (match?.[1]?.trim()) {
+        artifactPath = match[1].trim();
+      }
+    }
+    if (!previewUrl) {
+      const urls = text.match(URL_RE) ?? [];
+      previewUrl = urls.find((url) => isPublishedPreviewUrl(url));
+    }
+    if (artifactPath && previewUrl) {
+      break;
+    }
+  }
+  return { previewUrl, artifactPath };
+}
+
+type TrustedWorkItemEnvelope = {
+  title?: string;
+  summary?: string;
+};
+
+type DerivedTaskContext = {
+  subject?: string;
+  summary?: string;
+};
+
+function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvelope | null {
+  for (const message of messages) {
+    const text = extractMessageText(message);
+    if (!text) {
+      continue;
+    }
+    const match = WORK_ITEM_LINE_RE.exec(text);
+    WORK_ITEM_LINE_RE.lastIndex = 0;
+    if (!match?.[1]?.trim()) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (!isObject(parsed)) {
+        continue;
+      }
+      return {
+        title: normalizeText(parsed.title) || undefined,
+        summary: normalizeText(parsed.summary) || undefined,
+      };
+    } catch {
+      // Ignore malformed envelopes.
+    }
+  }
+  return null;
+}
+
+function excerptText(text: string, maxLen = 180): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLen) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLen - 1).trim()}…`;
+}
+
+function stripTaskControlText(text: string): string {
+  return text
+    .replace(WORK_ITEM_LINE_RE, " ")
+    .replace(FILE_ARTIFACT_RE, " ")
+    .replace(URL_RE, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeDerivedTaskSubject(subject: string | undefined): string | undefined {
+  const trimmed = normalizeText(subject)
+    .replace(/^[\s,:;.-]+/, "")
+    .replace(/[\s,:;.-]+$/, "");
+  if (!trimmed || trimmed.length < 4) {
+    return undefined;
+  }
+  if (
+    /^(?:task|work|output|preview|artifact)\b/i.test(trimmed) ||
+    /\b(?:complete|completed|done|ready|finished)\b/i.test(trimmed)
+  ) {
+    return undefined;
+  }
+  return excerptText(trimmed, 72);
+}
+
+function extractTaskSubjectFromLine(line: string): string | undefined {
+  const normalized = normalizeText(line);
+  if (!normalized) {
+    return undefined;
+  }
+  const patterns = [
+    /\bfor ([^.?!:;]{4,120})/i,
+    /\babout ([^.?!:;]{4,120})/i,
+    /\bof ([^.?!:;]{4,120})/i,
+    /^(?:build|built|create|created|design|designed|implement|implemented|review|reviewed|test|tested|qa|verify|verified|fix|fixed|update|updated)\s+([^.?!:;]{4,120})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(normalized);
+    const subject = normalizeDerivedTaskSubject(match?.[1]);
+    if (subject) {
+      return subject;
+    }
+  }
+  return undefined;
+}
+
+function deriveTaskContextFromText(text: string | undefined): DerivedTaskContext {
+  const cleaned = stripTaskControlText(normalizeText(text));
+  if (!cleaned) {
+    return {};
+  }
+  const candidates = cleaned
+    .split(/(?<=[.!?])\s+|\s*\n+\s*/)
+    .map((entry) => normalizeText(entry))
+    .filter(Boolean)
+    .filter(
+      (entry) =>
+        !/^preview ready\b/i.test(entry) &&
+        !/^conversation info\b/i.test(entry) &&
+        !/^open (?:preview|tasks|session)\b/i.test(entry) &&
+        !/\b(?:assigned to|session done|session running|untrusted metadata)\b/i.test(entry) &&
+        !/^[([{]/.test(entry),
+    );
+  const summary = candidates[0] ? excerptText(candidates[0]) : undefined;
+  const subject = candidates
+    .map((entry) => extractTaskSubjectFromLine(entry))
+    .find((entry): entry is string => Boolean(entry));
+  return { subject, summary };
+}
+
+function deriveTaskContextFromMessages(messages: unknown[]): DerivedTaskContext {
+  for (const message of messages) {
+    const role = isObject(message) ? normalizeText(message.role).toLowerCase() : "";
+    if (role && role !== "assistant" && role !== "user") {
+      continue;
+    }
+    const derived = deriveTaskContextFromText(extractMessageText(message));
+    if (derived.subject || derived.summary) {
+      return derived;
+    }
+  }
+  return {};
+}
+
+function mergeDerivedTaskContext(
+  primary: DerivedTaskContext,
+  fallback: DerivedTaskContext,
+): DerivedTaskContext {
+  return {
+    subject: primary.subject || fallback.subject,
+    summary: primary.summary || fallback.summary,
+  };
+}
+
+function startOfDay(value: number) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function resolveCalendarWindow(view: DashboardCalendarView, anchorAtMs: number) {
+  const anchorDay = startOfDay(anchorAtMs);
+  if (view === "day") {
+    return {
+      view,
+      anchorAtMs,
+      startAtMs: anchorDay,
+      endAtMs: anchorDay + CALENDAR_DAY_MS,
+    };
+  }
+  if (view === "week") {
+    const date = new Date(anchorDay);
+    date.setDate(date.getDate() - date.getDay());
+    const startAtMs = startOfDay(date.getTime());
+    return {
+      view,
+      anchorAtMs,
+      startAtMs,
+      endAtMs: startAtMs + 7 * CALENDAR_DAY_MS,
+    };
+  }
+  const monthStart = new Date(anchorDay);
+  monthStart.setDate(1);
+  const monthGridStart = new Date(monthStart.getTime());
+  monthGridStart.setDate(monthGridStart.getDate() - monthGridStart.getDay());
+  const startAtMs = startOfDay(monthGridStart.getTime());
+  return {
+    view,
+    anchorAtMs,
+    startAtMs,
+    endAtMs: startAtMs + 42 * CALENDAR_DAY_MS,
+  };
+}
+
+async function writeDashboardJsonFile(
+  filePath: string,
+  payload: string,
+): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now().toString(36)}`;
+  await fs.writeFile(tmpPath, payload, "utf8");
+  await fs.rename(tmpPath, filePath);
+}
+
+function resolveDashboardWorkItemsPath(stateDir = resolveStateDir()): string {
+  return path.join(stateDir, DASHBOARD_DIRNAME, WORK_ITEMS_FILENAME);
+}
+
+function resolveDashboardRoutinePrefsPath(stateDir = resolveStateDir()): string {
+  return path.join(stateDir, DASHBOARD_DIRNAME, ROUTINE_PREFS_FILENAME);
+}
+
+async function readStoredDashboardWorkItems(params?: {
+  stateDir?: string;
+}): Promise<DashboardWorkItemStore> {
+  const filePath = resolveDashboardWorkItemsPath(params?.stateDir);
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as Partial<DashboardWorkItemStore>;
+    return {
+      version: 1,
+      updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : 0,
+      items: Array.isArray(parsed.items) ? (parsed.items as DashboardWorkItem[]) : [],
+    };
+  } catch {
+    return {
+      version: 1,
+      updatedAtMs: 0,
+      items: [],
+    };
+  }
+}
+
+async function writeStoredDashboardWorkItems(
+  store: DashboardWorkItemStore,
+  stateDir = resolveStateDir(),
+): Promise<void> {
+  const filePath = resolveDashboardWorkItemsPath(stateDir);
+  await writeDashboardJsonFile(filePath, `${JSON.stringify(store, null, 2)}\n`);
+}
+
+async function readDashboardRoutineVisibilityStore(params?: {
+  stateDir?: string;
+}): Promise<DashboardRoutineVisibilityStore> {
+  const filePath = resolveDashboardRoutinePrefsPath(params?.stateDir);
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as Partial<DashboardRoutineVisibilityStore>;
+    return {
+      version: 1,
+      updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : 0,
+      preferences: isObject(parsed.preferences)
+        ? (parsed.preferences as DashboardRoutineVisibilityStore["preferences"])
+        : {},
+    };
+  } catch {
+    return {
+      version: 1,
+      updatedAtMs: 0,
+      preferences: {},
+    };
+  }
+}
+
+async function writeDashboardRoutineVisibilityStore(
+  store: DashboardRoutineVisibilityStore,
+  stateDir = resolveStateDir(),
+): Promise<void> {
+  const filePath = resolveDashboardRoutinePrefsPath(stateDir);
+  await writeDashboardJsonFile(filePath, `${JSON.stringify(store, null, 2)}\n`);
+}
+
+function formatRoleLabel(role: string | undefined): string | undefined {
+  const trimmed = normalizeText(role);
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed
+    .split(/[\s/_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeComparableText(value: string | undefined): string {
+  return normalizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function humanizeIdentifier(value: string | undefined): string | undefined {
+  const trimmed = normalizeText(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
+  })();
+  const withoutExtension = decoded.replace(/\.[a-z0-9]{1,8}$/i, "");
+  const words = withoutExtension
+    .split(/[\s._/-]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (words.length === 0) {
+    return undefined;
+  }
+  return words
+    .map((word) => {
+      if (/^[A-Z0-9]{2,}$/.test(word)) {
+        return word;
+      }
+      const lower = word.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function looksLikeOpaqueArtifactToken(value: string | undefined): boolean {
+  const trimmed = normalizeText(value);
+  if (!trimmed) {
+    return false;
+  }
+  return /^(?=.*\d)[a-z0-9]{12,}$/i.test(trimmed) || /^[a-f0-9]{8,}$/i.test(trimmed);
+}
+
+function resolveArtifactDisplayLabel(params: {
+  artifactPath?: string;
+  previewUrl?: string;
+}): string | undefined {
+  const artifactBase = normalizeText(path.basename(params.artifactPath || ""));
+  if (artifactBase === "." || artifactBase === "..") {
+    return undefined;
+  }
+  const fallbackFromUrl = (() => {
+    const normalizedUrl = normalizeText(params.previewUrl);
+    if (!normalizedUrl) {
+      return "";
+    }
+    try {
+      const parsed = new URL(normalizedUrl);
+      return normalizeText(
+        parsed.pathname
+          .split("/")
+          .map((segment) => segment.trim())
+          .filter(Boolean)
+          .at(-1),
+      );
+    } catch {
+      return "";
+    }
+        })();
+  if (!artifactBase && looksLikeOpaqueArtifactToken(fallbackFromUrl)) {
+    return undefined;
+  }
+  const label = humanizeIdentifier(artifactBase || fallbackFromUrl);
+  if (!label) {
+    return undefined;
+  }
+  const comparable = normalizeComparableText(label);
+  if (
+    comparable === "preview" ||
+    comparable === "index" ||
+    comparable === "share" ||
+    comparable === "requester"
+  ) {
+    return undefined;
+  }
+  if (label.length < 2 || !/[a-z0-9]/i.test(label)) {
+    return undefined;
+  }
+  return label;
+}
+
+function looksLikeGenericRoleTaskTitle(value: string | undefined): boolean {
+  const normalized = normalizeComparableText(value);
+  return (
+    normalized === "manager coordination" ||
+    normalized === "architecture plan" ||
+    normalized === "implementation" ||
+    normalized === "ui design" ||
+    normalized === "content and visual design" ||
+    normalized === "technical qa review" ||
+    normalized === "visual qa review" ||
+    normalized === "workspace task" ||
+    normalized.endsWith(" task")
+  );
+}
+
+function resolveWorkshopDeduplicationKey(params: {
+  previewSourcePath?: string;
+  previewDocumentLabel?: string;
+  artifactLabel?: string;
+  taskTitle?: string;
+  artifactPath?: string;
+  fallbackId: string;
+}): string {
+  const normalizedPreviewSourcePath = normalizeComparableText(params.previewSourcePath);
+  if (normalizedPreviewSourcePath) {
+    return `source:${normalizedPreviewSourcePath}`;
+  }
+  const normalizedPreviewDocumentLabel = normalizeComparableText(params.previewDocumentLabel);
+  if (
+    normalizedPreviewDocumentLabel &&
+    !looksLikeGenericRoleTaskTitle(params.previewDocumentLabel)
+  ) {
+    return `preview:${normalizedPreviewDocumentLabel}`;
+  }
+  const normalizedArtifactLabel = normalizeComparableText(params.artifactLabel);
+  if (normalizedArtifactLabel) {
+    return `artifact:${normalizedArtifactLabel}`;
+  }
+  const normalizedTaskTitle = normalizeComparableText(params.taskTitle);
+  if (normalizedTaskTitle && !looksLikeGenericRoleTaskTitle(params.taskTitle)) {
+    return `task:${normalizedTaskTitle}`;
+  }
+  const artifactBase = normalizeText(path.basename(params.artifactPath || ""));
+  const normalizedArtifactBase = normalizeComparableText(artifactBase);
+  if (normalizedArtifactBase && artifactBase !== "." && artifactBase !== "..") {
+    return `path:${normalizedArtifactBase}`;
+  }
+  return `id:${params.fallbackId}`;
+}
+
+function resolveRoleTaskTitle(teamRole: string | undefined): string | undefined {
+  const normalizedRole = normalizeComparableText(teamRole);
+  switch (normalizedRole) {
+    case "manager":
+      return "Manager coordination";
+    case "system architect":
+      return "Architecture plan";
+    case "developer":
+      return "Implementation";
+    case "ui ux designer":
+      return "UI design";
+    case "content visual designer":
+      return "Content and visual design";
+    case "technical qa":
+      return "Technical QA review";
+    case "visual ux qa":
+      return "Visual QA review";
+    default: {
+      const roleLabel = formatRoleLabel(teamRole);
+      return roleLabel ? `${roleLabel} task` : undefined;
+    }
+  }
+}
+
+function looksLikeLegacyTaskSummary(summary: string | undefined): boolean {
+  const normalized = normalizeText(summary);
+  if (!normalized) {
+    return false;
+  }
+  return /\b(lane|assigned to|session)\b/i.test(normalized);
+}
+
+function looksLikeTrivialStatusSummary(summary: string | undefined): boolean {
+  const normalized = normalizeComparableText(summary);
+  return (
+    normalized === "done" ||
+    normalized === "completed" ||
+    normalized === "approved" ||
+    normalized === "ready"
+  );
+}
+
+function cleanTaskSummary(summary: string | undefined, title: string): string | undefined {
+  const normalized = normalizeText(summary);
+  if (!normalized || looksLikeLegacyTaskSummary(normalized)) {
+    return undefined;
+  }
+  const comparableSummary = normalizeComparableText(normalized);
+  const comparableTitle = normalizeComparableText(title);
+  if (comparableSummary && comparableSummary === comparableTitle) {
+    return undefined;
+  }
+  return excerptText(normalized);
+}
+
+function isLegacyTaskTitle(params: {
+  title: string;
+  teamLabel?: string;
+  teamId?: string;
+  teamRole?: string;
+  assigneeLabel?: string;
+}): boolean {
+  const teamLabel = params.teamLabel || params.teamId || "Team";
+  const roleLabel = formatRoleLabel(params.teamRole) || params.assigneeLabel || "Manager";
+  return (
+    normalizeComparableText(params.title) ===
+    normalizeComparableText(`${teamLabel} ${roleLabel}`)
+  );
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "127.0.0.1" ||
+    normalized.startsWith("127.")
+  );
+}
+
+function resolvePreviewEmbeddable(previewUrl: string | undefined): boolean {
+  const normalized = normalizeText(previewUrl);
+  if (!normalized) {
+    return false;
+  }
+  if (
+    normalized.startsWith("/") ||
+    normalized.startsWith("./") ||
+    normalized.startsWith("../")
+  ) {
+    return true;
+  }
+  try {
+    const parsed = new URL(normalized);
+    return (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      isLoopbackHost(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function mergeSessionLinks(
+  existing: DashboardWorkItemSessionLink[],
+  next: DashboardWorkItemSessionLink[],
+): DashboardWorkItemSessionLink[] {
+  const merged = new Map<string, DashboardWorkItemSessionLink>();
+  for (const link of [...existing, ...next]) {
+    merged.set(`${link.sessionKey}:${link.kind}`, link);
+  }
+  return [...merged.values()];
+}
+
+function mergeBlockerLinks(
+  existing: DashboardWorkItemBlockerLink[],
+  next: DashboardWorkItemBlockerLink[],
+): DashboardWorkItemBlockerLink[] {
+  const merged = new Map<string, DashboardWorkItemBlockerLink>();
+  for (const blocker of [...existing, ...next]) {
+    merged.set(blocker.id, blocker);
+  }
+  return [...merged.values()];
+}
+
+function resolveTaskStatus(params: {
+  row: {
+    status?: string;
+    childSessions?: string[];
+  };
+  blockerIds: string[];
+}): DashboardTaskStatus {
+  if (params.blockerIds.length > 0) {
+    return "blocked";
+  }
+  if (params.row.status === "running") {
+    return "in_progress";
+  }
+  if (
+    params.row.status === "failed" ||
+    params.row.status === "killed" ||
+    params.row.status === "timeout"
+  ) {
+    return "blocked";
+  }
+  if (params.row.status === "done") {
+    return "done";
+  }
+  if ((params.row.childSessions?.length ?? 0) > 0) {
+    return "review";
+  }
+  return "idle";
+}
+
+function resolveTrustedTeamContext(
+  sessionKey: string,
+  store: Record<string, SessionEntry>,
+): { teamId?: string; teamRole?: string } | null {
+  let current = normalizeText(sessionKey);
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const entry = store[current];
+    const teamId = normalizeText(entry?.teamId) || undefined;
+    const teamRole = normalizeText(entry?.teamRole) || undefined;
+    if (teamId || teamRole) {
+      return { teamId, teamRole };
+    }
+    current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  return null;
+}
+
+function resolveWorkItemId(sessionKey: string): string {
+  return `task:${sessionKey}`;
+}
+
+function resolveTrustedTaskTitle(params: {
+  teamLabel?: string;
+  teamId?: string;
+  teamRole?: string;
+  assigneeLabel?: string;
+  envelope: TrustedWorkItemEnvelope | null;
+  artifactPath?: string;
+  previewUrl?: string;
+  subject?: string;
+}): string {
+  const envelopeTitle = normalizeText(params.envelope?.title);
+  if (envelopeTitle) {
+    return envelopeTitle;
+  }
+  const artifactLabel = resolveArtifactDisplayLabel({
+    artifactPath: params.artifactPath,
+    previewUrl: params.previewUrl,
+  });
+  if (artifactLabel) {
+    return artifactLabel;
+  }
+  const roleTitle = resolveRoleTaskTitle(params.teamRole);
+  if (roleTitle && params.subject) {
+    return `${roleTitle} for ${params.subject}`;
+  }
+  return (
+    roleTitle ||
+    params.teamLabel ||
+    params.assigneeLabel ||
+    "Workspace task"
+  );
+}
+
+function resolveTrustedTaskSummary(params: {
+  envelope: TrustedWorkItemEnvelope | null;
+  title: string;
+  artifactPath?: string;
+  previewUrl?: string;
+  messageSummary?: string;
+}): string | undefined {
+  const envelopeSummary = cleanTaskSummary(params.envelope?.summary, params.title);
+  if (envelopeSummary) {
+    return envelopeSummary;
+  }
+  const artifactLabel = resolveArtifactDisplayLabel({
+    artifactPath: params.artifactPath,
+    previewUrl: params.previewUrl,
+  });
+  if (
+    artifactLabel &&
+    normalizeComparableText(artifactLabel) !== normalizeComparableText(params.title)
+  ) {
+    return `Output: ${artifactLabel}`;
+  }
+  const messageSummary = cleanTaskSummary(params.messageSummary, params.title);
+  if (messageSummary) {
+    return messageSummary;
+  }
+  return undefined;
+}
+
+function refreshDashboardWorkItemCopy(item: DashboardWorkItem): DashboardWorkItem {
+  const primaryPreview = item.previewLinks[0];
+  const fallbackTitle = resolveTrustedTaskTitle({
+    teamLabel: item.teamLabel,
+    teamId: item.teamId,
+    teamRole: item.teamRole,
+    assigneeLabel: item.assigneeLabel,
+    envelope: null,
+    artifactPath: primaryPreview?.artifactPath,
+    previewUrl: primaryPreview?.previewUrl,
+  });
+  const title =
+    !normalizeText(item.title) ||
+    isLegacyTaskTitle({
+      title: item.title,
+      teamLabel: item.teamLabel,
+      teamId: item.teamId,
+      teamRole: item.teamRole,
+      assigneeLabel: item.assigneeLabel,
+    })
+      ? fallbackTitle
+      : item.title;
+  const summary =
+    cleanTaskSummary(item.summary, title) ||
+    resolveTrustedTaskSummary({
+      envelope: null,
+      title,
+      artifactPath: primaryPreview?.artifactPath,
+      previewUrl: primaryPreview?.previewUrl,
+    });
+  return {
+    ...item,
+    title,
+    summary,
+  };
+}
+
+function buildFailureBlocker(params: {
+  taskId: string;
+  title: string;
+  summary?: string;
+  sessionKey: string;
+  status?: string;
+}): DashboardWorkItemBlockerLink[] {
+  if (
+    params.status !== "failed" &&
+    params.status !== "killed" &&
+    params.status !== "timeout"
+  ) {
+    return [];
+  }
+  return [
+    {
+      id: `failure:${params.taskId}`,
+      kind: "failure",
+      title: `Task blocked: ${params.title}`,
+      description: params.summary || "This task needs intervention before it can continue.",
+      sessionKey: params.sessionKey,
+    },
+  ];
+}
+
+function buildPreviewLinks(params: {
+  taskId: string;
+  sessionKey: string;
+  updatedAtMs: number;
+  previewUrl?: string;
+  artifactPath?: string;
+}): DashboardWorkshopPreviewLink[] {
+  if (!isPublishedPreviewUrl(params.previewUrl)) {
+    return [];
+  }
+  return [
+    {
+      id: `${params.taskId}:preview:${params.sessionKey}`,
+      sessionKey: params.sessionKey,
+      previewUrl: params.previewUrl,
+      artifactPath: params.artifactPath,
+      embeddable: resolvePreviewEmbeddable(params.previewUrl),
+      updatedAtMs: params.updatedAtMs,
+    },
+  ];
+}
+
+function mergeWorkItem(
+  existing: DashboardWorkItem | undefined,
+  candidate: DashboardWorkItem,
+): DashboardWorkItem {
+  const mergedStatus =
+    candidate.blockerLinks.length > 0 ? "blocked" : candidate.status;
+  return {
+    ...existing,
+    ...candidate,
+    status: mergedStatus,
+    createdAtMs: existing?.createdAtMs ?? candidate.createdAtMs,
+    retainedUntilMs:
+      mergedStatus === "done" || mergedStatus === "blocked"
+        ? (candidate.endedAtMs ?? candidate.updatedAtMs ?? candidate.createdAtMs) +
+          WORK_ITEM_RETENTION_MS
+        : undefined,
+    sessionLinks: mergeSessionLinks(existing?.sessionLinks ?? [], candidate.sessionLinks),
+    blockerLinks: mergeBlockerLinks(existing?.blockerLinks ?? [], candidate.blockerLinks),
+    // Refresh previews from the current trusted transcript so stale noise drops away.
+    previewLinks: candidate.previewLinks,
+  };
+}
+
+function buildCandidateWorkItem(params: {
+  cfg: MaumauConfig;
+  row: {
+    key: string;
+    updatedAt: number | null;
+    startedAt?: number;
+    endedAt?: number;
+    status?: string;
+    parentSessionKey?: string;
+    childSessions?: string[];
+  };
+  entry: SessionEntry | undefined;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+  agentLabelById: Map<string, string>;
+  teamLabelById: Map<string, string>;
+  nowMs: number;
+}): DashboardWorkItem | null {
+  if (!params.row.updatedAt) {
+    return null;
+  }
+  const teamContext = resolveTrustedTeamContext(params.row.key, params.store);
+  if (!teamContext?.teamId && !teamContext?.teamRole) {
+    return null;
+  }
+  const agentId = resolveSessionAgentId(params.cfg, params.row.key);
+  const assigneeLabel =
+    params.agentLabelById.get(agentId) ?? resolveAgentDisplayName(params.cfg, agentId);
+  const messages = params.entry?.sessionId
+    ? readSessionMessages(params.entry.sessionId, params.storePath, params.entry.sessionFile)
+    : [];
+  const orderedMessages = messages.toReversed();
+  const promptContext = params.entry?.sessionId
+    ? deriveTaskContextFromText(
+        readFirstUserMessageFromTranscript(
+          params.entry.sessionId,
+          params.storePath,
+          params.entry.sessionFile,
+        ) || undefined,
+      )
+    : {};
+  const messageContext = mergeDerivedTaskContext(
+    deriveTaskContextFromMessages(orderedMessages),
+    promptContext,
+  );
+  const envelope = parseTrustedWorkItemEnvelope(orderedMessages);
+  const artifacts = parsePreviewArtifacts(orderedMessages);
+  const taskId = resolveWorkItemId(params.row.key);
+  const title = resolveTrustedTaskTitle({
+    teamLabel: teamContext.teamId ? params.teamLabelById.get(teamContext.teamId) : undefined,
+    teamId: teamContext.teamId,
+    teamRole: teamContext.teamRole,
+    assigneeLabel,
+    envelope,
+    artifactPath: artifacts.artifactPath,
+    previewUrl: artifacts.previewUrl,
+    subject: messageContext.subject,
+  });
+  const summary = resolveTrustedTaskSummary({
+    envelope,
+    title,
+    artifactPath: artifacts.artifactPath,
+    previewUrl: artifacts.previewUrl,
+    messageSummary: messageContext.summary,
+  });
+  const status = resolveTaskStatus({
+    row: params.row,
+    blockerIds: [],
+  });
+  const updatedAtMs = params.row.updatedAt ?? params.nowMs;
+  const blockerLinks = buildFailureBlocker({
+    taskId,
+    title,
+    summary,
+    sessionKey: params.row.key,
+    status: params.row.status,
+  });
+  return {
+    id: taskId,
+    sessionKey: params.row.key,
+    title,
+    summary,
+    status: blockerLinks.length > 0 ? "blocked" : status,
+    source: envelope ? "runtime_envelope" : "team_session",
+    agentId,
+    assigneeLabel,
+    teamId: teamContext.teamId,
+    teamLabel: teamContext.teamId ? params.teamLabelById.get(teamContext.teamId) : undefined,
+    teamRole: teamContext.teamRole,
+    updatedAtMs,
+    startedAtMs: params.row.startedAt,
+    endedAtMs: params.row.endedAt,
+    createdAtMs: params.row.startedAt ?? updatedAtMs,
+    retainedUntilMs:
+      status === "done" || status === "blocked"
+        ? (params.row.endedAt ?? updatedAtMs) + WORK_ITEM_RETENTION_MS
+        : undefined,
+    parentSessionKey: params.row.parentSessionKey,
+    childSessionKeys: params.row.childSessions,
+    blockerIds: blockerLinks.map((blocker) => blocker.id),
+    sessionLinks: [
+      {
+        sessionKey: params.row.key,
+        kind: "primary",
+        agentId,
+        assigneeLabel,
+        teamId: teamContext.teamId,
+        teamRole: teamContext.teamRole,
+      },
+    ],
+    blockerLinks,
+    previewLinks: buildPreviewLinks({
+      taskId,
+      sessionKey: params.row.key,
+      updatedAtMs,
+      previewUrl: artifacts.previewUrl,
+      artifactPath: artifacts.artifactPath,
+    }),
+  };
+}
+
+function resolveTaskIdForSessionKey(
+  sessionKey: string,
+  taskIdBySessionKey: Map<string, string>,
+  store: Record<string, SessionEntry>,
+): string | null {
+  let current = normalizeText(sessionKey);
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const taskId = taskIdBySessionKey.get(current);
+    if (taskId) {
+      return taskId;
+    }
+    const entry = store[current];
+    current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  return null;
+}
+
+async function reconcileDashboardWorkItems(params: {
+  cfg: MaumauConfig;
+  nowMs: number;
+  stateDir?: string;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+  sessions: Array<{
+    key: string;
+    updatedAt: number | null;
+    startedAt?: number;
+    endedAt?: number;
+    status?: string;
+    parentSessionKey?: string;
+    childSessions?: string[];
+  }>;
+  approvals: ReadonlyArray<ExecApprovalRecord>;
+}): Promise<DashboardWorkItem[]> {
+  const existingStore = await readStoredDashboardWorkItems({ stateDir: params.stateDir });
+  const existingById = new Map(existingStore.items.map((item) => [item.id, item]));
+  const nextById = new Map(existingById);
+  const taskIdBySessionKey = new Map<string, string>();
+  const agentLabelById = new Map<string, string>();
+  for (const agent of listAgentsForGateway(params.cfg).agents) {
+    agentLabelById.set(agent.id, agent.identity?.name?.trim() || agent.name?.trim() || agent.id);
+  }
+  const teamLabelById = new Map(
+    listConfiguredTeams(params.cfg).map((team) => [team.id, team.name?.trim() || team.id]),
+  );
+
+  for (const row of params.sessions) {
+    const entry = params.store[row.key];
+    const candidate = buildCandidateWorkItem({
+      cfg: params.cfg,
+      row,
+      entry,
+      storePath: params.storePath,
+      store: params.store,
+      agentLabelById,
+      teamLabelById,
+      nowMs: params.nowMs,
+    });
+    if (!candidate) {
+      continue;
+    }
+    const merged = mergeWorkItem(existingById.get(candidate.id), candidate);
+    nextById.set(merged.id, merged);
+    for (const link of merged.sessionLinks) {
+      taskIdBySessionKey.set(link.sessionKey, merged.id);
+    }
+  }
+
+  const approvalBlockersByTaskId = new Map<string, DashboardWorkItemBlockerLink[]>();
+  for (const approval of params.approvals) {
+    const sessionKey = normalizeText(approval.request.sessionKey);
+    if (!sessionKey) {
+      continue;
+    }
+    const taskId = resolveTaskIdForSessionKey(sessionKey, taskIdBySessionKey, params.store);
+    if (!taskId) {
+      continue;
+    }
+    const blockers = approvalBlockersByTaskId.get(taskId) ?? [];
+    blockers.push({
+      id: `approval:${approval.id}`,
+      kind: "approval",
+      title: "Exec approval needed",
+      description: approval.request.command,
+      sessionKey,
+    });
+    approvalBlockersByTaskId.set(taskId, blockers);
+  }
+
+  const finalItems = [...nextById.values()]
+    .map((item) => {
+      const approvalBlockers = approvalBlockersByTaskId.get(item.id) ?? [];
+      const nonApprovalBlockers = item.blockerLinks.filter((blocker) => blocker.kind !== "approval");
+      const blockerLinks = mergeBlockerLinks(nonApprovalBlockers, approvalBlockers);
+      const status = blockerLinks.length > 0 ? "blocked" : item.status;
+      const retainedUntilMs =
+        status === "done" || status === "blocked"
+          ? (item.endedAtMs ?? item.updatedAtMs ?? item.createdAtMs) + WORK_ITEM_RETENTION_MS
+          : undefined;
+      return {
+        ...item,
+        status,
+        retainedUntilMs,
+        blockerLinks,
+        blockerIds: blockerLinks.map((blocker) => blocker.id),
+      } satisfies DashboardWorkItem;
+    })
+    .map((item) => refreshDashboardWorkItemCopy(item))
+    .filter((item) => (item.retainedUntilMs ?? Number.MAX_SAFE_INTEGER) >= params.nowMs)
+    .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
+    .slice(0, MAX_TASKS);
+
+  await writeStoredDashboardWorkItems(
+    {
+      version: 1,
+      updatedAtMs: params.nowMs,
+      items: finalItems,
+    },
+    params.stateDir,
+  );
+  return finalItems;
+}
+
+async function collectRecentMemoryEntries(params: {
+  cfg: MaumauConfig;
+  nowMs: number;
+}): Promise<DashboardRecentMemoryEntry[]> {
+  const agents = listAgentsForGateway(params.cfg).agents;
+  const entries: DashboardRecentMemoryEntry[] = [];
+  for (const agent of agents) {
+    const agentId = agent.id;
+    const workspaceDir = resolveAgentWorkspaceDir(params.cfg, agentId);
+    const memoryDir = path.join(workspaceDir, MEMORY_NOTES_DIRNAME);
+    let dirEntries: Awaited<ReturnType<typeof fs.readdir>>;
+    try {
+      dirEntries = await fs.readdir(memoryDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of dirEntries) {
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".md")) {
+        continue;
+      }
+      const absolutePath = path.join(memoryDir, entry.name);
+      try {
+        const [stat, raw] = await Promise.all([
+          fs.stat(absolutePath),
+          fs.readFile(absolutePath, "utf8"),
+        ]);
+        entries.push({
+          id: `${agentId}:${entry.name}`,
+          agentId,
+          title: entry.name,
+          path: `${MEMORY_NOTES_DIRNAME}/${entry.name}`,
+          updatedAtMs: stat.mtimeMs,
+          excerpt: excerptText(raw),
+        });
+      } catch {
+        // Ignore transient file races.
+      }
+    }
+  }
+  return entries
+    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs)
+    .slice(0, MAX_MEMORY_ACTIVITY);
+}
+
+function buildCronBlockers(cronJobs: CronJob[], nowMs: number): DashboardBlocker[] {
+  const blockers: DashboardBlocker[] = [];
+  for (const job of cronJobs) {
+    if (job.state?.lastStatus === "error") {
+      blockers.push({
+        id: `cron-error:${job.id}`,
+        severity: "error",
+        title: `Routine failed: ${job.name}`,
+        description: job.state.lastError || "The latest routine run failed.",
+        jobId: job.id,
+      });
+    }
+    if (
+      job.enabled &&
+      typeof job.state?.nextRunAtMs === "number" &&
+      nowMs - job.state.nextRunAtMs > 300_000
+    ) {
+      blockers.push({
+        id: `cron-overdue:${job.id}`,
+        severity: "warning",
+        title: `Routine overdue: ${job.name}`,
+        description: "This routine is past its expected next run time.",
+        jobId: job.id,
+      });
+    }
+  }
+  return blockers;
+}
+
+function buildApprovalBlockers(approvals: ReadonlyArray<ExecApprovalRecord>): DashboardBlocker[] {
+  return approvals.map((approval) => ({
+    id: `approval:${approval.id}`,
+    severity: "warning",
+    title: "Exec approval needed",
+    description: approval.request.command,
+    sessionKey: approval.request.sessionKey || undefined,
+  }));
+}
+
+function classifyRoutineVisibility(job: CronJob): DashboardRoutineVisibility {
+  if (job.delivery?.mode && job.delivery.mode !== "none") {
+    return "user_facing";
+  }
+  if (
+    job.payload.kind === "agentTurn" &&
+    (job.payload.deliver || job.sessionTarget === "current")
+  ) {
+    return "user_facing";
+  }
+  const haystack = `${job.name} ${normalizeText(job.description)}`.trim();
+  if (OPS_ROUTINE_RE.test(haystack)) {
+    return "hidden";
+  }
+  if (USER_FACING_ROUTINE_RE.test(haystack)) {
+    return "user_facing";
+  }
+  return "hidden";
+}
+
+async function buildRoutinesFromCronJobs(params: {
+  cronJobs: CronJob[];
+  stateDir?: string;
+  nowMs: number;
+}): Promise<DashboardRoutine[]> {
+  const store = await readDashboardRoutineVisibilityStore({ stateDir: params.stateDir });
+  let changed = false;
+  const nextPreferences = { ...store.preferences };
+  const routines = params.cronJobs
+    .map((job) => {
+      const existing = nextPreferences[job.id];
+      if (!existing) {
+        nextPreferences[job.id] = {
+          visibility: classifyRoutineVisibility(job),
+          updatedAtMs: params.nowMs,
+        };
+        changed = true;
+      }
+      const visibility = nextPreferences[job.id]?.visibility ?? "hidden";
+      return {
+        id: `routine:${job.id}`,
+        sourceJobId: job.id,
+        title: job.name,
+        description: normalizeText(job.description) || undefined,
+        enabled: job.enabled,
+        scheduleLabel: buildScheduleLabel(job),
+        nextRunAtMs: job.state?.nextRunAtMs,
+        lastRunAtMs: job.state?.lastRunAtMs,
+        lastStatus: job.state?.lastStatus,
+        agentId: normalizeText(job.agentId) || undefined,
+        visibility,
+        visibilitySource: existing ? "stored" : "fallback",
+      } satisfies DashboardRoutine;
+    })
+    .filter((routine) => routine.visibility === "user_facing")
+    .toSorted((left, right) => {
+      const leftNext = left.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
+      const rightNext = right.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
+      return leftNext - rightNext;
+    });
+
+  if (changed) {
+    await writeDashboardRoutineVisibilityStore(
+      {
+        version: 1,
+        updatedAtMs: params.nowMs,
+        preferences: nextPreferences,
+      },
+      params.stateDir,
+    );
+  }
+  return routines;
+}
+
+async function buildWorkshopItems(
+  tasks: DashboardWorkItem[],
+  params: { cfg?: MaumauConfig; nowMs?: number; stateDir?: string },
+): Promise<DashboardWorkshopItem[]> {
+  const items: Array<DashboardWorkshopItem & { dedupeKey: string }> = [];
+  const resolvedAuth = resolveGatewayAuth({
+    authConfig: params.cfg?.gateway?.auth,
+    env: process.env,
+  });
+  for (const task of tasks) {
+    for (const preview of task.previewLinks) {
+      if (!isPublishedPreviewUrl(preview.previewUrl)) {
+        continue;
+      }
+      const previewInfo = await resolvePreviewArtifactInfoFromPreviewUrl({
+        previewUrl: preview.previewUrl,
+        stateDir: params.stateDir,
+      });
+      const previewDocumentLabel = previewInfo?.documentLabel;
+      const artifactLabel = resolveArtifactDisplayLabel({
+        artifactPath: preview.artifactPath,
+        previewUrl: preview.previewUrl,
+      });
+      const title =
+        previewDocumentLabel ||
+        artifactLabel ||
+        task.title ||
+        "Untitled preview";
+      const summaryText = normalizeText(task.summary);
+      const artifactSummary =
+        summaryText &&
+        !/\b(?:lane|assigned to|session)\b/i.test(summaryText) &&
+        !looksLikeTrivialStatusSummary(summaryText)
+          ? summaryText
+          : task.title && !looksLikeGenericRoleTaskTitle(task.title)
+            ? `Interactive preview for ${task.title}.`
+            : "Interactive preview linked to this workspace task.";
+      items.push({
+        id: preview.id,
+        sessionKey: preview.sessionKey,
+        taskId: task.id,
+        title,
+        summary: artifactSummary,
+        taskTitle: task.title,
+        updatedAtMs: preview.updatedAtMs,
+        agentId: task.agentId,
+        previewUrl: preview.previewUrl,
+        embedUrl: buildPreviewEmbedPathFromPreviewUrl({
+          previewUrl: preview.previewUrl,
+          auth: resolvedAuth,
+          nowMs: params.nowMs,
+        }),
+        artifactPath: preview.artifactPath,
+        embeddable: preview.embeddable,
+        taskStatus: task.status,
+        taskAssigneeLabel: task.assigneeLabel,
+        dedupeKey: resolveWorkshopDeduplicationKey({
+          previewSourcePath: previewInfo?.sourcePath,
+          previewDocumentLabel,
+          artifactLabel,
+          taskTitle: task.title,
+          artifactPath: preview.artifactPath,
+          fallbackId: preview.id,
+        }),
+      });
+    }
+  }
+  const deduped = new Map<string, DashboardWorkshopItem>();
+  for (const item of items.toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))) {
+    if (!deduped.has(item.dedupeKey)) {
+      const { dedupeKey: _dedupeKey, ...workshopItem } = item;
+      deduped.set(item.dedupeKey, workshopItem);
+    }
+  }
+  return [...deduped.values()];
+}
+
+function buildApprovalCalendarEvents(
+  approvals: ReadonlyArray<ExecApprovalRecord>,
+): DashboardCalendarEvent[] {
+  return approvals
+    .map((approval) => ({
+      id: `approval:${approval.id}`,
+      title: "Exec approval needed",
+      kind: "approval_needed",
+      status: "needs_action",
+      startAtMs: approval.createdAtMs,
+      endAtMs: approval.expiresAtMs,
+      description: approval.request.command,
+      agentId: normalizeText(approval.request.agentId) || undefined,
+    }))
+    .slice(0, 24);
+}
+
+function buildOccurrenceTimestampsForJob(params: {
+  job: CronJob;
+  startAtMs: number;
+  endAtMs: number;
+}): number[] {
+  const timestamps: number[] = [];
+  let cursor = params.startAtMs - 1;
+  for (let index = 0; index < MAX_OCCURRENCES_PER_JOB; index += 1) {
+    const nextRunAtMs = computeNextRunAtMs(params.job.schedule, cursor);
+    if (typeof nextRunAtMs !== "number" || !Number.isFinite(nextRunAtMs)) {
+      break;
+    }
+    if (nextRunAtMs >= params.endAtMs) {
+      break;
+    }
+    if (nextRunAtMs >= params.startAtMs) {
+      timestamps.push(nextRunAtMs);
+    }
+    cursor = nextRunAtMs + 1;
+  }
+  return timestamps;
+}
+
+function resolveRoutineOccurrenceStatus(params: {
+  job: CronJob;
+  occurrenceAtMs: number;
+  nowMs: number;
+  cronRuns: Array<{
+    ts: number;
+    jobId: string;
+    status?: "ok" | "error" | "skipped";
+    runAtMs?: number;
+  }>;
+}): DashboardCalendarEvent["status"] {
+  const toleranceMs =
+    params.job.schedule.kind === "every"
+      ? Math.min(Math.max(60_000, params.job.schedule.everyMs / 2), 15 * 60_000)
+      : 15 * 60_000;
+  const matchedRun = params.cronRuns.find((run) => {
+    const runAtMs = run.runAtMs ?? run.ts;
+    return Math.abs(runAtMs - params.occurrenceAtMs) <= toleranceMs;
+  });
+  if (matchedRun?.status === "error") {
+    return "error";
+  }
+  if (params.job.state.runningAtMs && Math.abs(params.job.state.runningAtMs - params.occurrenceAtMs) <= toleranceMs) {
+    return "running";
+  }
+  if (matchedRun?.status === "ok" || params.occurrenceAtMs < params.nowMs) {
+    return "done";
+  }
+  return "scheduled";
+}
+
+function buildCalendarEvents(params: {
+  cronJobs: CronJob[];
+  cronRuns: Array<{
+    ts: number;
+    jobId: string;
+    status?: "ok" | "error" | "skipped";
+    runAtMs?: number;
+  }>;
+  routines: DashboardRoutine[];
+  approvals: ReadonlyArray<ExecApprovalRecord>;
+  view: DashboardCalendarView;
+  anchorAtMs: number;
+  nowMs: number;
+}): DashboardCalendarResult {
+  const window = resolveCalendarWindow(params.view, params.anchorAtMs);
+  const visibleJobIds = new Set(params.routines.map((routine) => routine.sourceJobId));
+  const cronRunsByJobId = new Map<string, Array<(typeof params.cronRuns)[number]>>();
+  for (const run of params.cronRuns) {
+    const bucket = cronRunsByJobId.get(run.jobId) ?? [];
+    bucket.push(run);
+    cronRunsByJobId.set(run.jobId, bucket);
+  }
+  const events: DashboardCalendarEvent[] = [];
+  for (const job of params.cronJobs) {
+    if (!visibleJobIds.has(job.id)) {
+      continue;
+    }
+    const timestamps = buildOccurrenceTimestampsForJob({
+      job,
+      startAtMs: window.startAtMs,
+      endAtMs: window.endAtMs,
+    });
+    for (const occurrenceAtMs of timestamps) {
+      const status = resolveRoutineOccurrenceStatus({
+        job,
+        occurrenceAtMs,
+        nowMs: params.nowMs,
+        cronRuns: cronRunsByJobId.get(job.id) ?? [],
+      });
+      const haystack = `${job.name} ${normalizeText(job.description)}`;
+      events.push({
+        id: `routine:${job.id}:${occurrenceAtMs}`,
+        title: job.name,
+        kind: /remind/i.test(haystack) ? "reminder" : "routine_occurrence",
+        status,
+        startAtMs: occurrenceAtMs,
+        description: buildScheduleLabel(job),
+        jobId: job.id,
+        routineId: `routine:${job.id}`,
+        agentId: normalizeText(job.agentId) || undefined,
+      });
+    }
+  }
+  events.push(...buildApprovalCalendarEvents(params.approvals));
+  return {
+    generatedAtMs: params.nowMs,
+    anchorAtMs: window.anchorAtMs,
+    startAtMs: window.startAtMs,
+    endAtMs: window.endAtMs,
+    view: params.view,
+    events: events
+      .filter(
+        (event) =>
+          event.startAtMs >= window.startAtMs && event.startAtMs < window.endAtMs,
+      )
+      .toSorted((left, right) => left.startAtMs - right.startAtMs)
+      .slice(0, MAX_CALENDAR_EVENTS),
+  };
+}
+
+async function collectDashboardDataset(
+  params: CollectDashboardCalendarParams,
+): Promise<{
+  snapshot: DashboardSnapshot;
+  tasks: DashboardTasksResult;
+  workshop: DashboardWorkshopResult;
+  calendar: DashboardCalendarResult;
+  routines: DashboardRoutinesResult;
+  memories: DashboardMemoriesResult;
+}> {
+  const cfg = params.cfg ?? loadConfig();
+  const nowMs = params.nowMs ?? Date.now();
+  const { storePath, store } = loadCombinedSessionStoreForGateway(cfg);
+  const sessionsResult = listSessionsFromStore({
+    cfg,
+    storePath,
+    store,
+    opts: {
+      includeGlobal: false,
+      includeUnknown: false,
+      includeDerivedTitles: false,
+      includeLastMessage: false,
+      limit: MAX_TASKS,
+    },
+  });
+  const approvals = params.execApprovals ?? [];
+  const tasks = await reconcileDashboardWorkItems({
+    cfg,
+    nowMs,
+    stateDir: params.stateDir,
+    storePath,
+    store,
+    sessions: sessionsResult.sessions,
+    approvals,
+  });
+  const workshopItems = await buildWorkshopItems(tasks, {
+    cfg,
+    nowMs,
+    stateDir: params.stateDir,
+  });
+  const cronJobs = await params.cron.list({ includeDisabled: true });
+  const routines = await buildRoutinesFromCronJobs({
+    cronJobs,
+    stateDir: params.stateDir,
+    nowMs,
+  });
+  const jobNameById = Object.fromEntries(
+    cronJobs
+      .filter((job) => normalizeText(job.id) && normalizeText(job.name))
+      .map((job) => [job.id, job.name]),
+  );
+  const cronRunsPage = await readCronRunLogEntriesPageAll({
+    storePath: params.cronStorePath,
+    limit: 120,
+    offset: 0,
+    sortDir: "desc",
+    jobNameById,
+  });
+  const calendarResult = buildCalendarEvents({
+    cronJobs,
+    cronRuns: cronRunsPage.entries,
+    routines,
+    approvals,
+    view: params.view ?? "month",
+    anchorAtMs: params.anchorAtMs ?? nowMs,
+    nowMs,
+  });
+  const todayCalendar = buildCalendarEvents({
+    cronJobs,
+    cronRuns: cronRunsPage.entries,
+    routines,
+    approvals,
+    view: "day",
+    anchorAtMs: nowMs,
+    nowMs,
+  });
+  const recentMemory = await collectRecentMemoryEntries({ cfg, nowMs });
+  const approvalBlockers = buildApprovalBlockers(approvals);
+  const cronBlockers = buildCronBlockers(cronJobs, nowMs);
+  const taskBlockers: DashboardBlocker[] = tasks
+    .flatMap((task) =>
+      task.blockerLinks.map((blocker) => ({
+        id: blocker.id,
+        severity: blocker.kind === "approval" ? "warning" : "error",
+        title: blocker.title,
+        description: blocker.description,
+        sessionKey: blocker.sessionKey,
+        taskId: task.id,
+      })),
+    )
+    .slice(0, 24);
+  const blockers = [...approvalBlockers, ...cronBlockers, ...taskBlockers].slice(0, 32);
+  const today: DashboardTodaySnapshot = {
+    generatedAtMs: nowMs,
+    inProgressTasks: tasks
+      .filter((task) => task.status === "in_progress" || task.status === "review")
+      .slice(0, 8),
+    scheduledToday: todayCalendar.events,
+    blockers,
+    recentMemory,
+  };
+
+  return {
+    snapshot: {
+      generatedAtMs: nowMs,
+      today,
+      tasks,
+      workshop: workshopItems,
+      calendar: calendarResult.events,
+      routines,
+      memories: recentMemory,
+    },
+    tasks: {
+      generatedAtMs: nowMs,
+      items: tasks,
+    },
+    workshop: {
+      generatedAtMs: nowMs,
+      items: workshopItems,
+    },
+    calendar: calendarResult,
+    routines: {
+      generatedAtMs: nowMs,
+      items: routines,
+    },
+    memories: {
+      generatedAtMs: nowMs,
+      entries: recentMemory,
+    },
+  };
+}
+
+export async function collectDashboardSnapshot(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardSnapshot> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.snapshot;
+}
+
+export async function collectDashboardToday(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardTodaySnapshot> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "day",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.snapshot.today;
+}
+
+export async function collectDashboardTasks(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardTasksResult> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.tasks;
+}
+
+export async function collectDashboardWorkshop(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardWorkshopResult> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.workshop;
+}
+
+export async function collectDashboardCalendar(
+  params: CollectDashboardCalendarParams,
+): Promise<DashboardCalendarResult> {
+  const dataset = await collectDashboardDataset(params);
+  return dataset.calendar;
+}
+
+export async function collectDashboardRoutines(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardRoutinesResult> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.routines;
+}
+
+export async function collectDashboardMemories(
+  params: CollectDashboardSnapshotParams,
+): Promise<DashboardMemoriesResult> {
+  const dataset = await collectDashboardDataset({
+    ...params,
+    view: "month",
+    anchorAtMs: params.nowMs,
+  });
+  return dataset.memories;
+}
+
+export async function ensureStoredDashboardTeamSnapshots(params?: {
+  cfg?: MaumauConfig;
+  stateDir?: string;
+  nowMs?: number;
+  logger?: LoggerLike;
+}): Promise<DashboardTeamSnapshotsResult> {
+  const existing = await readStoredDashboardTeamSnapshots({ stateDir: params?.stateDir });
+  if (existing.snapshots.length > 0) {
+    return existing;
+  }
+  return await refreshStoredDashboardTeamSnapshots(params);
+}
+
+export function resolveDashboardMemoryEditorFiles(): string[] {
+  return [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME];
+}

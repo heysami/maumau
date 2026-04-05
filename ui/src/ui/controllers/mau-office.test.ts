@@ -4047,6 +4047,117 @@ describe("mau-office view", () => {
     );
   });
 
+  it("renders a floating in-page chat window for the selected worker session", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1440);
+    const container = document.createElement("div");
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      nowMs: 0,
+      actorOrder: ["worker:desk"],
+      actors: {
+        "worker:desk": makeActor({
+          id: "worker:desk",
+          label: "Vibe Coder Manager",
+          anchorId: "desk_worker_1",
+          nodeId: "desk_center",
+        }),
+      },
+    };
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state,
+        basePath: "",
+        chatWindow: {
+          open: true,
+          minimized: false,
+          actorId: "worker:desk",
+          actorLabel: "Vibe Coder Manager",
+          sessionKey: "agent:main:vibe-coder-manager",
+          loading: false,
+          sending: false,
+          draft: "Need anything else?",
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: "Can you summarize the blocker?" }],
+              timestamp: 1,
+            },
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "Waiting on the environment approval." }],
+              timestamp: 2,
+            },
+          ],
+          stream: null,
+          streamStartedAt: null,
+          error: null,
+          position: { x: 920, y: 180 },
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+        onChatClose: () => undefined,
+        onChatToggleMinimized: () => undefined,
+        onChatDraftChange: () => undefined,
+        onChatSend: () => undefined,
+        onChatAbort: () => undefined,
+        onChatPositionChange: () => undefined,
+      }),
+      container,
+    );
+
+    expect(container.querySelector(".mau-office-chat")).not.toBeNull();
+    expect(container.querySelector(".mau-office-chat__title")?.textContent).toContain(
+      "Vibe Coder Manager",
+    );
+    expect(container.querySelector(".mau-office-chat__message-body")?.textContent).toContain(
+      "Can you summarize the blocker?",
+    );
+  });
+
+  it("uses a full-screen overlay chat on mobile-sized viewports", () => {
+    installMatchMediaStub(true);
+    installViewportWidthStub(430);
+    const container = document.createElement("div");
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        chatWindow: {
+          open: true,
+          minimized: false,
+          actorId: null,
+          actorLabel: "Main",
+          sessionKey: "main",
+          loading: false,
+          sending: false,
+          draft: "",
+          messages: [],
+          stream: null,
+          streamStartedAt: null,
+          error: null,
+          position: { x: null, y: null },
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(
+      container.querySelector(".mau-office-chat")?.classList.contains("mau-office-chat--mobile"),
+    ).toBe(true);
+  });
+
   it("uses explicit worker animation overrides for placeholder animation families", () => {
     installMatchMediaStub(false);
     installViewportWidthStub(1600);

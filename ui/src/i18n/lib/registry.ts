@@ -10,9 +10,13 @@ type LazyLocaleRegistration = {
 
 export const DEFAULT_LOCALE: Locale = "en";
 
-const LAZY_LOCALES: readonly LazyLocale[] = ["zh-CN", "zh-TW", "pt-BR", "de", "es"];
+const LAZY_LOCALES: readonly LazyLocale[] = ["id", "zh-CN", "zh-TW", "pt-BR", "de", "es"];
 
 const LAZY_LOCALE_REGISTRY: Record<LazyLocale, LazyLocaleRegistration> = {
+  id: {
+    exportName: "id",
+    loader: () => import("../locales/id.ts"),
+  },
   "zh-CN": {
     exportName: "zh_CN",
     loader: () => import("../locales/zh-CN.ts"),
@@ -46,6 +50,9 @@ function isLazyLocale(locale: Locale): locale is LazyLocale {
 }
 
 export function resolveNavigatorLocale(navLang: string): Locale {
+  if (navLang.startsWith("id") || navLang.startsWith("in")) {
+    return "id";
+  }
   if (navLang.startsWith("zh")) {
     return navLang === "zh-TW" || navLang === "zh-HK" ? "zh-TW" : "zh-CN";
   }

@@ -34,6 +34,7 @@ import type { buildCommandContext } from "./commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
 import { buildGroupChatContext, buildGroupIntro } from "./groups.js";
 import { buildInboundMetaSystemPrompt, buildInboundUserContextPrefix } from "./inbound-meta.js";
+import { buildBootstrapSecureDashboardSystemPrompt } from "./bootstrap-secure-dashboard.js";
 import type { createModelSelectionState } from "./model-selection.js";
 import { resolveOriginMessageProvider } from "./origin-routing.js";
 import { resolveQueueSettings } from "./queue/settings.js";
@@ -289,8 +290,20 @@ export async function runPreparedReply(
   const inboundMetaPrompt = buildInboundMetaSystemPrompt(
     isNewSession ? sessionCtx : { ...sessionCtx, ThreadStarterBody: undefined },
   );
+  const bootstrapSecureDashboardPrompt = await buildBootstrapSecureDashboardSystemPrompt({
+    cfg,
+    workspaceDir,
+    isFirstTurnInSession,
+    originatingChannel: ctx.OriginatingChannel ?? sessionCtx.OriginatingChannel,
+    chatType: sessionCtx.ChatType,
+    senderIsOwner: command.senderIsOwner,
+    requesterSenderIsOwner: sessionEntry?.requesterSenderIsOwner,
+    ctx,
+    commandAuthorized,
+  });
   const extraSystemPromptParts = [
     inboundMetaPrompt,
+    bootstrapSecureDashboardPrompt,
     groupChatContext,
     groupIntro,
     groupSystemPrompt,

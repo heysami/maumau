@@ -785,8 +785,20 @@ extension GatewayEndpointStore {
         return withLeadingSlash.hasSuffix("/") ? withLeadingSlash : withLeadingSlash + "/"
     }
 
-    private static func localControlUiBasePath() -> String {
-        let root = MaumauConfigFile.loadDict()
+    private static func dashboardLandingPath(from basePath: String) -> String {
+        let normalizedBasePath = self.normalizeDashboardPath(basePath)
+        let trimmedBasePath =
+            normalizedBasePath == "/"
+            ? ""
+            : String(normalizedBasePath.dropLast())
+        let existingPath = trimmedBasePath.lowercased()
+        if existingPath.hasSuffix("/dashboard/today") {
+            return trimmedBasePath
+        }
+        return trimmedBasePath + "/dashboard/today"
+    }
+
+    private static func resolveControlUiBasePath(root: [String: Any]) -> String {
         guard let gateway = root["gateway"] as? [String: Any],
               let controlUi = gateway["controlUi"] as? [String: Any]
         else {
@@ -795,10 +807,15 @@ extension GatewayEndpointStore {
         return self.normalizeDashboardPath(controlUi["basePath"] as? String)
     }
 
+    private static func localControlUiBasePath() -> String {
+        self.resolveControlUiBasePath(root: MaumauConfigFile.loadDict())
+    }
+
     static func dashboardURL(
         for config: GatewayConnection.Config,
         mode: AppState.ConnectionMode,
-        localBasePath: String? = nil) throws -> URL
+        localBasePath: String? = nil,
+        locale: String? = nil) throws -> URL
     {
         guard var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false) else {
             throw NSError(domain: "Dashboard", code: 1, userInfo: [
@@ -816,13 +833,18 @@ extension GatewayEndpointStore {
 
         let urlPath = self.normalizeDashboardPath(components.path)
         if urlPath != "/" {
-            components.path = urlPath
+            components.path = self.dashboardLandingPath(from: urlPath)
         } else if mode == .local {
             let fallbackPath = localBasePath ?? self.localControlUiBasePath()
-            components.path = self.normalizeDashboardPath(fallbackPath)
+            components.path = self.dashboardLandingPath(from: fallbackPath)
         } else {
-            components.path = "/"
+            components.path = "/dashboard/today"
         }
+
+        let normalizedLocale = locale?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty
+        components.queryItems = normalizedLocale.map { [URLQueryItem(name: "locale", value: $0)] }
 
         var fragmentItems: [URLQueryItem] = []
         if let token = config.token?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -830,7 +852,6 @@ extension GatewayEndpointStore {
         {
             fragmentItems.append(URLQueryItem(name: "token", value: token))
         }
-        components.queryItems = nil
         if fragmentItems.isEmpty {
             components.fragment = nil
         } else {
@@ -844,6 +865,59 @@ extension GatewayEndpointStore {
             ])
         }
         return url
+    }
+
+    static func secureDashboardURL(
+        root: [String: Any],
+        tailscaleHostname: String?,
+        locale: String? = nil,
+        env: [String: String] = ProcessInfo.processInfo.environment,
+        launchdSnapshot: LaunchAgentPlistSnapshot? = GatewayLaunchAgentManager.launchdConfigSnapshot())
+        -> URL?
+    {
+        let gateway = root["gateway"] as? [String: Any] ?? [:]
+        let tailscale = gateway["tailscale"] as? [String: Any] ?? [:]
+        let rawMode = (tailscale["mode"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        // Keep the onboarding chat aligned with Control UI bootstrap: if
+        // Tailscale exposes the dashboard, hand the user the same phone-ready
+        // URL and include the current token when the local gateway still uses
+        // token auth.
+        guard rawMode == "serve" || rawMode == "funnel" else {
+            return nil
+        }
+
+        let host = (tailscaleHostname ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard !host.isEmpty else {
+            return nil
+        }
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = self.dashboardLandingPath(from: self.resolveControlUiBasePath(root: root))
+        if let normalizedLocale = locale?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty
+        {
+            components.queryItems = [URLQueryItem(name: "locale", value: normalizedLocale)]
+        }
+        if let token = self.resolveGatewayToken(
+            isRemote: false,
+            root: root,
+            env: env,
+            launchdSnapshot: launchdSnapshot)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !token.isEmpty
+        {
+            var fragment = URLComponents()
+            fragment.queryItems = [URLQueryItem(name: "token", value: token)]
+            components.fragment = fragment.percentEncodedQuery
+        }
+        return components.url
     }
 }
 

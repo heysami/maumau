@@ -3,12 +3,14 @@ import type { MaumauConfig } from "../../config/config.js";
 import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import type { RuntimeEnv } from "../../runtime.js";
+import { applyConversationAutomationPresetConfig } from "../conversation-automation-preset.js";
 import { DEFAULT_GATEWAY_DAEMON_RUNTIME } from "../daemon-runtime.js";
+import { ensureFreshInstallBundledTools } from "../onboard-bundled-tools.js";
 import {
   applyLocalSetupWorkspaceConfig,
   detectFreshInstallTailscaleMode,
 } from "../onboard-config.js";
-import { ensureFreshInstallBundledTools } from "../onboard-bundled-tools.js";
+import { applyOnboardingTailscaleGatewayAuth } from "../onboard-gateway-tailscale-auth.js";
 import {
   applyWizardMetadata,
   DEFAULT_WORKSPACE,
@@ -18,7 +20,6 @@ import {
 } from "../onboard-helpers.js";
 import { ensureOnboardedMultiUserMemoryArtifacts } from "../onboard-multi-user-memory.js";
 import { ensureOnboardedReflectionReviewerArtifacts } from "../onboard-reflection-reviewer.js";
-import { applyOnboardingTailscaleGatewayAuth } from "../onboard-gateway-tailscale-auth.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { inferAuthChoiceFromFlags } from "./local/auth-choice-inference.js";
 import { applyNonInteractiveGatewayConfig } from "./local/gateway-config.js";
@@ -126,7 +127,7 @@ export async function runNonInteractiveLocalSetup(params: {
     freshInstall && opts.tailscale === undefined
       ? await detectFreshInstallTailscaleMode(baseConfig)
       : undefined;
-  const gatewayResult = applyNonInteractiveGatewayConfig({
+  const gatewayResult = await applyNonInteractiveGatewayConfig({
     nextConfig,
     opts,
     runtime,
@@ -144,7 +145,8 @@ export async function runNonInteractiveLocalSetup(params: {
     if (exposure?.blockedReason === "doctor_failed") {
       const lines = [
         `Tailscale ${gatewayResult.tailscaleMode} is not enabled on this tailnet yet.`,
-        exposure.suggestedFix ?? "Enable the requested Tailscale exposure mode and rerun onboarding.",
+        exposure.suggestedFix ??
+          "Enable the requested Tailscale exposure mode and rerun onboarding.",
       ];
       if (opts.tailscale !== undefined) {
         runtime.error(lines.join("\n"));
@@ -171,6 +173,11 @@ export async function runNonInteractiveLocalSetup(params: {
   }
 
   nextConfig = applyNonInteractiveSkillsConfig({ nextConfig, opts, runtime });
+  if (opts.preset === "conversation-automation") {
+    nextConfig = applyConversationAutomationPresetConfig(nextConfig, {
+      enabled: true,
+    });
+  }
 
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);

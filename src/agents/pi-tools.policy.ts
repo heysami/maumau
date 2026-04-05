@@ -204,6 +204,16 @@ function resolveExplicitProfileAlsoAllow(tools?: MaumauConfig["tools"]): string[
   return Array.isArray(tools?.alsoAllow) ? tools.alsoAllow : undefined;
 }
 
+function mergeOptionalToolLists(
+  globalList?: string[],
+  agentList?: string[],
+): string[] | undefined {
+  if (!Array.isArray(globalList) && !Array.isArray(agentList)) {
+    return undefined;
+  }
+  return Array.from(new Set([...(globalList ?? []), ...(agentList ?? [])]));
+}
+
 function hasExplicitToolSection(section: unknown): boolean {
   return section !== undefined && section !== null;
 }
@@ -261,8 +271,10 @@ export function resolveEffectiveToolPolicy(params: {
     modelProvider: params.modelProvider,
     modelId: params.modelId,
   });
-  const explicitProfileAlsoAllow =
-    resolveExplicitProfileAlsoAllow(agentTools) ?? resolveExplicitProfileAlsoAllow(globalTools);
+  const explicitProfileAlsoAllow = mergeOptionalToolLists(
+    resolveExplicitProfileAlsoAllow(globalTools),
+    resolveExplicitProfileAlsoAllow(agentTools),
+  );
   const implicitProfileAlsoAllow = resolveImplicitProfileAlsoAllow({ globalTools, agentTools });
   const profileAlsoAllow =
     explicitProfileAlsoAllow || implicitProfileAlsoAllow
@@ -280,11 +292,10 @@ export function resolveEffectiveToolPolicy(params: {
     providerProfile: agentProviderPolicy?.profile ?? providerPolicy?.profile,
     // alsoAllow is applied at the profile stage (to avoid being filtered out early).
     profileAlsoAllow,
-    providerProfileAlsoAllow: Array.isArray(agentProviderPolicy?.alsoAllow)
-      ? agentProviderPolicy?.alsoAllow
-      : Array.isArray(providerPolicy?.alsoAllow)
-        ? providerPolicy?.alsoAllow
-        : undefined,
+    providerProfileAlsoAllow: mergeOptionalToolLists(
+      Array.isArray(providerPolicy?.alsoAllow) ? providerPolicy.alsoAllow : undefined,
+      Array.isArray(agentProviderPolicy?.alsoAllow) ? agentProviderPolicy.alsoAllow : undefined,
+    ),
   };
 }
 

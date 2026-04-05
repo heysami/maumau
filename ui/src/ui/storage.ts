@@ -121,6 +121,14 @@ function tokenSessionKeyForGateway(gatewayUrl: string): string {
   return `${TOKEN_SESSION_KEY_PREFIX}${normalizeGatewayTokenScope(gatewayUrl)}`;
 }
 
+function readQueryLocaleOverride(): string | undefined {
+  if (typeof location === "undefined" || typeof location.search !== "string") {
+    return undefined;
+  }
+  const locale = new URLSearchParams(location.search).get("locale");
+  return isSupportedLocale(locale) ? locale : undefined;
+}
+
 function resolveScopedSessionSelection(
   gatewayUrl: string,
   parsed: PersistedUiSettings,
@@ -191,6 +199,7 @@ function persistSessionToken(gatewayUrl: string, token: string) {
 
 export function loadSettings(): UiSettings {
   const { pageUrl: pageDerivedUrl, effectiveUrl: defaultUrl } = deriveDefaultGatewayUrl();
+  const queryLocaleOverride = readQueryLocaleOverride();
   const storage = getSafeLocalStorage();
 
   const defaults: UiSettings = {
@@ -218,7 +227,7 @@ export function loadSettings(): UiSettings {
       storage?.getItem(SETTINGS_KEY_PREFIX + "default") ??
       storage?.getItem(LEGACY_SETTINGS_KEY);
     if (!raw) {
-      return defaults;
+      return queryLocaleOverride == null ? defaults : { ...defaults, locale: queryLocaleOverride };
     }
     const parsed = JSON.parse(raw) as PersistedUiSettings;
     const parsedGatewayUrl =
@@ -231,6 +240,7 @@ export function loadSettings(): UiSettings {
       (parsed as { theme?: unknown }).theme,
       (parsed as { themeMode?: unknown }).themeMode,
     );
+    const persistedLocale = isSupportedLocale(parsed.locale) ? parsed.locale : undefined;
     const settings = {
       gatewayUrl,
       // Gateway auth is intentionally in-memory only; scrub any legacy persisted token on load.
@@ -271,14 +281,18 @@ export function loadSettings(): UiSettings {
         parsed.borderRadius <= 100
           ? snapBorderRadius(parsed.borderRadius)
           : defaults.borderRadius,
-      locale: isSupportedLocale(parsed.locale) ? parsed.locale : undefined,
+      // An explicit dashboard deep-link locale should win for that page load.
+      // The app launcher uses `?locale=` to carry the user's selected language
+      // into the standalone dashboard, so do not let older persisted settings
+      // silently override it.
+      locale: queryLocaleOverride ?? persistedLocale,
     };
     if ("token" in parsed) {
       persistSettings(settings);
     }
     return settings;
   } catch {
-    return defaults;
+    return queryLocaleOverride == null ? defaults : { ...defaults, locale: queryLocaleOverride };
   }
 }
 

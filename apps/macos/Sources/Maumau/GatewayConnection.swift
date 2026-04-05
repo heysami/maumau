@@ -196,16 +196,11 @@ actor GatewayConnection {
                mode == .local,
                await GatewayProcessManager.shared.recoverManagedGatewayAfterAuthFailureIfNeeded(error)
             {
-                await MainActor.run { GatewayProcessManager.shared.setActive(true) }
-                let gatewayReady = await GatewayProcessManager.shared.waitForGatewayReady(
-                    timeout: GatewayProcessManager.localGatewayStartupTimeout)
-                if gatewayReady {
-                    return try await self.retryRequestWithFreshConfig(
-                        method: method,
-                        params: params,
-                        timeoutMs: timeoutMs,
-                        delaysMs: [0, 150, 400, 900])
-                }
+                return try await self.retryRequestWithFreshConfig(
+                    method: method,
+                    params: params,
+                    timeoutMs: timeoutMs,
+                    delaysMs: [0, 150, 400, 900])
             }
 
             if recoveryBehavior == .disabled ||

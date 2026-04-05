@@ -265,6 +265,15 @@ export function removeConfigFormValue(state: ConfigState, path: Array<string | n
   }
 }
 
+export function replaceConfigFormRoot(state: ConfigState, root: Record<string, unknown>) {
+  const base = cloneConfigObject(root);
+  state.configForm = base;
+  state.configFormDirty = true;
+  if (state.configFormMode === "form") {
+    state.configRaw = serializeConfigForm(base);
+  }
+}
+
 export function findAgentConfigEntryIndex(
   config: Record<string, unknown> | null,
   agentId: string,

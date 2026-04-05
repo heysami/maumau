@@ -25,22 +25,32 @@ struct OnboardingViewSmokeTests {
         #expect(!OnboardingController.shared.isPresented)
     }
 
+    @Test func `onboarding kickoff message includes secure dashboard URL when available`() {
+        let prompt = OnboardingView.onboardingKickoffMessage(
+            secureDashboardUrl: "https://maumau.tailnet.ts.net/dashboard/today#token=abc123")
+        #expect(prompt.contains("BOOTSTRAP.md"))
+        #expect(prompt.contains("https://maumau.tailnet.ts.net/dashboard/today#token=abc123"))
+        #expect(prompt.contains("secure dashboard on my phone"))
+    }
+
     @Test func `local page order adds private access before permissions and included tools`() {
         let order = OnboardingView.pageOrder(for: .local, showOnboardingChat: false)
-        #expect(order == [0, 1, 3, 10, 12, 5, 11, 9])
+        #expect(order == [0, 1, 3, 10, 12, 5, 11, 13, 9])
         let channelsIndex = order.firstIndex(of: 10)
         let privateAccessIndex = order.firstIndex(of: 12)
         let permissionsIndex = order.firstIndex(of: 5)
-        let toolsIndex = order.firstIndex(of: 11)
+        let automationIndex = order.firstIndex(of: 11)
+        let toolsIndex = order.firstIndex(of: 13)
         #expect(privateAccessIndex == channelsIndex.map { $0 + 1 })
         #expect(permissionsIndex == privateAccessIndex.map { $0 + 1 })
-        #expect(toolsIndex == permissionsIndex.map { $0 + 1 })
+        #expect(automationIndex == permissionsIndex.map { $0 + 1 })
+        #expect(toolsIndex == automationIndex.map { $0 + 1 })
         #expect(!order.contains(6))
         #expect(!order.contains(7))
         #expect(!order.contains(8))
     }
 
-    @Test func `local onboarding step metadata marks required optional and prep elsewhere`() {
+    @Test func `local onboarding step metadata marks required optional and voice prep`() {
         let state = AppState(preview: true)
         state.connectionMode = .local
         let view = OnboardingView(
@@ -55,6 +65,7 @@ struct OnboardingViewSmokeTests {
         #expect(steps.first(where: { $0.pageID == view.channelsSetupPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.privateAccessPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.permissionsPageIndex })?.badges == [.optional])
+        #expect(steps.first(where: { $0.pageID == view.conversationAutomationPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.skillsSetupPageIndex })?.badges == [.optional])
     }
 
@@ -170,6 +181,318 @@ struct OnboardingViewSmokeTests {
             discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
 
         #expect(view.onboardingChannelsStore.defersConfigSaves)
+    }
+
+    @Test func `conversation automation page prep does not overwrite earlier voice settings`() async {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        view.onboardingChannelsStore.replaceConfigDraft([
+            "messages": [
+                "tts": [
+                    "provider": "openai",
+                    "elevenlabs": [
+                        "modelId": "kept-model",
+                        "languageCode": "en",
+                    ],
+                ],
+            ],
+            "plugins": [
+                "entries": [
+                    "voice-call": [
+                        "enabled": true,
+                        "config": [
+                            "enabled": true,
+                            "provider": "custom-provider",
+                            "inboundPolicy": "open",
+                            "allowFrom": ["+15551234567"],
+                            "streaming": [
+                                "enabled": true,
+                                "sttProvider": "deepgram",
+                                "languageCode": "en",
+                            ],
+                            "tts": [
+                                "provider": "openai",
+                                "elevenlabs": [
+                                    "modelId": "kept-model",
+                                    "languageCode": "en",
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], dirty: false)
+
+        await view.prepareConversationAutomationPage()
+
+        #expect(view.onboardingChannelsStore.configDirty == false)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("messages"), .key("tts"), .key("provider")]) as? String == "openai")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+    }
+
+    @Test func `conversation automation preset does not overwrite existing voice settings`() async {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        view.onboardingChannelsStore.replaceConfigDraft([
+            "messages": [
+                "tts": [
+                    "provider": "openai",
+                    "elevenlabs": [
+                        "modelId": "kept-model",
+                        "languageCode": "en",
+                    ],
+                ],
+            ],
+            "plugins": [
+                "entries": [
+                    "voice-call": [
+                        "enabled": true,
+                        "config": [
+                            "enabled": true,
+                            "provider": "custom-provider",
+                            "inboundPolicy": "open",
+                            "allowFrom": ["+15551234567"],
+                            "streaming": [
+                                "enabled": true,
+                                "sttProvider": "deepgram",
+                                "languageCode": "en",
+                            ],
+                            "tts": [
+                                "provider": "openai",
+                                "elevenlabs": [
+                                    "modelId": "kept-model",
+                                    "languageCode": "en",
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], dirty: false)
+
+        await view.prepareConversationAutomationPage()
+
+        view.applyConversationAutomationPresetDraft(enabled: true)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")]) as? Bool == true)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) as? Bool == true)
+
+        view.applyConversationAutomationPresetDraft(enabled: false)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")]) as? Bool == true)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) as? Bool == false)
+    }
+
+    @Test func `conversation automation telephony defaults can be applied and restored`() async {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        state.onboardingLanguage = .id
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        view.onboardingChannelsStore.replaceConfigDraft([
+            "plugins": [
+                "entries": [
+                    "voice-call": [
+                        "enabled": true,
+                        "config": [
+                            "enabled": true,
+                            "provider": "custom-provider",
+                            "inboundPolicy": "open",
+                            "allowFrom": ["+15551234567"],
+                            "streaming": [
+                                "enabled": true,
+                                "sttProvider": "deepgram",
+                                "languageCode": "en",
+                            ],
+                            "tts": [
+                                "provider": "openai",
+                                "elevenlabs": [
+                                    "modelId": "kept-model",
+                                    "languageCode": "en",
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], dirty: false)
+
+        await view.prepareConversationAutomationPage()
+
+        view.applyConversationAutomationPresetDraft(
+            enabled: nil,
+            telephonyEnabled: true,
+            sttProvider: .deepgramRealtime)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "twilio")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("inboundPolicy")]) as? String == "allowlist")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("allowFrom")]) as? [String] == ["+15551234567"])
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram-realtime")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("languageCode")]) as? String == "id")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")]) as? String == "nova-3")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("provider")]) as? String == "elevenlabs")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("modelId")]) as? String == "eleven_multilingual_v2")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")]) as? String == "id")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("tools"), .key("alsoAllow")]) as? [String] == ["voice-call"])
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) == nil)
+
+        view.applyConversationAutomationPresetDraft(
+            enabled: nil,
+            telephonyEnabled: true,
+            sttProvider: .openaiRealtime)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "openai-realtime")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")]) == nil)
+
+        view.applyConversationAutomationPresetDraft(
+            enabled: nil,
+            telephonyEnabled: false)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")]) as? Bool == true)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("provider")]) as? String == "openai")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("modelId")]) as? String == "kept-model")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("tools"), .key("alsoAllow")]) == nil)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) == nil)
+    }
+
+    @Test func `conversation automation voice setup writes provider credentials and callback route`() {
+        let updates = OnboardingView.conversationAutomationVoiceDraftUpdates(
+            phoneAllowFrom: [],
+            phoneProvider: .telnyx,
+            selectedSttProvider: .deepgramRealtime,
+            webhookMode: .publicUrl,
+            replyLanguageCode: "id",
+            fromNumber: "+628123456789",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "telnyx-key",
+            telnyxConnectionID: "CONN123",
+            telnyxPublicKey: "pub-key",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "deepgram-key",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "eleven-key",
+            elevenLabsVoiceID: "voice-123",
+            publicWebhookURL: "https://voice.example.com/voice/webhook")
+
+        func updateValue(at path: ConfigPath) -> Any? {
+            updates.first(where: { $0.path == path })?.value
+        }
+
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("fromNumber")]) as? String == "+628123456789")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("apiKey")]) as? String == "telnyx-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("connectionId")]) as? String == "CONN123")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("publicKey")]) as? String == "pub-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("publicUrl")]) as? String == "https://voice.example.com/voice/webhook")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tunnel"), .key("provider")]) as? String == "none")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("apiKey")]) as? String == "deepgram-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("apiKey")]) as? String == "eleven-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("voiceId")]) as? String == "voice-123")
+    }
+
+    @Test func `conversation automation voice step blocks advance until required fields exist`() {
+        let strings = OnboardingStrings(language: .en)
+        let missing = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            phoneProvider: .twilio,
+            sttProvider: .openaiRealtime,
+            webhookMode: .publicUrl,
+            fromNumber: "",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "",
+            publicWebhookURL: "",
+            tailscaleInstalled: false,
+            tailscaleRunning: false,
+            tailscaleFunnelChecked: false,
+            tailscaleFunnelEnabled: false,
+            strings: strings)
+
+        #expect(!missing.isEmpty)
+
+        let ready = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            phoneProvider: .twilio,
+            sttProvider: .openaiRealtime,
+            webhookMode: .publicUrl,
+            fromNumber: "+15551234567",
+            twilioAccountSID: "AC123",
+            twilioAuthToken: "twilio-token",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "sk-test",
+            elevenLabsAPIKey: "xi-test",
+            publicWebhookURL: "https://voice.example.com/voice/webhook",
+            tailscaleInstalled: false,
+            tailscaleRunning: false,
+            tailscaleFunnelChecked: false,
+            tailscaleFunnelEnabled: false,
+            strings: strings)
+
+        #expect(ready.isEmpty)
     }
 
     @Test func `managed browser sign-in waits for the brain step to finish`() {

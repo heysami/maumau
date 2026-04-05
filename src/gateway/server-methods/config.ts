@@ -41,6 +41,10 @@ import {
   summarizeChangedPaths,
 } from "../control-plane-audit.js";
 import {
+  haveTeamsConfigChanged,
+  refreshStoredDashboardTeamSnapshots,
+} from "../dashboard.js";
+import {
   ErrorCodes,
   errorShape,
   formatValidationErrors,
@@ -296,6 +300,25 @@ function loadSchemaWithPlugins(): ConfigSchemaResponse {
   });
 }
 
+async function refreshDashboardTeamSnapshotsIfNeeded(params: {
+  previousConfig: MaumauConfig | undefined;
+  nextConfig: MaumauConfig;
+  logger?: { warn?: (message: string) => void };
+}) {
+  if (!haveTeamsConfigChanged(params.previousConfig, params.nextConfig)) {
+    return;
+  }
+  try {
+    await refreshStoredDashboardTeamSnapshots({
+      cfg: params.nextConfig,
+      logger: params.logger,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    params.logger?.warn?.(`[dashboard] failed to refresh team snapshots after config write: ${message}`);
+  }
+}
+
 export const configHandlers: GatewayRequestHandlers = {
   "config.get": async ({ params, respond }) => {
     if (!assertValidParams(params, validateConfigGetParams, "config.get", respond)) {
@@ -344,7 +367,7 @@ export const configHandlers: GatewayRequestHandlers = {
     }
     respond(true, result, undefined);
   },
-  "config.set": async ({ params, respond }) => {
+  "config.set": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateConfigSetParams, "config.set", respond)) {
       return;
     }
@@ -357,6 +380,11 @@ export const configHandlers: GatewayRequestHandlers = {
       return;
     }
     await writeConfigFile(parsed.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+      logger: context?.logGateway,
+    });
     respond(
       true,
       {
@@ -447,6 +475,11 @@ export const configHandlers: GatewayRequestHandlers = {
       `config.patch write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)} restartReason=config.patch`,
     );
     await writeConfigFile(validated.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: validated.config,
+      logger: context?.logGateway,
+    });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =
       resolveConfigRestartRequest(params);
@@ -507,6 +540,11 @@ export const configHandlers: GatewayRequestHandlers = {
       `config.apply write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)} restartReason=config.apply`,
     );
     await writeConfigFile(parsed.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+      logger: context?.logGateway,
+    });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =
       resolveConfigRestartRequest(params);

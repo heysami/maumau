@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { id } from "../locales/id.ts";
 import { pt_BR } from "../locales/pt-BR.ts";
 import { zh_CN } from "../locales/zh-CN.ts";
 import { zh_TW } from "../locales/zh-TW.ts";
@@ -92,6 +93,21 @@ describe("i18n", () => {
     expect(fresh.t("common.health")).toBe("健康状况");
   });
 
+  it("does not let an older async locale load override a newer locale choice", async () => {
+    vi.resetModules();
+    vi.stubGlobal("localStorage", createStorageMock());
+    vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
+    localStorage.setItem("maumau.i18n.locale", "zh-CN");
+
+    const fresh = await import("../lib/translate.ts");
+    await fresh.i18n.setLocale("en");
+
+    await vi.waitFor(() => {
+      expect(fresh.i18n.getLocale()).toBe("en");
+    });
+    expect(fresh.i18n.getLocale()).toBe("en");
+  });
+
   it("skips node localStorage accessors that warn without a storage file", async () => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -109,6 +125,7 @@ describe("i18n", () => {
   });
 
   it("keeps the version label available in shipped locales", () => {
+    expect((id.common as { version?: string }).version).toBeTruthy();
     expect((pt_BR.common as { version?: string }).version).toBeTruthy();
     expect((zh_CN.common as { version?: string }).version).toBeTruthy();
     expect((zh_TW.common as { version?: string }).version).toBeTruthy();

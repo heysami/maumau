@@ -70,9 +70,15 @@ describe("TAB_GROUPS", () => {
     expect(navigation.tabFromPath("/teams")).toBe("teams");
   });
 
-  it("publishes MauOffice in the control sidebar group", () => {
+  it("keeps the standalone dashboard out of the classic sidebar groups", () => {
     const control = navigation.TAB_GROUPS.find((group) => group.label === "control");
-    expect(control?.tabs).toContain("mauOffice");
-    expect(navigation.tabFromPath("/mau-office")).toBe("mauOffice");
+    expect(control?.tabs).not.toContain("dashboardMauOffice");
+    expect(control?.tabs).not.toContain("dashboardToday");
+    expect(navigation.tabFromPath("/dashboard/today")).toBe("dashboardToday");
+    expect(navigation.tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
+  });
+
+  it("keeps the legacy MauOffice path pointed at the new dashboard page", () => {
+    expect(navigation.tabFromPath("/mau-office")).toBe("dashboardMauOffice");
   });
 });

@@ -29,7 +29,12 @@ describe("handleControlUiHttpRequest", () => {
       assistantAvatar: string;
       assistantAgentId: string;
       loopbackGatewayToken?: string;
+      secureDashboardUrl?: string;
     };
+  }
+
+  async function waitForBootstrapPayload() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   function expectNotFoundResponse(params: {
@@ -205,6 +210,7 @@ describe("handleControlUiHttpRequest", () => {
             },
           },
         );
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.basePath).toBe("");
@@ -231,6 +237,7 @@ describe("handleControlUiHttpRequest", () => {
             },
           },
         );
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.basePath).toBe("/maumau");
@@ -239,6 +246,42 @@ describe("handleControlUiHttpRequest", () => {
         expect(parsed.assistantAgentId).toBe("main");
       },
     });
+  });
+
+  it("includes a secure dashboard URL when tailscale access is available", async () => {
+    const previousTailnetDns = process.env.MAUMAU_TAILNET_DNS;
+    process.env.MAUMAU_TAILNET_DNS = "maumau.tailnet.ts.net";
+    try {
+      await withControlUiRoot({
+        fn: async (tmp) => {
+          const { end, handled } = runControlUiRequest({
+            url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+            method: "GET",
+            rootPath: tmp,
+            hostHeader: "127.0.0.1:18789",
+            remoteAddress: "127.0.0.1",
+            config: {
+              gateway: {
+                auth: { mode: "token", token: "loopback-secret" },
+                tailscale: { mode: "serve" },
+              },
+            },
+          });
+          await waitForBootstrapPayload();
+          expect(handled).toBe(true);
+          const parsed = parseBootstrapPayload(end);
+          expect(parsed.secureDashboardUrl).toBe(
+            "https://maumau.tailnet.ts.net/dashboard/today#token=loopback-secret",
+          );
+        },
+      });
+    } finally {
+      if (previousTailnetDns === undefined) {
+        delete process.env.MAUMAU_TAILNET_DNS;
+      } else {
+        process.env.MAUMAU_TAILNET_DNS = previousTailnetDns;
+      }
+    }
   });
 
   it("includes the current token for direct loopback bootstrap requests", async () => {
@@ -254,6 +297,7 @@ describe("handleControlUiHttpRequest", () => {
             gateway: { auth: { mode: "token", token: "loopback-secret" } },
           },
         });
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.loopbackGatewayToken).toBe("loopback-secret");
@@ -276,6 +320,7 @@ describe("handleControlUiHttpRequest", () => {
           trustedProxies: [],
           allowRealIpFallback: false,
         });
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.loopbackGatewayToken).toBeUndefined();

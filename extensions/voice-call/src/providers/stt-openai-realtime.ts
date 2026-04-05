@@ -9,6 +9,7 @@
  */
 
 import WebSocket from "ws";
+import type { RealtimeSTTProvider, RealtimeSTTSession } from "./stt-realtime.js";
 
 /**
  * Configuration for OpenAI Realtime STT.
@@ -18,6 +19,8 @@ export interface RealtimeSTTConfig {
   apiKey: string;
   /** Model to use (default: gpt-4o-transcribe) */
   model?: string;
+  /** ISO-639-1 language code */
+  languageCode?: string;
   /** Silence duration in ms before considering speech ended (default: 800) */
   silenceDurationMs?: number;
   /** VAD threshold 0-1 (default: 0.5) */
@@ -25,34 +28,13 @@ export interface RealtimeSTTConfig {
 }
 
 /**
- * Session for streaming audio and receiving transcripts.
- */
-export interface RealtimeSTTSession {
-  /** Connect to the transcription service */
-  connect(): Promise<void>;
-  /** Send mu-law audio data (8kHz mono) */
-  sendAudio(audio: Buffer): void;
-  /** Wait for next complete transcript (after VAD detects end of speech) */
-  waitForTranscript(timeoutMs?: number): Promise<string>;
-  /** Set callback for partial transcripts (streaming) */
-  onPartial(callback: (partial: string) => void): void;
-  /** Set callback for final transcripts */
-  onTranscript(callback: (transcript: string) => void): void;
-  /** Set callback when speech starts (VAD) */
-  onSpeechStart(callback: () => void): void;
-  /** Close the session */
-  close(): void;
-  /** Check if session is connected */
-  isConnected(): boolean;
-}
-
-/**
  * Provider factory for OpenAI Realtime STT sessions.
  */
-export class OpenAIRealtimeSTTProvider {
+export class OpenAIRealtimeSTTProvider implements RealtimeSTTProvider {
   readonly name = "openai-realtime";
   private apiKey: string;
   private model: string;
+  private languageCode?: string;
   private silenceDurationMs: number;
   private vadThreshold: number;
 
@@ -62,6 +44,7 @@ export class OpenAIRealtimeSTTProvider {
     }
     this.apiKey = config.apiKey;
     this.model = config.model || "gpt-4o-transcribe";
+    this.languageCode = config.languageCode?.trim() || undefined;
     this.silenceDurationMs = config.silenceDurationMs ?? 800;
     this.vadThreshold = config.vadThreshold ?? 0.5;
   }
@@ -73,6 +56,7 @@ export class OpenAIRealtimeSTTProvider {
     return new OpenAIRealtimeSTTSession(
       this.apiKey,
       this.model,
+      this.languageCode,
       this.silenceDurationMs,
       this.vadThreshold,
     );
@@ -98,6 +82,7 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
+    private readonly languageCode: string | undefined,
     private readonly silenceDurationMs: number,
     private readonly vadThreshold: number,
   ) {}
@@ -131,6 +116,7 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
             input_audio_format: "g711_ulaw",
             input_audio_transcription: {
               model: this.model,
+              ...(this.languageCode ? { language: this.languageCode } : {}),
             },
             turn_detection: {
               type: "server_vad",

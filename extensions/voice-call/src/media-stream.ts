@@ -1,26 +1,23 @@
 /**
  * Media Stream Handler
  *
- * Handles bidirectional audio streaming between Twilio and the AI services.
+ * Handles bidirectional audio streaming between Twilio and realtime STT services.
  * - Receives mu-law audio from Twilio via WebSocket
- * - Forwards to OpenAI Realtime STT for transcription
+ * - Forwards to a realtime STT provider for transcription
  * - Sends TTS audio back to Twilio
  */
 
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import type {
-  OpenAIRealtimeSTTProvider,
-  RealtimeSTTSession,
-} from "./providers/stt-openai-realtime.js";
+import type { RealtimeSTTProvider, RealtimeSTTSession } from "./providers/stt-realtime.js";
 
 /**
  * Configuration for the media stream handler.
  */
 export interface MediaStreamConfig {
   /** STT provider for transcription */
-  sttProvider: OpenAIRealtimeSTTProvider;
+  sttProvider: RealtimeSTTProvider;
   /** Close sockets that never send a valid `start` frame within this window. */
   preStartTimeoutMs?: number;
   /** Max concurrent pre-start sockets. */
@@ -266,7 +263,7 @@ export class MediaStreamHandler {
     // Notify connection BEFORE STT connect so TTS can work even if STT fails
     this.config.onConnect?.(callSid, streamSid);
 
-    // Connect to OpenAI STT (non-blocking, log errors but don't fail the call)
+    // Connect to STT (non-blocking, log errors but don't fail the call)
     sttSession.connect().catch((err) => {
       console.warn(`[MediaStream] STT connection failed (TTS still works):`, err.message);
     });

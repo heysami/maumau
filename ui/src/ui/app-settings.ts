@@ -1,4 +1,5 @@
 import { roleScopesAllow } from "../../../src/shared/operator-scope-compat.js";
+import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "./agent-workspace-constants.ts";
 import { refreshChat } from "./app-chat.ts";
 import {
   startLogsPolling,
@@ -8,12 +9,14 @@ import {
 } from "./app-polling.ts";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import type { MaumauApp } from "./app.ts";
+import { loadAgentFileContent, loadAgentFiles } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronRuns, loadCronStatus } from "./controllers/cron.ts";
+import { loadDashboardData } from "./controllers/dashboard.ts";
 import { loadDebug } from "./controllers/debug.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
@@ -26,6 +29,7 @@ import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import { loadUsage } from "./controllers/usage.ts";
 import {
+  isDashboardTab,
   inferBasePathFromPathname,
   normalizeBasePath,
   normalizePath,
@@ -63,6 +67,14 @@ type SettingsHost = {
   systemThemeCleanup?: (() => void) | null;
   pendingGatewayToken?: string | null;
   syncMauOfficeTicker?: () => void;
+  dashboardMemoryAgentId?: string | null;
+  dashboardLoading?: boolean;
+  dashboardError?: string | null;
+  dashboardSnapshot?: import("./types.ts").DashboardSnapshot | null;
+  dashboardTeamsLoading?: boolean;
+  dashboardTeamsError?: string | null;
+  dashboardTeamSnapshots?: import("./types.ts").DashboardTeamSnapshotsResult | null;
+  dashboardReloadTimer?: number | null;
 };
 
 export function applySettings(host: SettingsHost, next: UiSettings) {
@@ -219,6 +231,38 @@ export function setThemeMode(
 }
 
 export async function refreshActiveTab(host: SettingsHost) {
+  if (isDashboardTab(host.tab)) {
+    await loadDashboardData(host as unknown as Parameters<typeof loadDashboardData>[0], {
+      includeTeams: host.tab === "dashboardTeams",
+    });
+    if (host.tab === "dashboardMauOffice") {
+      await loadConfig(host as unknown as MaumauApp);
+      await loadMauOffice(host as unknown as MaumauApp);
+    }
+    if (host.tab === "dashboardMemories") {
+      await loadAgents(host as unknown as MaumauApp);
+      const dashboardMemoryAgentId =
+        host.dashboardMemoryAgentId ??
+        host.agentsList?.defaultId ??
+        host.agentsList?.agents?.[0]?.id ??
+        null;
+      if (dashboardMemoryAgentId) {
+        host.dashboardMemoryAgentId = dashboardMemoryAgentId;
+        await loadAgentFiles(host as unknown as MaumauApp, dashboardMemoryAgentId);
+        await Promise.allSettled(
+          [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME].map((name) =>
+            loadAgentFileContent(
+              host as unknown as MaumauApp,
+              dashboardMemoryAgentId,
+              name,
+              { preserveDraft: true },
+            ),
+          ),
+        );
+      }
+    }
+    return;
+  }
   if (host.tab === "overview") {
     await loadOverview(host);
   }
@@ -233,10 +277,6 @@ export async function refreshActiveTab(host: SettingsHost) {
   }
   if (host.tab === "sessions") {
     await loadSessions(host as unknown as MaumauApp);
-  }
-  if (host.tab === "mauOffice") {
-    await loadConfig(host as unknown as MaumauApp);
-    await loadMauOffice(host as unknown as MaumauApp);
   }
   if (host.tab === "cron") {
     await loadCron(host);
@@ -517,6 +557,7 @@ export function syncUrlWithSessionKey(host: SettingsHost, sessionKey: string, re
 export async function loadOverview(host: SettingsHost) {
   const app = host as unknown as MaumauApp;
   await Promise.allSettled([
+    loadConfig(app),
     loadChannels(app, false),
     loadPresence(app),
     loadSessions(app),

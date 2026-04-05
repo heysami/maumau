@@ -7,12 +7,60 @@ import {
 import { registerVoiceCallCli } from "./src/cli.js";
 import {
   VoiceCallConfigSchema,
+  normalizeVoiceCallConfig,
+  type VoiceCallConfigInput,
+  type VoiceCallStreamingConfig,
   resolveVoiceCallConfig,
   validateProviderConfig,
   type VoiceCallConfig,
 } from "./src/config.js";
 import type { CoreConfig } from "./src/core-bridge.js";
 import { createVoiceCallRuntime, type VoiceCallRuntime } from "./src/runtime.js";
+
+const SHARED_VOICE_CALL_RUNTIME_STATE = Symbol.for("maumau.voiceCall.sharedRuntimeState");
+
+type SharedVoiceCallRuntimeEntry = {
+  runtime: VoiceCallRuntime | null;
+  runtimePromise: Promise<VoiceCallRuntime> | null;
+};
+
+type SharedVoiceCallRuntimeState = {
+  entries: Map<string, SharedVoiceCallRuntimeEntry>;
+};
+
+function getSharedVoiceCallRuntimeState(): SharedVoiceCallRuntimeState {
+  const globalState = globalThis as typeof globalThis & {
+    [SHARED_VOICE_CALL_RUNTIME_STATE]?: SharedVoiceCallRuntimeState;
+  };
+  if (!globalState[SHARED_VOICE_CALL_RUNTIME_STATE]) {
+    globalState[SHARED_VOICE_CALL_RUNTIME_STATE] = {
+      entries: new Map<string, SharedVoiceCallRuntimeEntry>(),
+    };
+  }
+  return globalState[SHARED_VOICE_CALL_RUNTIME_STATE];
+}
+
+function getSharedVoiceCallRuntimeEntry(key: string): SharedVoiceCallRuntimeEntry {
+  const state = getSharedVoiceCallRuntimeState();
+  const existing = state.entries.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created: SharedVoiceCallRuntimeEntry = {
+    runtime: null,
+    runtimePromise: null,
+  };
+  state.entries.set(key, created);
+  return created;
+}
+
+function clearSharedVoiceCallRuntimeEntry(key: string): void {
+  getSharedVoiceCallRuntimeState().entries.delete(key);
+}
+
+function createSharedVoiceCallRuntimeKey(config: VoiceCallConfig): string {
+  return JSON.stringify(config);
+}
 
 const voiceCallConfigSchema = {
   parse(value: unknown): VoiceCallConfig {
@@ -27,13 +75,62 @@ const voiceCallConfigSchema = {
     const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true;
     const providerRaw = raw.provider === "log" ? "mock" : raw.provider;
     const provider = providerRaw ?? (enabled ? "mock" : undefined);
+    const streamingRaw =
+      raw.streaming && typeof raw.streaming === "object" && !Array.isArray(raw.streaming)
+        ? (raw.streaming as Record<string, unknown>)
+        : undefined;
+    const streamingOpenAI =
+      streamingRaw?.openai &&
+      typeof streamingRaw.openai === "object" &&
+      !Array.isArray(streamingRaw.openai)
+        ? (streamingRaw.openai as Record<string, unknown>)
+        : undefined;
+    const streamingDeepgram =
+      streamingRaw?.deepgram &&
+      typeof streamingRaw.deepgram === "object" &&
+      !Array.isArray(streamingRaw.deepgram)
+        ? (streamingRaw.deepgram as Record<string, unknown>)
+        : undefined;
 
-    return VoiceCallConfigSchema.parse({
-      ...raw,
-      enabled,
-      provider,
-      fromNumber: raw.fromNumber ?? legacyFrom,
-    });
+    return normalizeVoiceCallConfig(
+      VoiceCallConfigSchema.parse({
+        ...raw,
+        enabled,
+        provider,
+        fromNumber: raw.fromNumber ?? legacyFrom,
+        streaming: streamingRaw
+          ? ({
+              ...streamingRaw,
+              openai: {
+                ...streamingOpenAI,
+                apiKey:
+                  (typeof streamingRaw.openaiApiKey === "string"
+                    ? streamingRaw.openaiApiKey
+                    : undefined) ??
+                  (typeof streamingOpenAI?.apiKey === "string"
+                    ? streamingOpenAI.apiKey
+                    : undefined),
+                model:
+                  (typeof streamingRaw.sttModel === "string" ? streamingRaw.sttModel : undefined) ??
+                  (typeof streamingOpenAI?.model === "string" ? streamingOpenAI.model : undefined),
+                silenceDurationMs:
+                  typeof streamingRaw.silenceDurationMs === "number"
+                    ? streamingRaw.silenceDurationMs
+                    : typeof streamingOpenAI?.silenceDurationMs === "number"
+                      ? streamingOpenAI.silenceDurationMs
+                      : undefined,
+                vadThreshold:
+                  typeof streamingRaw.vadThreshold === "number"
+                    ? streamingRaw.vadThreshold
+                    : typeof streamingOpenAI?.vadThreshold === "number"
+                      ? streamingOpenAI.vadThreshold
+                      : undefined,
+              },
+              deepgram: streamingDeepgram,
+            } satisfies VoiceCallConfigInput["streaming"])
+          : undefined,
+      }),
+    );
   },
   uiHints: {
     provider: {
@@ -72,12 +169,20 @@ const voiceCallConfigSchema = {
       advanced: true,
     },
     "streaming.enabled": { label: "Enable Streaming", advanced: true },
-    "streaming.openaiApiKey": {
+    "streaming.sttProvider": { label: "Realtime STT Provider", advanced: true },
+    "streaming.languageCode": { label: "Realtime Language Code", advanced: true },
+    "streaming.openai.apiKey": {
       label: "OpenAI Realtime API Key",
       sensitive: true,
       advanced: true,
     },
-    "streaming.sttModel": { label: "Realtime STT Model", advanced: true },
+    "streaming.openai.model": { label: "OpenAI Realtime Model", advanced: true },
+    "streaming.deepgram.apiKey": {
+      label: "Deepgram Realtime API Key",
+      sensitive: true,
+      advanced: true,
+    },
+    "streaming.deepgram.model": { label: "Deepgram Realtime Model", advanced: true },
     "streaming.streamPath": { label: "Media Stream Path", advanced: true },
     "tts.provider": {
       label: "TTS Provider Override",
@@ -152,6 +257,7 @@ export default definePluginEntry({
   register(api: MaumauPluginApi) {
     const config = resolveVoiceCallConfig(voiceCallConfigSchema.parse(api.pluginConfig));
     const validation = validateProviderConfig(config);
+    const sharedRuntimeKey = createSharedVoiceCallRuntimeKey(config);
 
     if (api.pluginConfig && typeof api.pluginConfig === "object") {
       const raw = api.pluginConfig as Record<string, unknown>;
@@ -174,28 +280,63 @@ export default definePluginEntry({
       if (!validation.valid) {
         throw new Error(validation.errors.join("; "));
       }
-      if (runtime) {
+      const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      if (sharedRuntime.runtime) {
+        runtime = sharedRuntime.runtime;
+        runtimePromise ??= sharedRuntime.runtimePromise ?? Promise.resolve(sharedRuntime.runtime);
+        return sharedRuntime.runtime;
+      }
+      if (sharedRuntime.runtimePromise) {
+        runtimePromise = sharedRuntime.runtimePromise;
+        runtime = await sharedRuntime.runtimePromise;
         return runtime;
       }
-      if (!runtimePromise) {
-        runtimePromise = createVoiceCallRuntime({
-          config,
-          coreConfig: api.config as CoreConfig,
-          agentRuntime: api.runtime.agent,
-          ttsRuntime: api.runtime.tts,
-          logger: api.logger,
-        });
-      }
+      const nextRuntimePromise = createVoiceCallRuntime({
+        config,
+        coreConfig: api.config as CoreConfig,
+        agentRuntime: api.runtime.agent,
+        ttsRuntime: api.runtime.tts,
+        logger: api.logger,
+      });
+      runtimePromise = nextRuntimePromise;
+      sharedRuntime.runtimePromise = nextRuntimePromise;
       try {
-        runtime = await runtimePromise;
+        runtime = await nextRuntimePromise;
+        sharedRuntime.runtime = runtime;
       } catch (err) {
         // Reset so the next call can retry instead of caching the
         // rejected promise forever (which also leaves the port orphaned
         // if the server started before the failure).  See: #32387
+        if (sharedRuntime.runtimePromise === nextRuntimePromise) {
+          sharedRuntime.runtimePromise = null;
+        }
         runtimePromise = null;
         throw err;
       }
       return runtime;
+    };
+
+    const stopSharedRuntime = async () => {
+      const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      const runtimeToStop =
+        runtime ??
+        sharedRuntime.runtime ??
+        (runtimePromise
+          ? await runtimePromise.catch(() => null)
+          : sharedRuntime.runtimePromise
+            ? await sharedRuntime.runtimePromise.catch(() => null)
+            : null);
+      try {
+        if (runtimeToStop) {
+          await runtimeToStop.stop();
+        }
+      } finally {
+        runtimePromise = null;
+        runtime = null;
+        sharedRuntime.runtime = null;
+        sharedRuntime.runtimePromise = null;
+        clearSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      }
     };
 
     const sendError = (respond: (ok: boolean, payload?: unknown) => void, err: unknown) => {
@@ -548,16 +689,11 @@ export default definePluginEntry({
         }
       },
       stop: async () => {
-        if (!runtimePromise) {
+        const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+        if (!runtimePromise && !runtime && !sharedRuntime.runtime && !sharedRuntime.runtimePromise) {
           return;
         }
-        try {
-          const rt = await runtimePromise;
-          await rt.stop();
-        } finally {
-          runtimePromise = null;
-          runtime = null;
-        }
+        await stopSharedRuntime();
       },
     });
   },

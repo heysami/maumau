@@ -11,6 +11,7 @@ const loadBootstrapMock = vi.hoisted(() => vi.fn(async () => null));
 type GatewayClientMock = {
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  request: ReturnType<typeof vi.fn>;
   options: { clientVersion?: string; token?: string };
   emitHello: (hello?: GatewayHelloOk) => void;
   emitClose: (info: {
@@ -41,6 +42,7 @@ vi.mock("./gateway.ts", () => {
   class GatewayBrowserClient {
     readonly start = vi.fn();
     readonly stop = vi.fn();
+    readonly request = vi.fn(async () => ({}));
 
     constructor(
       private opts: {
@@ -59,6 +61,7 @@ vi.mock("./gateway.ts", () => {
       gatewayClientInstances.push({
         start: this.start,
         stop: this.stop,
+        request: this.request,
         options: { clientVersion: this.opts.clientVersion, token: this.opts.token },
         emitHello: (hello) => {
           this.opts.onHello?.(
@@ -152,6 +155,16 @@ function createHost() {
     toolStreamOrder: [],
     toolStreamSyncTimer: null,
     refreshSessionsAfterChat: new Set<string>(),
+    dashboardLoading: false,
+    dashboardError: null,
+    dashboardSnapshot: null,
+    dashboardCalendarResult: null,
+    dashboardCalendarAnchorAtMs: null,
+    dashboardCalendarView: "month",
+    dashboardTeamsLoading: false,
+    dashboardTeamsError: null,
+    dashboardTeamSnapshots: null,
+    dashboardReloadTimer: null,
     mauOfficeLoading: false,
     mauOfficeError: null,
     mauOfficeState: createEmptyMauOfficeState(),

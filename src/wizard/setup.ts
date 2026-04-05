@@ -843,6 +843,16 @@ export async function runSetupWizard(
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
 
+  if (!opts.embedded && (!shouldKeepExistingConfig || opts.preset === "conversation-automation")) {
+    const { maybeApplyConversationAutomationPreset } =
+      await import("./setup.conversation-automation.js");
+    nextConfig = await maybeApplyConversationAutomationPreset({
+      config: nextConfig,
+      opts,
+      prompter,
+    });
+  }
+
   if (!shouldKeepExistingConfig) {
     if (!opts.skipSearch) {
       const { setupSearch } = await import("../commands/onboard-search.js");

@@ -59,6 +59,7 @@ import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./contro
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
@@ -79,6 +80,9 @@ import type {
   CronJob,
   CronRunLogEntry,
   CronStatus,
+  DashboardCalendarResult,
+  DashboardSnapshot,
+  DashboardTeamSnapshotsResult,
   HealthSummary,
   LogEntry,
   LogLevel,
@@ -150,6 +154,7 @@ export class MaumauApp extends LitElement {
   @state() assistantAvatar = bootAssistantIdentity.avatar;
   @state() assistantAgentId = bootAssistantIdentity.agentId ?? null;
   @state() serverVersion: string | null = null;
+  @state() secureDashboardUrl: string | null = null;
 
   @state() sessionKey = this.settings.sessionKey;
   @state() chatLoading = false;
@@ -306,9 +311,47 @@ export class MaumauApp extends LitElement {
   @state() sessionsPage = 0;
   @state() sessionsPageSize = 25;
   @state() sessionsSelectedKeys: Set<string> = new Set();
+  @state() dashboardLoading = false;
+  @state() dashboardError: string | null = null;
+  @state() dashboardSnapshot: DashboardSnapshot | null = null;
+  @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
+  @state() dashboardCalendarAnchorAtMs: number | null = null;
+  @state() dashboardTeamsLoading = false;
+  @state() dashboardTeamsError: string | null = null;
+  @state() dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null = null;
+  @state() dashboardTaskFilter: string | null = null;
+  @state() dashboardDoneFromDate = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  @state() dashboardDoneToDate = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  @state() dashboardWorkshopSelectedId: string | null = null;
+  @state() dashboardCalendarView: "month" | "week" | "day" = "month";
+  @state() dashboardTeamSelection: string | null = null;
+  @state() dashboardMemoryAgentId: string | null = null;
   @state() mauOfficeLoading = false;
   @state() mauOfficeError: string | null = null;
   @state() mauOfficeState = createEmptyMauOfficeState();
+  @state() mauOfficeChatOpen = false;
+  @state() mauOfficeChatMinimized = false;
+  @state() mauOfficeChatActorId: string | null = null;
+  @state() mauOfficeChatActorLabel = "";
+  @state() mauOfficeChatSessionKey = "";
+  @state() mauOfficeChatLoading = false;
+  @state() mauOfficeChatSending = false;
+  @state() mauOfficeChatMessage = "";
+  @state() mauOfficeChatMessages: unknown[] = [];
+  @state() mauOfficeChatThinkingLevel: string | null = null;
+  @state() mauOfficeChatAttachments: ChatAttachment[] = [];
+  @state() mauOfficeChatRunId: string | null = null;
+  @state() mauOfficeChatStream: string | null = null;
+  @state() mauOfficeChatStreamStartedAt: number | null = null;
+  @state() mauOfficeChatError: string | null = null;
+  @state() mauOfficeChatPositionX: number | null = null;
+  @state() mauOfficeChatPositionY: number | null = null;
 
   @state() usageLoading = false;
   @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
@@ -470,6 +513,7 @@ export class MaumauApp extends LitElement {
   refreshSessionsAfterChat = new Set<string>();
   basePath = "";
   mauOfficeReloadTimer: number | null = null;
+  dashboardReloadTimer: number | null = null;
   private popStateHandler = () =>
     onPopStateInternal(this as unknown as Parameters<typeof onPopStateInternal>[0]);
   private topbarObserver: ResizeObserver | null = null;
@@ -519,6 +563,7 @@ export class MaumauApp extends LitElement {
     document.removeEventListener("keydown", this.globalKeydownHandler);
     document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
     this.stopMauOfficeTicker();
+    clearScheduledDashboardReload(this);
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -766,7 +811,7 @@ export class MaumauApp extends LitElement {
   syncMauOfficeTicker() {
     const pageVisible =
       typeof document === "undefined" ? true : document.visibilityState !== "hidden";
-    const active = this.tab === "mauOffice" && pageVisible;
+    const active = this.tab === "dashboardMauOffice" && pageVisible;
     if (!active) {
       this.stopMauOfficeTicker();
       return;
@@ -776,7 +821,7 @@ export class MaumauApp extends LitElement {
     }
     const stepIntervalMs = 1000 / 30;
     const tick = (frameAt: number) => {
-      if (this.tab !== "mauOffice" || this.mauOfficeState.loaded !== true) {
+      if (this.tab !== "dashboardMauOffice" || this.mauOfficeState.loaded !== true) {
         this.mauOfficeTicker = window.requestAnimationFrame(tick);
         return;
       }

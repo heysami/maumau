@@ -64,6 +64,10 @@ vi.mock("./inbound-meta.js", () => ({
   buildInboundUserContextPrefix: vi.fn().mockReturnValue(""),
 }));
 
+vi.mock("./bootstrap-secure-dashboard.js", () => ({
+  buildBootstrapSecureDashboardSystemPrompt: vi.fn().mockResolvedValue(""),
+}));
+
 vi.mock("./queue/settings.js", () => ({
   resolveQueueSettings: vi.fn().mockReturnValue({ mode: "followup" }),
 }));
@@ -93,6 +97,7 @@ let runReplyAgent: typeof import("./agent-runner.runtime.js").runReplyAgent;
 let routeReply: typeof import("./route-reply.runtime.js").routeReply;
 let drainFormattedSystemEvents: typeof import("./session-system-events.js").drainFormattedSystemEvents;
 let resolveTypingMode: typeof import("./typing-mode.js").resolveTypingMode;
+let buildBootstrapSecureDashboardSystemPrompt: typeof import("./bootstrap-secure-dashboard.js").buildBootstrapSecureDashboardSystemPrompt;
 
 async function loadFreshGetReplyRunModuleForTest() {
   vi.resetModules();
@@ -100,6 +105,7 @@ async function loadFreshGetReplyRunModuleForTest() {
   ({ routeReply } = await import("./route-reply.runtime.js"));
   ({ drainFormattedSystemEvents } = await import("./session-system-events.js"));
   ({ resolveTypingMode } = await import("./typing-mode.js"));
+  ({ buildBootstrapSecureDashboardSystemPrompt } = await import("./bootstrap-secure-dashboard.js"));
   ({ runPreparedReply } = await import("./get-reply-run.js"));
 }
 
@@ -230,6 +236,95 @@ describe("runPreparedReply media-only handling", () => {
       text: "I didn't receive any text in your message. Please resend or add a caption.",
     });
     expect(vi.mocked(runReplyAgent)).not.toHaveBeenCalled();
+  });
+
+  it("forwards the bootstrap dashboard hint into the extra system prompt on first owner DMs", async () => {
+    vi.mocked(buildBootstrapSecureDashboardSystemPrompt).mockResolvedValueOnce(
+      "Mention this exact URL early:\nhttps://maumau.tailnet.ts.net/dashboard/today",
+    );
+
+    const result = await runPreparedReply(
+      baseParams({
+        ctx: {
+          Body: "halo",
+          RawBody: "halo",
+          CommandBody: "halo",
+          OriginatingChannel: "telegram",
+          OriginatingTo: "telegram:123",
+          ChatType: "direct",
+        },
+        sessionCtx: {
+          Body: "halo",
+          BodyStripped: "halo",
+          Provider: "telegram",
+          ChatType: "direct",
+          OriginatingChannel: "telegram",
+          OriginatingTo: "telegram:123",
+        },
+        command: {
+          surface: "telegram",
+          channel: "telegram",
+          isAuthorizedSender: true,
+          abortKey: "session-key",
+          ownerList: [],
+          senderIsOwner: true,
+          rawBodyNormalized: "halo",
+          commandBodyNormalized: "halo",
+        } as never,
+      }),
+    );
+
+    expect(result).toEqual({ text: "ok" });
+    const call = vi.mocked(runReplyAgent).mock.calls[0]?.[0];
+    expect(call?.followupRun.run.extraSystemPrompt).toContain("Mention this exact URL early:");
+    expect(call?.followupRun.run.extraSystemPrompt).toContain(
+      "https://maumau.tailnet.ts.net/dashboard/today",
+    );
+  });
+
+  it("passes persisted session owner state into the bootstrap dashboard prompt", async () => {
+    await runPreparedReply(
+      baseParams({
+        ctx: {
+          Body: "halo",
+          RawBody: "halo",
+          CommandBody: "halo",
+          OriginatingChannel: "telegram",
+          OriginatingTo: "telegram:123",
+          ChatType: "direct",
+        },
+        sessionCtx: {
+          Body: "halo",
+          BodyStripped: "halo",
+          Provider: "telegram",
+          ChatType: "direct",
+          OriginatingChannel: "telegram",
+          OriginatingTo: "telegram:123",
+        },
+        sessionEntry: {
+          sessionId: "session-key",
+          updatedAt: Date.now(),
+          requesterSenderIsOwner: true,
+        } as never,
+        command: {
+          surface: "telegram",
+          channel: "telegram",
+          isAuthorizedSender: true,
+          abortKey: "session-key",
+          ownerList: [],
+          senderIsOwner: false,
+          rawBodyNormalized: "halo",
+          commandBodyNormalized: "halo",
+        } as never,
+      }),
+    );
+
+    expect(buildBootstrapSecureDashboardSystemPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        senderIsOwner: false,
+        requesterSenderIsOwner: true,
+      }),
+    );
   });
 
   it("omits auth key labels from /new and /reset confirmation messages", async () => {

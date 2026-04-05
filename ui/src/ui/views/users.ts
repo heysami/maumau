@@ -1,5 +1,6 @@
 import { html, nothing } from "lit";
 import { t } from "../../i18n/index.ts";
+import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
   MultiUserMemoryConfigState,
@@ -19,6 +20,7 @@ type UsersViewProps = {
   runtimeError: string | null;
   config: MultiUserMemoryConfigState;
   runtime: MultiUserMemoryAdminSnapshot | null;
+  secureDashboardUrl: string | null;
   newUserDisplayName: string;
   newUserLanguage: string;
   newUserIdentities: MultiUserMemoryIdentity[];
@@ -328,6 +330,7 @@ function renderDetectedSendersSection(props: UsersViewProps) {
   const provisionalUsers = props.runtime?.provisionalUsers ?? [];
   const firstDetectedBootstrap =
     props.config.users.length === 0 && provisionalUsers.length > 0 && !props.runtimeLoading;
+  const showDetectedSendersCallout = provisionalUsers.length > 0 && !props.runtimeLoading;
   const configMutationDisabled =
     !props.configReady || props.configLoading || props.configSaving || props.configApplying;
 
@@ -336,10 +339,35 @@ function renderDetectedSendersSection(props: UsersViewProps) {
       <div class="card-title">${t("multiUserMemory.runtime.provisionalTitle")}</div>
       <div class="card-sub">${t("multiUserMemory.runtime.provisionalSubtitle")}</div>
       ${
-        firstDetectedBootstrap
+        showDetectedSendersCallout
           ? html`
               <div class="callout info" style="margin-top: 12px;">
-                ${t("multiUserMemory.runtime.bootstrapHint")}
+                <div>
+                  ${
+                    firstDetectedBootstrap
+                      ? t("multiUserMemory.runtime.bootstrapHint")
+                      : "Detected senders are ready to review here."
+                  }
+                </div>
+                ${
+                  props.secureDashboardUrl
+                    ? html`
+                        <div style="margin-top: 8px;">
+                          On your phone too? Open the secure dashboard here:
+                        </div>
+                        <div style="margin-top: 6px;">
+                          <a
+                            class="session-link"
+                            href=${props.secureDashboardUrl}
+                            target=${EXTERNAL_LINK_TARGET}
+                            rel=${buildExternalLinkRel()}
+                          >
+                            ${props.secureDashboardUrl}
+                          </a>
+                        </div>
+                      `
+                    : nothing
+                }
               </div>
             `
           : nothing

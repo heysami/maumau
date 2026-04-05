@@ -86,13 +86,30 @@
       "label": "Enable Streaming",
       "advanced": true
     },
-    "streaming.openaiApiKey": {
+    "streaming.sttProvider": {
+      "label": "Realtime STT Provider",
+      "advanced": true
+    },
+    "streaming.languageCode": {
+      "label": "Realtime Language Code",
+      "advanced": true
+    },
+    "streaming.openai.apiKey": {
       "label": "OpenAI Realtime API Key",
       "sensitive": true,
       "advanced": true
     },
-    "streaming.sttModel": {
-      "label": "Realtime STT Model",
+    "streaming.openai.model": {
+      "label": "OpenAI Realtime Model",
+      "advanced": true
+    },
+    "streaming.deepgram.apiKey": {
+      "label": "Deepgram Realtime API Key",
+      "sensitive": true,
+      "advanced": true
+    },
+    "streaming.deepgram.model": {
+      "label": "Deepgram Realtime Model",
       "advanced": true
     },
     "streaming.streamPath": {
@@ -347,7 +364,10 @@
           },
           "sttProvider": {
             "type": "string",
-            "enum": ["openai-realtime"]
+            "enum": ["openai-realtime", "deepgram-realtime"]
+          },
+          "languageCode": {
+            "type": "string"
           },
           "openaiApiKey": {
             "type": "string"
@@ -363,6 +383,46 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          },
+          "openai": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "apiKey": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "silenceDurationMs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "vadThreshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          "deepgram": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "apiKey": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "endpointingMs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "interimResults": {
+                "type": "boolean"
+              }
+            }
           },
           "streamPath": {
             "type": "string"

@@ -29,6 +29,8 @@ describe("validateProviderConfig", () => {
     delete process.env.TELNYX_PUBLIC_KEY;
     delete process.env.PLIVO_AUTH_ID;
     delete process.env.PLIVO_AUTH_TOKEN;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.DEEPGRAM_API_KEY;
   };
 
   beforeEach(() => {
@@ -193,9 +195,54 @@ describe("normalizeVoiceCallConfig", () => {
 
     expect(normalized.serve.path).toBe("/voice/webhook");
     expect(normalized.streaming.streamPath).toBe("/custom-stream");
-    expect(normalized.streaming.sttModel).toBe("gpt-4o-transcribe");
+    expect(normalized.streaming.openai.model).toBe("gpt-4o-transcribe");
+    expect(normalized.streaming.deepgram.model).toBe("nova-3");
     expect(normalized.tunnel.provider).toBe("none");
     expect(normalized.webhookSecurity.allowedHosts).toEqual([]);
+  });
+
+  it("maps legacy openai streaming fields into the nested provider config", () => {
+    const normalized = normalizeVoiceCallConfig({
+      streaming: {
+        enabled: true,
+        openaiApiKey: "legacy-openai-key",
+        sttModel: "gpt-4o-mini-transcribe",
+        silenceDurationMs: 600,
+        vadThreshold: 0.25,
+      } as unknown as VoiceCallConfig["streaming"] & Record<string, unknown>,
+    });
+
+    expect(normalized.streaming.sttProvider).toBe("openai-realtime");
+    expect(normalized.streaming.openai.apiKey).toBe("legacy-openai-key");
+    expect(normalized.streaming.openai.model).toBe("gpt-4o-mini-transcribe");
+    expect(normalized.streaming.openai.silenceDurationMs).toBe(600);
+    expect(normalized.streaming.openai.vadThreshold).toBe(0.25);
+  });
+
+  it("resolves realtime provider API keys from the environment", () => {
+    process.env.OPENAI_API_KEY = "env-openai-realtime";
+    process.env.DEEPGRAM_API_KEY = "env-deepgram-realtime";
+
+    const openaiResolved = resolveVoiceCallConfig({
+      streaming: {
+        enabled: true,
+        sttProvider: "openai-realtime",
+      },
+    });
+    expect(openaiResolved.streaming.openai.apiKey).toBe("env-openai-realtime");
+
+    const deepgramResolved = resolveVoiceCallConfig({
+      streaming: {
+        enabled: true,
+        sttProvider: "deepgram-realtime",
+        languageCode: "id",
+        deepgram: {
+          model: "nova-3",
+        },
+      },
+    });
+    expect(deepgramResolved.streaming.deepgram.apiKey).toBe("env-deepgram-realtime");
+    expect(deepgramResolved.streaming.languageCode).toBe("id");
   });
 
   it("accepts partial nested TTS overrides and preserves nested objects", () => {

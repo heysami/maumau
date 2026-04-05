@@ -77,6 +77,52 @@ struct GatewayProcessManagerTests {
             instance: managedListener))
     }
 
+    @Test func `managed auth recovery coalesces concurrent requests`() async {
+        final class RecoveryCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var rawValue = 0
+
+            func increment() {
+                self.lock.lock()
+                self.rawValue += 1
+                self.lock.unlock()
+            }
+
+            func value() -> Int {
+                self.lock.lock()
+                let value = self.rawValue
+                self.lock.unlock()
+                return value
+            }
+        }
+
+        let manager = GatewayProcessManager.shared
+        let previousMode = AppStateStore.shared.connectionMode
+        let previousStatus = manager.status
+        let counter = RecoveryCounter()
+        AppStateStore.shared.connectionMode = .local
+        manager.setTestingManagedAuthRecoveryTask(nil)
+        manager.setTestingManagedAuthRecoveryHandler { _ in
+            counter.increment()
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            return true
+        }
+        defer {
+            AppStateStore.shared.connectionMode = previousMode
+            manager.setTestingManagedAuthRecoveryHandler(nil)
+            manager.setTestingManagedAuthRecoveryTask(nil)
+            manager.setTestingStatus(previousStatus)
+        }
+
+        async let first: Bool = manager.recoverManagedGatewayAfterAuthFailureIfNeeded(URLError(.dataNotAllowed))
+        async let second: Bool = manager.recoverManagedGatewayAfterAuthFailureIfNeeded(URLError(.dataNotAllowed))
+        let (firstResult, secondResult) = await (first, second)
+
+        #expect(firstResult)
+        #expect(secondResult)
+        #expect(counter.value() == 1)
+    }
+
     @Test func `clears last failure when health succeeds`() async throws {
         let session = GatewayTestWebSocketSession(
             taskFactory: {

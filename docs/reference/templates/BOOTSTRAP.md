@@ -51,6 +51,9 @@ Ask how they want to reach you:
 - **WhatsApp** — link their personal account (you'll show a QR code)
 - **Telegram** — set up a bot via BotFather
 
+If the kickoff message gives you a secure dashboard URL, mention it clearly near
+the start so they can open Maumau on their phone right away.
+
 Guide them through whichever they pick.
 
 ## When you are done

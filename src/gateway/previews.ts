@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -75,6 +75,7 @@ const DEFAULT_PRIVATE_TTL_MS = 24 * 60 * 60_000;
 const DEFAULT_PUBLIC_SHARE_TTL_MS = 60 * 60_000;
 const MAX_PRIVATE_TTL_MS = 7 * 24 * 60 * 60_000;
 const MAX_PUBLIC_SHARE_TTL_MS = 24 * 60 * 60_000;
+const PREVIEW_EMBED_TTL_MS = 15 * 60 * 1_000;
 const STATIC_ASSET_EXTENSIONS = new Set([
   ".js",
   ".css",
@@ -669,9 +670,39 @@ function setPreviewResponseHeaders(res: ServerResponse, contentType: string): vo
   res.setHeader("X-Content-Type-Options", "nosniff");
 }
 
-function parsePreviewRequestPath(pathname: string):
-  | { visibility: PreviewVisibility; maskedSlug: string; id: string; relativePath: string }
-  | null {
+type ParsedPreviewRequestPath = {
+  visibility: PreviewVisibility;
+  maskedSlug: string;
+  id: string;
+  relativePath: string;
+  isEmbed: boolean;
+  embedExpiresAtMs?: number;
+  embedSignature?: string;
+};
+
+function routePrefixForVisibility(visibility: PreviewVisibility): "preview" | "share" {
+  return visibility === "private" ? "preview" : "share";
+}
+
+function parsePreviewRequestPath(pathname: string): ParsedPreviewRequestPath | null {
+  const embedMatch = pathname.match(
+    /^\/preview-embed\/(preview|share)\/for-([^/]+)\/([^/]+)\/(\d+)\/([^/]+)\/?(.*)$/,
+  );
+  if (embedMatch) {
+    const expiresAtMs = Number(embedMatch[4] ?? "");
+    if (!Number.isFinite(expiresAtMs)) {
+      return null;
+    }
+    return {
+      visibility: embedMatch[1] === "preview" ? "private" : "public-share",
+      maskedSlug: embedMatch[2] ?? "",
+      id: embedMatch[3] ?? "",
+      isEmbed: true,
+      embedExpiresAtMs: expiresAtMs,
+      embedSignature: embedMatch[5] ?? "",
+      relativePath: embedMatch[6] ?? "",
+    };
+  }
   const match = pathname.match(/^\/(preview|share)\/for-([^/]+)\/([^/]+)\/?(.*)$/);
   if (!match) {
     return null;
@@ -680,8 +711,214 @@ function parsePreviewRequestPath(pathname: string):
     visibility: match[1] === "preview" ? "private" : "public-share",
     maskedSlug: match[2] ?? "",
     id: match[3] ?? "",
+    isEmbed: false,
     relativePath: match[4] ?? "",
   };
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'");
+}
+
+function normalizePreviewDocumentLabel(value: string | undefined): string | undefined {
+  const normalized = decodeHtmlEntities(
+    (value ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  )
+    .replace(/^[\s`'"“”‘’.,:;|\\/_-]+/, "")
+    .replace(/[\s`'"“”‘’.,:;|\\/_-]+$/, "")
+    .trim();
+  if (normalized.length < 2 || !/[a-z0-9]/i.test(normalized)) {
+    return undefined;
+  }
+  if (/^(?:preview|preview ready|index|share|home|requester|created for requester)$/i.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+}
+
+async function resolvePreviewArtifactFileFromLease(params: {
+  lease: PreviewLeaseRecord;
+  relativePath: string;
+}): Promise<string | undefined> {
+  const requestedRelative = params.relativePath.replace(/^\/+/, "");
+  const root = params.lease.isDirectory
+    ? params.lease.storedPath
+    : path.dirname(params.lease.storedPath);
+  const defaultRelative = params.lease.isDirectory
+    ? "index.html"
+    : (params.lease.rootFileName ?? path.basename(params.lease.storedPath));
+  const resolvedRelative = requestedRelative || defaultRelative;
+  let targetPath = path.resolve(root, resolvedRelative);
+  if (targetPath !== root && !isWithinDir(root, targetPath)) {
+    return undefined;
+  }
+  let stat = await fs.stat(targetPath).catch(() => null);
+  if (stat?.isDirectory()) {
+    targetPath = path.join(targetPath, "index.html");
+    stat = await fs.stat(targetPath).catch(() => null);
+  }
+  if (!stat && params.lease.isDirectory && !STATIC_ASSET_EXTENSIONS.has(path.extname(resolvedRelative))) {
+    targetPath = path.join(root, "index.html");
+    stat = await fs.stat(targetPath).catch(() => null);
+  }
+  if (!stat?.isFile()) {
+    return undefined;
+  }
+  return targetPath;
+}
+
+function extractPreviewDocumentLabel(html: string): string | undefined {
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = normalizePreviewDocumentLabel(titleMatch?.[1]);
+  if (title) {
+    return title;
+  }
+  const headingMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  return normalizePreviewDocumentLabel(headingMatch?.[1]);
+}
+
+export async function resolvePreviewArtifactLabelFromPreviewUrl(params: {
+  previewUrl?: string;
+  stateDir?: string;
+}): Promise<string | undefined> {
+  const info = await resolvePreviewArtifactInfoFromPreviewUrl(params);
+  return info?.documentLabel;
+}
+
+export async function resolvePreviewArtifactInfoFromPreviewUrl(params: {
+  previewUrl?: string;
+  stateDir?: string;
+}): Promise<{ documentLabel?: string; sourcePath?: string } | undefined> {
+  const normalized = params.previewUrl?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  let pathname = normalized;
+  try {
+    pathname = new URL(normalized, "http://localhost").pathname;
+  } catch {
+    pathname = normalized;
+  }
+  const parsed = parsePreviewRequestPath(pathname);
+  if (!parsed) {
+    return undefined;
+  }
+  const lease = await readLease(parsed.id, params.stateDir);
+  if (!lease) {
+    return undefined;
+  }
+  const targetPath = await resolvePreviewArtifactFileFromLease({
+    lease,
+    relativePath: parsed.relativePath,
+  });
+  if (!targetPath) {
+    return {
+      sourcePath: lease.sourcePath,
+    };
+  }
+  if (path.extname(targetPath).toLowerCase() !== ".html") {
+    return {
+      documentLabel: normalizePreviewDocumentLabel(
+        path.basename(targetPath, path.extname(targetPath)),
+      ),
+      sourcePath: lease.sourcePath,
+    };
+  }
+  const html = await fs.readFile(targetPath, "utf8").catch(() => "");
+  if (!html) {
+    return {
+      sourcePath: lease.sourcePath,
+    };
+  }
+  return {
+    documentLabel: extractPreviewDocumentLabel(html),
+    sourcePath: lease.sourcePath,
+  };
+}
+
+function resolvePreviewEmbedSecret(auth: ResolvedGatewayAuth): string | undefined {
+  return auth.token?.trim() || auth.password?.trim() || undefined;
+}
+
+function signPreviewEmbedPath(params: {
+  secret: string;
+  visibility: PreviewVisibility;
+  maskedSlug: string;
+  id: string;
+  expiresAtMs: number;
+}): string {
+  const payload = [
+    routePrefixForVisibility(params.visibility),
+    params.maskedSlug,
+    params.id,
+    String(params.expiresAtMs),
+  ].join(":");
+  return createHmac("sha256", params.secret).update(payload).digest("base64url");
+}
+
+function isValidPreviewEmbedRequest(params: {
+  parsed: ParsedPreviewRequestPath;
+  auth: ResolvedGatewayAuth;
+  nowMs?: number;
+}): boolean {
+  if (typeof params.parsed.embedExpiresAtMs !== "number" || !params.parsed.embedSignature) {
+    return false;
+  }
+  if (params.parsed.embedExpiresAtMs < (params.nowMs ?? Date.now())) {
+    return false;
+  }
+  const secret = resolvePreviewEmbedSecret(params.auth);
+  if (!secret) {
+    return false;
+  }
+  const expected = signPreviewEmbedPath({
+    secret,
+    visibility: params.parsed.visibility,
+    maskedSlug: params.parsed.maskedSlug,
+    id: params.parsed.id,
+    expiresAtMs: params.parsed.embedExpiresAtMs,
+  });
+  return expected === params.parsed.embedSignature;
+}
+
+export function buildPreviewEmbedPathFromPreviewUrl(params: {
+  previewUrl?: string;
+  auth: ResolvedGatewayAuth;
+  nowMs?: number;
+}): string | undefined {
+  const secret = resolvePreviewEmbedSecret(params.auth);
+  const normalized = params.previewUrl?.trim();
+  if (!secret || !normalized) {
+    return undefined;
+  }
+  let pathname = normalized;
+  try {
+    pathname = new URL(normalized, "http://localhost").pathname;
+  } catch {
+    pathname = normalized;
+  }
+  const parsed = parsePreviewRequestPath(pathname);
+  if (!parsed) {
+    return undefined;
+  }
+  const expiresAtMs = (params.nowMs ?? Date.now()) + PREVIEW_EMBED_TTL_MS;
+  const signature = signPreviewEmbedPath({
+    secret,
+    visibility: parsed.visibility,
+    maskedSlug: parsed.maskedSlug,
+    id: parsed.id,
+    expiresAtMs,
+  });
+  const suffix = parsed.relativePath ? `/${parsed.relativePath}` : "/";
+  return `/preview-embed/${routePrefixForVisibility(parsed.visibility)}/for-${parsed.maskedSlug}/${parsed.id}/${expiresAtMs}/${signature}${suffix}`;
 }
 
 async function authorizePrivatePreviewRequest(params: {
@@ -714,14 +951,17 @@ async function serveHtmlFile(params: {
   filePath: string;
   lease: PreviewLeaseRecord;
   authRequired: boolean;
+  injectBanner: boolean;
 }): Promise<void> {
   const html = await fs.readFile(params.filePath, "utf8");
-  const body = injectPreviewBanner(
-    html,
-    params.lease,
-    params.lease.recipientHintDisplayLabel,
-    params.authRequired,
-  );
+  const body = params.injectBanner
+    ? injectPreviewBanner(
+        html,
+        params.lease,
+        params.lease.recipientHintDisplayLabel,
+        params.authRequired,
+      )
+    : html;
   setPreviewResponseHeaders(params.res, "text/html; charset=utf-8");
   if ((params.req.method ?? "GET").toUpperCase() === "HEAD") {
     params.res.statusCode = 200;
@@ -737,6 +977,7 @@ async function serveLeaseContent(params: {
   res: ServerResponse;
   lease: PreviewLeaseRecord;
   relativePath: string;
+  injectBanner: boolean;
 }): Promise<void> {
   const requestedRelative = params.relativePath.replace(/^\/+/, "");
   const root = params.lease.isDirectory
@@ -796,6 +1037,7 @@ async function serveLeaseContent(params: {
       filePath: targetPath,
       lease: params.lease,
       authRequired: params.lease.visibility === "private",
+      injectBanner: params.injectBanner,
     });
     return;
   }
@@ -842,7 +1084,11 @@ export async function handlePreviewHttpRequest(params: {
     params.res.end(buildGenericInvalidPage());
     return true;
   }
-  if (lease.visibility === "private") {
+  const embedAuthorized = isValidPreviewEmbedRequest({
+    parsed,
+    auth: params.auth,
+  });
+  if (lease.visibility === "private" && !embedAuthorized) {
     const ok = await authorizePrivatePreviewRequest(params);
     if (!ok) {
       return true;
@@ -853,6 +1099,7 @@ export async function handlePreviewHttpRequest(params: {
     res: params.res,
     lease,
     relativePath: parsed.relativePath,
+    injectBanner: !parsed.isEmbed,
   });
   return true;
 }

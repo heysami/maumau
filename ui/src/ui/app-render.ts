@@ -1,4 +1,8 @@
 import { html, nothing } from "lit";
+import {
+  applyConversationAutomationPresetConfig,
+  readConversationAutomationPresetState,
+} from "../../../src/commands/conversation-automation-preset.js";
 import type { MaumauConfig } from "../../../src/config/types.maumau.js";
 import type { TeamConfig } from "../../../src/config/types.teams.js";
 import {
@@ -13,6 +17,7 @@ import {
 } from "../../../src/teams/presets.js";
 import { t } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
+import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "./agent-workspace-constants.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import {
@@ -37,6 +42,7 @@ import {
   findAgentConfigEntryIndex,
   loadConfig,
   openConfigFile,
+  replaceConfigFormRoot,
   runUpdate,
   saveConfig,
   updateConfigFormValue,
@@ -61,6 +67,7 @@ import {
   updateCronJobsFilter,
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
+import { loadDashboardData } from "./controllers/dashboard.ts";
 import { loadDebug, callDebugMethod } from "./controllers/debug.ts";
 import {
   approveDevicePairing,
@@ -77,10 +84,17 @@ import {
 } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import {
-  createMauOfficeSessionTarget,
   loadMauOffice,
   setMauOfficeRoomFocus,
 } from "./controllers/mau-office.ts";
+import {
+  abortMauOfficeChat,
+  closeMauOfficeChat,
+  openMauOfficeChat,
+  sendMauOfficeChat,
+  setMauOfficeChatDraft,
+  toggleMauOfficeChatMinimized,
+} from "./controllers/mau-office-chat.ts";
 import {
   addMultiUserMemoryDraftIdentity,
   addMultiUserMemoryIdentity,
@@ -120,7 +134,14 @@ import {
 import "./components/dashboard-header.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
-import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
+import {
+  isDashboardTab,
+  normalizeBasePath,
+  TAB_GROUPS,
+  subtitleForTab,
+  tabForDashboardPage,
+  titleForTab,
+} from "./navigation.ts";
 import { agentLogoUrl } from "./views/agents-utils.ts";
 import {
   resolveAgentConfig,
@@ -163,10 +184,10 @@ function createLazy<T>(loader: () => Promise<T>): () => T | null {
 const lazyAgents = createLazy(() => import("./views/agents.ts"));
 const lazyChannels = createLazy(() => import("./views/channels.ts"));
 const lazyCron = createLazy(() => import("./views/cron.ts"));
+const lazyDashboard = createLazy(() => import("./views/dashboard.ts"));
 const lazyDebug = createLazy(() => import("./views/debug.ts"));
 const lazyInstances = createLazy(() => import("./views/instances.ts"));
 const lazyLogs = createLazy(() => import("./views/logs.ts"));
-const lazyMauOffice = createLazy(() => import("./views/mau-office.ts"));
 const lazyNodes = createLazy(() => import("./views/nodes.ts"));
 const lazySessions = createLazy(() => import("./views/sessions.ts"));
 const lazySkills = createLazy(() => import("./views/skills.ts"));
@@ -361,14 +382,16 @@ export function renderApp(state: AppViewState) {
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
   const multiUserMemoryConfig = resolveMultiUserMemoryConfigState(configValue);
   const basePath = normalizeBasePath(state.basePath ?? "");
-  const sessionDefaults = (state.hello?.snapshot as
-    | {
-        sessionDefaults?: {
-          defaultAgentId?: string;
-          mainKey?: string;
-        };
-      }
-    | undefined)?.sessionDefaults;
+  const sessionDefaults = (
+    state.hello?.snapshot as
+      | {
+          sessionDefaults?: {
+            defaultAgentId?: string;
+            mainKey?: string;
+          };
+        }
+      | undefined
+  )?.sessionDefaults;
   const resolvedAgentId =
     state.agentsSelectedId ??
     state.agentsList?.defaultId ??
@@ -376,6 +399,9 @@ export function renderApp(state: AppViewState) {
     null;
   const getCurrentConfigValue = () =>
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
+  const conversationAutomationPresetState = readConversationAutomationPresetState(
+    (configValue ?? {}) as MaumauConfig,
+  );
   const getCurrentTeams = () => {
     const teams = (getCurrentConfigValue()?.teams ?? {}) as { list?: unknown };
     return Array.isArray(teams.list)
@@ -443,6 +469,222 @@ export function renderApp(state: AppViewState) {
     state.cronForm.deliveryMode === "webhook"
       ? rawDeliveryToSuggestions.filter((value) => isHttpUrl(value))
       : rawDeliveryToSuggestions;
+  const updateConversationAutomationPreset = (
+    nextState: typeof conversationAutomationPresetState,
+  ) => {
+    const baseConfig = (getCurrentConfigValue() ?? {}) as MaumauConfig;
+    const nextConfig = applyConversationAutomationPresetConfig(baseConfig, {
+      enabled: nextState.enabled,
+      telephonyEnabled: nextState.enabled ? nextState.telephonyEnabled : undefined,
+      telephonyProvider: nextState.telephonyEnabled ? nextState.telephonyProvider : undefined,
+      sttProvider: nextState.telephonyEnabled ? nextState.sttProvider : undefined,
+      allowFrom: nextState.allowFrom,
+      languageId: nextState.telephonyEnabled ? nextState.languageId : undefined,
+    });
+    replaceConfigFormRoot(state, nextConfig as Record<string, unknown>);
+  };
+
+  if (isDashboardTab(state.tab)) {
+    const dashboardView = lazyDashboard();
+    if (!dashboardView) {
+      return html`
+        <div class="dashboard-shell">
+          <header class="dashboard-shell__header">
+            <div>
+              <div class="dashboard-shell__eyebrow">${t("dashboard.shell.eyebrow")}</div>
+              <h1 class="dashboard-shell__title">${titleForTab(state.tab)}</h1>
+            </div>
+            <div class="dashboard-shell__actions">
+              <span class="pill">${t("dashboard.shell.loading")}</span>
+              <button class="btn btn--sm" @click=${() => state.setTab("overview")}>
+                ${t("dashboard.shell.goToAdvance")}
+              </button>
+            </div>
+          </header>
+          <main class="dashboard-shell__content">
+            <section class="dashboard-page">
+              <div class="card">
+                <div class="card-title">${t("dashboard.shell.loadingTitle")}</div>
+                <div class="card-sub">${t("dashboard.shell.loadingSubtitle")}</div>
+              </div>
+            </section>
+          </main>
+        </div>
+      `;
+    }
+    const calendarAnchorAtMs =
+      state.dashboardCalendarAnchorAtMs ??
+      state.dashboardCalendarResult?.anchorAtMs ??
+      Date.now();
+    const shiftCalendarAnchor = (direction: -1 | 1) => {
+      const nextAnchor = new Date(calendarAnchorAtMs);
+      if (state.dashboardCalendarView === "month") {
+        const dayOfMonth = nextAnchor.getDate();
+        nextAnchor.setDate(1);
+        nextAnchor.setMonth(nextAnchor.getMonth() + direction);
+        const lastDay = new Date(nextAnchor.getFullYear(), nextAnchor.getMonth() + 1, 0).getDate();
+        nextAnchor.setDate(Math.min(dayOfMonth, lastDay));
+      } else if (state.dashboardCalendarView === "week") {
+        nextAnchor.setDate(nextAnchor.getDate() + direction * 7);
+      } else {
+        nextAnchor.setDate(nextAnchor.getDate() + direction);
+      }
+      state.dashboardCalendarAnchorAtMs = nextAnchor.getTime();
+      void loadDashboardData(state);
+    };
+    return dashboardView.renderDashboard({
+        tab: state.tab,
+        loading: state.dashboardLoading,
+        error: state.dashboardError,
+        snapshot: state.dashboardSnapshot,
+        calendarResult: state.dashboardCalendarResult,
+        calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
+        teamsLoading: state.dashboardTeamsLoading,
+        teamsError: state.dashboardTeamsError,
+        teamSnapshots: state.dashboardTeamSnapshots,
+        attentionItems: state.attentionItems,
+        basePath: state.basePath,
+        taskFilter: state.dashboardTaskFilter,
+        doneFromDate: state.dashboardDoneFromDate,
+        doneToDate: state.dashboardDoneToDate,
+        workshopSelectedId: state.dashboardWorkshopSelectedId,
+        calendarView: state.dashboardCalendarView,
+        teamSelection: state.dashboardTeamSelection,
+        memoryAgentId: state.dashboardMemoryAgentId,
+        agentsList: state.agentsList,
+        agentFilesLoading: state.agentFilesLoading,
+        agentFilesError: state.agentFilesError,
+        agentFileContents: state.agentFileContents,
+        agentFileDrafts: state.agentFileDrafts,
+        agentFileSaving: state.agentFileSaving,
+        mauOfficeLoading: state.mauOfficeLoading,
+        mauOfficeError: state.mauOfficeError,
+        mauOfficeState: state.mauOfficeState,
+        mauOfficeChatOpen: state.mauOfficeChatOpen,
+        mauOfficeChatMinimized: state.mauOfficeChatMinimized,
+        mauOfficeChatActorId: state.mauOfficeChatActorId,
+        mauOfficeChatActorLabel: state.mauOfficeChatActorLabel,
+        mauOfficeChatSessionKey: state.mauOfficeChatSessionKey,
+        mauOfficeChatLoading: state.mauOfficeChatLoading,
+        mauOfficeChatSending: state.mauOfficeChatSending,
+        mauOfficeChatMessage: state.mauOfficeChatMessage,
+        mauOfficeChatMessages: state.mauOfficeChatMessages,
+        mauOfficeChatStream: state.mauOfficeChatStream,
+        mauOfficeChatStreamStartedAt: state.mauOfficeChatStreamStartedAt,
+        mauOfficeChatError: state.mauOfficeChatError,
+        mauOfficeChatPosition: {
+          x: state.mauOfficeChatPositionX,
+          y: state.mauOfficeChatPositionY,
+        },
+        onNavigate: (page) => state.setTab(tabForDashboardPage(page)),
+        onBackToControl: () => state.setTab("overview"),
+        onRefresh: () =>
+          void loadDashboardData(state, {
+            includeTeams: state.tab === "dashboardTeams",
+          }),
+        onRefreshTeams: () => void loadDashboardData(state, { includeTeams: true }),
+        onOpenTask: (task) => {
+          switchChatSession(state, task.sessionKey);
+          state.setTab("chat");
+        },
+        onFilterTasks: (taskId) => {
+          state.dashboardTaskFilter = taskId;
+          state.setTab("dashboardTasks");
+        },
+        onDoneDateRangeChange: ({ fromDate, toDate }) => {
+          if (typeof fromDate === "string") {
+            state.dashboardDoneFromDate = fromDate;
+          }
+          if (typeof toDate === "string") {
+            state.dashboardDoneToDate = toDate;
+          }
+        },
+        onSelectWorkshop: (itemId) => {
+          state.dashboardWorkshopSelectedId = itemId;
+        },
+        onCalendarViewChange: (view) => {
+          state.dashboardCalendarView = view;
+          void loadDashboardData(state);
+        },
+        onCalendarNavigate: (direction) => {
+          shiftCalendarAnchor(direction);
+        },
+        onCalendarJumpToday: () => {
+          state.dashboardCalendarAnchorAtMs = Date.now();
+          void loadDashboardData(state);
+        },
+        onCalendarSelectDay: (anchorAtMs, view) => {
+          const withinVisibleWindow =
+            state.dashboardCalendarResult &&
+            anchorAtMs >= state.dashboardCalendarResult.startAtMs &&
+            anchorAtMs < state.dashboardCalendarResult.endAtMs;
+          state.dashboardCalendarAnchorAtMs = anchorAtMs;
+          if (view) {
+            state.dashboardCalendarView = view;
+          }
+          if (!withinVisibleWindow || Boolean(view)) {
+            void loadDashboardData(state);
+          }
+        },
+        onSelectTeam: (selection) => {
+          state.dashboardTeamSelection = selection;
+        },
+        onSelectMemoryAgent: (agentId) => {
+          state.dashboardMemoryAgentId = agentId;
+          state.agentFilesList = null;
+          state.agentFilesError = null;
+          state.agentFileContents = {};
+          state.agentFileDrafts = {};
+          void loadAgentFiles(state, agentId);
+          void Promise.allSettled(
+            [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME].map((name) =>
+              loadAgentFileContent(state, agentId, name, { preserveDraft: true }),
+            ),
+          );
+        },
+        onMemoryDraftChange: (name, content) => {
+          state.agentFileDrafts = { ...state.agentFileDrafts, [name]: content };
+        },
+        onSaveMemoryFile: (name) => {
+          const agentId =
+            state.dashboardMemoryAgentId ??
+            state.agentsList?.defaultId ??
+            state.agentsList?.agents?.[0]?.id;
+          if (!agentId) {
+            return;
+          }
+          const content = state.agentFileDrafts[name] ?? state.agentFileContents[name] ?? "";
+          void saveAgentFile(state, agentId, name, content);
+        },
+        onRefreshMauOffice: () =>
+          void loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
+        onMauOfficeRoomFocus: (roomId) => {
+          state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
+        },
+        onMauOfficeActorOpen: (actorId) => {
+          void openMauOfficeChat(state, actorId, sessionDefaults);
+        },
+        onMauOfficeChatClose: () => {
+          closeMauOfficeChat(state);
+        },
+        onMauOfficeChatToggleMinimized: () => {
+          toggleMauOfficeChatMinimized(state);
+        },
+        onMauOfficeChatDraftChange: (next) => {
+          setMauOfficeChatDraft(state, next);
+        },
+        onMauOfficeChatSend: () => {
+          void sendMauOfficeChat(state);
+        },
+        onMauOfficeChatAbort: () => {
+          void abortMauOfficeChat(state);
+        },
+        onMauOfficeChatPositionChange: ({ x, y }) => {
+          state.mauOfficeChatPositionX = x;
+          state.mauOfficeChatPositionY = y;
+        },
+      });
+  }
 
   return html`
     ${renderCommandPalette({
@@ -702,6 +944,17 @@ export function renderApp(state: AppViewState) {
                 overviewLogLines: state.overviewLogLines,
                 showGatewayToken: state.overviewShowGatewayToken,
                 showGatewayPassword: state.overviewShowGatewayPassword,
+                conversationAutomationPreset: {
+                  ready: Boolean(configValue ?? state.configSnapshot?.config),
+                  state: conversationAutomationPresetState,
+                  dirty: state.configFormDirty,
+                  saving: state.configSaving,
+                  applying: state.configApplying,
+                  onStateChange: updateConversationAutomationPreset,
+                  onSave: () => saveConfig(state),
+                  onApply: () => applyConfig(state),
+                  onReload: () => loadConfig(state),
+                },
                 onSettingsChange: (next) => state.applySettings(next),
                 onPasswordChange: (next) => (state.password = next),
                 onSessionKeyChange: (next) => {
@@ -873,38 +1126,6 @@ export function renderApp(state: AppViewState) {
         }
 
         ${renderUsageTab(state)}
-
-        ${
-          state.tab === "mauOffice"
-            ? lazyRender(lazyMauOffice, (m) =>
-                m.renderMauOffice({
-                  loading: state.mauOfficeLoading,
-                  error: state.mauOfficeError,
-                  state: state.mauOfficeState,
-                  basePath: state.basePath,
-                  onRefresh: () =>
-                    loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
-                  onRoomFocus: (roomId) => {
-                    state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
-                  },
-                  onActorOpen: (actorId) => {
-                    const target = createMauOfficeSessionTarget(
-                      state.mauOfficeState,
-                      actorId,
-                      sessionDefaults,
-                    );
-                    if (!target) {
-                      return;
-                    }
-                    switchChatSession(state, target);
-                    if (state.tab !== "chat") {
-                      state.setTab("chat");
-                    }
-                  },
-                }),
-              )
-            : nothing
-        }
 
         ${
           state.tab === "cron"
@@ -1518,6 +1739,8 @@ export function renderApp(state: AppViewState) {
                 error: state.lastError,
                 sessions: state.sessionsResult,
                 focusMode: chatFocus,
+                onboarding: state.onboarding,
+                secureDashboardUrl: state.secureDashboardUrl,
                 onRefresh: () => {
                   state.resetToolStream();
                   return Promise.all([loadChatHistory(state), refreshChatAvatar(state)]);
@@ -1608,6 +1831,7 @@ export function renderApp(state: AppViewState) {
                   runtimeError: state.multiUserMemoryError,
                   config: multiUserMemoryConfig,
                   runtime: state.multiUserMemoryAdmin,
+                  secureDashboardUrl: state.secureDashboardUrl,
                   newUserDisplayName: state.multiUserMemoryNewUserDisplayName,
                   newUserLanguage: state.multiUserMemoryNewUserLanguage,
                   newUserIdentities: state.multiUserMemoryNewUserIdentities,

@@ -31,9 +31,16 @@ export function createVoiceCallBaseConfig(params?: {
     streaming: {
       enabled: false,
       sttProvider: "openai-realtime",
-      sttModel: "gpt-4o-transcribe",
-      silenceDurationMs: 800,
-      vadThreshold: 0.5,
+      openai: {
+        model: "gpt-4o-transcribe",
+        silenceDurationMs: 800,
+        vadThreshold: 0.5,
+      },
+      deepgram: {
+        model: "nova-3",
+        endpointingMs: 300,
+        interimResults: true,
+      },
       streamPath: "/voice/stream",
       preStartTimeoutMs: 5000,
       maxPendingConnections: 32,

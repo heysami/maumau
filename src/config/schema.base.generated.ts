@@ -1505,6 +1505,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
               workspace: {
                 type: "string",
               },
+              executionStyle: {
+                type: "string",
+                enum: ["direct", "hybrid", "orchestrator"],
+              },
+              executionWorkerAgentId: {
+                type: "string",
+              },
               repoRoot: {
                 type: "string",
               },
@@ -3403,6 +3410,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 agentDir: {
                   type: "string",
                 },
+                executionStyle: {
+                  type: "string",
+                  enum: ["direct", "hybrid", "orchestrator"],
+                },
+                executionWorkerAgentId: {
+                  type: "string",
+                },
                 model: {
                   anyOf: [
                     {
@@ -4994,6 +5008,9 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 managerAgentId: {
                   type: "string",
                 },
+                implicitForManagerSessions: {
+                  type: "boolean",
+                },
                 members: {
                   type: "array",
                   items: {
@@ -5058,6 +5075,27 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       synthesisPrompt: {
                         type: "string",
                       },
+                      contract: {
+                        type: "object",
+                        properties: {
+                          requiredRoles: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                            },
+                          },
+                          requiredQaRoles: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                            },
+                          },
+                          requireDelegation: {
+                            type: "boolean",
+                          },
+                        },
+                        additionalProperties: false,
+                      },
                       default: {
                         type: "boolean",
                       },
@@ -5083,6 +5121,27 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     },
                     synthesisPrompt: {
                       type: "string",
+                    },
+                    contract: {
+                      type: "object",
+                      properties: {
+                        requiredRoles: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                          },
+                        },
+                        requiredQaRoles: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                          },
+                        },
+                        requireDelegation: {
+                          type: "boolean",
+                        },
+                      },
+                      additionalProperties: false,
                     },
                     default: {
                       type: "boolean",
@@ -12262,6 +12321,11 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       label: "Team Manager Agent",
       help: "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
       tags: ["advanced"],
+    },
+    "teams.list[].implicitForManagerSessions": {
+      label: "Implicit Manager Team Sessions",
+      help: "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
+      tags: ["storage"],
     },
     "teams.list[].members": {
       label: "Team Specialists",

@@ -24,6 +24,7 @@ import {
   respondPlainText,
 } from "./control-ui-http-utils.js";
 import { classifyControlUiRequest } from "./control-ui-routing.js";
+import { resolveTailnetDnsHint } from "./server-discovery.js";
 import {
   buildControlUiAvatarUrl,
   CONTROL_UI_AVATAR_PREFIX,
@@ -125,6 +126,29 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   res.end(JSON.stringify(body));
+}
+
+function buildControlUiDashboardPath(basePath: string) {
+  return basePath ? `${basePath}/dashboard/today` : "/dashboard/today";
+}
+
+async function resolveControlUiSecureDashboardUrl(params: {
+  config?: MaumauConfig;
+  basePath: string;
+  loopbackGatewayToken?: string;
+}): Promise<string | undefined> {
+  const tailscaleMode = params.config?.gateway?.tailscale?.mode ?? "off";
+  if (tailscaleMode !== "serve" && tailscaleMode !== "funnel") {
+    return undefined;
+  }
+  const tailnetHost = await resolveTailnetDnsHint({ enabled: true });
+  if (!tailnetHost) {
+    return undefined;
+  }
+  const dashboardUrl = `https://${tailnetHost}${buildControlUiDashboardPath(params.basePath)}`;
+  return params.loopbackGatewayToken
+    ? `${dashboardUrl}#token=${encodeURIComponent(params.loopbackGatewayToken)}`
+    : dashboardUrl;
 }
 
 function respondControlUiAssetsUnavailable(
@@ -364,14 +388,7 @@ export function handleControlUiHttpRequest(
       agentId: identity.agentId,
       basePath,
     });
-    if (req.method === "HEAD") {
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.setHeader("Cache-Control", "no-cache");
-      res.end();
-      return true;
-    }
-    sendJson(res, 200, {
+    const bootstrapConfigBase = {
       basePath,
       assistantName: identity.name,
       assistantAvatar: avatarValue ?? identity.avatar,
@@ -380,7 +397,27 @@ export function handleControlUiHttpRequest(
       // Only direct loopback requests get the shared token so an already-open
       // local Control UI tab can recover after onboarding rotates auth.
       loopbackGatewayToken,
-    } satisfies ControlUiBootstrapConfig);
+    } satisfies Omit<ControlUiBootstrapConfig, "secureDashboardUrl">;
+    if (req.method === "HEAD") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache");
+      res.end();
+      return true;
+    }
+    void (async () => {
+      const secureDashboardUrl = await resolveControlUiSecureDashboardUrl({
+        config,
+        basePath,
+        loopbackGatewayToken,
+      });
+      sendJson(res, 200, {
+        ...bootstrapConfigBase,
+        secureDashboardUrl,
+      } satisfies ControlUiBootstrapConfig);
+    })().catch(() => {
+      sendJson(res, 200, bootstrapConfigBase satisfies ControlUiBootstrapConfig);
+    });
     return true;
   }
 

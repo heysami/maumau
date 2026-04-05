@@ -1,0 +1,15 @@
+{
+  "name": "@maumau/automation-runner",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau bounded browser-first automation plugin",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

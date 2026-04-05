@@ -1,0 +1,38 @@
+{
+  "id": "automation-runner",
+  "name": "Automation Runner",
+  "description": "Bounded browser-first automation with sender allowlists and approval-gated side effects.",
+  "skills": ["./skills"],
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": false
+      },
+      "accessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["disabled", "owner", "allowlist"],
+            "default": "owner"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "requireApproval": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}

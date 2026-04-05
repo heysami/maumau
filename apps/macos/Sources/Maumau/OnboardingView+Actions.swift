@@ -50,6 +50,11 @@ extension OnboardingView {
         }
     }
 
+    func goToOnboardingPage(_ pageID: Int) {
+        guard let cursor = self.pageOrder.firstIndex(of: pageID) else { return }
+        withAnimation { self.currentPage = cursor }
+    }
+
     func maybeDefaultToLocalConnectionMode() {
         guard Self.shouldDefaultToLocalConnectionMode(
             connectionMode: self.state.connectionMode,

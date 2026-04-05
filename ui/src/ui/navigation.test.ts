@@ -1,12 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { i18n } from "../i18n/index.ts";
+import { de } from "../i18n/locales/de.ts";
+import { es } from "../i18n/locales/es.ts";
+import { id } from "../i18n/locales/id.ts";
+import { pt_BR } from "../i18n/locales/pt-BR.ts";
+import { zh_CN } from "../i18n/locales/zh-CN.ts";
+import { zh_TW } from "../i18n/locales/zh-TW.ts";
 import {
   TAB_GROUPS,
+  dashboardPageForTab,
   iconForTab,
   inferBasePathFromPathname,
+  isDashboardTab,
   normalizeBasePath,
   normalizePath,
   pathForTab,
   subtitleForTab,
+  tabForDashboardPage,
   tabFromPath,
   titleForTab,
   type Tab,
@@ -14,6 +24,10 @@ import {
 
 /** All valid tab identifiers derived from TAB_GROUPS */
 const ALL_TABS: Tab[] = TAB_GROUPS.flatMap((group) => group.tabs) as Tab[];
+
+afterEach(async () => {
+  await i18n.setLocale("en");
+});
 
 describe("iconForTab", () => {
   it("returns a non-empty string for every tab", () => {
@@ -32,7 +46,13 @@ describe("iconForTab", () => {
     expect(iconForTab("instances")).toBe("radio");
     expect(iconForTab("teams")).toBe("folder");
     expect(iconForTab("sessions")).toBe("fileText");
-    expect(iconForTab("mauOffice")).toBe("spark");
+    expect(iconForTab("dashboardToday")).toBe("sun");
+    expect(iconForTab("dashboardMauOffice")).toBe("briefcase");
+    expect(iconForTab("dashboardTasks")).toBe("checkSquare");
+    expect(iconForTab("dashboardCalendar")).toBe("calendarDays");
+    expect(iconForTab("dashboardRoutines")).toBe("repeat2");
+    expect(iconForTab("dashboardTeams")).toBe("users");
+    expect(iconForTab("dashboardMemories")).toBe("brain");
     expect(iconForTab("cron")).toBe("loader");
     expect(iconForTab("skills")).toBe("zap");
     expect(iconForTab("nodes")).toBe("monitor");
@@ -61,8 +81,16 @@ describe("titleForTab", () => {
     expect(titleForTab("chat")).toBe("Chat");
     expect(titleForTab("overview")).toBe("Overview");
     expect(titleForTab("teams")).toBe("Teams");
-    expect(titleForTab("mauOffice")).toBe("MauOffice");
+    expect(titleForTab("dashboardToday")).toBe("Today");
+    expect(titleForTab("dashboardMauOffice")).toBe("MauOffice");
     expect(titleForTab("cron")).toBe("Cron Jobs");
+  });
+
+  it("localizes standalone dashboard titles with the selected locale", async () => {
+    await i18n.setLocale("id");
+    expect(titleForTab("dashboardToday")).toBe("Hari Ini");
+    expect(titleForTab("dashboardTasks")).toBe("Tugas");
+    expect(titleForTab("dashboardCalendar")).toBe("Kalender");
   });
 });
 
@@ -78,7 +106,27 @@ describe("subtitleForTab", () => {
     expect(subtitleForTab("chat")).toContain("quick interventions");
     expect(subtitleForTab("config")).toContain("maumau.json");
     expect(subtitleForTab("teams")).toContain("generated workflows");
-    expect(subtitleForTab("mauOffice")).toContain("pixel office");
+    expect(subtitleForTab("dashboardMauOffice")).toContain("pixel office");
+    expect(subtitleForTab("dashboardToday")).toContain("scheduled");
+  });
+
+  it("localizes standalone dashboard subtitles with the selected locale", async () => {
+    await i18n.setLocale("id");
+    expect(subtitleForTab("dashboardToday").toLowerCase()).toContain("terjadwal");
+    expect(subtitleForTab("dashboardTeams").toLowerCase()).toContain("bagan organisasi");
+  });
+});
+
+describe("dashboard locale inventory", () => {
+  it("ships dashboard labels for supported lazy locales", () => {
+    const locales = [id, de, es, pt_BR, zh_CN, zh_TW];
+    for (const locale of locales) {
+      expect((locale.tabs as { dashboardToday?: string }).dashboardToday).toBeTruthy();
+      expect((locale.subtitles as { dashboardToday?: string }).dashboardToday).toBeTruthy();
+      expect((((locale.dashboard as { shell?: { eyebrow?: string } }).shell) ?? {}).eyebrow).toBeTruthy();
+      expect((((locale.dashboard as { mauOffice?: { subtitle?: string } }).mauOffice) ?? {}).subtitle)
+        .toBeTruthy();
+    }
   });
 });
 
@@ -124,7 +172,8 @@ describe("pathForTab", () => {
     expect(pathForTab("chat")).toBe("/chat");
     expect(pathForTab("overview")).toBe("/overview");
     expect(pathForTab("teams")).toBe("/teams");
-    expect(pathForTab("mauOffice")).toBe("/mau-office");
+    expect(pathForTab("dashboardToday")).toBe("/dashboard/today");
+    expect(pathForTab("dashboardMauOffice")).toBe("/dashboard/mau-office");
   });
 
   it("prepends base path", () => {
@@ -139,7 +188,12 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/overview")).toBe("overview");
     expect(tabFromPath("/teams")).toBe("teams");
     expect(tabFromPath("/sessions")).toBe("sessions");
-    expect(tabFromPath("/mau-office")).toBe("mauOffice");
+    expect(tabFromPath("/dashboard/today")).toBe("dashboardToday");
+    expect(tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
+  });
+
+  it("keeps legacy MauOffice routes compatible", () => {
+    expect(tabFromPath("/mau-office")).toBe("dashboardMauOffice");
   });
 
   it("returns chat for root path", () => {
@@ -170,6 +224,7 @@ describe("inferBasePathFromPathname", () => {
     expect(inferBasePathFromPathname("/chat")).toBe("");
     expect(inferBasePathFromPathname("/overview")).toBe("");
     expect(inferBasePathFromPathname("/teams")).toBe("");
+    expect(inferBasePathFromPathname("/dashboard/today")).toBe("");
   });
 
   it("infers base path from nested paths", () => {
@@ -180,6 +235,26 @@ describe("inferBasePathFromPathname", () => {
   it("handles index.html suffix", () => {
     expect(inferBasePathFromPathname("/index.html")).toBe("");
     expect(inferBasePathFromPathname("/ui/index.html")).toBe("/ui");
+  });
+});
+
+describe("dashboard route helpers", () => {
+  it("maps dashboard pages to tabs", () => {
+    expect(tabForDashboardPage("today")).toBe("dashboardToday");
+    expect(tabForDashboardPage("mau-office")).toBe("dashboardMauOffice");
+    expect(tabForDashboardPage("memories")).toBe("dashboardMemories");
+  });
+
+  it("maps dashboard tabs back to pages", () => {
+    expect(dashboardPageForTab("dashboardToday")).toBe("today");
+    expect(dashboardPageForTab("dashboardWorkshop")).toBe("workshop");
+    expect(dashboardPageForTab("chat")).toBeNull();
+  });
+
+  it("identifies dashboard tabs", () => {
+    expect(isDashboardTab("dashboardTasks")).toBe(true);
+    expect(isDashboardTab("dashboardTeams")).toBe(true);
+    expect(isDashboardTab("chat")).toBe(false);
   });
 });
 

@@ -271,4 +271,58 @@ describe("resolveEffectiveToolPolicy", () => {
     const result = resolveEffectiveToolPolicy({ config: cfg, agentId: "coder" });
     expect(result.profileAlsoAllow).toEqual(["read", "write", "edit"]);
   });
+
+  it("merges global and agent alsoAllow entries for the same agent session", () => {
+    const cfg = {
+      tools: {
+        profile: "coding",
+        alsoAllow: ["voice-call"],
+      },
+      agents: {
+        list: [
+          {
+            id: "main",
+            tools: {
+              profile: "messaging",
+              alsoAllow: ["web_search"],
+            },
+          },
+        ],
+      },
+    } as MaumauConfig;
+    const result = resolveEffectiveToolPolicy({ config: cfg, agentId: "main" });
+    expect(result.profileAlsoAllow).toEqual(["voice-call", "web_search"]);
+  });
+
+  it("merges global and agent provider-specific alsoAllow entries", () => {
+    const cfg = {
+      tools: {
+        byProvider: {
+          telegram: {
+            alsoAllow: ["voice-call"],
+          },
+        },
+      },
+      agents: {
+        list: [
+          {
+            id: "main",
+            tools: {
+              byProvider: {
+                telegram: {
+                  alsoAllow: ["web_search"],
+                },
+              },
+            },
+          },
+        ],
+      },
+    } as MaumauConfig;
+    const result = resolveEffectiveToolPolicy({
+      config: cfg,
+      agentId: "main",
+      modelProvider: "telegram",
+    });
+    expect(result.providerProfileAlsoAllow).toEqual(["voice-call", "web_search"]);
+  });
 });

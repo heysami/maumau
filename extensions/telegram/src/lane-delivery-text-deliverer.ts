@@ -12,6 +12,8 @@ const MESSAGE_NOT_MODIFIED_RE =
   /400:\s*Bad Request:\s*message is not modified|MESSAGE_NOT_MODIFIED/i;
 const MESSAGE_NOT_FOUND_RE =
   /400:\s*Bad Request:\s*message to edit not found|MESSAGE_ID_INVALID|message can't be edited/i;
+const PROTECTED_FINAL_URL_RE =
+  /https?:\/\/[^\s)]+\/(?:(?:preview|share)\/for-[^/\s)]+\/[A-Za-z0-9-]+(?:\/[^\s)]*)?|dashboard(?:\/[^\s)]*)?)/i;
 
 function extractErrorText(err: unknown): string {
   return typeof err === "string"
@@ -36,6 +38,10 @@ function isMessageNotModifiedError(err: unknown): boolean {
  */
 function isMissingPreviewMessageError(err: unknown): boolean {
   return MESSAGE_NOT_FOUND_RE.test(extractErrorText(err));
+}
+
+function shouldSendProtectedLinkAsStandaloneFinal(text: string): boolean {
+  return PROTECTED_FINAL_URL_RE.test(text);
 }
 
 export type LaneName = "answer" | "reasoning";
@@ -247,7 +253,42 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
       params.markDelivered();
       return "edited";
     } catch (err) {
-      if (isMessageNotModifiedError(err)) {
+      let resolvedError = err;
+      if (
+        args.context === "final" &&
+        !args.finalTextAlreadyLanded &&
+        !isSafeToRetrySendError(err) &&
+        !isMissingPreviewMessageError(err) &&
+        !isTelegramClientRejection(err)
+      ) {
+        params.log(
+          `telegram: ${args.laneName} preview final edit failed; retrying once before fallback (${String(err)})`,
+        );
+        try {
+          await params.editPreview({
+            laneName: args.laneName,
+            messageId: args.messageId,
+            text: args.text,
+            previewButtons: args.previewButtons,
+            context: args.context,
+          });
+          if (args.updateLaneSnapshot) {
+            args.lane.lastPartialText = args.text;
+          }
+          params.markDelivered();
+          return "edited";
+        } catch (retryErr) {
+          if (isMessageNotModifiedError(retryErr)) {
+            params.log(
+              `telegram: ${args.laneName} preview ${args.context} retry returned "message is not modified"; treating as delivered`,
+            );
+            params.markDelivered();
+            return "edited";
+          }
+          resolvedError = retryErr;
+        }
+      }
+      if (isMessageNotModifiedError(resolvedError)) {
         params.log(
           `telegram: ${args.laneName} preview ${args.context} edit returned "message is not modified"; treating as delivered`,
         );
@@ -257,52 +298,52 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
       if (args.context === "final") {
         if (args.finalTextAlreadyLanded) {
           params.log(
-            `telegram: ${args.laneName} preview final edit failed after stop flush; keeping existing preview (${String(err)})`,
+            `telegram: ${args.laneName} preview final edit failed after stop flush; keeping existing preview (${String(resolvedError)})`,
           );
           params.markDelivered();
           return "retained";
         }
-        if (isSafeToRetrySendError(err)) {
+        if (isSafeToRetrySendError(resolvedError)) {
           params.log(
-            `telegram: ${args.laneName} preview final edit failed before reaching Telegram; falling back to standard send (${String(err)})`,
+            `telegram: ${args.laneName} preview final edit failed before reaching Telegram; falling back to standard send (${String(resolvedError)})`,
           );
           return "fallback";
         }
-        if (isMissingPreviewMessageError(err)) {
+        if (isMissingPreviewMessageError(resolvedError)) {
           if (args.retainAlternatePreviewOnMissingTarget) {
             params.log(
-              `telegram: ${args.laneName} preview final edit target missing; keeping alternate preview without fallback (${String(err)})`,
+              `telegram: ${args.laneName} preview final edit target missing; keeping alternate preview without fallback (${String(resolvedError)})`,
             );
             params.markDelivered();
             return "retained";
           }
           params.log(
-            `telegram: ${args.laneName} preview final edit target missing with no alternate preview; falling back to standard send (${String(err)})`,
+            `telegram: ${args.laneName} preview final edit target missing with no alternate preview; falling back to standard send (${String(resolvedError)})`,
           );
           return "fallback";
         }
-        if (isRecoverableTelegramNetworkError(err, { allowMessageMatch: true })) {
+        if (isRecoverableTelegramNetworkError(resolvedError, { allowMessageMatch: true })) {
           params.log(
-            `telegram: ${args.laneName} preview final edit may have landed despite network error; keeping existing preview (${String(err)})`,
+            `telegram: ${args.laneName} preview final edit may have landed despite network error; keeping existing preview (${String(resolvedError)})`,
           );
           params.markDelivered();
           return "retained";
         }
-        if (isTelegramClientRejection(err)) {
+        if (isTelegramClientRejection(resolvedError)) {
           params.log(
-            `telegram: ${args.laneName} preview final edit rejected by Telegram (client error); falling back to standard send (${String(err)})`,
+            `telegram: ${args.laneName} preview final edit rejected by Telegram (client error); falling back to standard send (${String(resolvedError)})`,
           );
           return "fallback";
         }
         // Default: ambiguous error — prefer incomplete over duplicate
         params.log(
-          `telegram: ${args.laneName} preview final edit failed with ambiguous error; keeping existing preview to avoid duplicate (${String(err)})`,
+          `telegram: ${args.laneName} preview final edit failed with ambiguous error; keeping existing preview to avoid duplicate (${String(resolvedError)})`,
         );
         params.markDelivered();
         return "retained";
       }
       params.log(
-        `telegram: ${args.laneName} preview ${args.context} edit failed; falling back to standard send (${String(err)})`,
+        `telegram: ${args.laneName} preview ${args.context} edit failed; falling back to standard send (${String(resolvedError)})`,
       );
       return "fallback";
     }
@@ -484,8 +525,14 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
     const lane = params.lanes[laneName];
     const reply = resolveSendableOutboundReplyParts(payload, { text });
     const hasMedia = reply.hasMedia;
+    const shouldBypassPreviewEdit =
+      infoKind === "final" && shouldSendProtectedLinkAsStandaloneFinal(text);
     const canEditViaPreview =
-      !hasMedia && text.length > 0 && text.length <= params.draftMaxChars && !payload.isError;
+      !shouldBypassPreviewEdit &&
+      !hasMedia &&
+      text.length > 0 &&
+      text.length <= params.draftMaxChars &&
+      !payload.isError;
 
     if (infoKind === "final") {
       // Transient previews must decide cleanup retention per final attempt.
@@ -562,6 +609,10 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
           markActivePreviewComplete(laneName);
           return result("preview-retained");
         }
+      } else if (shouldBypassPreviewEdit) {
+        params.log(
+          `telegram: ${laneName} final contains a protected link; sending standalone final message instead of preview edit`,
+        );
       } else if (!hasMedia && !payload.isError && text.length > params.draftMaxChars) {
         params.log(
           `telegram: preview final too long for edit (${text.length} > ${params.draftMaxChars}); falling back to standard send`,

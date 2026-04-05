@@ -1,13 +1,18 @@
 import { html, nothing } from "lit";
 import { guard } from "lit/directives/guard.js";
 import { repeat } from "lit/directives/repeat.js";
+import { ref } from "lit/directives/ref.js";
 import { styleMap } from "lit/directives/style-map.js";
+import { t } from "../../i18n/index.ts";
+import { extractText } from "../chat/message-extract.ts";
+import { normalizeMessage, normalizeRoleForGrouping } from "../chat/message-normalizer.ts";
 import {
   MAU_OFFICE_CHASING_LOOP_CYCLE_MS,
   MAU_OFFICE_PASSING_BALL_BEAT_MS,
   MAU_OFFICE_SUPPORT_DIALOGUE_WINDOW_MS,
 } from "../controllers/mau-office.ts";
 import type { MauOfficeState, OfficeActor, OfficeBubbleEntry } from "../controllers/mau-office.ts";
+import { icons } from "../icons.ts";
 import {
   MAU_OFFICE_BUBBLE_FRAME_ASSETS,
   MAU_OFFICE_BUBBLE_TAIL_ASSET,
@@ -88,17 +93,320 @@ export type MauOfficeProps = {
   error: string | null;
   state: MauOfficeState;
   basePath: string;
+  chatWindow?: MauOfficeChatWindowState | null;
   onRefresh: () => void;
   onRoomFocus: (roomId: MauOfficeRoomId | "all") => void;
   onActorOpen: (actorId: string) => void;
+  onChatClose?: () => void;
+  onChatToggleMinimized?: () => void;
+  onChatDraftChange?: (next: string) => void;
+  onChatSend?: () => void;
+  onChatAbort?: () => void;
+  onChatPositionChange?: (position: { x: number; y: number }) => void;
+};
+
+export type MauOfficeChatWindowState = {
+  open: boolean;
+  minimized: boolean;
+  actorId: string | null;
+  actorLabel: string;
+  sessionKey: string;
+  loading: boolean;
+  sending: boolean;
+  draft: string;
+  messages: unknown[];
+  stream: string | null;
+  streamStartedAt: number | null;
+  error: string | null;
+  position: { x: number | null; y: number | null };
 };
 
 function isNarrowViewport(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
+  return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 900px)").matches;
+}
+
+function isMobileOfficeChatViewport(): boolean {
+  return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 900px)").matches;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function formatChatTimestamp(value: number | null | undefined): string {
+  if (typeof value !== "number") {
+    return "";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function resolveOfficeChatDock(position: { x: number | null; y: number | null } | undefined): "left" | "right" {
+  const width = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const x = position?.x ?? width;
+  return x > width / 2 ? "right" : "left";
+}
+
+function resolveOfficeChatWindowStyle(
+  chatWindow: MauOfficeChatWindowState,
+): Record<string, string> {
+  if (isMobileOfficeChatViewport()) {
+    return {};
+  }
+  const margin = 20;
+  const width = chatWindow.minimized ? 300 : 420;
+  const height = chatWindow.minimized ? 64 : 620;
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1440;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 900;
+  const maxX = Math.max(margin, viewportWidth - width - margin);
+  const maxY = Math.max(margin, viewportHeight - height - margin);
+  const defaultX = maxX;
+  const defaultY = Math.max(margin, viewportHeight - height - 28);
+  const x = clamp(chatWindow.position.x ?? defaultX, margin, maxX);
+  const y = clamp(chatWindow.position.y ?? defaultY, margin, maxY);
+  if (chatWindow.minimized) {
+    const dock = resolveOfficeChatDock(chatWindow.position);
+    return dock === "left"
+      ? { left: `${margin}px`, bottom: `${margin}px` }
+      : { right: `${margin}px`, bottom: `${margin}px` };
+  }
+  return {
+    left: `${x}px`,
+    top: `${y}px`,
+  };
+}
+
+function startOfficeChatDrag(
+  event: PointerEvent,
+  chatWindow: MauOfficeChatWindowState,
+  onPositionChange?: (position: { x: number; y: number }) => void,
+) {
+  if (!onPositionChange || isMobileOfficeChatViewport() || chatWindow.minimized) {
+    return;
+  }
+  const handle = event.currentTarget as HTMLElement | null;
+  const panel = handle?.closest<HTMLElement>(".mau-office-chat");
+  if (!handle || !panel) {
+    return;
+  }
+  const margin = 20;
+  const snapThreshold = 28;
+  const panelWidth = panel.offsetWidth || 420;
+  const panelHeight = panel.offsetHeight || 620;
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1440;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 900;
+  const maxX = Math.max(margin, viewportWidth - panelWidth - margin);
+  const maxY = Math.max(margin, viewportHeight - panelHeight - margin);
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const currentStyle = resolveOfficeChatWindowStyle(chatWindow);
+  const initialLeft = Number.parseFloat(currentStyle.left ?? String(maxX));
+  const initialTop = Number.parseFloat(currentStyle.top ?? String(maxY));
+  document.body.style.userSelect = "none";
+  const cleanup = () => {
+    document.body.style.userSelect = "";
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+  };
+  const handleMove = (moveEvent: PointerEvent) => {
+    const rawX = initialLeft + (moveEvent.clientX - startX);
+    const rawY = initialTop + (moveEvent.clientY - startY);
+    let nextX = clamp(rawX, margin, maxX);
+    if (nextX - margin <= snapThreshold) {
+      nextX = margin;
+    } else if (maxX - nextX <= snapThreshold) {
+      nextX = maxX;
+    }
+    const nextY = clamp(rawY, margin, maxY);
+    onPositionChange({ x: nextX, y: nextY });
+  };
+  const handleUp = () => cleanup();
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp);
+}
+
+function resolveOfficeChatMessageText(message: unknown): string {
+  const text = extractText(message)?.trim();
+  if (text) {
+    return text;
+  }
+  const normalized = normalizeMessage(message);
+  if (normalized.content.some((item) => item.type === "image")) {
+    return t("dashboard.mauOffice.chat.image");
+  }
+  const role = normalizeRoleForGrouping(normalized.role);
+  if (role === "tool") {
+    return t("dashboard.mauOffice.chat.toolOutput");
+  }
+  return t("dashboard.mauOffice.chat.message");
+}
+
+function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null) {
+  const chatWindow = props.chatWindow;
+  if (!chatWindow?.open) {
+    return nothing;
+  }
+  const mobile = isMobileOfficeChatViewport();
+  const minimized = !mobile && chatWindow.minimized;
+  const title = (actor?.label ?? chatWindow.actorLabel) || t("dashboard.mauOffice.chat.sessionTitle");
+  const subtitle = actor
+    ? `${actor.currentActivity.label} · ${chatWindow.sessionKey}`
+    : chatWindow.sessionKey;
+  const canSend = Boolean(chatWindow.draft.trim()) && !chatWindow.sending && !chatWindow.stream;
+  const threadItems = chatWindow.messages.slice(-80);
+  return html`
+    <section
+      class="mau-office-chat ${minimized ? "mau-office-chat--minimized" : ""} ${mobile ? "mau-office-chat--mobile" : ""}"
+      style=${styleMap(resolveOfficeChatWindowStyle(chatWindow))}
+      aria-label=${t("dashboard.mauOffice.chat.ariaLabel")}
+    >
+      <header class="mau-office-chat__header">
+        <button
+          class="mau-office-chat__drag"
+          type="button"
+          @pointerdown=${(event: PointerEvent) =>
+            startOfficeChatDrag(event, chatWindow, props.onChatPositionChange)}
+        >
+          <span class="mau-office-chat__title">${title}</span>
+          <span class="mau-office-chat__subtitle">${subtitle}</span>
+        </button>
+        <div class="mau-office-chat__actions">
+          ${mobile
+            ? nothing
+            : html`
+                <button
+                  class="btn btn--ghost btn--icon"
+                  type="button"
+                  aria-label=${minimized
+                    ? t("dashboard.mauOffice.chat.expand")
+                    : t("dashboard.mauOffice.chat.minimize")}
+                  @click=${() => props.onChatToggleMinimized?.()}
+                >
+                  ${minimized ? icons.maximize : icons.minimize}
+                </button>
+              `}
+          <button
+            class="btn btn--ghost btn--icon"
+            type="button"
+            aria-label=${t("dashboard.mauOffice.chat.close")}
+            @click=${() => props.onChatClose?.()}
+          >
+            ${icons.x}
+          </button>
+        </div>
+      </header>
+
+      ${minimized
+        ? nothing
+        : html`
+            ${chatWindow.error
+              ? html`<div class="callout danger mau-office-chat__error">${chatWindow.error}</div>`
+              : nothing}
+            <div
+              class="mau-office-chat__thread"
+              ${ref((element) => {
+                if (!(element instanceof HTMLElement)) {
+                  return;
+                }
+                requestAnimationFrame(() => {
+                  element.scrollTop = element.scrollHeight;
+                });
+              })}
+            >
+              ${chatWindow.loading
+                ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.loading")}</div>`
+                : threadItems.length === 0 && !chatWindow.stream
+                  ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.empty")}</div>`
+                  : nothing}
+              ${repeat(
+                threadItems,
+                (_message, index) => `${chatWindow.sessionKey}:${index}`,
+                (message) => {
+                  const normalized = normalizeMessage(message);
+                  const role = normalizeRoleForGrouping(normalized.role);
+                  const roleClass =
+                    role === "assistant"
+                      ? "assistant"
+                      : role === "user" || role === "User"
+                        ? "user"
+                        : role === "tool"
+                          ? "tool"
+                          : "system";
+                  return html`
+                    <article class="mau-office-chat__message mau-office-chat__message--${roleClass}">
+                      <div class="mau-office-chat__message-role">${t(`dashboard.mauOffice.chat.role.${roleClass}`)}</div>
+                      <div class="mau-office-chat__message-body">
+                        ${resolveOfficeChatMessageText(message)}
+                      </div>
+                      <div class="mau-office-chat__message-time">
+                        ${formatChatTimestamp(normalized.timestamp)}
+                      </div>
+                    </article>
+                  `;
+                },
+              )}
+              ${chatWindow.stream
+                ? html`
+                    <article class="mau-office-chat__message mau-office-chat__message--assistant">
+                      <div class="mau-office-chat__message-role">${t("dashboard.mauOffice.chat.role.assistant")}</div>
+                      <div class="mau-office-chat__message-body">${chatWindow.stream}</div>
+                      <div class="mau-office-chat__message-time">
+                        ${formatChatTimestamp(chatWindow.streamStartedAt ?? Date.now())}
+                      </div>
+                    </article>
+                  `
+                : nothing}
+            </div>
+            <div class="mau-office-chat__composer">
+              <textarea
+                class="mau-office-chat__input"
+                .value=${chatWindow.draft}
+                rows="2"
+                placeholder=${t("dashboard.mauOffice.chat.placeholder")}
+                ?disabled=${chatWindow.sending}
+                @input=${(event: Event) =>
+                  props.onChatDraftChange?.((event.target as HTMLTextAreaElement).value)}
+                @keydown=${(event: KeyboardEvent) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    if (chatWindow.stream) {
+                      props.onChatAbort?.();
+                      return;
+                    }
+                    if (canSend) {
+                      props.onChatSend?.();
+                    }
+                  }
+                }}
+              ></textarea>
+              <div class="mau-office-chat__composer-actions">
+                <button
+                  class="btn btn--ghost"
+                  type="button"
+                  ?disabled=${!chatWindow.stream}
+                  @click=${() => props.onChatAbort?.()}
+                >
+                  ${t("dashboard.mauOffice.chat.stop")}
+                </button>
+                <button
+                  class="btn"
+                  type="button"
+                  ?disabled=${!canSend}
+                  @click=${() => props.onChatSend?.()}
+                >
+                  ${t("dashboard.mauOffice.chat.send")}
+                </button>
+              </div>
+            </div>
+          `}
+    </section>
+  `;
 }
 
 function resolveViewportAvailableWidth(): number {
@@ -122,7 +430,7 @@ function resolveViewportAvailableWidth(): number {
 }
 
 function labelForRoom(roomId: MauOfficeRoomId | "all"): string {
-  return roomId === "all" ? "All rooms" : MAU_OFFICE_LAYOUT.rooms[roomId].label;
+  return roomId === "all" ? t("dashboard.mauOffice.allRooms") : MAU_OFFICE_LAYOUT.rooms[roomId].label;
 }
 
 function resolveEffectiveRoomFocus(state: MauOfficeState): MauOfficeRoomId | "all" {
@@ -892,29 +1200,32 @@ export function renderMauOffice(props: MauOfficeProps) {
     .map((actorId) => props.state.actors[actorId])
     .filter((actor): actor is OfficeActor => Boolean(actor))
     .filter((actor) => isActorVisibleInFocus(actor, effectiveRoomFocus));
+  const activeChatActor = props.chatWindow?.actorId
+    ? (props.state.actors[props.chatWindow.actorId] ?? null)
+    : null;
 
   return html`
     <section class="card mau-office">
       <div class="mau-office__header">
         <div>
-          <div class="card-title">MauOffice</div>
+          <div class="card-title">${t("tabs.dashboardMauOffice")}</div>
           <div class="card-sub">
-            A tile-built pixel office that snaps workers, props, labels, and bubbles to one shared grid.
+            ${t("dashboard.mauOffice.subtitle")}
           </div>
         </div>
         <div class="mau-office__toolbar">
-          <span class="chip">${actors.length} visible</span>
-          <span class="chip">${props.state.offsiteWorkerCount} offsite</span>
-          <span class="chip">Grid-native stage</span>
+          <span class="chip">${t("dashboard.mauOffice.visibleCount", { count: String(actors.length) })}</span>
+          <span class="chip">${t("dashboard.mauOffice.offsiteCount", { count: String(props.state.offsiteWorkerCount) })}</span>
+          <span class="chip">${t("dashboard.mauOffice.gridStage")}</span>
           <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
-            ${props.loading ? "Loading…" : "Refresh"}
+            ${props.loading ? t("dashboard.shell.loading") : t("common.refresh")}
           </button>
         </div>
       </div>
 
       ${props.error ? html`<div class="callout danger mau-office__callout">${props.error}</div>` : nothing}
 
-      <div class="mau-office__chips" role="tablist" aria-label="Focus a room">
+      <div class="mau-office__chips" role="tablist" aria-label=${t("dashboard.mauOffice.focusRoom")}>
         ${roomOptions.map(
           (roomId) => html`
             <button
@@ -944,6 +1255,8 @@ export function renderMauOffice(props: MauOfficeProps) {
           </div>
         </div>
       </div>
+
+      ${renderOfficeChatWindow(props, activeChatActor)}
     </section>
   `;
 }

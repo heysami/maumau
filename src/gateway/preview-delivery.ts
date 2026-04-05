@@ -4,13 +4,15 @@ import { resolveAgentWorkspaceDir, resolveSessionAgentId } from "../agents/agent
 import type { ReplyPayload } from "../auto-reply/types.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
-import { isTrustedOwnerDirectPreviewRoute } from "../utils/private-preview-route.js";
 import { isInternalMessageChannel, normalizeMessageChannel } from "../utils/message-channel.js";
+import { isTrustedOwnerDirectPreviewRoute } from "../utils/private-preview-route.js";
 import { publishPreviewArtifact } from "./previews.js";
 
 const FILE_TEXT_LINE_RE = /^FILE:(.+)$/gm;
 const PREVIEWABLE_FILE_EXTENSIONS = new Set([".htm", ".html"]);
 const PREVIEWABLE_INDEX_FILES = ["index.html", "index.htm"];
+const MANAGED_PREVIEW_URL_RE =
+  /https?:\/\/[^\s)]+\/(?:preview|share)\/for-[^/\s)]+\/[A-Za-z0-9-]+(?:\/[^\s)]*)?/i;
 
 type PreviewDeliverySessionEntry = Pick<
   SessionEntry,
@@ -101,6 +103,25 @@ function formatPreviewDeliveryReceipt(params: {
   return undefined;
 }
 
+function payloadsAlreadyContainUrl(
+  payloads: readonly ReplyPayload[],
+  url?: string | null,
+): boolean {
+  const trimmedUrl = url?.trim();
+  if (!trimmedUrl) {
+    return false;
+  }
+  return payloads.some(
+    (payload) => typeof payload.text === "string" && payload.text.includes(trimmedUrl),
+  );
+}
+
+function payloadsAlreadyContainManagedPreviewUrl(payloads: readonly ReplyPayload[]): boolean {
+  return payloads.some(
+    (payload) => typeof payload.text === "string" && MANAGED_PREVIEW_URL_RE.test(payload.text),
+  );
+}
+
 function resolvePreviewWorkspaceDir(params: {
   cfg: MaumauConfig;
   workspaceDir?: string;
@@ -149,6 +170,9 @@ export async function maybeBuildPreviewReceiptPayloads(params: {
   if (!messageChannel || isInternalMessageChannel(messageChannel)) {
     return [];
   }
+  if (payloadsAlreadyContainManagedPreviewUrl(params.payloads)) {
+    return [];
+  }
 
   const workspaceDir = resolvePreviewWorkspaceDir({
     cfg: params.cfg,
@@ -169,9 +193,11 @@ export async function maybeBuildPreviewReceiptPayloads(params: {
   const requesterTailscaleLogin =
     normalizeOptionalText(params.requesterTailscaleLogin) ??
     normalizeOptionalText(params.sessionEntry?.requesterTailscaleLogin);
-  const groupId = normalizeOptionalText(params.groupId) ?? normalizeOptionalText(params.sessionEntry?.groupId);
+  const groupId =
+    normalizeOptionalText(params.groupId) ?? normalizeOptionalText(params.sessionEntry?.groupId);
   const groupChannel =
-    normalizeOptionalText(params.groupChannel) ?? normalizeOptionalText(params.sessionEntry?.groupChannel);
+    normalizeOptionalText(params.groupChannel) ??
+    normalizeOptionalText(params.sessionEntry?.groupChannel);
   const groupSpace =
     normalizeOptionalText(params.groupSpace) ?? normalizeOptionalText(params.sessionEntry?.space);
 
@@ -204,6 +230,9 @@ export async function maybeBuildPreviewReceiptPayloads(params: {
       groupSpace,
       createdBySessionId: params.createdBySessionId,
     });
+    if (payloadsAlreadyContainUrl(params.payloads, published.url)) {
+      return [];
+    }
     const text = formatPreviewDeliveryReceipt({ result: published });
     return text ? [{ text }] : [];
   } catch (err) {

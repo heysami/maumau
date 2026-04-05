@@ -2,6 +2,24 @@ export type UpdateAvailable = import("../../../src/infra/update-startup.js").Upd
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
 import type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 import type {
+  DashboardCalendarResult as SharedDashboardCalendarResult,
+  DashboardCalendarView as SharedDashboardCalendarView,
+  DashboardRecentMemoryEntry as SharedDashboardRecentMemoryEntry,
+  DashboardMemoriesResult as SharedDashboardMemoriesResult,
+  DashboardRoutine as SharedDashboardRoutine,
+  DashboardRoutinesResult as SharedDashboardRoutinesResult,
+  DashboardSnapshot as SharedDashboardSnapshot,
+  DashboardTask as SharedDashboardTask,
+  DashboardTasksResult as SharedDashboardTasksResult,
+  DashboardTeamSnapshot as SharedDashboardTeamSnapshot,
+  DashboardTeamSnapshotsResult as SharedDashboardTeamSnapshotsResult,
+  DashboardTodaySnapshot as SharedDashboardTodaySnapshot,
+  DashboardWorkshopItem as SharedDashboardWorkshopItem,
+  DashboardWorkshopResult as SharedDashboardWorkshopResult,
+  DashboardWorkItem as SharedDashboardWorkItem,
+  DashboardCalendarEvent as SharedDashboardCalendarEvent,
+} from "../../../src/gateway/dashboard-types.ts";
+import type {
   SessionPreviewItem as SharedSessionPreviewItem,
   SessionsPreviewEntry as SharedSessionsPreviewEntry,
   SessionsPreviewResult as SharedSessionsPreviewResult,
@@ -12,6 +30,22 @@ import type {
   SessionsPatchResultBase,
 } from "../../../src/shared/session-types.js";
 export type { ConfigUiHint, ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
+export type DashboardSnapshot = SharedDashboardSnapshot;
+export type DashboardTodaySnapshot = SharedDashboardTodaySnapshot;
+export type DashboardTask = SharedDashboardTask;
+export type DashboardWorkItem = SharedDashboardWorkItem;
+export type DashboardTasksResult = SharedDashboardTasksResult;
+export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
+export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
+export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
+export type DashboardCalendarResult = SharedDashboardCalendarResult;
+export type DashboardCalendarView = SharedDashboardCalendarView;
+export type DashboardRoutine = SharedDashboardRoutine;
+export type DashboardRoutinesResult = SharedDashboardRoutinesResult;
+export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
+export type DashboardMemoriesResult = SharedDashboardMemoriesResult;
+export type DashboardTeamSnapshot = SharedDashboardTeamSnapshot;
+export type DashboardTeamSnapshotsResult = SharedDashboardTeamSnapshotsResult;
 
 export type ChannelsStatusSnapshot = {
   ts: number;

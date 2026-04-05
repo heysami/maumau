@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,7 +10,12 @@ import {
   dispatchRequest,
 } from "./server-http.test-harness.js";
 import { withTempConfig } from "./test-temp-config.js";
-const { deriveRecipientHint, publishPreviewArtifact, resolvePrivatePreviewAccess } =
+const {
+  buildPreviewEmbedPathFromPreviewUrl,
+  deriveRecipientHint,
+  publishPreviewArtifact,
+  resolvePrivatePreviewAccess,
+} =
   await import("./previews.js");
 
 async function withFakeTailscaleBinary(
@@ -278,6 +283,91 @@ describe("gateway previews", () => {
           await new Promise((resolve) => setTimeout(resolve, 25));
           expect(wrongSlug.res.statusCode).toBe(404);
           expect(wrongSlug.getBody()).toContain("invalid or expired");
+        },
+      );
+    });
+  });
+
+  it("serves dashboard embed preview paths without requiring an iframe auth header", async () => {
+    await withFakeTailscaleBinary({ serveStatus: "https://preview.tailnet.ts.net (tailnet only)" }, async () => {
+      await withTempPreviewEnv(
+        {
+          gateway: {
+            auth: {
+              mode: "token",
+              token: "test-token",
+            },
+            tailscale: { mode: "serve" },
+            trustedProxies: [],
+          },
+        },
+        async ({ workspaceDir }) => {
+          const siteDir = path.join(workspaceDir, "site");
+          await mkdir(siteDir, { recursive: true });
+          await writeFile(
+            path.join(siteDir, "index.html"),
+            '<html><head><link rel="stylesheet" href="styles.css"></head><body><h1>embed preview</h1></body></html>\n',
+            "utf8",
+          );
+          await writeFile(
+            path.join(siteDir, "styles.css"),
+            "body { background: rgb(1, 2, 3); }\n",
+            "utf8",
+          );
+          const result = await publishPreviewArtifact({
+            cfg: {
+              gateway: {
+                auth: {
+                  mode: "token",
+                  token: "test-token",
+                },
+                tailscale: { mode: "serve" },
+              },
+            },
+            workspaceDir,
+            sourcePath: "site",
+            senderUsername: "samiaji",
+            requesterTailscaleLogin: "samiaji@example.com",
+          });
+          const embedPath = buildPreviewEmbedPathFromPreviewUrl({
+            previewUrl: result.url,
+            auth: AUTH_TOKEN,
+            nowMs: Date.now(),
+          });
+          expect(embedPath).toBeTruthy();
+          expect(embedPath).toMatch(/\/$/);
+
+          const server = createTestGatewayServer({ resolvedAuth: AUTH_TOKEN });
+          const embedded = createResponse();
+          await dispatchRequest(
+            server,
+            createRequest({
+              path: embedPath ?? "/preview-embed/invalid",
+            }),
+            embedded.res,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          expect(embedded.res.statusCode).toBe(200);
+          expect(embedded.getBody()).toContain("embed preview");
+          expect(embedded.getBody()).not.toContain("Created for");
+
+          const embeddedCss = createResponse();
+          await dispatchRequest(
+            server,
+            createRequest({
+              path: `${embedPath ?? "/preview-embed/invalid"}styles.css`,
+            }),
+            embeddedCss.res,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          expect(embeddedCss.res.statusCode).toBe(200);
+          const cssBody = JSON.parse(embeddedCss.getBody()) as {
+            type: string;
+            data: number[];
+          };
+          expect(Buffer.from(cssBody.data).toString("utf8")).toContain(
+            "background: rgb(1, 2, 3)",
+          );
         },
       );
     });

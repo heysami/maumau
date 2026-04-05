@@ -5,7 +5,7 @@ export const TAB_GROUPS = [
   { label: "chat", tabs: ["chat"] },
   {
     label: "control",
-    tabs: ["overview", "channels", "instances", "sessions", "mauOffice", "usage", "cron"],
+    tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
   },
   { label: "agent", tabs: ["agents", "teams", "skills", "nodes"] },
   {
@@ -24,6 +24,19 @@ export const TAB_GROUPS = [
   },
 ] as const;
 
+export const DASHBOARD_PAGE_ORDER = [
+  "today",
+  "mau-office",
+  "tasks",
+  "workshop",
+  "calendar",
+  "routines",
+  "teams",
+  "memories",
+] as const;
+
+export type DashboardPage = (typeof DASHBOARD_PAGE_ORDER)[number];
+
 export type Tab =
   | "agents"
   | "teams"
@@ -31,9 +44,16 @@ export type Tab =
   | "channels"
   | "instances"
   | "sessions"
-  | "mauOffice"
   | "usage"
   | "cron"
+  | "dashboardToday"
+  | "dashboardMauOffice"
+  | "dashboardTasks"
+  | "dashboardWorkshop"
+  | "dashboardCalendar"
+  | "dashboardRoutines"
+  | "dashboardTeams"
+  | "dashboardMemories"
   | "skills"
   | "nodes"
   | "chat"
@@ -54,9 +74,16 @@ const TAB_PATHS: Record<Tab, string> = {
   channels: "/channels",
   instances: "/instances",
   sessions: "/sessions",
-  mauOffice: "/mau-office",
   usage: "/usage",
   cron: "/cron",
+  dashboardToday: "/dashboard/today",
+  dashboardMauOffice: "/dashboard/mau-office",
+  dashboardTasks: "/dashboard/tasks",
+  dashboardWorkshop: "/dashboard/workshop",
+  dashboardCalendar: "/dashboard/calendar",
+  dashboardRoutines: "/dashboard/routines",
+  dashboardTeams: "/dashboard/teams",
+  dashboardMemories: "/dashboard/memories",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
@@ -71,7 +98,36 @@ const TAB_PATHS: Record<Tab, string> = {
   logs: "/logs",
 };
 
-const PATH_TO_TAB = new Map(Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab]));
+const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
+  today: "dashboardToday",
+  "mau-office": "dashboardMauOffice",
+  tasks: "dashboardTasks",
+  workshop: "dashboardWorkshop",
+  calendar: "dashboardCalendar",
+  routines: "dashboardRoutines",
+  teams: "dashboardTeams",
+  memories: "dashboardMemories",
+};
+
+const LEGACY_TAB_ALIASES: Array<[string, Tab]> = [["/mau-office", "dashboardMauOffice"]];
+
+const PATH_TO_TAB = new Map<string, Tab>([
+  ...Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab] as const),
+  ...LEGACY_TAB_ALIASES,
+]);
+
+export function tabForDashboardPage(page: DashboardPage): Tab {
+  return DASHBOARD_PAGE_TO_TAB[page];
+}
+
+export function dashboardPageForTab(tab: Tab): DashboardPage | null {
+  const entry = Object.entries(DASHBOARD_PAGE_TO_TAB).find(([, value]) => value === tab);
+  return (entry?.[0] as DashboardPage | undefined) ?? null;
+}
+
+export function isDashboardTab(tab: Tab): boolean {
+  return dashboardPageForTab(tab) !== null;
+}
 
 export function normalizeBasePath(basePath: string): string {
   if (!basePath) {
@@ -168,12 +224,26 @@ export function iconForTab(tab: Tab): IconName {
       return "radio";
     case "sessions":
       return "fileText";
-    case "mauOffice":
-      return "spark";
     case "usage":
       return "barChart";
     case "cron":
       return "loader";
+    case "dashboardToday":
+      return "sun";
+    case "dashboardMauOffice":
+      return "briefcase";
+    case "dashboardTasks":
+      return "checkSquare";
+    case "dashboardWorkshop":
+      return "monitor";
+    case "dashboardCalendar":
+      return "calendarDays";
+    case "dashboardRoutines":
+      return "repeat2";
+    case "dashboardTeams":
+      return "users";
+    case "dashboardMemories":
+      return "brain";
     case "skills":
       return "zap";
     case "nodes":

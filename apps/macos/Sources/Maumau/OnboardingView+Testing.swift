@@ -46,6 +46,7 @@ extension OnboardingView {
         _ = view.channelsSetupPage()
         _ = view.privateAccessPage()
         _ = view.permissionsPage()
+        _ = view.conversationAutomationPage()
         _ = view.cliPage()
         _ = view.workspacePage()
         _ = view.skillsSetupPage()

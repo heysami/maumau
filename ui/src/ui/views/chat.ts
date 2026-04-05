@@ -31,6 +31,7 @@ import { detectTextDirection } from "../text-direction.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../types.ts";
 import type { ChatItem, MessageGroup } from "../types/chat-types.ts";
 import type { ChatAttachment, ChatQueueItem } from "../ui-types.ts";
+import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
 import { agentLogoUrl, resolveAgentAvatarUrl } from "./agents-utils.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
 import "../components/resizable-divider.ts";
@@ -82,6 +83,8 @@ export type ChatProps = {
   splitRatio?: number;
   assistantName: string;
   assistantAvatar: string | null;
+  onboarding?: boolean;
+  secureDashboardUrl?: string | null;
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
   showNewMessages?: boolean;
@@ -1121,6 +1124,25 @@ export function renderChat(props: ChatProps) {
     >
       ${props.disabledReason ? html`<div class="callout">${props.disabledReason}</div>` : nothing}
       ${props.error ? html`<div class="callout danger">${props.error}</div>` : nothing}
+      ${
+        props.onboarding && props.secureDashboardUrl
+          ? html`
+              <div class="callout info">
+                <div>Open the secure dashboard on your phone here:</div>
+                <div style="margin-top: 6px;">
+                  <a
+                    class="session-link"
+                    href=${props.secureDashboardUrl}
+                    target=${EXTERNAL_LINK_TARGET}
+                    rel=${buildExternalLinkRel()}
+                  >
+                    ${props.secureDashboardUrl}
+                  </a>
+                </div>
+              </div>
+            `
+          : nothing
+      }
 
       ${
         props.focusMode

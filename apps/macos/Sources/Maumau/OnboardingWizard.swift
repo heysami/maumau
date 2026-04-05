@@ -277,12 +277,12 @@ final class OnboardingWizardModel {
                         })
                     return .ready
                 } catch {
-                    let message = error.localizedDescription
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !message.isEmpty, Self.isGatewayAuthFailure(error) {
-                        return .rejected(message)
-                    }
-                    return .pending
+                    return await Self.classifyLocalGatewayAuthProbeReadiness(
+                        error: error,
+                        attemptManagedAuthRecovery: { authError in
+                            await GatewayProcessManager.shared
+                                .recoverManagedGatewayAfterAuthFailureIfNeeded(authError)
+                        })
                 }
             },
             probeGatewayHealth: { port in
@@ -354,6 +354,21 @@ final class OnboardingWizardModel {
         } while Date() < deadline
 
         return .notReady
+    }
+
+    static func classifyLocalGatewayAuthProbeReadiness(
+        error: Error,
+        attemptManagedAuthRecovery: @escaping @Sendable (Error) async -> Bool) async -> LocalGatewayAuthProbeReadiness
+    {
+        let message = error.localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty, Self.isGatewayAuthFailure(error) else {
+            return .pending
+        }
+        if await attemptManagedAuthRecovery(error) {
+            return .ready
+        }
+        return .rejected(message)
     }
 
     private nonisolated static func isGatewayAuthFailure(_ error: Error) -> Bool {

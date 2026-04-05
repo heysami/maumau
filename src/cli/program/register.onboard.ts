@@ -82,6 +82,7 @@ export function registerOnboardCommand(program: Command) {
       false,
     )
     .option("--flow <flow>", "Onboard flow: quickstart|advanced|manual")
+    .option("--preset <id>", "Setup preset: conversation-automation")
     .option("--mode <mode>", "Onboard mode: local|remote")
     .option("--auth-choice <choice>", `Auth: ${AUTH_CHOICE_HELP}`)
     .option(
@@ -155,6 +156,7 @@ export function registerOnboardCommand(program: Command) {
           nonInteractive: Boolean(opts.nonInteractive),
           acceptRisk: Boolean(opts.acceptRisk),
           flow: opts.flow as "quickstart" | "advanced" | "manual" | undefined,
+          preset: opts.preset as "conversation-automation" | undefined,
           mode: opts.mode as "local" | "remote" | undefined,
           authChoice: opts.authChoice as AuthChoice | undefined,
           tokenProvider: opts.tokenProvider as string | undefined,

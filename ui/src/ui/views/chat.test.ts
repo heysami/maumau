@@ -165,6 +165,8 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
     focusMode: false,
     assistantName: "Maumau",
     assistantAvatar: null,
+    onboarding: false,
+    secureDashboardUrl: null,
     onRefresh: () => undefined,
     onToggleFocusMode: () => undefined,
     onDraftChange: () => undefined,
@@ -217,6 +219,26 @@ function createOverviewProps(overrides: Partial<OverviewProps> = {}): OverviewPr
     overviewLogLines: [],
     showGatewayToken: false,
     showGatewayPassword: false,
+    conversationAutomationPreset: {
+      ready: true,
+      state: {
+        enabled: false,
+        active: false,
+        telephonyEnabled: false,
+        telephonyProvider: "telnyx",
+        sttProvider: "deepgram-realtime",
+        languageId: "en",
+        allowFrom: [],
+        accessMode: "disabled",
+      },
+      dirty: false,
+      saving: false,
+      applying: false,
+      onStateChange: () => undefined,
+      onSave: () => undefined,
+      onApply: () => undefined,
+      onReload: () => undefined,
+    },
     onSettingsChange: () => undefined,
     onPasswordChange: () => undefined,
     onSessionKeyChange: () => undefined,
@@ -409,6 +431,32 @@ describe("chat view", () => {
     );
     expect(logoImage).not.toBeNull();
     expect(logoImage?.getAttribute("src")).toBe("/maumau/favicon.svg");
+  });
+
+  it("shows the secure dashboard URL during onboarding chat", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          onboarding: true,
+          secureDashboardUrl: "https://tailnet.example/dashboard/today#token=abc123",
+          messages: [
+            {
+              role: "assistant",
+              content: "Onboarding is ready.",
+              timestamp: 1000,
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    expect(container.textContent).toContain("Open the secure dashboard on your phone here:");
+    const link = container.querySelector<HTMLAnchorElement>(
+      'a[href="https://tailnet.example/dashboard/today#token=abc123"]',
+    );
+    expect(link).not.toBeNull();
   });
 
   it("keeps grouped assistant avatar fallbacks under the mounted base path", () => {

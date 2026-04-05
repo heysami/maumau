@@ -199,20 +199,58 @@ export type OutboundConfig = z.infer<typeof OutboundConfigSchema>;
 // Streaming Configuration (OpenAI Realtime STT)
 // -----------------------------------------------------------------------------
 
+export const VoiceCallStreamingOpenAIConfigSchema = z
+  .object({
+    /** OpenAI API key for Realtime API (uses OPENAI_API_KEY env if not set) */
+    apiKey: z.string().min(1).optional(),
+    /** OpenAI transcription model (default: gpt-4o-transcribe) */
+    model: z.string().min(1).default("gpt-4o-transcribe"),
+    /** VAD silence duration in ms before considering speech ended */
+    silenceDurationMs: z.number().int().positive().default(800),
+    /** VAD threshold 0-1 (higher = less sensitive) */
+    vadThreshold: z.number().min(0).max(1).default(0.5),
+  })
+  .strict()
+  .default({
+    model: "gpt-4o-transcribe",
+    silenceDurationMs: 800,
+    vadThreshold: 0.5,
+  });
+export type VoiceCallStreamingOpenAIConfig = z.infer<typeof VoiceCallStreamingOpenAIConfigSchema>;
+
+export const VoiceCallStreamingDeepgramConfigSchema = z
+  .object({
+    /** Deepgram API key (uses DEEPGRAM_API_KEY env if not set) */
+    apiKey: z.string().min(1).optional(),
+    /** Deepgram realtime model (default: nova-3) */
+    model: z.string().min(1).default("nova-3"),
+    /** Silence pause before endpointing emits speech_final */
+    endpointingMs: z.number().int().positive().default(300),
+    /** Emit interim transcripts while speech is still ongoing */
+    interimResults: z.boolean().default(true),
+  })
+  .strict()
+  .default({
+    model: "nova-3",
+    endpointingMs: 300,
+    interimResults: true,
+  });
+export type VoiceCallStreamingDeepgramConfig = z.infer<
+  typeof VoiceCallStreamingDeepgramConfigSchema
+>;
+
 export const VoiceCallStreamingConfigSchema = z
   .object({
     /** Enable real-time audio streaming (requires WebSocket support) */
     enabled: z.boolean().default(false),
     /** STT provider for real-time transcription */
-    sttProvider: z.enum(["openai-realtime"]).default("openai-realtime"),
-    /** OpenAI API key for Realtime API (uses OPENAI_API_KEY env if not set) */
-    openaiApiKey: z.string().min(1).optional(),
-    /** OpenAI transcription model (default: gpt-4o-transcribe) */
-    sttModel: z.string().min(1).default("gpt-4o-transcribe"),
-    /** VAD silence duration in ms before considering speech ended */
-    silenceDurationMs: z.number().int().positive().default(800),
-    /** VAD threshold 0-1 (higher = less sensitive) */
-    vadThreshold: z.number().min(0).max(1).default(0.5),
+    sttProvider: z.enum(["openai-realtime", "deepgram-realtime"]).default("openai-realtime"),
+    /** Shared language hint used by the selected realtime STT provider */
+    languageCode: z.string().min(1).optional(),
+    /** OpenAI realtime-specific settings */
+    openai: VoiceCallStreamingOpenAIConfigSchema,
+    /** Deepgram realtime-specific settings */
+    deepgram: VoiceCallStreamingDeepgramConfigSchema,
     /** WebSocket path for media stream connections */
     streamPath: z.string().min(1).default("/voice/stream"),
     /**
@@ -231,9 +269,16 @@ export const VoiceCallStreamingConfigSchema = z
   .default({
     enabled: false,
     sttProvider: "openai-realtime",
-    sttModel: "gpt-4o-transcribe",
-    silenceDurationMs: 800,
-    vadThreshold: 0.5,
+    openai: {
+      model: "gpt-4o-transcribe",
+      silenceDurationMs: 800,
+      vadThreshold: 0.5,
+    },
+    deepgram: {
+      model: "nova-3",
+      endpointingMs: 300,
+      interimResults: true,
+    },
     streamPath: "/voice/stream",
     preStartTimeoutMs: 5000,
     maxPendingConnections: 32,
@@ -375,8 +420,57 @@ function normalizeVoiceCallTtsConfig(
   return TtsConfigSchema.parse(deepMergeDefined(defaults ?? {}, overrides ?? {}));
 }
 
+function normalizeStreamingConfigInput(
+  streaming: DeepPartial<VoiceCallStreamingConfig> | undefined,
+): DeepPartial<VoiceCallStreamingConfig> | undefined {
+  if (!streaming) {
+    return streaming;
+  }
+
+  const raw =
+    typeof streaming === "object" && streaming !== null
+      ? (streaming as Record<string, unknown>)
+      : {};
+  const openaiInput =
+    raw.openai && typeof raw.openai === "object" && !Array.isArray(raw.openai)
+      ? (raw.openai as Record<string, unknown>)
+      : {};
+  const deepgramInput =
+    raw.deepgram && typeof raw.deepgram === "object" && !Array.isArray(raw.deepgram)
+      ? (raw.deepgram as Record<string, unknown>)
+      : {};
+  const normalizedOpenAI: Record<string, unknown> = { ...openaiInput };
+  const normalizedDeepgram: Record<string, unknown> = { ...deepgramInput };
+
+  const legacyOpenAIApiKey = typeof raw.openaiApiKey === "string" ? raw.openaiApiKey : undefined;
+  const legacyOpenAIModel = typeof raw.sttModel === "string" ? raw.sttModel : undefined;
+  const legacySilenceDurationMs =
+    typeof raw.silenceDurationMs === "number" ? raw.silenceDurationMs : undefined;
+  const legacyVadThreshold = typeof raw.vadThreshold === "number" ? raw.vadThreshold : undefined;
+
+  if (legacyOpenAIApiKey) {
+    normalizedOpenAI.apiKey = legacyOpenAIApiKey;
+  }
+  if (legacyOpenAIModel) {
+    normalizedOpenAI.model = legacyOpenAIModel;
+  }
+  if (legacySilenceDurationMs != null) {
+    normalizedOpenAI.silenceDurationMs = legacySilenceDurationMs;
+  }
+  if (legacyVadThreshold != null) {
+    normalizedOpenAI.vadThreshold = legacyVadThreshold;
+  }
+
+  return {
+    ...streaming,
+    openai: normalizedOpenAI,
+    deepgram: normalizedDeepgram,
+  };
+}
+
 export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallConfig {
   const defaults = cloneDefaultVoiceCallConfig();
+  const normalizedStreamingInput = normalizeStreamingConfigInput(config.streaming);
   return {
     ...defaults,
     ...config,
@@ -392,7 +486,18 @@ export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCal
       trustedProxyIPs:
         config.webhookSecurity?.trustedProxyIPs ?? defaults.webhookSecurity.trustedProxyIPs,
     },
-    streaming: { ...defaults.streaming, ...config.streaming },
+    streaming: {
+      ...defaults.streaming,
+      ...normalizedStreamingInput,
+      openai: {
+        ...defaults.streaming.openai,
+        ...normalizedStreamingInput?.openai,
+      },
+      deepgram: {
+        ...defaults.streaming.deepgram,
+        ...normalizedStreamingInput?.deepgram,
+      },
+    },
     stt: { ...defaults.stt, ...config.stt },
     tts: normalizeVoiceCallTtsConfig(defaults.tts, config.tts),
   };
@@ -447,6 +552,20 @@ export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallC
   resolved.webhookSecurity.trustForwardingHeaders =
     resolved.webhookSecurity.trustForwardingHeaders ?? false;
   resolved.webhookSecurity.trustedProxyIPs = resolved.webhookSecurity.trustedProxyIPs ?? [];
+
+  resolved.streaming.openai = resolved.streaming.openai ?? {
+    model: "gpt-4o-transcribe",
+    silenceDurationMs: 800,
+    vadThreshold: 0.5,
+  };
+  resolved.streaming.openai.apiKey = resolved.streaming.openai.apiKey ?? process.env.OPENAI_API_KEY;
+  resolved.streaming.deepgram = resolved.streaming.deepgram ?? {
+    model: "nova-3",
+    endpointingMs: 300,
+    interimResults: true,
+  };
+  resolved.streaming.deepgram.apiKey =
+    resolved.streaming.deepgram.apiKey ?? process.env.DEEPGRAM_API_KEY;
 
   return normalizeVoiceCallConfig(resolved);
 }

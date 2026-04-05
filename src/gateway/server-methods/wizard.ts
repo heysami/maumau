@@ -119,6 +119,7 @@ export const wizardHandlers: GatewayRequestHandlers = {
       const opts = {
         mode: params.mode,
         flow: params.flow,
+        preset: params.preset,
         workspace: typeof params.workspace === "string" ? params.workspace : undefined,
         acceptRisk: params.acceptRisk === true,
         skipChannels: params.skipChannels === true,

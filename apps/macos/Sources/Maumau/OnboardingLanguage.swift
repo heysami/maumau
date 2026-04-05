@@ -34,6 +34,10 @@ enum OnboardingLanguage: String, CaseIterable, Codable, Sendable {
     var replyLanguageID: String {
         self.rawValue
     }
+
+    var controlUILocaleID: String {
+        self.rawValue
+    }
 }
 
 struct OnboardingStrings: Sendable {
@@ -598,6 +602,912 @@ struct OnboardingStrings: Sendable {
         }
     }
 
+    var conversationAutomationTitle: String {
+        switch self.language {
+        case .en:
+            "Voice calls"
+        case .id:
+            "Panggilan suara"
+        }
+    }
+
+    var conversationAutomationIntro: String {
+        switch self.language {
+        case .en:
+            "This optional step finishes a real phone-call setup with a supported phone provider, realtime speech recognition, spoken replies, and the callback URL Maumau needs to receive live events."
+        case .id:
+            "Langkah opsional ini menyelesaikan setup panggilan telepon sungguhan dengan provider telepon yang didukung, speech recognition realtime, balasan suara, dan URL callback yang dibutuhkan Maumau untuk menerima event panggilan langsung."
+        }
+    }
+
+    var conversationAutomationTelephonyTitle: String {
+        switch self.language {
+        case .en:
+            "Turn on phone calls"
+        case .id:
+            "Nyalakan panggilan telepon"
+        }
+    }
+
+    var conversationAutomationTelephonySubtitle: String {
+        switch self.language {
+        case .en:
+            "Maumau will only save voice-call settings when every required provider key and callback route is ready."
+        case .id:
+            "Maumau hanya akan menyimpan pengaturan voice call jika semua key provider dan rute callback yang dibutuhkan sudah siap."
+        }
+    }
+
+    var conversationAutomationChecklistTitle: String {
+        switch self.language {
+        case .en:
+            "What this step completes"
+        case .id:
+            "Yang diselesaikan langkah ini"
+        }
+    }
+
+    var conversationAutomationChecklistSubtitle: String {
+        switch self.language {
+        case .en:
+            "1. A Twilio, Telnyx, or Plivo phone number plus provider credentials. 2. A public callback URL for webhooks. 3. Deepgram or OpenAI realtime speech-to-text. 4. ElevenLabs for spoken replies."
+        case .id:
+            "1. Nomor telepon Twilio, Telnyx, atau Plivo plus kredensial providernya. 2. URL callback publik untuk webhook. 3. Deepgram atau OpenAI untuk speech-to-text realtime. 4. ElevenLabs untuk balasan suara."
+        }
+    }
+
+    var conversationAutomationPhoneProviderTitle: String {
+        switch self.language {
+        case .en:
+            "1. Phone provider"
+        case .id:
+            "1. Provider telepon"
+        }
+    }
+
+    var conversationAutomationPhoneProviderSubtitle: String {
+        switch self.language {
+        case .en:
+            "Choose the built-in phone provider Maumau should use for live calls, then add that provider's number and credentials below."
+        case .id:
+            "Pilih provider telepon bawaan yang harus dipakai Maumau untuk panggilan langsung, lalu tambahkan nomor dan kredensial provider itu di bawah."
+        }
+    }
+
+    var conversationAutomationPhoneProviderTwilioLabel: String {
+        switch self.language {
+        case .en:
+            "Twilio"
+        case .id:
+            "Twilio"
+        }
+    }
+
+    var conversationAutomationPhoneProviderTelnyxLabel: String {
+        switch self.language {
+        case .en:
+            "Telnyx"
+        case .id:
+            "Telnyx"
+        }
+    }
+
+    var conversationAutomationPhoneProviderPlivoLabel: String {
+        switch self.language {
+        case .en:
+            "Plivo"
+        case .id:
+            "Plivo"
+        }
+    }
+
+    var conversationAutomationPhoneNumberTitle: String {
+        switch self.language {
+        case .en:
+            "Phone number"
+        case .id:
+            "Nomor telepon"
+        }
+    }
+
+    var conversationAutomationPhoneNumberSubtitle: String {
+        switch self.language {
+        case .en:
+            "Paste the E.164 number Maumau should call from, like +628123456789."
+        case .id:
+            "Tempel nomor E.164 yang harus dipakai Maumau untuk menelepon, misalnya +628123456789."
+        }
+    }
+
+    var conversationAutomationPhoneNumberPlaceholder: String {
+        switch self.language {
+        case .en:
+            "+628123456789"
+        case .id:
+            "+628123456789"
+        }
+    }
+
+    var conversationAutomationTwilioSectionTitle: String {
+        switch self.language {
+        case .en:
+            "Twilio setup"
+        case .id:
+            "Setup Twilio"
+        }
+    }
+
+    var conversationAutomationTwilioSectionSubtitle: String {
+        switch self.language {
+        case .en:
+            "Use the Twilio Console to get a voice-capable number and copy the account credentials Maumau needs for calls."
+        case .id:
+            "Gunakan Twilio Console untuk mendapatkan nomor yang mendukung voice dan salin kredensial akun yang dibutuhkan Maumau untuk panggilan."
+        }
+    }
+
+    var conversationAutomationTwilioAccountSIDTitle: String {
+        switch self.language {
+        case .en:
+            "Twilio Account SID"
+        case .id:
+            "Twilio Account SID"
+        }
+    }
+
+    var conversationAutomationTwilioAccountSIDSubtitle: String {
+        switch self.language {
+        case .en:
+            "Copy the Account SID from your Twilio Console project."
+        case .id:
+            "Salin Account SID dari project Twilio Console Anda."
+        }
+    }
+
+    var conversationAutomationTwilioAccountSIDPlaceholder: String {
+        switch self.language {
+        case .en:
+            "AC..."
+        case .id:
+            "AC..."
+        }
+    }
+
+    var conversationAutomationTwilioAuthTokenTitle: String {
+        switch self.language {
+        case .en:
+            "Twilio Auth Token"
+        case .id:
+            "Twilio Auth Token"
+        }
+    }
+
+    var conversationAutomationTwilioAuthTokenSubtitle: String {
+        switch self.language {
+        case .en:
+            "Reveal or create the Auth Token in Twilio Console, then paste it here."
+        case .id:
+            "Tampilkan atau buat Auth Token di Twilio Console, lalu tempel di sini."
+        }
+    }
+
+    var conversationAutomationTwilioAuthTokenPlaceholder: String {
+        switch self.language {
+        case .en:
+            "Twilio auth token"
+        case .id:
+            "Auth token Twilio"
+        }
+    }
+
+    var conversationAutomationOpenPortalButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open portal"
+        case .id:
+            "Buka portal"
+        }
+    }
+
+    var conversationAutomationOpenGuideButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open guide"
+        case .id:
+            "Buka panduan"
+        }
+    }
+
+    var conversationAutomationOpenConsoleButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open console"
+        case .id:
+            "Buka console"
+        }
+    }
+
+    var conversationAutomationOpenAPIKeysButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open API keys"
+        case .id:
+            "Buka API keys"
+        }
+    }
+
+    var conversationAutomationOpenVoiceLibraryButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open voice library"
+        case .id:
+            "Buka voice library"
+        }
+    }
+
+    var conversationAutomationCopyURLButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Copy URL"
+        case .id:
+            "Salin URL"
+        }
+    }
+
+    var conversationAutomationGoToPrivateAccessButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Go to Private access"
+        case .id:
+            "Buka Akses privat"
+        }
+    }
+
+    var conversationAutomationOpenAdminButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open admin page"
+        case .id:
+            "Buka halaman admin"
+        }
+    }
+
+    var conversationAutomationTelnyxSectionTitle: String {
+        switch self.language {
+        case .en:
+            "Telnyx setup"
+        case .id:
+            "Setup Telnyx"
+        }
+    }
+
+    var conversationAutomationTelnyxSectionSubtitle: String {
+        switch self.language {
+        case .en:
+            "Use Telnyx Mission Control to get a voice-capable number, create an API key, and open the Call Control connection or application you want Maumau to use."
+        case .id:
+            "Gunakan Telnyx Mission Control untuk mendapatkan nomor yang mendukung voice, membuat API key, dan membuka connection atau application Call Control yang ingin dipakai Maumau."
+        }
+    }
+
+    var conversationAutomationPlivoSectionTitle: String {
+        switch self.language {
+        case .en:
+            "Plivo setup"
+        case .id:
+            "Setup Plivo"
+        }
+    }
+
+    var conversationAutomationPlivoSectionSubtitle: String {
+        switch self.language {
+        case .en:
+            "Use the Plivo Console to buy or assign a voice-capable number, then copy the auth credentials Maumau needs."
+        case .id:
+            "Gunakan Plivo Console untuk membeli atau menetapkan nomor yang mendukung voice, lalu salin kredensial auth yang dibutuhkan Maumau."
+        }
+    }
+
+    var conversationAutomationPlivoAuthIDTitle: String {
+        switch self.language {
+        case .en:
+            "Plivo Auth ID"
+        case .id:
+            "Plivo Auth ID"
+        }
+    }
+
+    var conversationAutomationPlivoAuthIDSubtitle: String {
+        switch self.language {
+        case .en:
+            "Copy the Auth ID from your Plivo Console account."
+        case .id:
+            "Salin Auth ID dari akun Plivo Console Anda."
+        }
+    }
+
+    var conversationAutomationPlivoAuthIDPlaceholder: String {
+        switch self.language {
+        case .en:
+            "MA..."
+        case .id:
+            "MA..."
+        }
+    }
+
+    var conversationAutomationPlivoAuthTokenTitle: String {
+        switch self.language {
+        case .en:
+            "Plivo Auth Token"
+        case .id:
+            "Plivo Auth Token"
+        }
+    }
+
+    var conversationAutomationPlivoAuthTokenSubtitle: String {
+        switch self.language {
+        case .en:
+            "Copy the Auth Token from your Plivo Console account."
+        case .id:
+            "Salin Auth Token dari akun Plivo Console Anda."
+        }
+    }
+
+    var conversationAutomationPlivoAuthTokenPlaceholder: String {
+        switch self.language {
+        case .en:
+            "Plivo auth token"
+        case .id:
+            "Auth token Plivo"
+        }
+    }
+
+    var conversationAutomationTelnyxAPIKeyTitle: String {
+        switch self.language {
+        case .en:
+            "Telnyx API key"
+        case .id:
+            "API key Telnyx"
+        }
+    }
+
+    var conversationAutomationTelnyxAPIKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Create a Telnyx API v2 key and paste it here."
+        case .id:
+            "Buat API key Telnyx v2 lalu tempel di sini."
+        }
+    }
+
+    var conversationAutomationTelnyxAPIKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "KEY..."
+        case .id:
+            "KEY..."
+        }
+    }
+
+    var conversationAutomationTelnyxConnectionIDTitle: String {
+        switch self.language {
+        case .en:
+            "Call Control connection ID"
+        case .id:
+            "Connection ID Call Control"
+        }
+    }
+
+    var conversationAutomationTelnyxConnectionIDSubtitle: String {
+        switch self.language {
+        case .en:
+            "Paste the connection or application ID from the Telnyx Call Control setup."
+        case .id:
+            "Tempel connection atau application ID dari setup Telnyx Call Control."
+        }
+    }
+
+    var conversationAutomationTelnyxConnectionIDPlaceholder: String {
+        switch self.language {
+        case .en:
+            "CONNxxxx"
+        case .id:
+            "CONNxxxx"
+        }
+    }
+
+    var conversationAutomationTelnyxPublicKeyTitle: String {
+        switch self.language {
+        case .en:
+            "Telnyx public key"
+        case .id:
+            "Public key Telnyx"
+        }
+    }
+
+    var conversationAutomationTelnyxPublicKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Maumau uses this to verify signed Telnyx webhooks."
+        case .id:
+            "Maumau memakai ini untuk memverifikasi webhook Telnyx yang ditandatangani."
+        }
+    }
+
+    var conversationAutomationTelnyxPublicKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "Paste the public key from Telnyx"
+        case .id:
+            "Tempel public key dari Telnyx"
+        }
+    }
+
+    var conversationAutomationWebhookTitle: String {
+        switch self.language {
+        case .en:
+            "2. Callback URL"
+        case .id:
+            "2. URL callback"
+        }
+    }
+
+    var conversationAutomationWebhookSubtitle: String {
+        switch self.language {
+        case .en:
+            "Your chosen phone provider must be able to reach Maumau over HTTPS during live calls. Pick the public route Maumau should use."
+        case .id:
+            "Provider telepon yang Anda pilih harus bisa menjangkau Maumau lewat HTTPS saat panggilan berlangsung. Pilih rute publik yang harus dipakai Maumau."
+        }
+    }
+
+    var conversationAutomationWebhookTailscaleLabel: String {
+        switch self.language {
+        case .en:
+            "Automatic with Tailscale Funnel"
+        case .id:
+            "Otomatis dengan Tailscale Funnel"
+        }
+    }
+
+    var conversationAutomationWebhookManualLabel: String {
+        switch self.language {
+        case .en:
+            "I already have a public webhook URL"
+        case .id:
+            "Saya sudah punya URL webhook publik"
+        }
+    }
+
+    func conversationAutomationWebhookTailscaleSubtitle(expectedURL: String?) -> String {
+        switch self.language {
+        case .en:
+            if let expectedURL, !expectedURL.isEmpty {
+                return "Maumau will publish \(expectedURL) and you should use that same URL in your phone provider's webhook setting."
+            }
+            return "Maumau will publish /voice/webhook over Tailscale Funnel and you should use that same URL in your phone provider's webhook setting."
+        case .id:
+            if let expectedURL, !expectedURL.isEmpty {
+                return "Maumau akan memublikasikan \(expectedURL) dan URL yang sama itu harus dipakai di pengaturan webhook provider telepon Anda."
+            }
+            return "Maumau akan memublikasikan /voice/webhook lewat Tailscale Funnel dan URL yang sama itu harus dipakai di pengaturan webhook provider telepon Anda."
+        }
+    }
+
+    var conversationAutomationWebhookPublicURLTitle: String {
+        switch self.language {
+        case .en:
+            "Public webhook URL"
+        case .id:
+            "URL webhook publik"
+        }
+    }
+
+    var conversationAutomationWebhookPublicURLSubtitle: String {
+        switch self.language {
+        case .en:
+            "Paste the exact HTTPS webhook URL that your phone provider should call, for example https://your.domain/voice/webhook."
+        case .id:
+            "Tempel URL webhook HTTPS persis yang harus dipanggil provider telepon Anda, misalnya https://your.domain/voice/webhook."
+        }
+    }
+
+    var conversationAutomationWebhookPublicURLPlaceholder: String {
+        switch self.language {
+        case .en:
+            "https://your.domain/voice/webhook"
+        case .id:
+            "https://domain-anda/voice/webhook"
+        }
+    }
+
+    var conversationAutomationWebhookPrivateAccessSubtitle: String {
+        switch self.language {
+        case .en:
+            "Tailscale is not ready on this Mac yet. Finish that setup first, then come back here."
+        case .id:
+            "Tailscale belum siap di Mac ini. Selesaikan setup itu dulu, lalu kembali ke sini."
+        }
+    }
+
+    var conversationAutomationWebhookAdminSubtitle: String {
+        switch self.language {
+        case .en:
+            "Your tailnet still has Funnel disabled. Open the admin page to enable it, or switch to a manual public webhook URL instead."
+        case .id:
+            "Tailnet Anda masih menonaktifkan Funnel. Buka halaman admin untuk mengaktifkannya, atau ganti ke URL webhook publik manual."
+        }
+    }
+
+    var conversationAutomationSttTitle: String {
+        switch self.language {
+        case .en:
+            "3. Realtime speech-to-text"
+        case .id:
+            "3. Speech-to-text realtime"
+        }
+    }
+
+    var conversationAutomationSttSubtitle: String {
+        switch self.language {
+        case .en:
+            "Choose the engine Maumau should use while a phone call is live. Both options need their own API key."
+        case .id:
+            "Pilih engine yang harus dipakai Maumau saat panggilan telepon sedang berlangsung. Keduanya butuh API key masing-masing."
+        }
+    }
+
+    var conversationAutomationSttDeepgramLabel: String {
+        switch self.language {
+        case .en:
+            "Deepgram Nova-3"
+        case .id:
+            "Deepgram Nova-3"
+        }
+    }
+
+    var conversationAutomationSttOpenAILabel: String {
+        switch self.language {
+        case .en:
+            "OpenAI Realtime"
+        case .id:
+            "OpenAI Realtime"
+        }
+    }
+
+    var conversationAutomationDeepgramAPIKeyTitle: String {
+        switch self.language {
+        case .en:
+            "Deepgram API key"
+        case .id:
+            "API key Deepgram"
+        }
+    }
+
+    var conversationAutomationDeepgramAPIKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Open the Deepgram console, create or copy a project API key, then paste it here."
+        case .id:
+            "Buka console Deepgram, buat atau salin project API key, lalu tempel di sini."
+        }
+    }
+
+    var conversationAutomationDeepgramAPIKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "dg..."
+        case .id:
+            "dg..."
+        }
+    }
+
+    var conversationAutomationOpenAIAPIKeyTitle: String {
+        switch self.language {
+        case .en:
+            "OpenAI API key"
+        case .id:
+            "API key OpenAI"
+        }
+    }
+
+    var conversationAutomationOpenAIAPIKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Open the OpenAI API keys page, create a key for the Realtime API, then paste it here."
+        case .id:
+            "Buka halaman API keys OpenAI, buat key untuk Realtime API, lalu tempel di sini."
+        }
+    }
+
+    var conversationAutomationOpenAIAPIKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "sk-..."
+        case .id:
+            "sk-..."
+        }
+    }
+
+    var conversationAutomationTtsTitle: String {
+        switch self.language {
+        case .en:
+            "4. Spoken replies"
+        case .id:
+            "4. Balasan suara"
+        }
+    }
+
+    var conversationAutomationTtsSubtitle: String {
+        switch self.language {
+        case .en:
+            "Maumau uses ElevenLabs with eleven_multilingual_v2 for call replies. Add the API key here, and optionally override the default voice."
+        case .id:
+            "Maumau memakai ElevenLabs dengan eleven_multilingual_v2 untuk balasan panggilan. Tambahkan API key di sini, dan opsional ganti voice default-nya."
+        }
+    }
+
+    var conversationAutomationElevenLabsAPIKeyTitle: String {
+        switch self.language {
+        case .en:
+            "ElevenLabs API key"
+        case .id:
+            "API key ElevenLabs"
+        }
+    }
+
+    var conversationAutomationElevenLabsAPIKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Open ElevenLabs API authentication docs or your workspace settings, then paste the key here."
+        case .id:
+            "Buka dokumentasi autentikasi API ElevenLabs atau pengaturan workspace Anda, lalu tempel key-nya di sini."
+        }
+    }
+
+    var conversationAutomationElevenLabsAPIKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "xi-..."
+        case .id:
+            "xi-..."
+        }
+    }
+
+    var conversationAutomationElevenLabsVoiceIDTitle: String {
+        switch self.language {
+        case .en:
+            "Optional ElevenLabs voice ID"
+        case .id:
+            "Voice ID ElevenLabs opsional"
+        }
+    }
+
+    var conversationAutomationElevenLabsVoiceIDSubtitle: String {
+        switch self.language {
+        case .en:
+            "Leave this blank to use Maumau’s multilingual default voice, or paste a voice ID from the ElevenLabs voice library."
+        case .id:
+            "Biarkan kosong untuk memakai voice multilingual default Maumau, atau tempel voice ID dari ElevenLabs voice library."
+        }
+    }
+
+    var conversationAutomationElevenLabsVoiceIDPlaceholder: String {
+        switch self.language {
+        case .en:
+            "Optional voice ID"
+        case .id:
+            "Voice ID opsional"
+        }
+    }
+
+    var conversationAutomationReadyTitle: String {
+        switch self.language {
+        case .en:
+            "Ready to finish"
+        case .id:
+            "Siap diselesaikan"
+        }
+    }
+
+    var conversationAutomationReadySubtitle: String {
+        switch self.language {
+        case .en:
+            "This voice-call setup now has the required phone provider, speech, voice, and callback URL configuration."
+        case .id:
+            "Setup voice call ini sekarang sudah memiliki konfigurasi provider telepon, speech, voice, dan URL callback yang dibutuhkan."
+        }
+    }
+
+    var conversationAutomationBeforeFinishTitle: String {
+        switch self.language {
+        case .en:
+            "Finish is blocked until these are added"
+        case .id:
+            "Finish akan diblokir sampai ini ditambahkan"
+        }
+    }
+
+    var conversationAutomationValidationFromNumberMissing: String {
+        switch self.language {
+        case .en:
+            "Add the phone number Maumau should call from."
+        case .id:
+            "Tambahkan nomor telepon yang harus dipakai Maumau untuk menelepon."
+        }
+    }
+
+    var conversationAutomationValidationFromNumberInvalid: String {
+        switch self.language {
+        case .en:
+            "Use E.164 format for the phone number, for example +628123456789."
+        case .id:
+            "Gunakan format E.164 untuk nomor telepon, misalnya +628123456789."
+        }
+    }
+
+    var conversationAutomationValidationTwilioAccountSIDMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Twilio Account SID."
+        case .id:
+            "Tambahkan Twilio Account SID."
+        }
+    }
+
+    var conversationAutomationValidationTwilioAuthTokenMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Twilio Auth Token."
+        case .id:
+            "Tambahkan Twilio Auth Token."
+        }
+    }
+
+    var conversationAutomationValidationTelnyxAPIKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Telnyx API key."
+        case .id:
+            "Tambahkan API key Telnyx."
+        }
+    }
+
+    var conversationAutomationValidationTelnyxConnectionIDMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Telnyx Call Control connection or application ID."
+        case .id:
+            "Tambahkan connection atau application ID Telnyx Call Control."
+        }
+    }
+
+    var conversationAutomationValidationTelnyxPublicKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Telnyx public key for webhook verification."
+        case .id:
+            "Tambahkan public key Telnyx untuk verifikasi webhook."
+        }
+    }
+
+    var conversationAutomationValidationPlivoAuthIDMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Plivo Auth ID."
+        case .id:
+            "Tambahkan Plivo Auth ID."
+        }
+    }
+
+    var conversationAutomationValidationPlivoAuthTokenMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Plivo Auth Token."
+        case .id:
+            "Tambahkan Plivo Auth Token."
+        }
+    }
+
+    var conversationAutomationValidationTailscaleInstallMissing: String {
+        switch self.language {
+        case .en:
+            "Install Tailscale on this Mac or switch to a manual public webhook URL."
+        case .id:
+            "Pasang Tailscale di Mac ini atau ganti ke URL webhook publik manual."
+        }
+    }
+
+    var conversationAutomationValidationTailscaleRunningMissing: String {
+        switch self.language {
+        case .en:
+            "Sign in to Tailscale on this Mac or switch to a manual public webhook URL."
+        case .id:
+            "Masuk ke Tailscale di Mac ini atau ganti ke URL webhook publik manual."
+        }
+    }
+
+    var conversationAutomationValidationTailscaleFunnelMissing: String {
+        switch self.language {
+        case .en:
+            "Enable Tailscale Funnel for this tailnet or switch to a manual public webhook URL."
+        case .id:
+            "Aktifkan Tailscale Funnel untuk tailnet ini atau ganti ke URL webhook publik manual."
+        }
+    }
+
+    var conversationAutomationValidationPublicWebhookMissing: String {
+        switch self.language {
+        case .en:
+            "Add the public HTTPS webhook URL that your phone provider should call."
+        case .id:
+            "Tambahkan URL webhook HTTPS publik yang harus dipanggil provider telepon Anda."
+        }
+    }
+
+    var conversationAutomationValidationPublicWebhookInvalid: String {
+        switch self.language {
+        case .en:
+            "Use a valid HTTPS webhook URL, for example https://your.domain/voice/webhook."
+        case .id:
+            "Gunakan URL webhook HTTPS yang valid, misalnya https://your.domain/voice/webhook."
+        }
+    }
+
+    var conversationAutomationValidationDeepgramAPIKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Deepgram API key or switch the speech engine to OpenAI Realtime."
+        case .id:
+            "Tambahkan API key Deepgram atau ganti engine speech ke OpenAI Realtime."
+        }
+    }
+
+    var conversationAutomationValidationOpenAIAPIKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the OpenAI API key or switch the speech engine to Deepgram Nova-3."
+        case .id:
+            "Tambahkan API key OpenAI atau ganti engine speech ke Deepgram Nova-3."
+        }
+    }
+
+    var conversationAutomationValidationElevenLabsAPIKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the ElevenLabs API key for spoken replies."
+        case .id:
+            "Tambahkan API key ElevenLabs untuk balasan suara."
+        }
+    }
+
+    var conversationAutomationValidationListHeader: String {
+        switch self.language {
+        case .en:
+            "Add the missing items below, then Finish will save a working voice-call config."
+        case .id:
+            "Tambahkan item yang masih kurang di bawah ini, lalu Finish akan menyimpan konfigurasi voice call yang bisa dipakai."
+        }
+    }
+
+    var conversationAutomationTailscaleUnavailableTitle: String {
+        switch self.language {
+        case .en:
+            "Tailscale Funnel is not ready yet"
+        case .id:
+            "Tailscale Funnel belum siap"
+        }
+    }
+
+    var conversationAutomationTailscaleReadyTitle: String {
+        switch self.language {
+        case .en:
+            "Use this callback URL in your phone provider"
+        case .id:
+            "Pakai URL callback ini di provider telepon Anda"
+        }
+    }
+
     var skillsTitle: String {
         switch self.language {
         case .en:
@@ -883,6 +1793,8 @@ struct OnboardingStrings: Sendable {
             "Private access"
         case (.en, .permissions):
             "Permissions"
+        case (.en, .automation):
+            "Voice"
         case (.en, .tools):
             "Tools"
         case (.id, .home):
@@ -895,6 +1807,8 @@ struct OnboardingStrings: Sendable {
             "Akses privat"
         case (.id, .permissions):
             "Izin"
+        case (.id, .automation):
+            "Suara"
         case (.id, .tools):
             "Tool"
         }
@@ -912,6 +1826,8 @@ struct OnboardingStrings: Sendable {
             "Private driveway"
         case (.en, .permissions):
             "What Maumau can do on this Mac"
+        case (.en, .automation):
+            "Live phone setup"
         case (.en, .tools):
             "Included tools"
         case (.id, .home):
@@ -924,6 +1840,8 @@ struct OnboardingStrings: Sendable {
             "Jalur privat"
         case (.id, .permissions):
             "Yang bisa dilakukan Maumau di Mac ini"
+        case (.id, .automation):
+            "Setup telepon langsung"
         case (.id, .tools):
             "Tool bawaan"
         }
@@ -952,6 +1870,8 @@ struct OnboardingStrings: Sendable {
             "This gives Maumau's home a private driveway. It lets your phone, laptop, or browser reach Maumau privately without putting it on the public internet."
         case (.en, .permissions):
             "This is where you decide what Maumau can do on this Mac, like work with apps or see the screen."
+        case (.en, .automation):
+            "This optional step finishes the provider keys and public callback route that the built-in voice-call plugin needs before real phone calls can work."
         case (.en, .tools):
             "This is a quick look at the main tools Maumau already has, so you know what comes with it."
         case (.id, .home):
@@ -964,6 +1884,8 @@ struct OnboardingStrings: Sendable {
             "Ini memberi rumah Maumau jalur privat. Dengan ini ponsel, laptop, atau browser Anda bisa menjangkau Maumau secara privat tanpa menaruhnya di internet publik."
         case (.id, .permissions):
             "Di sinilah Anda memutuskan apa yang boleh dilakukan Maumau di Mac ini, seperti bekerja dengan aplikasi atau melihat layar."
+        case (.id, .automation):
+            "Langkah opsional ini menyelesaikan key provider dan rute callback publik yang dibutuhkan plugin voice-call bawaan sebelum panggilan telepon sungguhan bisa bekerja."
         case (.id, .tools):
             "Ini adalah ringkasan cepat tentang tool utama yang sudah dimiliki Maumau, supaya Anda tahu apa saja yang sudah tersedia."
         }

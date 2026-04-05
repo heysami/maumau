@@ -405,7 +405,7 @@ struct GatewayEndpointStoreTests {
             for: config,
             mode: .local,
             localBasePath: " control ")
-        #expect(url.absoluteString == "http://127.0.0.1:18789/control/")
+        #expect(url.absoluteString == "http://127.0.0.1:18789/control/dashboard/today")
     }
 
     @Test func `dashboard URL skips local base path in remote mode`() throws {
@@ -418,7 +418,7 @@ struct GatewayEndpointStoreTests {
             for: config,
             mode: .remote,
             localBasePath: "/local-ui")
-        #expect(url.absoluteString == "http://gateway.example:18789/")
+        #expect(url.absoluteString == "http://gateway.example:18789/dashboard/today")
     }
 
     @Test func `dashboard URL prefers path from config URL`() throws {
@@ -431,7 +431,7 @@ struct GatewayEndpointStoreTests {
             for: config,
             mode: .remote,
             localBasePath: "/local-ui")
-        #expect(url.absoluteString == "https://gateway.example:443/remote-ui/")
+        #expect(url.absoluteString == "https://gateway.example:443/remote-ui/dashboard/today")
     }
 
     @Test func `dashboard URL uses fragment token and omits password`() throws {
@@ -444,8 +444,137 @@ struct GatewayEndpointStoreTests {
             for: config,
             mode: .local,
             localBasePath: "/control")
-        #expect(url.absoluteString == "http://127.0.0.1:18789/control/#token=abc123")
+        #expect(url.absoluteString == "http://127.0.0.1:18789/control/dashboard/today#token=abc123")
         #expect(url.query == nil)
+    }
+
+    @Test func `dashboard URL carries locale query before token fragment`() throws {
+        let config: GatewayConnection.Config = try (
+            url: #require(URL(string: "ws://127.0.0.1:18789")),
+            token: "abc123",
+            password: nil)
+
+        let url = try GatewayEndpointStore.dashboardURL(
+            for: config,
+            mode: .local,
+            localBasePath: "/control",
+            locale: "id")
+        #expect(url.absoluteString == "http://127.0.0.1:18789/control/dashboard/today?locale=id#token=abc123")
+    }
+
+    @Test func `secure dashboard URL appends the current gateway token when available`() throws {
+        let root: [String: Any] = [
+            "gateway": [
+                "auth": [
+                    "mode": "token",
+                    "token": "local-token",
+                    "allowTailscale": true,
+                ],
+                "controlUi": [
+                    "basePath": "/control",
+                ],
+                "tailscale": [
+                    "mode": "serve",
+                ],
+            ],
+        ]
+
+        let url = GatewayEndpointStore.secureDashboardURL(
+            root: root,
+            tailscaleHostname: "maumau.tailnet.ts.net",
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(url?.absoluteString == "https://maumau.tailnet.ts.net/control/dashboard/today#token=local-token")
+    }
+
+    @Test func `secure dashboard URL stays nil when tailscale mode is off`() {
+        let root: [String: Any] = [
+            "gateway": [
+                "tailscale": [
+                    "mode": "off",
+                ],
+            ],
+        ]
+
+        let url = GatewayEndpointStore.secureDashboardURL(
+            root: root,
+            tailscaleHostname: "maumau.tailnet.ts.net",
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(url == nil)
+    }
+
+    @Test func `secure dashboard URL still returns a password-auth link for serve`() {
+        let root: [String: Any] = [
+            "gateway": [
+                "auth": [
+                    "mode": "password",
+                    "password": "secret",
+                    "allowTailscale": false,
+                ],
+                "tailscale": [
+                    "mode": "serve",
+                ],
+            ],
+        ]
+
+        let url = GatewayEndpointStore.secureDashboardURL(
+            root: root,
+            tailscaleHostname: "maumau.tailnet.ts.net",
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(url?.absoluteString == "https://maumau.tailnet.ts.net/dashboard/today")
+    }
+
+    @Test func `secure dashboard URL supports funnel links too`() {
+        let root: [String: Any] = [
+            "gateway": [
+                "auth": [
+                    "mode": "password",
+                    "password": "secret",
+                    "allowTailscale": false,
+                ],
+                "controlUi": [
+                    "basePath": "/control",
+                ],
+                "tailscale": [
+                    "mode": "funnel",
+                ],
+            ],
+        ]
+
+        let url = GatewayEndpointStore.secureDashboardURL(
+            root: root,
+            tailscaleHostname: "maumau.tailnet.ts.net",
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(url?.absoluteString == "https://maumau.tailnet.ts.net/control/dashboard/today")
+    }
+
+    @Test func `secure dashboard URL carries locale query when requested`() {
+        let root: [String: Any] = [
+            "gateway": [
+                "auth": [
+                    "mode": "token",
+                    "token": "local-token",
+                    "allowTailscale": true,
+                ],
+                "controlUi": [
+                    "basePath": "/control",
+                ],
+                "tailscale": [
+                    "mode": "serve",
+                ],
+            ],
+        ]
+
+        let url = GatewayEndpointStore.secureDashboardURL(
+            root: root,
+            tailscaleHostname: "maumau.tailnet.ts.net",
+            locale: "id",
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(url?.absoluteString == "https://maumau.tailnet.ts.net/control/dashboard/today?locale=id#token=local-token")
     }
 
     @Test func `normalize gateway url adds default port for loopback ws`() {

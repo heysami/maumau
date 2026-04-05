@@ -267,6 +267,19 @@ struct OnboardingWizardStepViewTests {
         #expect(GatewayAuthFailureClassifier.isAuthFailure(mismatch))
     }
 
+    @Test func `local wizard auth rejection can continue after managed recovery starts`() async {
+        let mismatch = NSError(
+            domain: "Gateway",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "unauthorized: gateway token mismatch"])
+
+        let readiness = await OnboardingWizardModel.classifyLocalGatewayAuthProbeReadiness(
+            error: mismatch,
+            attemptManagedAuthRecovery: { _ in true })
+
+        #expect(readiness == .ready)
+    }
+
     @Test func `persisted local onboard metadata counts as completed setup`() {
         #expect(
             OnboardingWizardModel.shouldTreatPersistedSetupAsComplete([

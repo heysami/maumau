@@ -93,6 +93,7 @@ export type GatewayBind = "loopback" | "lan" | "auto" | "custom" | "tailnet";
 export type TailscaleMode = "off" | "serve" | "funnel";
 export type NodeManagerChoice = "npm" | "pnpm" | "bun";
 export type ChannelChoice = ChannelId;
+export type OnboardPreset = "conversation-automation";
 // Legacy alias (pre-rename).
 export type ProviderChoice = ChannelChoice;
 export type { SecretInputMode } from "../plugins/provider-auth-types.js";
@@ -101,6 +102,7 @@ export type OnboardOptions = {
   mode?: OnboardMode;
   /** "manual" is an alias for "advanced". */
   flow?: "quickstart" | "advanced" | "manual";
+  preset?: OnboardPreset;
   workspace?: string;
   nonInteractive?: boolean;
   /** Required for non-interactive setup; skips the interactive risk prompt when true. */

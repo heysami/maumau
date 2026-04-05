@@ -7,4 +7,5 @@ export type ControlUiBootstrapConfig = {
   assistantAgentId: string;
   serverVersion?: string;
   loopbackGatewayToken?: string;
+  secureDashboardUrl?: string;
 };

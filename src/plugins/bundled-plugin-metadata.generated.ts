@@ -200,6 +200,59 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
     },
   },
   {
+    dirName: "automation-runner",
+    idHint: "automation-runner",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/automation-runner",
+    packageVersion: "2026.3.22",
+    packageDescription: "Maumau bounded browser-first automation plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "automation-runner",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          enabled: {
+            type: "boolean",
+            default: false,
+          },
+          accessPolicy: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              mode: {
+                type: "string",
+                enum: ["disabled", "owner", "allowlist"],
+                default: "owner",
+              },
+              allowFrom: {
+                type: "array",
+                items: {
+                  type: "string",
+                },
+              },
+            },
+          },
+          requireApproval: {
+            type: "boolean",
+            default: true,
+          },
+        },
+      },
+      enabledByDefault: true,
+      skills: ["./skills"],
+      name: "Automation Runner",
+      description:
+        "Bounded browser-first automation with sender allowlists and approval-gated side effects.",
+    },
+  },
+  {
     dirName: "bluebubbles",
     idHint: "bluebubbles",
     source: {
@@ -3780,7 +3833,10 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
               },
               sttProvider: {
                 type: "string",
-                enum: ["openai-realtime"],
+                enum: ["openai-realtime", "deepgram-realtime"],
+              },
+              languageCode: {
+                type: "string",
               },
               openaiApiKey: {
                 type: "string",
@@ -3796,6 +3852,46 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
                 type: "number",
                 minimum: 0,
                 maximum: 1,
+              },
+              openai: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  apiKey: {
+                    type: "string",
+                  },
+                  model: {
+                    type: "string",
+                  },
+                  silenceDurationMs: {
+                    type: "integer",
+                    minimum: 1,
+                  },
+                  vadThreshold: {
+                    type: "number",
+                    minimum: 0,
+                    maximum: 1,
+                  },
+                },
+              },
+              deepgram: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  apiKey: {
+                    type: "string",
+                  },
+                  model: {
+                    type: "string",
+                  },
+                  endpointingMs: {
+                    type: "integer",
+                    minimum: 1,
+                  },
+                  interimResults: {
+                    type: "boolean",
+                  },
+                },
               },
               streamPath: {
                 type: "string",
@@ -4126,13 +4222,30 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
           label: "Enable Streaming",
           advanced: true,
         },
-        "streaming.openaiApiKey": {
+        "streaming.sttProvider": {
+          label: "Realtime STT Provider",
+          advanced: true,
+        },
+        "streaming.languageCode": {
+          label: "Realtime Language Code",
+          advanced: true,
+        },
+        "streaming.openai.apiKey": {
           label: "OpenAI Realtime API Key",
           sensitive: true,
           advanced: true,
         },
-        "streaming.sttModel": {
-          label: "Realtime STT Model",
+        "streaming.openai.model": {
+          label: "OpenAI Realtime Model",
+          advanced: true,
+        },
+        "streaming.deepgram.apiKey": {
+          label: "Deepgram Realtime API Key",
+          sensitive: true,
+          advanced: true,
+        },
+        "streaming.deepgram.model": {
+          label: "Deepgram Realtime Model",
           advanced: true,
         },
         "streaming.streamPath": {

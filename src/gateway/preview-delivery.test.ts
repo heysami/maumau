@@ -81,4 +81,49 @@ describe("maybeBuildPreviewReceiptPayloads", () => {
     expect(mocks.publishPreviewArtifact).not.toHaveBeenCalled();
     expect(payloads).toEqual([]);
   });
+
+  it("skips the preview receipt when the final payload already contains the published URL", async () => {
+    workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-preview-delivery-"));
+    await fs.writeFile(path.join(workspaceDir, "index.html"), "<html>preview</html>", "utf8");
+    mocks.publishPreviewArtifact.mockResolvedValue({
+      status: "published",
+      url: "https://preview.example/lease",
+      recipientHint: "owner",
+    });
+
+    const payloads = await maybeBuildPreviewReceiptPayloads({
+      cfg: {} as MaumauConfig,
+      payloads: [{ text: "Preview is ready: https://preview.example/lease\nFILE:index.html" }],
+      workspaceDir,
+      messageChannel: "telegram",
+      senderIsOwner: true,
+    });
+
+    expect(mocks.publishPreviewArtifact).toHaveBeenCalledTimes(1);
+    expect(payloads).toEqual([]);
+  });
+
+  it("skips auto-publish when the final payload already contains a managed preview URL", async () => {
+    workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-preview-delivery-"));
+    await fs.writeFile(path.join(workspaceDir, "index.html"), "<html>preview</html>", "utf8");
+
+    const payloads = await maybeBuildPreviewReceiptPayloads({
+      cfg: {} as MaumauConfig,
+      payloads: [
+        {
+          text: [
+            "Preview is ready:",
+            "https://maumau.tailnet.ts.net/preview/for-req-er/149cf12730dd4c2b8ad81bb77b52be18/",
+            "FILE:index.html",
+          ].join("\n"),
+        },
+      ],
+      workspaceDir,
+      messageChannel: "telegram",
+      senderIsOwner: true,
+    });
+
+    expect(mocks.publishPreviewArtifact).not.toHaveBeenCalled();
+    expect(payloads).toEqual([]);
+  });
 });

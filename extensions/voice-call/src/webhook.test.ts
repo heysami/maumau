@@ -617,7 +617,10 @@ describe("VoiceCallWebhookServer stream disconnect grace", () => {
       streaming: {
         ...createConfig().streaming,
         enabled: true,
-        openaiApiKey: "test-key",
+        openai: {
+          ...createConfig().streaming.openai,
+          apiKey: "test-key",
+        },
       },
     });
     const server = new VoiceCallWebhookServer(
@@ -709,7 +712,10 @@ describe("VoiceCallWebhookServer barge-in suppression during initial message", (
       streaming: {
         ...createConfig().streaming,
         enabled: true,
-        openaiApiKey: "test-key",
+        openai: {
+          ...createConfig().streaming.openai,
+          apiKey: "test-key",
+        },
       },
     });
     const server = new VoiceCallWebhookServer(
@@ -782,7 +788,10 @@ describe("VoiceCallWebhookServer barge-in suppression during initial message", (
       streaming: {
         ...createConfig().streaming,
         enabled: true,
-        openaiApiKey: "test-key",
+        openai: {
+          ...createConfig().streaming.openai,
+          apiKey: "test-key",
+        },
       },
     });
     const server = new VoiceCallWebhookServer(
