@@ -1,11 +1,11 @@
 import { createHmac, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { resolveGatewayPort, resolveStateDir } from "../config/paths.js";
+import path from "node:path";
 import type { MaumauConfig } from "../config/config.js";
-import { getTailnetHostname, probeTailscaleExposure } from "../infra/tailscale.js";
+import { resolveGatewayPort, resolveStateDir } from "../config/paths.js";
 import { isWithinDir } from "../infra/path-safety.js";
+import { getTailnetHostname, probeTailscaleExposure } from "../infra/tailscale.js";
 import { isRequesterTrustedForPrivatePreview } from "../utils/private-preview-route.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import { authorizeWsControlUiGatewayConnect, type ResolvedGatewayAuth } from "./auth.js";
@@ -285,7 +285,8 @@ export async function resolvePrivatePreviewAccess(params: {
     return {
       ready: false,
       blockedReason: "not_configured",
-      suggestedFix: "Enable gateway.tailscale.mode=serve so private preview links have private ingress.",
+      suggestedFix:
+        "Enable gateway.tailscale.mode=serve so private preview links have private ingress.",
     };
   }
   const ingress = await probeTailscaleExposure("serve");
@@ -350,10 +351,16 @@ async function ensureDir(dirPath: string): Promise<void> {
 async function writeLease(lease: PreviewLeaseRecord, stateDir = resolveStateDir()): Promise<void> {
   const leaseDir = getPreviewLeaseDir(lease.id, stateDir);
   await ensureDir(leaseDir);
-  await fs.writeFile(getPreviewLeaseFile(lease.id, stateDir), `${JSON.stringify(lease, null, 2)}\n`);
+  await fs.writeFile(
+    getPreviewLeaseFile(lease.id, stateDir),
+    `${JSON.stringify(lease, null, 2)}\n`,
+  );
 }
 
-async function readLease(id: string, stateDir = resolveStateDir()): Promise<PreviewLeaseRecord | null> {
+async function readLease(
+  id: string,
+  stateDir = resolveStateDir(),
+): Promise<PreviewLeaseRecord | null> {
   try {
     const raw = await fs.readFile(getPreviewLeaseFile(id, stateDir), "utf8");
     return JSON.parse(raw) as PreviewLeaseRecord;
@@ -388,10 +395,7 @@ async function pruneExpiredLeases(stateDir = resolveStateDir()): Promise<void> {
   );
 }
 
-function resolveSourcePath(params: {
-  sourcePath: string;
-  workspaceDir?: string;
-}): string | null {
+function resolveSourcePath(params: { sourcePath: string; workspaceDir?: string }): string | null {
   const raw = params.sourcePath.trim();
   if (!raw) {
     return null;
@@ -576,7 +580,9 @@ export async function publishPreviewArtifact(params: {
   }
 
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + normalizeTtlMs({ visibility, ttlSeconds: params.ttlSeconds }));
+  const expiresAt = new Date(
+    now.getTime() + normalizeTtlMs({ visibility, ttlSeconds: params.ttlSeconds }),
+  );
   const lease: PreviewLeaseRecord = {
     id: leaseId,
     visibility,
@@ -642,8 +648,8 @@ function buildGenericInvalidPage(): string {
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8"><title>Preview unavailable</title></head>',
     '<body style="font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:32px;color:#111827;background:#f9fafb">',
-    "<h1 style=\"margin:0 0 12px\">Preview unavailable</h1>",
-    "<p style=\"margin:0\">This link is invalid or expired.</p>",
+    '<h1 style="margin:0 0 12px">Preview unavailable</h1>',
+    '<p style="margin:0">This link is invalid or expired.</p>',
     "</body></html>",
   ].join("");
 }
@@ -738,7 +744,9 @@ function normalizePreviewDocumentLabel(value: string | undefined): string | unde
   if (normalized.length < 2 || !/[a-z0-9]/i.test(normalized)) {
     return undefined;
   }
-  if (/^(?:preview|preview ready|index|share|home|requester|created for requester)$/i.test(normalized)) {
+  if (
+    /^(?:preview|preview ready|index|share|home|requester|created for requester)$/i.test(normalized)
+  ) {
     return undefined;
   }
   return normalized;
@@ -765,7 +773,11 @@ async function resolvePreviewArtifactFileFromLease(params: {
     targetPath = path.join(targetPath, "index.html");
     stat = await fs.stat(targetPath).catch(() => null);
   }
-  if (!stat && params.lease.isDirectory && !STATIC_ASSET_EXTENSIONS.has(path.extname(resolvedRelative))) {
+  if (
+    !stat &&
+    params.lease.isDirectory &&
+    !STATIC_ASSET_EXTENSIONS.has(path.extname(resolvedRelative))
+  ) {
     targetPath = path.join(root, "index.html");
     stat = await fs.stat(targetPath).catch(() => null);
   }
@@ -796,7 +808,16 @@ export async function resolvePreviewArtifactLabelFromPreviewUrl(params: {
 export async function resolvePreviewArtifactInfoFromPreviewUrl(params: {
   previewUrl?: string;
   stateDir?: string;
-}): Promise<{ documentLabel?: string; sourcePath?: string } | undefined> {
+}): Promise<
+  | {
+      documentLabel?: string;
+      sourcePath?: string;
+      storedPath?: string;
+      isDirectory?: boolean;
+      rootFileName?: string;
+    }
+  | undefined
+> {
   const normalized = params.previewUrl?.trim();
   if (!normalized) {
     return undefined;
@@ -822,6 +843,9 @@ export async function resolvePreviewArtifactInfoFromPreviewUrl(params: {
   if (!targetPath) {
     return {
       sourcePath: lease.sourcePath,
+      storedPath: lease.storedPath,
+      isDirectory: lease.isDirectory,
+      rootFileName: lease.rootFileName,
     };
   }
   if (path.extname(targetPath).toLowerCase() !== ".html") {
@@ -830,17 +854,26 @@ export async function resolvePreviewArtifactInfoFromPreviewUrl(params: {
         path.basename(targetPath, path.extname(targetPath)),
       ),
       sourcePath: lease.sourcePath,
+      storedPath: lease.storedPath,
+      isDirectory: lease.isDirectory,
+      rootFileName: lease.rootFileName,
     };
   }
   const html = await fs.readFile(targetPath, "utf8").catch(() => "");
   if (!html) {
     return {
       sourcePath: lease.sourcePath,
+      storedPath: lease.storedPath,
+      isDirectory: lease.isDirectory,
+      rootFileName: lease.rootFileName,
     };
   }
   return {
     documentLabel: extractPreviewDocumentLabel(html),
     sourcePath: lease.sourcePath,
+    storedPath: lease.storedPath,
+    isDirectory: lease.isDirectory,
+    rootFileName: lease.rootFileName,
   };
 }
 
@@ -1001,7 +1034,11 @@ async function serveLeaseContent(params: {
     targetPath = path.join(targetPath, "index.html");
     stat = await fs.stat(targetPath).catch(() => null);
   }
-  if (!stat && params.lease.isDirectory && !STATIC_ASSET_EXTENSIONS.has(path.extname(resolvedRelative))) {
+  if (
+    !stat &&
+    params.lease.isDirectory &&
+    !STATIC_ASSET_EXTENSIONS.has(path.extname(resolvedRelative))
+  ) {
     targetPath = path.join(root, "index.html");
     stat = await fs.stat(targetPath).catch(() => null);
   }

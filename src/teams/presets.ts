@@ -1,21 +1,36 @@
 import type { AgentConfig } from "../config/types.agents.js";
 import type { MaumauConfig } from "../config/types.maumau.js";
-import type { TeamConfig, TeamWorkflowConfig } from "../config/types.teams.js";
+import type {
+  TeamConfig,
+  TeamCrossTeamLinkConfig,
+  TeamWorkflowConfig,
+} from "../config/types.teams.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
 import { DEFAULT_TEAM_WORKFLOW_ID, listTeamWorkflows } from "./model.js";
 
 export const STARTER_TEAM_ID = "vibe-coder";
+export const DESIGN_STUDIO_TEAM_ID = "design-studio";
 export const MAIN_ORCHESTRATION_TEAM_ID = DEFAULT_AGENT_ID;
 export const MAIN_WORKER_AGENT_ID = "main-worker";
 export const STARTER_TEAM_MANAGER_AGENT_ID = "vibe-coder-manager";
 export const STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID = "vibe-coder-system-architect";
 export const STARTER_TEAM_DEVELOPER_AGENT_ID = "vibe-coder-developer";
 export const STARTER_TEAM_UI_UX_DESIGNER_AGENT_ID = "vibe-coder-ui-ux-designer";
-export const STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID = "vibe-coder-content-visual-designer";
+export const STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID =
+  "vibe-coder-content-visual-designer";
 export const STARTER_TEAM_TECHNICAL_QA_AGENT_ID = "vibe-coder-technical-qa";
 export const STARTER_TEAM_VISUAL_UX_QA_AGENT_ID = "vibe-coder-visual-ux-qa";
-export const STARTER_TEAM_PRESET_VERSION = 4;
-export const MAIN_ORCHESTRATION_TEAM_PRESET_VERSION = 1;
+export const DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID = "design-studio-manager";
+export const DESIGN_STUDIO_TEAM_VECTOR_VISUAL_DESIGNER_AGENT_ID =
+  "design-studio-vector-visual-designer";
+export const DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID =
+  "design-studio-image-visual-designer";
+export const DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID = "design-studio-requirements-qa";
+export const DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID = "design-studio-consistency-qa";
+export const STARTER_TEAM_PRESET_VERSION = 5;
+export const DESIGN_STUDIO_TEAM_PRESET_VERSION = 1;
+export const MAIN_ORCHESTRATION_TEAM_PRESET_VERSION = 2;
+
 const STARTER_MAIN_AGENT_ALSO_ALLOW = [
   "agents_list",
   "capabilities_list",
@@ -29,6 +44,47 @@ const STARTER_MAIN_AGENT_ALSO_ALLOW = [
   "web_fetch",
   "web_search",
 ] as const;
+
+const DESIGN_STUDIO_MANAGER_TOOL_ALLOW = [
+  "capabilities_list",
+  "image",
+  "read",
+  "sessions_spawn",
+  "sessions_yield",
+] as const;
+
+const DESIGN_STUDIO_VECTOR_TOOL_ALLOW = [
+  "image",
+  "read",
+  "sessions_spawn",
+  "sessions_yield",
+] as const;
+
+const DESIGN_STUDIO_IMAGE_TOOL_ALLOW = [
+  "capabilities_list",
+  "image",
+  "image_generate",
+  "read",
+  "sessions_spawn",
+  "sessions_yield",
+] as const;
+
+const DESIGN_STUDIO_QA_TOOL_ALLOW = ["image", "read"] as const;
+
+const ROOT_LINKED_TEAM_IDS = [STARTER_TEAM_ID, DESIGN_STUDIO_TEAM_ID] as const;
+type BundledSpecialistTeamId = (typeof ROOT_LINKED_TEAM_IDS)[number];
+
+const ROOT_LINK_DESCRIPTIONS: Record<BundledSpecialistTeamId, string> = {
+  [STARTER_TEAM_ID]:
+    "Use for staged UI/product implementation, architecture, development, and ship-readiness QA.",
+  [DESIGN_STUDIO_TEAM_ID]:
+    "Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.",
+};
+
+const STARTER_LINK_DESCRIPTIONS: Record<typeof DESIGN_STUDIO_TEAM_ID, string> = {
+  [DESIGN_STUDIO_TEAM_ID]:
+    "Use for asset-only design exploration, required image manifests, vector/raster asset generation, and consistency-focused QA.",
+};
 
 function normalizeOptionalText(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -48,6 +104,92 @@ function hasTeam(config: MaumauConfig, teamId: string): boolean {
     Array.isArray(config.teams?.list) &&
     config.teams.list.some((entry) => entry && entry.id.trim().toLowerCase() === teamId)
   );
+}
+
+function createMainWorkerAgent(): AgentConfig {
+  return {
+    id: MAIN_WORKER_AGENT_ID,
+    name: "Main Worker",
+    tools: {
+      profile: "coding",
+      alsoAllow: ["browser", "gateway", "nodes"],
+    },
+  };
+}
+
+function buildMainCrossTeamLinks(
+  teamIds: readonly BundledSpecialistTeamId[] = ROOT_LINKED_TEAM_IDS,
+): TeamCrossTeamLinkConfig[] {
+  return teamIds.map((teamId) => ({
+    type: "team",
+    targetId: teamId,
+    description: ROOT_LINK_DESCRIPTIONS[teamId],
+  }));
+}
+
+function buildStarterCrossTeamLinks(
+  teamIds: readonly BundledSpecialistTeamId[] = ROOT_LINKED_TEAM_IDS,
+): TeamCrossTeamLinkConfig[] {
+  return teamIds.includes(DESIGN_STUDIO_TEAM_ID)
+    ? [
+        {
+          type: "team",
+          targetId: DESIGN_STUDIO_TEAM_ID,
+          description: STARTER_LINK_DESCRIPTIONS[DESIGN_STUDIO_TEAM_ID],
+        },
+      ]
+    : [];
+}
+
+function mergeRequiredCrossTeamLinks(
+  existing: TeamCrossTeamLinkConfig[] | undefined,
+  required: TeamCrossTeamLinkConfig[],
+): TeamCrossTeamLinkConfig[] {
+  const merged = Array.isArray(existing) ? [...existing] : [];
+  for (const link of required) {
+    const targetId = link.targetId.trim().toLowerCase();
+    const hasMatch = merged.some(
+      (entry) =>
+        entry.type === link.type && entry.targetId.trim().toLowerCase() === targetId,
+    );
+    if (!hasMatch) {
+      merged.push(link);
+    }
+  }
+  return merged;
+}
+
+function syncBundledCrossTeamLinks(teams: TeamConfig[]): TeamConfig[] {
+  const availableTeamIds: BundledSpecialistTeamId[] = [];
+  if (teams.some((team) => team.id.trim().toLowerCase() === STARTER_TEAM_ID)) {
+    availableTeamIds.push(STARTER_TEAM_ID);
+  }
+  if (teams.some((team) => team.id.trim().toLowerCase() === DESIGN_STUDIO_TEAM_ID)) {
+    availableTeamIds.push(DESIGN_STUDIO_TEAM_ID);
+  }
+
+  return teams.map((team) => {
+    const normalizedId = team.id.trim().toLowerCase();
+    if (normalizedId === MAIN_ORCHESTRATION_TEAM_ID) {
+      return {
+        ...team,
+        crossTeamLinks: mergeRequiredCrossTeamLinks(
+          team.crossTeamLinks,
+          buildMainCrossTeamLinks(availableTeamIds),
+        ),
+      };
+    }
+    if (normalizedId === STARTER_TEAM_ID) {
+      return {
+        ...team,
+        crossTeamLinks: mergeRequiredCrossTeamLinks(
+          team.crossTeamLinks,
+          buildStarterCrossTeamLinks(availableTeamIds),
+        ),
+      };
+    }
+    return team;
+  });
 }
 
 function createStarterMainAgent(params?: { hasExplicitDefault?: boolean }): AgentConfig {
@@ -75,12 +217,7 @@ function mergeStarterMainAgent(
   const hasExplicitAllow = Array.isArray(existingTools?.allow) && existingTools.allow.length > 0;
   const mergedAlsoAllow = hasExplicitAllow
     ? existingTools?.alsoAllow
-    : Array.from(
-        new Set([
-          ...(existingTools?.alsoAllow ?? []),
-          ...starter.tools!.alsoAllow!,
-        ]),
-      );
+    : Array.from(new Set([...(existingTools?.alsoAllow ?? []), ...starter.tools!.alsoAllow!]));
 
   return {
     ...starter,
@@ -111,14 +248,7 @@ function mergeStarterMainAgent(
 
 export function createStarterTeamAgents(): AgentConfig[] {
   return [
-    {
-      id: MAIN_WORKER_AGENT_ID,
-      name: "Main Worker",
-      tools: {
-        profile: "coding",
-        alsoAllow: ["browser", "gateway", "nodes"],
-      },
-    },
+    createMainWorkerAgent(),
     {
       id: STARTER_TEAM_MANAGER_AGENT_ID,
       name: "Vibe Coder Manager",
@@ -171,7 +301,53 @@ export function createStarterTeamAgents(): AgentConfig[] {
   ];
 }
 
-export function createStarterTeamConfig(): TeamConfig {
+export function createDesignStudioTeamAgents(): AgentConfig[] {
+  return [
+    {
+      id: DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID,
+      name: "Design Studio Manager",
+      tools: {
+        allow: [...DESIGN_STUDIO_MANAGER_TOOL_ALLOW],
+      },
+    },
+    {
+      id: DESIGN_STUDIO_TEAM_VECTOR_VISUAL_DESIGNER_AGENT_ID,
+      name: "Vector Visual Designer",
+      tools: {
+        allow: [...DESIGN_STUDIO_VECTOR_TOOL_ALLOW],
+      },
+    },
+    {
+      id: DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
+      name: "Image Visual Designer",
+      tools: {
+        allow: [...DESIGN_STUDIO_IMAGE_TOOL_ALLOW],
+      },
+    },
+    {
+      id: DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID,
+      name: "Requirements QA",
+      tools: {
+        allow: [...DESIGN_STUDIO_QA_TOOL_ALLOW],
+      },
+    },
+    {
+      id: DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID,
+      name: "Consistency QA",
+      tools: {
+        allow: [...DESIGN_STUDIO_QA_TOOL_ALLOW],
+      },
+    },
+  ];
+}
+
+export function createBundledTeamAgents(): AgentConfig[] {
+  return [...createStarterTeamAgents(), ...createDesignStudioTeamAgents()];
+}
+
+export function createStarterTeamConfig(params?: {
+  linkedTeamIds?: readonly BundledSpecialistTeamId[];
+}): TeamConfig {
   return {
     id: STARTER_TEAM_ID,
     name: "Vibe Coder",
@@ -199,7 +375,7 @@ export function createStarterTeamConfig(): TeamConfig {
         agentId: STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID,
         role: "content/visual designer",
         description:
-          "Owns product copy, visual direction, layout polish, illustration, and presentation quality.",
+          "Owns product copy, visual direction, layout polish, illustration planning, and presentation quality. If illustration is needed, brief it as image-lane work rather than vector work, and never rely on emoji as icon replacements.",
       },
       {
         agentId: STARTER_TEAM_TECHNICAL_QA_AGENT_ID,
@@ -211,10 +387,10 @@ export function createStarterTeamConfig(): TeamConfig {
         agentId: STARTER_TEAM_VISUAL_UX_QA_AGENT_ID,
         role: "visual/ux qa",
         description:
-          "Owns visual consistency, UX polish, accessibility checks, and final experience review.",
+          "Owns visual consistency, UX polish, accessibility checks, and final experience review, including rejecting vector stand-ins for illustration work and emoji stand-ins for icons.",
       },
     ],
-    crossTeamLinks: [],
+    crossTeamLinks: buildStarterCrossTeamLinks(params?.linkedTeamIds),
     workflows: [
       {
         id: DEFAULT_TEAM_WORKFLOW_ID,
@@ -257,7 +433,7 @@ export function createStarterTeamConfig(): TeamConfig {
           ],
         },
         managerPrompt:
-          "Run the default lifecycle with explicit stage statuses: architecture first, then execution, then QA verification, then done. The system architect goes first. Developer, UI/UX designer, and content/visual designer work only after architecture approval. Technical QA and visual/UX QA only verify completed work. If QA blocks, send the task back to rework before another QA pass.",
+          "Run the default lifecycle with explicit stage statuses: architecture first, then execution, then QA verification, then done. The system architect goes first. Developer, UI/UX designer, and content/visual designer work only after architecture approval. Vibe-coder is the implementation owner for any final deliverable that is a built webpage, app, screen, or other implemented UI/product artifact. That stays true even if the request also mentions images, illustrations, moodboards, placeholder assets, SVG/CSS motifs, art direction, or design-studio by name. For those user-facing UI deliverables, the visual plan must include at least one prominent illustration, image, or hero visual, or a clearly intentional icon system used in key places. The content/visual designer should capture any asset or visual-system requirements and, when generated or externally produced visuals are needed, prepare a placeholder asset register that says where each asset will appear, what it should depict or communicate, and any known slot constraints. If a placeholder asset is an illustration, hero visual, character art, scene art, or other prominent decorative image, it must be treated as image-lane work rather than vector work. Do not satisfy those illustration requirements with vector art, SVG illustration, CSS-only composition, code-native decorative graphics, emoji, Unicode symbols, or typography tricks. Vector is reserved for actual icons or simple code-native graphics rendered or animated in code. If the UI uses icons, they must be actual icon assets or code-native icon components rather than emoji, Unicode symbols, letters, punctuation, or decorative glyphs. Hand only those asset subsets to the linked design team before QA or during QA rework. The linked design team returns approved assets and guidance mapped back to those placeholders; it does not take ownership of the whole page/app implementation. Visual/UX QA should block built webpages/apps/screens that lack both a prominent visual anchor and meaningful icon use in key places, and should also block vector stand-ins for illustration work or emoji stand-ins for icons. Technical QA and visual/UX QA only verify completed work. If QA blocks, send the task back to rework before another QA pass.",
         synthesisPrompt:
           "Synthesize the specialist outputs into one practical answer, highlight tradeoffs and quality risks, and call out anything that still needs a human decision.",
         contract: {
@@ -282,7 +458,103 @@ export function createStarterTeamConfig(): TeamConfig {
   };
 }
 
-export function createMainOrchestrationTeamConfig(): TeamConfig {
+export function createDesignStudioTeamConfig(): TeamConfig {
+  return {
+    id: DESIGN_STUDIO_TEAM_ID,
+    name: "Design Studio",
+    description:
+      "A bundled asset-design team for design exploration, asset manifests, vector/raster visual generation, and consistency-focused QA. It does not implement webpages, apps, or product code.",
+    managerAgentId: DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID,
+    members: [
+      {
+        agentId: DESIGN_STUDIO_TEAM_VECTOR_VISUAL_DESIGNER_AGENT_ID,
+        role: "vector visual designer",
+        description:
+          "Owns actual icons and simple code-native graphic elements that will be rendered or animated directly in HTML/CSS/SVG/canvas. Not for human characters, portraits, creatures, scenes, hero art, or any other illustration work, and never for emoji-as-icon substitutions.",
+      },
+      {
+        agentId: DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
+        role: "image visual designer",
+        description:
+          "Owns raster image exploration and image generation/editing work, especially for characters, portraits, creatures, scenes, figurative illustration, and other rendered imagery. Use image_generate for actual image outputs instead of treating the chat model as the drawing model.",
+      },
+      {
+        agentId: DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID,
+        role: "requirements qa",
+        description:
+          "Verifies each generated asset matches the manifest, stated requirements, and visual acceptance criteria.",
+      },
+      {
+        agentId: DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID,
+        role: "consistency qa",
+        description:
+          "Verifies each generated asset stays consistent with the shared visual system and previously approved assets.",
+      },
+    ],
+    crossTeamLinks: [],
+    workflows: [
+      {
+        id: DEFAULT_TEAM_WORKFLOW_ID,
+        name: "Default Workflow",
+        description:
+          "Manager-led design exploration for visual asset requirements, option generation, and consistency-focused QA.",
+        default: true,
+        lifecycle: {
+          stages: [
+            {
+              id: "planning",
+              name: "Planning",
+              status: "in_progress",
+              roles: [],
+            },
+            {
+              id: "asset_manifest",
+              name: "Asset Manifest",
+              status: "in_progress",
+              roles: [],
+            },
+            {
+              id: "production",
+              name: "Production",
+              status: "in_progress",
+              roles: ["vector visual designer", "image visual designer"],
+            },
+            {
+              id: "qa",
+              name: "QA",
+              status: "in_progress",
+              roles: ["requirements qa", "consistency qa"],
+            },
+            {
+              id: "manager_confirmation",
+              name: "Manager Confirmation",
+              status: "review",
+              roles: [],
+            },
+          ],
+        },
+        managerPrompt:
+          "This team is asset-only: do not implement webpages, apps, screens, or product code. Start by creating an asset manifest and a shared consistency guide. If an upstream team gives you a placeholder asset register, treat it as the source of truth for what assets exist, where they belong, what they should depict or communicate, and any known slot constraints; preserve those placeholders when building the manifest unless you explicitly explain a change. Every manifest item must be an asset deliverable, not an implementation task. Use only the production lane each asset actually needs; do not force both lanes onto every asset. Human characters, portraits, creatures, scenes, figurative illustration, painterly work, photorealistic work, anything explicitly requested as an illustration, and any asset acting as a hero image or prominent decorative visual must go to the image lane and require actual raster output through image_generate. The vector lane is only for actual icons and simple code-native graphic elements that will be rendered or animated directly in HTML/CSS/SVG/canvas. Emoji, Unicode symbols, letters, punctuation, and decorative glyphs are never acceptable substitutes for icons or illustration deliverables. If the request is really a page/app implementation, block clearly and route it back to vibe-coder. Requirements QA verifies the asset against the brief, and Consistency QA verifies it against the shared guide plus already-approved assets.",
+        synthesisPrompt:
+          "Synthesize the approved asset list, selected options, remaining blockers or follow-ups, and any hard blockers such as missing image-generation support. Do not present page/app implementation as if this team completed it.",
+        contract: {
+          requiredRoles: [],
+          requiredQaRoles: ["requirements qa", "consistency qa"],
+          requireDelegation: true,
+        },
+      },
+    ],
+    preset: {
+      id: DESIGN_STUDIO_TEAM_ID,
+      source: "bundled",
+      version: DESIGN_STUDIO_TEAM_PRESET_VERSION,
+    },
+  };
+}
+
+export function createMainOrchestrationTeamConfig(params?: {
+  linkedTeamIds?: readonly BundledSpecialistTeamId[];
+}): TeamConfig {
   return {
     id: MAIN_ORCHESTRATION_TEAM_ID,
     name: "Main Orchestration",
@@ -298,7 +570,7 @@ export function createMainOrchestrationTeamConfig(): TeamConfig {
           "Owns bounded execution, implementation, research, browser work, and direct task completion when a full specialist team is not required.",
       },
     ],
-    crossTeamLinks: [{ type: "team", targetId: STARTER_TEAM_ID }],
+    crossTeamLinks: buildMainCrossTeamLinks(params?.linkedTeamIds),
     workflows: [
       {
         id: DEFAULT_TEAM_WORKFLOW_ID,
@@ -317,7 +589,7 @@ export function createMainOrchestrationTeamConfig(): TeamConfig {
           ],
         },
         managerPrompt:
-          "Treat this team as the root orchestrator for the default chat agent. Keep direct replies to casual or lightweight read-only requests. Delegate bounded execution to the execution worker. Route UI, human-facing, or staged product work to the linked specialist teams configured on this root team. Always report which execution path was used.",
+          "Treat this team as the root orchestrator for the default chat agent. Keep direct replies to casual or lightweight read-only requests. Delegate bounded execution to the execution worker. If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose vibe-coder first as the implementation owner. That stays true even if the task also asks for visual design, images, illustrations, placeholder assets, SVG/CSS motifs, art direction, moodboards, or design-studio collaboration. Choose design-studio first only when the requested deliverable is asset-only: for example icons, logos, illustrations, image sets, moodboards, style guides, vector/raster option exploration, or consistency review without page/app implementation. When a built page/app also needs asset work, start with vibe-coder and let that manager call design-studio for only the asset subsets it does not own. Do not use design-studio as the implementation team for webpages, apps, or screens. Always report which execution path was used.",
         synthesisPrompt:
           "Summarize the delegated outcome, name the worker or linked team used, and include a concise execution receipt with QA and preview/share state when relevant.",
       },
@@ -334,14 +606,16 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
   const currentAgents = Array.isArray(baseConfig.agents?.list) ? [...baseConfig.agents.list] : [];
   const hasExplicitDefault = currentAgents.some((entry) => entry?.default);
   const nextAgents = [...currentAgents];
-  const mainIndex = nextAgents.findIndex((entry) => normalizeAgentId(entry.id) === DEFAULT_AGENT_ID);
+  const mainIndex = nextAgents.findIndex(
+    (entry) => normalizeAgentId(entry.id) === DEFAULT_AGENT_ID,
+  );
   if (mainIndex >= 0) {
     nextAgents[mainIndex] = mergeStarterMainAgent(nextAgents[mainIndex], { hasExplicitDefault });
   } else {
     nextAgents.unshift(createStarterMainAgent({ hasExplicitDefault }));
   }
 
-  for (const agent of createStarterTeamAgents()) {
+  for (const agent of createBundledTeamAgents()) {
     if (!hasAgent(nextAgents, agent.id)) {
       nextAgents.push(agent);
     }
@@ -353,6 +627,9 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
   }
   if (!hasTeam(baseConfig, STARTER_TEAM_ID)) {
     nextTeams.push(createStarterTeamConfig());
+  }
+  if (!hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)) {
+    nextTeams.push(createDesignStudioTeamConfig());
   }
 
   return {
@@ -370,7 +647,73 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
     },
     teams: {
       ...baseConfig.teams,
-      list: nextTeams,
+      list: syncBundledCrossTeamLinks(nextTeams),
+    },
+  };
+}
+
+export function ensureBundledTeamPresetConfig(
+  baseConfig: MaumauConfig,
+  presetId: typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID,
+): MaumauConfig {
+  const currentAgents = Array.isArray(baseConfig.agents?.list) ? [...baseConfig.agents.list] : [];
+  const hasExplicitDefault = currentAgents.some((entry) => entry?.default);
+  const nextAgents = [...currentAgents];
+  const mainIndex = nextAgents.findIndex(
+    (entry) => normalizeAgentId(entry.id) === DEFAULT_AGENT_ID,
+  );
+  if (mainIndex >= 0) {
+    nextAgents[mainIndex] = mergeStarterMainAgent(nextAgents[mainIndex], { hasExplicitDefault });
+  } else {
+    nextAgents.unshift(createStarterMainAgent({ hasExplicitDefault }));
+  }
+
+  if (!hasAgent(nextAgents, MAIN_WORKER_AGENT_ID)) {
+    nextAgents.push(createMainWorkerAgent());
+  }
+
+  const presetAgents =
+    presetId === STARTER_TEAM_ID ? createStarterTeamAgents() : createDesignStudioTeamAgents();
+  for (const agent of presetAgents) {
+    if (!hasAgent(nextAgents, agent.id)) {
+      nextAgents.push(agent);
+    }
+  }
+
+  const nextTeams = Array.isArray(baseConfig.teams?.list) ? [...baseConfig.teams.list] : [];
+  if (!hasTeam(baseConfig, MAIN_ORCHESTRATION_TEAM_ID)) {
+    const linkedTeamIds =
+      presetId === STARTER_TEAM_ID
+        ? ([STARTER_TEAM_ID] as const)
+        : ([DESIGN_STUDIO_TEAM_ID] as const);
+    nextTeams.unshift(createMainOrchestrationTeamConfig({ linkedTeamIds }));
+  }
+  if (presetId === STARTER_TEAM_ID && !hasTeam(baseConfig, STARTER_TEAM_ID)) {
+    const linkedTeamIds = hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)
+      ? ROOT_LINKED_TEAM_IDS
+      : ([STARTER_TEAM_ID] as const);
+    nextTeams.push(createStarterTeamConfig({ linkedTeamIds }));
+  }
+  if (presetId === DESIGN_STUDIO_TEAM_ID && !hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)) {
+    nextTeams.push(createDesignStudioTeamConfig());
+  }
+
+  return {
+    ...baseConfig,
+    agents: {
+      ...baseConfig.agents,
+      defaults: {
+        ...baseConfig.agents?.defaults,
+        executionStyle: baseConfig.agents?.defaults?.executionStyle ?? "orchestrator",
+        executionWorkerAgentId:
+          normalizeOptionalText(baseConfig.agents?.defaults?.executionWorkerAgentId) ??
+          MAIN_WORKER_AGENT_ID,
+      },
+      list: nextAgents,
+    },
+    teams: {
+      ...baseConfig.teams,
+      list: syncBundledCrossTeamLinks(nextTeams),
     },
   };
 }

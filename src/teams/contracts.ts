@@ -127,14 +127,6 @@ export function evaluateTeamWorkflowContractReadiness(params: {
     }
   }
 
-  for (const role of contract.requiredQaRoles) {
-    if (!contract.requiredRoles.includes(role)) {
-      blockingReasons.push(
-        `Required QA role "${role}" must also be listed in contract.requiredRoles.`,
-      );
-    }
-  }
-
   return {
     ...contract,
     contractReady: blockingReasons.length === 0,

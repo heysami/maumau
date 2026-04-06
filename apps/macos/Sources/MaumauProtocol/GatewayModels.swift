@@ -1460,7 +1460,12 @@ public struct SessionsPatchParams: Codable, Sendable {
     public let model: AnyCodable?
     public let spawnedby: AnyCodable?
     public let spawnedworkspacedir: AnyCodable?
+    public let requestersenderisowner: AnyCodable?
+    public let requestertailscalelogin: AnyCodable?
+    public let teamid: AnyCodable?
+    public let teamrole: AnyCodable?
     public let spawndepth: AnyCodable?
+    public let subagentmaxspawndepth: AnyCodable?
     public let subagentrole: AnyCodable?
     public let subagentcontrolscope: AnyCodable?
     public let sendpolicy: AnyCodable?
@@ -1482,7 +1487,12 @@ public struct SessionsPatchParams: Codable, Sendable {
         model: AnyCodable?,
         spawnedby: AnyCodable?,
         spawnedworkspacedir: AnyCodable?,
+        requestersenderisowner: AnyCodable?,
+        requestertailscalelogin: AnyCodable?,
+        teamid: AnyCodable?,
+        teamrole: AnyCodable?,
         spawndepth: AnyCodable?,
+        subagentmaxspawndepth: AnyCodable?,
         subagentrole: AnyCodable?,
         subagentcontrolscope: AnyCodable?,
         sendpolicy: AnyCodable?,
@@ -1503,7 +1513,12 @@ public struct SessionsPatchParams: Codable, Sendable {
         self.model = model
         self.spawnedby = spawnedby
         self.spawnedworkspacedir = spawnedworkspacedir
+        self.requestersenderisowner = requestersenderisowner
+        self.requestertailscalelogin = requestertailscalelogin
+        self.teamid = teamid
+        self.teamrole = teamrole
         self.spawndepth = spawndepth
+        self.subagentmaxspawndepth = subagentmaxspawndepth
         self.subagentrole = subagentrole
         self.subagentcontrolscope = subagentcontrolscope
         self.sendpolicy = sendpolicy
@@ -1526,7 +1541,12 @@ public struct SessionsPatchParams: Codable, Sendable {
         case model
         case spawnedby = "spawnedBy"
         case spawnedworkspacedir = "spawnedWorkspaceDir"
+        case requestersenderisowner = "requesterSenderIsOwner"
+        case requestertailscalelogin = "requesterTailscaleLogin"
+        case teamid = "teamId"
+        case teamrole = "teamRole"
         case spawndepth = "spawnDepth"
+        case subagentmaxspawndepth = "subagentMaxSpawnDepth"
         case subagentrole = "subagentRole"
         case subagentcontrolscope = "subagentControlScope"
         case sendpolicy = "sendPolicy"
@@ -1631,6 +1651,38 @@ public struct SessionsUsageParams: Codable, Sendable {
 }
 
 public struct ConfigGetParams: Codable, Sendable {}
+
+public struct DashboardTeamsSnapshotParams: Codable, Sendable {
+    public let rawconfig: String?
+
+    public init(
+        rawconfig: String?)
+    {
+        self.rawconfig = rawconfig
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case rawconfig = "rawConfig"
+    }
+}
+
+public struct DashboardWorkshopSaveParams: Codable, Sendable {
+    public let itemids: [String]
+    public let projectname: String
+
+    public init(
+        itemids: [String],
+        projectname: String)
+    {
+        self.itemids = itemids
+        self.projectname = projectname
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case itemids = "itemIds"
+        case projectname = "projectName"
+    }
+}
 
 public struct ConfigSetParams: Codable, Sendable {
     public let raw: String
@@ -1783,8 +1835,11 @@ public struct ConfigSchemaLookupResult: Codable, Sendable {
 }
 
 public struct WizardStartParams: Codable, Sendable {
+    public let entrypoint: AnyCodable?
     public let mode: AnyCodable?
     public let flow: AnyCodable?
+    public let preset: String?
+    public let authchoice: String?
     public let workspace: String?
     public let acceptrisk: Bool?
     public let skipchannels: Bool?
@@ -1795,8 +1850,11 @@ public struct WizardStartParams: Codable, Sendable {
     public let fresh: Bool?
 
     public init(
+        entrypoint: AnyCodable?,
         mode: AnyCodable?,
         flow: AnyCodable?,
+        preset: String?,
+        authchoice: String?,
         workspace: String?,
         acceptrisk: Bool?,
         skipchannels: Bool?,
@@ -1806,8 +1864,11 @@ public struct WizardStartParams: Codable, Sendable {
         embedded: Bool?,
         fresh: Bool?)
     {
+        self.entrypoint = entrypoint
         self.mode = mode
         self.flow = flow
+        self.preset = preset
+        self.authchoice = authchoice
         self.workspace = workspace
         self.acceptrisk = acceptrisk
         self.skipchannels = skipchannels
@@ -1819,8 +1880,11 @@ public struct WizardStartParams: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case entrypoint
         case mode
         case flow
+        case preset
+        case authchoice = "authChoice"
         case workspace
         case acceptrisk = "acceptRisk"
         case skipchannels = "skipChannels"
@@ -1995,6 +2059,282 @@ public struct WizardStatusResult: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case status
         case error
+    }
+}
+
+public struct TeamPromptEditParams: Codable, Sendable {
+    public let rawconfig: String
+    public let teamid: String
+    public let workflowid: String?
+    public let prompt: String
+
+    public init(
+        rawconfig: String,
+        teamid: String,
+        workflowid: String?,
+        prompt: String)
+    {
+        self.rawconfig = rawconfig
+        self.teamid = teamid
+        self.workflowid = workflowid
+        self.prompt = prompt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case rawconfig = "rawConfig"
+        case teamid = "teamId"
+        case workflowid = "workflowId"
+        case prompt
+    }
+}
+
+public struct TeamPromptEditResult: Codable, Sendable {
+    public let ok: Bool
+    public let noop: Bool
+    public let summary: String?
+    public let warnings: [String]
+    public let teampatch: [String: AnyCodable]?
+    public let workflowpatch: [String: AnyCodable]?
+    public let agentpatches: [TeamPromptEditAgentPatch]
+
+    public init(
+        ok: Bool,
+        noop: Bool,
+        summary: String?,
+        warnings: [String],
+        teampatch: [String: AnyCodable]?,
+        workflowpatch: [String: AnyCodable]?,
+        agentpatches: [TeamPromptEditAgentPatch])
+    {
+        self.ok = ok
+        self.noop = noop
+        self.summary = summary
+        self.warnings = warnings
+        self.teampatch = teampatch
+        self.workflowpatch = workflowpatch
+        self.agentpatches = agentpatches
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+        case noop
+        case summary
+        case warnings
+        case teampatch = "teamPatch"
+        case workflowpatch = "workflowPatch"
+        case agentpatches = "agentPatches"
+    }
+}
+
+public struct TeamPromptEditTeamPatch: Codable, Sendable {
+    public let name: AnyCodable?
+    public let description: AnyCodable?
+    public let manageragentid: AnyCodable?
+    public let implicitformanagersessions: Bool?
+    public let members: [TeamPromptEditMember]?
+    public let crossteamlinks: [TeamPromptEditCrossTeamLink]?
+
+    public init(
+        name: AnyCodable?,
+        description: AnyCodable?,
+        manageragentid: AnyCodable?,
+        implicitformanagersessions: Bool?,
+        members: [TeamPromptEditMember]?,
+        crossteamlinks: [TeamPromptEditCrossTeamLink]?)
+    {
+        self.name = name
+        self.description = description
+        self.manageragentid = manageragentid
+        self.implicitformanagersessions = implicitformanagersessions
+        self.members = members
+        self.crossteamlinks = crossteamlinks
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case manageragentid = "managerAgentId"
+        case implicitformanagersessions = "implicitForManagerSessions"
+        case members
+        case crossteamlinks = "crossTeamLinks"
+    }
+}
+
+public struct TeamPromptEditMember: Codable, Sendable {
+    public let agentid: String
+    public let role: String
+    public let description: AnyCodable?
+
+    public init(
+        agentid: String,
+        role: String,
+        description: AnyCodable?)
+    {
+        self.agentid = agentid
+        self.role = role
+        self.description = description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case role
+        case description
+    }
+}
+
+public struct TeamPromptEditCrossTeamLink: Codable, Sendable {
+    public let type: AnyCodable
+    public let targetid: String
+    public let description: AnyCodable?
+
+    public init(
+        type: AnyCodable,
+        targetid: String,
+        description: AnyCodable?)
+    {
+        self.type = type
+        self.targetid = targetid
+        self.description = description
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case targetid = "targetId"
+        case description
+    }
+}
+
+public struct TeamPromptEditWorkflowPatch: Codable, Sendable {
+    public let name: AnyCodable?
+    public let description: AnyCodable?
+    public let managerprompt: AnyCodable?
+    public let synthesisprompt: AnyCodable?
+    public let lifecycle: AnyCodable?
+    public let contract: AnyCodable?
+
+    public init(
+        name: AnyCodable?,
+        description: AnyCodable?,
+        managerprompt: AnyCodable?,
+        synthesisprompt: AnyCodable?,
+        lifecycle: AnyCodable?,
+        contract: AnyCodable?)
+    {
+        self.name = name
+        self.description = description
+        self.managerprompt = managerprompt
+        self.synthesisprompt = synthesisprompt
+        self.lifecycle = lifecycle
+        self.contract = contract
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case managerprompt = "managerPrompt"
+        case synthesisprompt = "synthesisPrompt"
+        case lifecycle
+        case contract
+    }
+}
+
+public struct TeamPromptEditWorkflowContract: Codable, Sendable {
+    public let requiredroles: [String]?
+    public let requiredqaroles: [String]?
+    public let requiredelegation: Bool?
+
+    public init(
+        requiredroles: [String]?,
+        requiredqaroles: [String]?,
+        requiredelegation: Bool?)
+    {
+        self.requiredroles = requiredroles
+        self.requiredqaroles = requiredqaroles
+        self.requiredelegation = requiredelegation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case requiredroles = "requiredRoles"
+        case requiredqaroles = "requiredQaRoles"
+        case requiredelegation = "requireDelegation"
+    }
+}
+
+public struct TeamPromptEditLifecycleStage: Codable, Sendable {
+    public let id: String
+    public let name: AnyCodable?
+    public let status: AnyCodable?
+    public let roles: [String]?
+
+    public init(
+        id: String,
+        name: AnyCodable?,
+        status: AnyCodable?,
+        roles: [String]?)
+    {
+        self.id = id
+        self.name = name
+        self.status = status
+        self.roles = roles
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case status
+        case roles
+    }
+}
+
+public struct TeamPromptEditAgentPatch: Codable, Sendable {
+    public let agentid: String
+    public let name: AnyCodable?
+    public let identity: AnyCodable?
+
+    public init(
+        agentid: String,
+        name: AnyCodable?,
+        identity: AnyCodable?)
+    {
+        self.agentid = agentid
+        self.name = name
+        self.identity = identity
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case name
+        case identity
+    }
+}
+
+public struct TeamPromptEditAgentIdentityPatch: Codable, Sendable {
+    public let name: AnyCodable?
+    public let theme: AnyCodable?
+    public let emoji: AnyCodable?
+    public let avatar: AnyCodable?
+    public let avatarurl: AnyCodable?
+
+    public init(
+        name: AnyCodable?,
+        theme: AnyCodable?,
+        emoji: AnyCodable?,
+        avatar: AnyCodable?,
+        avatarurl: AnyCodable?)
+    {
+        self.name = name
+        self.theme = theme
+        self.emoji = emoji
+        self.avatar = avatar
+        self.avatarurl = avatarurl
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case theme
+        case emoji
+        case avatar
+        case avatarurl = "avatarUrl"
     }
 }
 
@@ -2640,6 +2980,36 @@ public struct ModelChoice: Codable, Sendable {
     }
 }
 
+public struct ImageGenerationProviderCatalogEntry: Codable, Sendable {
+    public let id: String
+    public let label: String?
+    public let defaultmodel: String?
+    public let models: [String]
+    public let configured: Bool
+
+    public init(
+        id: String,
+        label: String?,
+        defaultmodel: String?,
+        models: [String],
+        configured: Bool)
+    {
+        self.id = id
+        self.label = label
+        self.defaultmodel = defaultmodel
+        self.models = models
+        self.configured = configured
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case label
+        case defaultmodel = "defaultModel"
+        case models
+        case configured
+    }
+}
+
 public struct ModelsListParams: Codable, Sendable {}
 
 public struct ModelsListResult: Codable, Sendable {
@@ -2655,6 +3025,24 @@ public struct ModelsListResult: Codable, Sendable {
         case models
     }
 }
+
+public struct ModelsImageGenerationProvidersParams: Codable, Sendable {}
+
+public struct ModelsImageGenerationProvidersResult: Codable, Sendable {
+    public let providers: [ImageGenerationProviderCatalogEntry]
+
+    public init(
+        providers: [ImageGenerationProviderCatalogEntry])
+    {
+        self.providers = providers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case providers
+    }
+}
+
+public struct PluginsStatusParams: Codable, Sendable {}
 
 public struct SkillsStatusParams: Codable, Sendable {
     public let agentid: String?

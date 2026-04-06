@@ -11,6 +11,7 @@ export type AgentFilesState = {
   connected: boolean;
   agentFilesLoading: boolean;
   agentFilesError: string | null;
+  agentFilesTargetId?: string | null;
   agentFilesList: AgentsFilesListResult | null;
   agentFileContents: Record<string, string>;
   agentFileDrafts: Record<string, string>;
@@ -33,15 +34,23 @@ function mergeFileEntry(
 }
 
 export async function loadAgentFiles(state: AgentFilesState, agentId: string) {
-  if (!state.client || !state.connected || state.agentFilesLoading) {
+  const resolvedAgentId = agentId.trim();
+  if (!state.client || !state.connected || !resolvedAgentId) {
     return;
   }
+  if (state.agentFilesLoading && state.agentFilesTargetId === resolvedAgentId) {
+    return;
+  }
+  state.agentFilesTargetId = resolvedAgentId;
   state.agentFilesLoading = true;
   state.agentFilesError = null;
   try {
     const res = await state.client.request<AgentsFilesListResult | null>("agents.files.list", {
-      agentId,
+      agentId: resolvedAgentId,
     });
+    if (state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
     if (res) {
       state.agentFilesList = res;
       if (state.agentFileActive && !res.files.some((file) => file.name === state.agentFileActive)) {
@@ -49,9 +58,14 @@ export async function loadAgentFiles(state: AgentFilesState, agentId: string) {
       }
     }
   } catch (err) {
+    if (state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
     state.agentFilesError = String(err);
   } finally {
-    state.agentFilesLoading = false;
+    if (state.agentFilesTargetId === resolvedAgentId) {
+      state.agentFilesLoading = false;
+    }
   }
 }
 
@@ -61,19 +75,30 @@ export async function loadAgentFileContent(
   name: string,
   opts?: { force?: boolean; preserveDraft?: boolean },
 ) {
-  if (!state.client || !state.connected || state.agentFilesLoading) {
+  const resolvedAgentId = agentId.trim();
+  if (!state.client || !state.connected || !resolvedAgentId) {
+    return;
+  }
+  if (state.agentFilesTargetId && state.agentFilesTargetId !== resolvedAgentId) {
+    return;
+  }
+  if (state.agentFilesLoading) {
     return;
   }
   if (!opts?.force && Object.hasOwn(state.agentFileContents, name)) {
     return;
   }
+  state.agentFilesTargetId = resolvedAgentId;
   state.agentFilesLoading = true;
   state.agentFilesError = null;
   try {
     const res = await state.client.request<AgentsFilesGetResult | null>("agents.files.get", {
-      agentId,
+      agentId: resolvedAgentId,
       name,
     });
+    if (state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
     if (res?.file) {
       const content = res.file.content ?? "";
       const previousBase = state.agentFileContents[name] ?? "";
@@ -90,9 +115,14 @@ export async function loadAgentFileContent(
       }
     }
   } catch (err) {
+    if (state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
     state.agentFilesError = String(err);
   } finally {
-    state.agentFilesLoading = false;
+    if (state.agentFilesTargetId === resolvedAgentId) {
+      state.agentFilesLoading = false;
+    }
   }
 }
 
@@ -102,17 +132,21 @@ export async function saveAgentFile(
   name: string,
   content: string,
 ) {
-  if (!state.client || !state.connected || state.agentFileSaving) {
+  const resolvedAgentId = agentId.trim();
+  if (!state.client || !state.connected || state.agentFileSaving || !resolvedAgentId) {
     return;
   }
   state.agentFileSaving = true;
   state.agentFilesError = null;
   try {
     const res = await state.client.request<AgentsFilesSetResult | null>("agents.files.set", {
-      agentId,
+      agentId: resolvedAgentId,
       name,
       content,
     });
+    if (state.agentFilesTargetId && state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
     if (res?.file) {
       state.agentFilesList = mergeFileEntry(state.agentFilesList, res.file);
       state.agentFileContents = { ...state.agentFileContents, [name]: content };
@@ -122,5 +156,29 @@ export async function saveAgentFile(
     state.agentFilesError = String(err);
   } finally {
     state.agentFileSaving = false;
+  }
+}
+
+export async function loadPinnedAgentFiles(
+  state: AgentFilesState,
+  agentId: string,
+  names: string[],
+  opts?: { preserveDraft?: boolean },
+) {
+  const resolvedAgentId = agentId.trim();
+  if (!resolvedAgentId) {
+    return;
+  }
+  await loadAgentFiles(state, resolvedAgentId);
+  if (state.agentFilesTargetId !== resolvedAgentId) {
+    return;
+  }
+  for (const name of names) {
+    await loadAgentFileContent(state, resolvedAgentId, name, {
+      preserveDraft: opts?.preserveDraft,
+    });
+    if (state.agentFilesTargetId !== resolvedAgentId) {
+      return;
+    }
   }
 }

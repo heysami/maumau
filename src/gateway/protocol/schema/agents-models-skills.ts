@@ -12,6 +12,17 @@ export const ModelChoiceSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const ImageGenerationProviderCatalogEntrySchema = Type.Object(
+  {
+    id: NonEmptyString,
+    label: Type.Optional(NonEmptyString),
+    defaultModel: Type.Optional(NonEmptyString),
+    models: Type.Array(NonEmptyString),
+    configured: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+
 export const AgentSummarySchema = Type.Object(
   {
     id: NonEmptyString,
@@ -169,6 +180,18 @@ export const ModelsListParamsSchema = Type.Object({}, { additionalProperties: fa
 export const ModelsListResultSchema = Type.Object(
   {
     models: Type.Array(ModelChoiceSchema),
+  },
+  { additionalProperties: false },
+);
+
+export const ModelsImageGenerationProvidersParamsSchema = Type.Object(
+  {},
+  { additionalProperties: false },
+);
+
+export const ModelsImageGenerationProvidersResultSchema = Type.Object(
+  {
+    providers: Type.Array(ImageGenerationProviderCatalogEntrySchema),
   },
   { additionalProperties: false },
 );

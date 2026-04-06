@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatCapabilityPromptSummaryLine,
-  type CapabilityRow,
-} from "./capabilities.js";
+import { formatCapabilityPromptSummaryLine, type CapabilityRow } from "./capabilities.js";
 
 function createCapabilityRow(
   overrides: Partial<CapabilityRow> & Pick<CapabilityRow, "id" | "kind">,
@@ -115,5 +112,19 @@ describe("formatCapabilityPromptSummaryLine", () => {
         }),
       ),
     ).toContain("Public shares are never automatic");
+  });
+
+  it("tells the model how to use delegated generic tools", () => {
+    expect(
+      formatCapabilityPromptSummaryLine(
+        createCapabilityRow({
+          id: "image_generate",
+          kind: "tool",
+          ready: true,
+          exposedToSession: false,
+          delegatedAgentId: "design-studio-image-visual-designer",
+        }),
+      ),
+    ).toContain('sessions_spawn with agentId="design-studio-image-visual-designer"');
   });
 });

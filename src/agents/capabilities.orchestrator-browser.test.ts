@@ -82,6 +82,13 @@ const teamModelMocks = vi.hoisted(() => ({
   findTeamWorkflow: vi.fn(),
   listAccessibleTeams: vi.fn(() => []),
   listConfiguredTeams: vi.fn(() => []),
+  listLinkedAgentIds: vi.fn(() => []),
+  listTeamMemberAgentIds: vi.fn(
+    (team: { managerAgentId?: string; members?: Array<{ agentId: string }> }) => [
+      ...(team.managerAgentId ? [team.managerAgentId] : []),
+      ...(team.members ?? []).map((member) => member.agentId),
+    ],
+  ),
   resolveDefaultTeamWorkflowId: vi.fn(),
 }));
 vi.mock("../teams/model.js", () => teamModelMocks);
@@ -159,8 +166,7 @@ describe("listSessionCapabilities", () => {
     expect(browserTool).toMatchObject({
       kind: "tool",
       exposedToSession: false,
-      ready: false,
-      blockedReason: "not_in_profile",
+      ready: true,
       delegatedAgentId: "main-worker",
     });
     expect(browserTool?.suggestedFix).toContain('sessions_spawn with agentId="main-worker"');

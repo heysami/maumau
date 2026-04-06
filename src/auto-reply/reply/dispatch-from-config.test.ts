@@ -106,6 +106,9 @@ const ttsMocks = vi.hoisted(() => {
 const previewDeliveryMocks = vi.hoisted(() => ({
   maybeBuildPreviewReceiptPayloads: vi.fn(async () => [] as ReplyPayload[]),
 }));
+const subagentRegistryMocks = vi.hoisted(() => ({
+  hasRequesterCompletionDeliveryRunStartedSince: vi.fn(() => false),
+}));
 
 vi.mock("./route-reply.runtime.js", () => ({
   isRoutableChannel: (channel: string | undefined) =>
@@ -216,6 +219,14 @@ vi.mock("../../gateway/preview-delivery.js", () => ({
   maybeBuildPreviewReceiptPayloads: (params: unknown) =>
     previewDeliveryMocks.maybeBuildPreviewReceiptPayloads(params),
 }));
+vi.mock("../../agents/subagent-registry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../agents/subagent-registry.js")>();
+  return {
+    ...actual,
+    hasRequesterCompletionDeliveryRunStartedSince: (sessionKey: string, sinceMs: number) =>
+      subagentRegistryMocks.hasRequesterCompletionDeliveryRunStartedSince(sessionKey, sinceMs),
+  };
+});
 vi.mock("../../tts/tts-config.js", () => ({
   normalizeTtsAutoMode: (value: unknown) => ttsMocks.normalizeTtsAutoMode(value),
   resolveConfiguredTtsMode: (cfg: MaumauConfig) => ttsMocks.resolveTtsConfig(cfg).mode,
@@ -366,6 +377,8 @@ describe("dispatchReplyFromConfig", () => {
     ttsMocks.resolveTtsConfig.mockReturnValue({
       mode: "final",
     });
+    subagentRegistryMocks.hasRequesterCompletionDeliveryRunStartedSince.mockReset();
+    subagentRegistryMocks.hasRequesterCompletionDeliveryRunStartedSince.mockReturnValue(false);
   });
   it("does not route when Provider matches OriginatingChannel (even if Surface is missing)", async () => {
     setNoAbort();
@@ -412,8 +425,68 @@ describe("dispatchReplyFromConfig", () => {
         to: "telegram:999",
         accountId: "acc-1",
         threadId: 123,
+        mirror: false,
         isGroup: true,
         groupId: "telegram:999",
+      }),
+    );
+  });
+
+  it("keeps the immediate handoff reply when the same turn handed off completion delivery", async () => {
+    setNoAbort();
+    mocks.routeReply.mockClear();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      Surface: "telegram",
+      SessionKey: "agent:main:telegram:direct:6925625562",
+      MessageSid: "10051",
+    });
+    subagentRegistryMocks.hasRequesterCompletionDeliveryRunStartedSince.mockReturnValue(true);
+
+    const replyResolver = async (_ctx: MsgContext, _opts?: GetReplyOptions, _cfg?: MaumauConfig) =>
+      ({
+        text: "Done starting it. I'll send the result when it finishes.",
+      }) satisfies ReplyPayload;
+
+    const result = await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "Done starting it. I'll send the result when it finishes.",
+      }),
+    );
+    expect(mocks.routeReply).not.toHaveBeenCalled();
+    expect(result).toEqual({ queuedFinal: true, counts: { tool: 0, block: 0, final: 0 } });
+  });
+
+  it("still suppresses synthetic preview receipts after completion handoff starts", async () => {
+    setNoAbort();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      Surface: "telegram",
+      SessionKey: "agent:main:telegram:direct:6925625562",
+      MessageSid: "10052",
+    });
+    subagentRegistryMocks.hasRequesterCompletionDeliveryRunStartedSince.mockReturnValue(true);
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([
+      { text: "Preview: https://example.invalid/private" } satisfies ReplyPayload,
+    ]);
+
+    const replyResolver = async (_ctx: MsgContext, _opts?: GetReplyOptions, _cfg?: MaumauConfig) =>
+      ({
+        text: "Routing this to the right team now.",
+      }) satisfies ReplyPayload;
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(1);
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "Routing this to the right team now.",
       }),
     );
   });

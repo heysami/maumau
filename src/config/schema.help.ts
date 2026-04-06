@@ -96,13 +96,13 @@ export const FIELD_HELP: Record<string, string> = {
   "teams.list[].workflow.synthesisPrompt":
     "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
   "teams.list[].preset":
-    "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+    "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
   "teams.list[].preset.id":
-    "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+    "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
   "teams.list[].preset.source":
-    'Preset origin marker: "bundled" for Maumau starter teams or "user" for locally-authored templates.',
+    'Preset origin marker: "bundled" for Maumau bundled presets or "user" for locally-authored templates.',
   "teams.list[].preset.version":
-    "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
+    "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
   "diagnostics.otel":
     "OpenTelemetry export settings for traces, metrics, and logs emitted by gateway components. Use this when integrating with centralized observability backends and distributed tracing pipelines.",
   "diagnostics.cacheTrace":

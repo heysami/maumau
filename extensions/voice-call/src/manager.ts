@@ -12,7 +12,11 @@ import {
   speak as speakWithContext,
   speakInitialMessage as speakInitialMessageWithContext,
 } from "./manager/outbound.js";
-import { getCallHistoryFromStore, loadActiveCallsFromStore } from "./manager/store.js";
+import {
+  getCallHistoryFromStore,
+  loadActiveCallsFromStore,
+  persistCallRecord,
+} from "./manager/store.js";
 import { startMaxDurationTimer } from "./manager/timers.js";
 import type { VoiceCallProvider } from "./providers/base.js";
 import {
@@ -338,6 +342,17 @@ export class CallManager {
    */
   getActiveCalls(): CallRecord[] {
     return Array.from(this.activeCalls.values());
+  }
+
+  /**
+   * Persist an updated call snapshot without going through webhook event normalization.
+   */
+  persistCall(call: CallRecord): void {
+    this.activeCalls.set(call.callId, call);
+    if (call.providerCallId) {
+      this.providerCallIdMap.set(call.providerCallId, call.callId);
+    }
+    persistCallRecord(this.storePath, call);
   }
 
   /**

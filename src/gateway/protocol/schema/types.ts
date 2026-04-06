@@ -53,6 +53,8 @@ export type SessionsCompactParams = SchemaType<"SessionsCompactParams">;
 export type SessionsUsageParams = SchemaType<"SessionsUsageParams">;
 export type ConfigGetParams = SchemaType<"ConfigGetParams">;
 export type DashboardTeamsSnapshotParams = SchemaType<"DashboardTeamsSnapshotParams">;
+export type DashboardWalletParams = SchemaType<"DashboardWalletParams">;
+export type DashboardWorkshopSaveParams = SchemaType<"DashboardWorkshopSaveParams">;
 export type ConfigSetParams = SchemaType<"ConfigSetParams">;
 export type ConfigApplyParams = SchemaType<"ConfigApplyParams">;
 export type ConfigPatchParams = SchemaType<"ConfigPatchParams">;
@@ -105,8 +107,13 @@ export type AgentsFilesSetResult = SchemaType<"AgentsFilesSetResult">;
 export type AgentsListParams = SchemaType<"AgentsListParams">;
 export type AgentsListResult = SchemaType<"AgentsListResult">;
 export type ModelChoice = SchemaType<"ModelChoice">;
+export type ImageGenerationProviderCatalogEntry = SchemaType<"ImageGenerationProviderCatalogEntry">;
 export type ModelsListParams = SchemaType<"ModelsListParams">;
 export type ModelsListResult = SchemaType<"ModelsListResult">;
+export type ModelsImageGenerationProvidersParams =
+  SchemaType<"ModelsImageGenerationProvidersParams">;
+export type ModelsImageGenerationProvidersResult =
+  SchemaType<"ModelsImageGenerationProvidersResult">;
 export type PluginsStatusParams = SchemaType<"PluginsStatusParams">;
 export type SkillsStatusParams = SchemaType<"SkillsStatusParams">;
 export type ToolsCatalogParams = SchemaType<"ToolsCatalogParams">;

@@ -345,6 +345,7 @@ describe("buildBootstrapSecureDashboardSystemPrompt", () => {
 
     expect(prompt).toContain("Mention this exact URL early");
     expect(prompt).toContain("https://maumau.tailnet.ts.net/dashboard/today");
+    expect(prompt).toContain("approve it there before the link will work");
   });
 });
 
@@ -359,6 +360,7 @@ describe("injectBootstrapSecureDashboardUrlIntoPayloads", () => {
       {
         text: [
           "Phone dashboard: https://maumau.tailnet.ts.net/dashboard/today",
+          "If your computer shows a pairing request, approve it there first before this link will work.",
           "Hello there.",
         ].join("\n\n"),
       },

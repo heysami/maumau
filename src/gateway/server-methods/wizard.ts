@@ -110,6 +110,8 @@ export const wizardHandlers: GatewayRequestHandlers = {
         return context.modelAuthWizardRunner(
           {
             authChoice: typeof params.authChoice === "string" ? params.authChoice : undefined,
+            setDefaultModel:
+              typeof params.setDefaultModel === "boolean" ? params.setDefaultModel : undefined,
           },
           defaultRuntime,
           prompter,

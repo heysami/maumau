@@ -11,7 +11,11 @@ import { isWithinDir } from "../infra/path-safety.js";
 import { openVerifiedFileSync } from "../infra/safe-open-sync.js";
 import { AVATAR_MAX_BYTES } from "../shared/avatar-policy.js";
 import { resolveRuntimeServiceVersion } from "../version.js";
-import { isLocalDirectRequest, resolveGatewayAuth } from "./auth.js";
+import {
+  isLocalDirectRequest,
+  resolveGatewayAuth,
+  type ResolvedGatewayAuth,
+} from "./auth.js";
 import { DEFAULT_ASSISTANT_IDENTITY, resolveAssistantIdentity } from "./assistant-identity.js";
 import {
   CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
@@ -39,6 +43,7 @@ const CONTROL_UI_ASSETS_MISSING_MESSAGE =
 export type ControlUiRequestOptions = {
   basePath?: string;
   config?: MaumauConfig;
+  resolvedAuth?: ResolvedGatewayAuth | null;
   agentId?: string;
   root?: ControlUiRootState;
   trustedProxies?: string[];
@@ -376,7 +381,8 @@ export function handleControlUiHttpRequest(
     const identity = config
       ? resolveAssistantIdentity({ cfg: config, agentId: opts?.agentId })
       : DEFAULT_ASSISTANT_IDENTITY;
-    const resolvedAuth = config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null;
+    const resolvedAuth =
+      opts?.resolvedAuth ?? (config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null);
     const loopbackGatewayToken =
       resolvedAuth &&
       resolvedAuth.mode === "token" &&

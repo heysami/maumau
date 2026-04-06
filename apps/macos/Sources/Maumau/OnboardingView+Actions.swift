@@ -6,6 +6,17 @@ import MaumauKit
 import SwiftUI
 
 extension OnboardingView {
+    static func reconnectModeAfterSuccessfulOnboarding(
+        connectionMode: AppState.ConnectionMode
+    ) -> AppState.ConnectionMode? {
+        switch connectionMode {
+        case .local, .remote:
+            return connectionMode
+        case .unconfigured:
+            return nil
+        }
+    }
+
     static func managedBrowserStartParams(profile: String = "maumau") -> [String: AnyCodable] {
         ManagedBrowserSignInLauncher.startParams(profile: profile)
     }
@@ -110,12 +121,21 @@ extension OnboardingView {
                 return
             }
 
+            let reconnectMode = Self.reconnectModeAfterSuccessfulOnboarding(
+                connectionMode: self.state.connectionMode)
+            let paused = self.state.isPaused
             AppStateStore.shared.onboardingSeen = true
             UserDefaults.standard.set(true, forKey: "maumau.onboardingSeen")
             UserDefaults.standard.set(currentOnboardingVersion, forKey: onboardingVersionKey)
             self.onboardingFinishStatus = nil
             self.onboardingFinishStatusIsError = false
             OnboardingController.shared.close()
+            if let reconnectMode {
+                Task { @MainActor in
+                    await ConnectionModeCoordinator.shared.apply(mode: reconnectMode, paused: paused)
+                    await HealthStore.shared.refresh(onDemand: true)
+                }
+            }
         }
     }
 

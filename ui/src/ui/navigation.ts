@@ -26,6 +26,7 @@ export const TAB_GROUPS = [
 
 export const DASHBOARD_PAGE_ORDER = [
   "today",
+  "wallet",
   "mau-office",
   "tasks",
   "workshop",
@@ -47,6 +48,7 @@ export type Tab =
   | "usage"
   | "cron"
   | "dashboardToday"
+  | "dashboardWallet"
   | "dashboardMauOffice"
   | "dashboardTasks"
   | "dashboardWorkshop"
@@ -77,13 +79,14 @@ const TAB_PATHS: Record<Tab, string> = {
   usage: "/usage",
   cron: "/cron",
   dashboardToday: "/dashboard/today",
+  dashboardWallet: "/dashboard/wallet",
   dashboardMauOffice: "/dashboard/mau-office",
   dashboardTasks: "/dashboard/tasks",
   dashboardWorkshop: "/dashboard/workshop",
   dashboardCalendar: "/dashboard/calendar",
   dashboardRoutines: "/dashboard/routines",
   dashboardTeams: "/dashboard/teams",
-  dashboardMemories: "/dashboard/memories",
+  dashboardMemories: "/dashboard/agents",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
@@ -100,6 +103,7 @@ const TAB_PATHS: Record<Tab, string> = {
 
 const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
   today: "dashboardToday",
+  wallet: "dashboardWallet",
   "mau-office": "dashboardMauOffice",
   tasks: "dashboardTasks",
   workshop: "dashboardWorkshop",
@@ -109,7 +113,10 @@ const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
   memories: "dashboardMemories",
 };
 
-const LEGACY_TAB_ALIASES: Array<[string, Tab]> = [["/mau-office", "dashboardMauOffice"]];
+const LEGACY_TAB_ALIASES: Array<[string, Tab]> = [
+  ["/mau-office", "dashboardMauOffice"],
+  ["/dashboard/memories", "dashboardMemories"],
+];
 
 const PATH_TO_TAB = new Map<string, Tab>([
   ...Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab] as const),
@@ -230,6 +237,8 @@ export function iconForTab(tab: Tab): IconName {
       return "loader";
     case "dashboardToday":
       return "sun";
+    case "dashboardWallet":
+      return "creditCard";
     case "dashboardMauOffice":
       return "briefcase";
     case "dashboardTasks":

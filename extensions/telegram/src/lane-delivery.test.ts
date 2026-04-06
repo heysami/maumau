@@ -336,6 +336,7 @@ describe("createLaneTextDeliverer", () => {
     const harness = createHarness({ answerMessageId: 999 });
     const text = [
       "Phone dashboard: https://maumau.tailnet.ts.net/dashboard/today#token=abc",
+      "If your computer shows a pairing request, approve it there first before this link will work.",
       "Hello final",
     ].join("\n\n");
 

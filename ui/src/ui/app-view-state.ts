@@ -24,6 +24,8 @@ import type {
   ConfigSnapshot,
   ConfigUiHints,
   DashboardCalendarResult,
+  DashboardWalletResult,
+  DashboardTaskFilter,
   DashboardSnapshot,
   DashboardTeamSnapshotsResult,
   HealthSummary,
@@ -196,6 +198,7 @@ export type AppViewState = {
   agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   agentFilesLoading: boolean;
   agentFilesError: string | null;
+  agentFilesTargetId: string | null;
   agentFilesList: AgentsFilesListResult | null;
   agentFileContents: Record<string, string>;
   agentFileDrafts: Record<string, string>;
@@ -225,6 +228,12 @@ export type AppViewState = {
   dashboardLoading: boolean;
   dashboardError: string | null;
   dashboardSnapshot: DashboardSnapshot | null;
+  dashboardWalletLoading: boolean;
+  dashboardWalletError: string | null;
+  dashboardWalletResult: DashboardWalletResult | null;
+  dashboardWalletStartDate: string;
+  dashboardWalletEndDate: string;
+  dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
   dashboardTeamsLoading: boolean;
@@ -233,14 +242,20 @@ export type AppViewState = {
   dashboardTeamRunsLoading: boolean;
   dashboardTeamRunsError: string | null;
   dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
-  dashboardTaskFilter: string | null;
+  dashboardTaskFilter: DashboardTaskFilter;
   dashboardTaskGroupSelection: string | null;
   dashboardDoneFromDate: string;
   dashboardDoneToDate: string;
   dashboardWorkshopSelectedId: string | null;
+  dashboardWorkshopTab: "saved" | "recent";
+  dashboardWorkshopSelectedIds: Set<string>;
+  dashboardWorkshopProjectDraft: string;
+  dashboardWorkshopSaving: boolean;
+  dashboardWorkshopSaveError: string | null;
   dashboardCalendarView: "month" | "week" | "day";
   dashboardTeamSelection: string | null;
   dashboardMemoryAgentId: string | null;
+  dashboardAgentPanel: "memory" | "scope";
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;
   mauOfficeState: MauOfficeState;
@@ -296,6 +311,7 @@ export type AppViewState = {
   usageLogFilterTools: string[];
   usageLogFilterHasTools: boolean;
   usageLogFilterQuery: string;
+  dashboardWalletDateDebounceTimer: number | null;
 } & Pick<
   CronState,
   | "cronLoading"

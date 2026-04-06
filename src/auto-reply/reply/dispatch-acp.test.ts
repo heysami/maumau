@@ -485,6 +485,12 @@ describe("tryDispatchAcpReply", () => {
     expect(result?.counts.block).toBe(1);
     expect(result?.counts.final).toBe(1);
     expect(routeMocks.routeReply).toHaveBeenCalledTimes(2);
+    expect(routeMocks.routeReply).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mirror: false,
+      }),
+    );
     expectSecondRoutedPayload({ text: "CODEX_OK" });
   });
 
@@ -500,6 +506,12 @@ describe("tryDispatchAcpReply", () => {
     expect(result?.counts.block).toBe(1);
     expect(result?.counts.final).toBe(1);
     expect(routeMocks.routeReply).toHaveBeenCalledTimes(2);
+    expect(routeMocks.routeReply).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mirror: false,
+      }),
+    );
     expectSecondRoutedPayload({
       mediaUrl: "https://example.com/final.mp3",
       audioAsVoice: true,

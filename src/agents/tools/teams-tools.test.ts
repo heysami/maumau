@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
 
 const hoisted = vi.hoisted(() => {
   const spawnSubagentDirectMock = vi.fn();
@@ -72,6 +73,7 @@ const TEST_CONFIG = {
       { id: "alpha-coder", name: "Alpha Coder" },
       { id: "beta-manager", name: "Beta Manager" },
       { id: "gamma-manager", name: "Gamma Manager" },
+      { id: "design-studio-manager", name: "Design Studio Manager" },
     ],
   },
   teams: {
@@ -107,6 +109,14 @@ const TEST_CONFIG = {
         id: "gamma",
         name: "Gamma",
         managerAgentId: "gamma-manager",
+        members: [],
+        crossTeamLinks: [],
+        workflows: [{ id: "default", default: true }],
+      },
+      {
+        id: DESIGN_STUDIO_TEAM_ID,
+        name: "Design Studio",
+        managerAgentId: "design-studio-manager",
         members: [],
         crossTeamLinks: [],
         workflows: [{ id: "default", default: true }],
@@ -199,6 +209,7 @@ describe("teams tools", () => {
       }),
       expect.objectContaining({ id: "beta", runnable: true }),
       expect.objectContaining({ id: "gamma", runnable: false }),
+      expect.objectContaining({ id: DESIGN_STUDIO_TEAM_ID, runnable: false }),
     ]);
   });
 
@@ -244,6 +255,7 @@ describe("teams tools", () => {
       expect.objectContaining({
         agentId: "alpha-manager",
         intent: "team_manager",
+        routingTask: "Build the feature",
         suppressRequesterAnnounce: true,
         skipAllowAgentsCheck: true,
         sessionPatch: {
@@ -284,6 +296,52 @@ describe("teams tools", () => {
         task: expect.stringContaining(
           'WORK_ITEM:{"teamRun":{"kind":"team_run","teamId":"<team-id>"',
         ),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("raises design-studio manager spawn depth so specialists can fan out into option workers", async () => {
+    hoisted.materializeGeneratedTeamProgramMock.mockResolvedValue({
+      ok: true,
+      team: TEST_CONFIG.teams.list[3],
+      workflow: TEST_CONFIG.teams.list[3].workflows[0],
+      program: 'agent manager:\n  prompt: "Run the design studio"',
+      absolutePath: "/tmp/.maumau/teams/design-studio/default.generated.prose",
+      relativePath: ".maumau/teams/design-studio/default.generated.prose",
+    });
+
+    const tool = createTeamsRunTool({
+      agentSessionKey: "main",
+      config: TEST_CONFIG,
+      callGateway: (request) => hoisted.callGatewayMock(request),
+      subagentRegistry: {
+        countPendingDescendantRuns: (sessionKey) =>
+          hoisted.countPendingDescendantRunsMock(sessionKey),
+        getLatestSubagentRunByChildSessionKey: (sessionKey) =>
+          hoisted.getLatestSubagentRunByChildSessionKeyMock(sessionKey),
+        handoffSubagentCompletionToRequester: (runId) =>
+          hoisted.handoffSubagentCompletionToRequesterMock(runId),
+        listDescendantRunsForRequester: (sessionKey) =>
+          hoisted.listDescendantRunsForRequesterMock(sessionKey),
+      },
+    });
+
+    await tool.execute("call-run-design-studio", {
+      teamId: DESIGN_STUDIO_TEAM_ID,
+      task: "Explore and generate the asset set.",
+      timeoutSeconds: 1,
+    });
+
+    expect(hoisted.spawnSubagentDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "design-studio-manager",
+        routingTask: "Explore and generate the asset set.",
+        sessionPatch: {
+          subagentMaxSpawnDepth: 3,
+          teamId: DESIGN_STUDIO_TEAM_ID,
+          teamRole: "manager",
+        },
       }),
       expect.anything(),
     );

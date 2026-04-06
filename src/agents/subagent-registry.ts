@@ -47,6 +47,7 @@ import {
   countPendingDescendantRunsExcludingRunFromRuns,
   countPendingDescendantRunsFromRuns,
   findRunIdsByChildSessionKeyFromRuns,
+  hasRequesterCompletionDeliveryRunStartedSinceFromRuns,
   listRunsForControllerFromRuns,
   listDescendantRunsForRequesterFromRuns,
   listRunsForRequesterFromRuns,
@@ -1792,6 +1793,17 @@ export function countPendingDescendantRunsExcludingRun(
     getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
     excludeRunId,
+  );
+}
+
+export function hasRequesterCompletionDeliveryRunStartedSince(
+  requesterSessionKey: string,
+  sinceMs: number,
+): boolean {
+  return hasRequesterCompletionDeliveryRunStartedSinceFromRuns(
+    getSubagentRunsSnapshotForRead(subagentRuns),
+    requesterSessionKey,
+    sinceMs,
   );
 }
 

@@ -12,7 +12,12 @@ type GatewayClientMock = {
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
   request: ReturnType<typeof vi.fn>;
-  options: { clientVersion?: string; token?: string };
+  options: {
+    clientVersion?: string;
+    token?: string;
+    getToken?: (() => string | undefined) | undefined;
+    beforeConnect?: (() => Promise<void> | void) | undefined;
+  };
   emitHello: (hello?: GatewayHelloOk) => void;
   emitClose: (info: {
     code: number;
@@ -48,6 +53,8 @@ vi.mock("./gateway.ts", () => {
       private opts: {
         clientVersion?: string;
         token?: string;
+        getToken?: () => string | undefined;
+        beforeConnect?: () => Promise<void> | void;
         onHello?: (hello: GatewayHelloOk) => void;
         onClose?: (info: {
           code: number;
@@ -62,7 +69,12 @@ vi.mock("./gateway.ts", () => {
         start: this.start,
         stop: this.stop,
         request: this.request,
-        options: { clientVersion: this.opts.clientVersion, token: this.opts.token },
+        options: {
+          clientVersion: this.opts.clientVersion,
+          token: this.opts.token,
+          getToken: this.opts.getToken,
+          beforeConnect: this.opts.beforeConnect,
+        },
         emitHello: (hello) => {
           this.opts.onHello?.(
             hello ?? {
@@ -431,6 +443,27 @@ describe("connectGateway", () => {
     expect(host.settings.token).toBe("fresh-token");
     expect(gatewayClientInstances).toHaveLength(2);
     expect(gatewayClientInstances[1]?.options.token).toBe("fresh-token");
+  });
+
+  it("refreshes the loopback token before connect attempts", async () => {
+    const host = createHost();
+    host.settings.token = "stale-token";
+    loadBootstrapMock.mockResolvedValueOnce({
+      basePath: "/",
+      assistantName: "Maumau",
+      assistantAvatar: "/avatar/main",
+      assistantAgentId: "main",
+      loopbackGatewayToken: "fresh-token",
+    });
+
+    connectGateway(host);
+    const client = gatewayClientInstances[0];
+    expect(client).toBeDefined();
+
+    await client.options.beforeConnect?.();
+
+    expect(host.settings.token).toBe("fresh-token");
+    expect(client.options.getToken?.()).toBe("fresh-token");
   });
 
   it("surfaces shutdown restart reasons before the socket closes", () => {

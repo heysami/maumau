@@ -227,6 +227,9 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         accountId: params.ctx.AccountId,
         threadId: params.ctx.MessageThreadId,
         cfg: params.cfg,
+        // Final ACP replies already originate from a real assistant turn.
+        // Keep mirror behavior for tool/block routing only.
+        mirror: kind === "final" ? false : undefined,
       });
       if (!result.ok) {
         logVerbose(

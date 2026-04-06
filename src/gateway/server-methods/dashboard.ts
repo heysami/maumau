@@ -1,4 +1,7 @@
 import { parseConfigJson5, type MaumauConfig } from "../../config/config.js";
+import type { DashboardCalendarView } from "../dashboard-types.js";
+import { collectDashboardWallet } from "../dashboard-wallet.js";
+import { parseDateRange, resolveDateInterpretation } from "../date-range.js";
 import {
   collectDashboardCalendar,
   collectDashboardMemories,
@@ -10,11 +13,13 @@ import {
   collectDashboardToday,
   collectDashboardWorkshop,
   ensureStoredDashboardTeamSnapshots,
+  saveDashboardWorkshop,
 } from "../dashboard.js";
-import type { DashboardCalendarView } from "../dashboard-types.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
-import { validateDashboardTeamsSnapshotParams } from "../protocol/index.js";
 import { validateConfigGetParams } from "../protocol/index.js";
+import { validateDashboardTeamsSnapshotParams } from "../protocol/index.js";
+import { validateDashboardWalletParams } from "../protocol/index.js";
+import { validateDashboardWorkshopSaveParams } from "../protocol/index.js";
 import type { GatewayRequestHandlers } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
@@ -64,6 +69,25 @@ export const dashboardHandlers: GatewayRequestHandlers = {
     });
     respond(true, today, undefined);
   },
+  "dashboard.wallet": async ({ params, respond }) => {
+    if (!assertValidParams(params, validateDashboardWalletParams, "dashboard.wallet", respond)) {
+      return;
+    }
+    const range = parseDateRange({
+      startDate: params?.startDate,
+      endDate: params?.endDate,
+      mode: params?.mode,
+      utcOffset: params?.utcOffset,
+    });
+    const result = await collectDashboardWallet({
+      ...range,
+      interpretation: resolveDateInterpretation({
+        mode: params?.mode,
+        utcOffset: params?.utcOffset,
+      }),
+    });
+    respond(true, result, undefined);
+  },
   "dashboard.tasks": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateConfigGetParams, "dashboard.tasks", respond)) {
       return;
@@ -86,9 +110,38 @@ export const dashboardHandlers: GatewayRequestHandlers = {
     });
     respond(true, result, undefined);
   },
+  "dashboard.workshop.save": async ({ params, respond, context }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateDashboardWorkshopSaveParams,
+        "dashboard.workshop.save",
+        respond,
+      )
+    ) {
+      return;
+    }
+    try {
+      const payload = params as { itemIds: string[]; projectName: string };
+      const result = await saveDashboardWorkshop({
+        cron: context.cron,
+        cronStorePath: context.cronStorePath,
+        execApprovals: context.execApprovalManager?.listPending() ?? [],
+        itemIds: payload.itemIds,
+        projectName: payload.projectName,
+      });
+      respond(true, result, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(error)));
+    }
+  },
   "dashboard.calendar": async ({ params, respond, context }) => {
     if (!isPlainRecord(params)) {
-      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "invalid dashboard.calendar params"));
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "invalid dashboard.calendar params"),
+      );
       return;
     }
     const result = await collectDashboardCalendar({
@@ -134,9 +187,10 @@ export const dashboardHandlers: GatewayRequestHandlers = {
       return;
     }
     try {
-      const rawConfig = isPlainRecord(params) && typeof params.rawConfig === "string"
-        ? params.rawConfig
-        : undefined;
+      const rawConfig =
+        isPlainRecord(params) && typeof params.rawConfig === "string"
+          ? params.rawConfig
+          : undefined;
       if (rawConfig) {
         const snapshots = await collectDashboardTeamSnapshots({
           cfg: parseDraftConfigOrThrow(rawConfig),
@@ -150,22 +204,11 @@ export const dashboardHandlers: GatewayRequestHandlers = {
       });
       respond(true, snapshots, undefined);
     } catch (error) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, String(error)),
-      );
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(error)));
     }
   },
   "dashboard.teams.runs": async ({ params, respond, context }) => {
-    if (
-      !assertValidParams(
-        params,
-        validateConfigGetParams,
-        "dashboard.teams.runs",
-        respond,
-      )
-    ) {
+    if (!assertValidParams(params, validateConfigGetParams, "dashboard.teams.runs", respond)) {
       return;
     }
     const result = await collectDashboardTeamRuns({

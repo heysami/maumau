@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateStoredCredentialEligibility,
+  hasUsableStoredCredential,
   resolveTokenExpiryState,
 } from "./credential-state.js";
 
@@ -73,5 +74,57 @@ describe("evaluateStoredCredentialEligibility", () => {
       now,
     });
     expect(result).toEqual({ eligible: false, reasonCode: "invalid_expires" });
+  });
+});
+
+describe("hasUsableStoredCredential", () => {
+  it("requires env-backed api_key refs to resolve", () => {
+    expect(
+      hasUsableStoredCredential({
+        credential: {
+          type: "api_key",
+          provider: "google",
+          keyRef: {
+            source: "env",
+            provider: "default",
+            id: "GEMINI_API_KEY",
+          },
+        },
+        env: {},
+      }),
+    ).toBe(false);
+
+    expect(
+      hasUsableStoredCredential({
+        credential: {
+          type: "api_key",
+          provider: "google",
+          keyRef: {
+            source: "env",
+            provider: "default",
+            id: "GEMINI_API_KEY",
+          },
+        },
+        env: { GEMINI_API_KEY: "test-key" },
+      }),
+    ).toBe(true);
+  });
+
+  it("prefers an inline api_key over an unresolved explicit ref", () => {
+    expect(
+      hasUsableStoredCredential({
+        credential: {
+          type: "api_key",
+          provider: "openai",
+          key: "sk-inline",
+          keyRef: {
+            source: "env",
+            provider: "default",
+            id: "OPENAI_API_KEY",
+          },
+        },
+        env: {},
+      }),
+    ).toBe(true);
   });
 });

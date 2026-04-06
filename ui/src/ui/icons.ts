@@ -47,6 +47,13 @@ export const icons = {
       <path d="M3 12h18" />
     </svg>
   `,
+  creditCard: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+      <path d="M6 15h4" />
+    </svg>
+  `,
   checkSquare: html`
     <svg viewBox="0 0 24 24">
       <rect x="3" y="3" width="18" height="18" rx="2" />

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../config/config.js";
 import * as imageGenerationRuntime from "../image-generation/runtime.js";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  replaceRuntimeAuthProfileStoreSnapshots,
+} from "./auth-profiles.js";
 import { createMaumauTools } from "./maumau-tools.js";
 
 vi.mock("../plugins/tools.js", () => ({
@@ -46,6 +50,7 @@ describe("maumau tools image generation registration", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    clearRuntimeAuthProfileStoreSnapshots();
   });
 
   it("registers image_generate when image-generation config is present", () => {
@@ -79,6 +84,36 @@ describe("maumau tools image generation registration", () => {
 
   it("omits image_generate when config is absent and no compatible provider auth exists", () => {
     stubImageGenerationProviders();
+
+    const tools = createMaumauTools({
+      config: asConfig({}),
+      agentDir: "/tmp/maumau-agent-main",
+    });
+
+    expect(tools.map((tool) => tool.name)).not.toContain("image_generate");
+  });
+
+  it("omits image_generate when provider auth only points to an unresolved env ref", () => {
+    stubImageGenerationProviders();
+    replaceRuntimeAuthProfileStoreSnapshots([
+      {
+        agentDir: "/tmp/maumau-agent-main",
+        store: {
+          version: 1,
+          profiles: {
+            "openai:default": {
+              type: "api_key",
+              provider: "openai",
+              keyRef: {
+                source: "env",
+                provider: "default",
+                id: "OPENAI_API_KEY",
+              },
+            },
+          },
+        },
+      },
+    ]);
 
     const tools = createMaumauTools({
       config: asConfig({}),

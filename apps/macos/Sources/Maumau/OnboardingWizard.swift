@@ -76,7 +76,7 @@ final class OnboardingWizardModel {
 
     private enum StartRoute: Equatable {
         case onboarding(mode: AppState.ConnectionMode, workspace: String?)
-        case modelAuth(authChoice: String?)
+        case modelAuth(authChoice: String?, setDefaultModel: Bool)
     }
 
     typealias WizardStartParams = [String: AnyCodable]
@@ -198,8 +198,8 @@ final class OnboardingWizardModel {
         await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
     }
 
-    func startModelAuthIfNeeded(authChoice: String? = nil) async {
-        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
+    func startModelAuthIfNeeded(authChoice: String? = nil, setDefaultModel: Bool = true) async {
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel))
     }
 
     private func startIfNeeded(route: StartRoute) async {
@@ -533,10 +533,10 @@ final class OnboardingWizardModel {
         await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
     }
 
-    func retryModelAuth(authChoice: String? = nil) async {
+    func retryModelAuth(authChoice: String? = nil, setDefaultModel: Bool = true) async {
         await self.cancelIfRunning()
         self.reset()
-        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel))
     }
 
     func skipForNow() async {
@@ -569,9 +569,9 @@ final class OnboardingWizardModel {
         await self.submit(step: step, value: value)
     }
 
-    func triggerModelAuthPrimaryAction(authChoice: String? = nil) async {
+    func triggerModelAuthPrimaryAction(authChoice: String? = nil, setDefaultModel: Bool = true) async {
         if self.errorMessage != nil {
-            await self.retryModelAuth(authChoice: authChoice)
+            await self.retryModelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel)
             return
         }
         guard let step = self.currentStep else { return }
@@ -783,17 +783,27 @@ final class OnboardingWizardModel {
             params["skipChannels"] = AnyCodable(true)
             params["skipSkills"] = AnyCodable(true)
             return params
-        case let .modelAuth(authChoice):
-            var params: WizardStartParams = [
-                "entrypoint": AnyCodable("models-auth"),
-                "embedded": AnyCodable(true),
-                "fresh": AnyCodable(true),
-            ]
-            if let authChoice, !authChoice.isEmpty {
-                params["authChoice"] = AnyCodable(authChoice)
-            }
-            return params
+        case let .modelAuth(authChoice, setDefaultModel):
+            return self.focusedModelAuthStartParams(
+                authChoice: authChoice,
+                setDefaultModel: setDefaultModel)
         }
+    }
+
+    static func focusedModelAuthStartParams(
+        authChoice: String?,
+        setDefaultModel: Bool
+    ) -> WizardStartParams {
+        var params: WizardStartParams = [
+            "entrypoint": AnyCodable("models-auth"),
+            "embedded": AnyCodable(true),
+            "fresh": AnyCodable(true),
+            "setDefaultModel": AnyCodable(setDefaultModel),
+        ]
+        if let authChoice, !authChoice.isEmpty {
+            params["authChoice"] = AnyCodable(authChoice)
+        }
+        return params
     }
 
     static func shouldRetryLegacyStart(for error: Error) -> Bool {

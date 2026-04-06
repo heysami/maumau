@@ -18,6 +18,8 @@ import {
   findTeamWorkflow,
   listAccessibleTeams,
   listConfiguredTeams,
+  listLinkedAgentIds,
+  listTeamMemberAgentIds,
   resolveDefaultTeamWorkflowId,
 } from "../teams/model.js";
 import { resolveSessionTeamContext, resolveTeamAgentAccess } from "../teams/runtime.js";
@@ -193,43 +195,64 @@ function resolveDelegatedToolAccess(
     sessionKey: opts.agentSessionKey,
   });
   const requesterAgentConfig = resolveAgentConfig(cfg, requesterAgentId);
-  if (requesterAgentConfig?.executionStyle !== "orchestrator") {
-    return {};
-  }
   if (!isToolExposedToSession(opts, "sessions_spawn")) {
     return {};
   }
   const executionWorkerAgentId = normalizeOptionalAgentId(
-    requesterAgentConfig.executionWorkerAgentId,
+    requesterAgentConfig?.executionWorkerAgentId,
   );
-  if (!executionWorkerAgentId || !resolveAgentConfig(cfg, executionWorkerAgentId)) {
-    return {};
-  }
   if (
-    !canSessionDelegateToAgent({
+    requesterAgentConfig?.executionStyle === "orchestrator" &&
+    executionWorkerAgentId &&
+    resolveAgentConfig(cfg, executionWorkerAgentId) &&
+    canSessionDelegateToAgent({
       cfg,
       sessionKey: opts.agentSessionKey,
       requesterAgentId,
       targetAgentId: executionWorkerAgentId,
-    })
+    }) &&
+    isToolExposedForAgent(opts, toolName, executionWorkerAgentId)
   ) {
+    return { agentId: executionWorkerAgentId };
+  }
+
+  const teamContext = resolveSessionTeamContext({
+    cfg,
+    sessionKey: opts.agentSessionKey,
+  });
+  if (!teamContext?.team) {
     return {};
   }
-  if (!isToolExposedForAgent(opts, toolName, executionWorkerAgentId)) {
-    return {};
+  const candidateAgentIds = Array.from(
+    new Set([...listTeamMemberAgentIds(teamContext.team), ...listLinkedAgentIds(teamContext.team)]),
+  ).filter((agentId) => normalizeAgentId(agentId) !== normalizeAgentId(requesterAgentId));
+
+  for (const candidateAgentId of candidateAgentIds) {
+    const teamAccess = resolveTeamAgentAccess({
+      cfg,
+      sourceTeamId: teamContext.teamId,
+      targetAgentId: candidateAgentId,
+    });
+    if (!teamAccess.allowed) {
+      continue;
+    }
+    if (isToolExposedForAgent(opts, toolName, candidateAgentId)) {
+      return { agentId: candidateAgentId };
+    }
   }
-  return { agentId: executionWorkerAgentId };
+
+  return {};
 }
 
 function buildDelegatedToolSuggestedFix(toolId: string, agentId: string): string {
   if (toolId === "browser") {
     return (
-      `Direct ${toolId} use is unavailable on this orchestrator session. ` +
+      `Direct ${toolId} use is unavailable on this session. ` +
       `Use sessions_spawn with agentId="${agentId}" for browser/account work instead.`
     );
   }
   return (
-    `Direct ${toolId} use is unavailable on this orchestrator session. ` +
+    `Direct ${toolId} use is unavailable on this session. ` +
     `Use sessions_spawn with agentId="${agentId}" instead.`
   );
 }
@@ -718,15 +741,16 @@ export async function listSessionCapabilities(
     for (const tool of section.tools) {
       const exposedToSession = isToolExposedToSession(opts, tool.id);
       const delegatedAccess = exposedToSession ? {} : resolveDelegatedToolAccess(opts, tool.id);
+      const ready = exposedToSession || Boolean(delegatedAccess.agentId);
       rows.push({
         id: tool.id,
         kind: "tool",
         declared: true,
         exposedToSession,
         installed: true,
-        ready: exposedToSession,
+        ready,
         delegatedAgentId: delegatedAccess.agentId,
-        blockedReason: exposedToSession ? undefined : "not_in_profile",
+        blockedReason: ready ? undefined : "not_in_profile",
         suggestedFix: exposedToSession
           ? undefined
           : delegatedAccess.agentId
@@ -854,6 +878,13 @@ export function formatCapabilityPromptSummaryLine(row: CapabilityRow): string {
         ? "Capability preview-public-share: ready. Public shares are never automatic; create one only after explicit user consent and include the temporary TTL."
         : `Capability preview-public-share: ${status}.${suggestedFix}`;
     default:
+      if (row.ready && row.delegatedAgentId) {
+        return (
+          `Capability ${row.id}: ready via delegated agent "${row.delegatedAgentId}". ` +
+          `Direct ${row.id} use is unavailable on this session; use sessions_spawn ` +
+          `with agentId="${row.delegatedAgentId}" instead.`
+        );
+      }
       return `Capability ${row.id}: ${status}.${suggestedFix}`;
   }
 }

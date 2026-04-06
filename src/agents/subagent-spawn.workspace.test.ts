@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createDesignStudioTeamAgents,
+  createDesignStudioTeamConfig,
   createMainOrchestrationTeamConfig,
   createStarterTeamAgents,
   createStarterTeamConfig,
@@ -337,6 +339,66 @@ describe("spawnSubagentDirect workspace inheritance", () => {
     });
   });
 
+  it("routes team-manager spawns using routingTask instead of the generated team program text", async () => {
+    hoisted.configOverride = createConfigOverride({
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+        },
+        list: [
+          {
+            id: "main",
+            workspace: "/tmp/workspace-main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+            subagents: {
+              allowAgents: [MAIN_WORKER_AGENT_ID],
+            },
+          },
+          ...createStarterTeamAgents(),
+          ...createDesignStudioTeamAgents(),
+        ],
+      },
+      teams: {
+        list: [
+          createMainOrchestrationTeamConfig(),
+          createStarterTeamConfig(),
+          createDesignStudioTeamConfig(),
+        ],
+      },
+    });
+
+    const result = await spawnSubagentDirect(
+      {
+        task:
+          '[Team Runtime] Team: Vibe Coder (vibe-coder)\n[Team Runtime] Execute the generated OpenProse workflow.\nManager guidance: If the work needs deeper design exploration, hand an asset-only brief to the linked design team before QA.\nChoose the best linked design team from: design-studio.\nRun input:\ntask = Create a simple attractive webpage about the Mistborn series main characters in /Users/samiaji/.maumau/workspace. Use a clean responsive layout and tasteful styling.',
+        routingTask:
+          "Create a simple attractive webpage about the Mistborn series main characters in /Users/samiaji/.maumau/workspace. Use a clean responsive layout and tasteful styling.",
+        agentId: STARTER_TEAM_MANAGER_AGENT_ID,
+        intent: "team_manager",
+        skipAllowAgentsCheck: true,
+        sessionPatch: {
+          teamId: STARTER_TEAM_ID,
+          teamRole: "manager",
+          subagentMaxSpawnDepth: 2,
+        },
+      },
+      {
+        agentSessionKey: "main",
+        agentChannel: "telegram",
+        agentAccountId: "123",
+        agentTo: "456",
+        workspaceDir: "/tmp/requester-workspace",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    expect(result.childSessionKey).toMatch(
+      new RegExp(`^agent:${STARTER_TEAM_MANAGER_AGENT_ID}:subagent:`),
+    );
+  });
+
   it("still forbids direct worker delegation for UI tasks from the implicit root team", async () => {
     hoisted.configOverride = createConfigOverride({
       agents: {
@@ -375,7 +437,7 @@ describe("spawnSubagentDirect workspace inheritance", () => {
 
     expect(result).toMatchObject({
       status: "forbidden",
-      error: expect.stringContaining('teams_run with teamId="vibe-coder"'),
+      error: expect.stringContaining("teams_run with the matching linked specialist team"),
     });
   });
 

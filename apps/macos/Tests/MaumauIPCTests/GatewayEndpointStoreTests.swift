@@ -27,25 +27,11 @@ struct GatewayEndpointStoreTests {
         return defaults
     }
 
-    @Test func `resolve local gateway token follows launchd then config then env`() {
+    @Test func `resolve local gateway token follows config then launchd then env`() {
         let snapshot = self.makeLaunchAgentSnapshot(
             env: ["MAUMAU_GATEWAY_TOKEN": "launchd-token"],
             token: "launchd-token",
             password: nil)
-
-        let launchdToken = GatewayEndpointStore._testResolveGatewayToken(
-            isRemote: false,
-            root: [
-                "gateway": [
-                    "auth": [
-                        "mode": "token",
-                        "token": "config-token",
-                    ],
-                ],
-            ],
-            env: ["MAUMAU_GATEWAY_TOKEN": "env-token"],
-            launchdSnapshot: snapshot)
-        #expect(launchdToken == "launchd-token")
 
         let configToken = GatewayEndpointStore._testResolveGatewayToken(
             isRemote: false,
@@ -58,8 +44,22 @@ struct GatewayEndpointStoreTests {
                 ],
             ],
             env: ["MAUMAU_GATEWAY_TOKEN": "env-token"],
-            launchdSnapshot: nil)
+            launchdSnapshot: snapshot)
         #expect(configToken == "config-token")
+
+        let configOnlyToken = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "mode": "token",
+                        "token": "config-token",
+                    ],
+                ],
+            ],
+            env: ["MAUMAU_GATEWAY_TOKEN": "env-token"],
+            launchdSnapshot: nil)
+        #expect(configOnlyToken == "config-token")
 
         let envFallbackToken = GatewayEndpointStore._testResolveGatewayToken(
             isRemote: false,
@@ -75,6 +75,45 @@ struct GatewayEndpointStoreTests {
             launchdSnapshot: snapshot)
         #expect(launchdFallbackToken == "launchd-token")
     }
+
+    @Test func `resolve local gateway token prefers launchd config path token over embedded launchd token`() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let configURL = tempDir.appendingPathComponent("maumau.json")
+        try """
+        {
+          "gateway": {
+            "auth": {
+              "mode": "token",
+              "token": "launchd-config-token"
+            }
+          }
+        }
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let token = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "mode": "token",
+                        "token": "home-config-token",
+                    ],
+                ],
+            ],
+            env: ["MAUMAU_GATEWAY_TOKEN": "env-token"],
+            launchdSnapshot: self.makeLaunchAgentSnapshot(
+                env: [
+                    "MAUMAU_CONFIG_PATH": configURL.path,
+                    "MAUMAU_GATEWAY_TOKEN": "embedded-launchd-token",
+                ],
+                token: "embedded-launchd-token",
+                password: nil))
+        #expect(token == "launchd-config-token")
+    }
+
 
     @Test func `resolve gateway token ignores launchd in remote mode`() {
         let snapshot = self.makeLaunchAgentSnapshot(
@@ -162,25 +201,11 @@ struct GatewayEndpointStoreTests {
         #expect(token == "remote-token")
     }
 
-    @Test func `resolve local gateway password follows launchd then config then env`() {
+    @Test func `resolve local gateway password follows config then launchd then env`() {
         let snapshot = self.makeLaunchAgentSnapshot(
             env: ["MAUMAU_GATEWAY_PASSWORD": "launchd-pass"],
             token: nil,
             password: "launchd-pass")
-
-        let launchdPassword = GatewayEndpointStore._testResolveGatewayPassword(
-            isRemote: false,
-            root: [
-                "gateway": [
-                    "auth": [
-                        "mode": "password",
-                        "password": "config-pass",
-                    ],
-                ],
-            ],
-            env: ["MAUMAU_GATEWAY_PASSWORD": "env-pass"],
-            launchdSnapshot: snapshot)
-        #expect(launchdPassword == "launchd-pass")
 
         let configPassword = GatewayEndpointStore._testResolveGatewayPassword(
             isRemote: false,
@@ -193,8 +218,22 @@ struct GatewayEndpointStoreTests {
                 ],
             ],
             env: ["MAUMAU_GATEWAY_PASSWORD": "env-pass"],
-            launchdSnapshot: nil)
+            launchdSnapshot: snapshot)
         #expect(configPassword == "config-pass")
+
+        let configOnlyPassword = GatewayEndpointStore._testResolveGatewayPassword(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "mode": "password",
+                        "password": "config-pass",
+                    ],
+                ],
+            ],
+            env: ["MAUMAU_GATEWAY_PASSWORD": "env-pass"],
+            launchdSnapshot: nil)
+        #expect(configOnlyPassword == "config-pass")
 
         let envFallbackPassword = GatewayEndpointStore._testResolveGatewayPassword(
             isRemote: false,

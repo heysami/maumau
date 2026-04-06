@@ -13,6 +13,8 @@ import type { MsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 
 const BOOTSTRAP_SECURE_DASHBOARD_PREFIX = "Phone dashboard:";
+const BOOTSTRAP_SECURE_DASHBOARD_PAIRING_HINT =
+  "If your computer shows a pairing request, approve it there first before this link will work.";
 
 function buildDashboardPath(basePath?: string) {
   const normalizedBasePath = normalizeControlUiBasePath(basePath);
@@ -105,6 +107,7 @@ export async function buildBootstrapSecureDashboardSystemPrompt(params: {
     "A dashboard URL is already available during this bootstrap.",
     "Mention this exact URL early in the conversation so the user can open Maumau on their phone right away:",
     secureDashboardUrl,
+    "Also tell them that if their computer shows a pairing request, they need to approve it there before the link will work.",
   ].join("\n");
 }
 
@@ -139,7 +142,11 @@ export function injectBootstrapSecureDashboardUrlIntoPayloads(
 
   nextPayloads[firstTextPayloadIndex] = {
     ...targetPayload,
-    text: `${BOOTSTRAP_SECURE_DASHBOARD_PREFIX} ${trimmedUrl}\n\n${text}`,
+    text: [
+      `${BOOTSTRAP_SECURE_DASHBOARD_PREFIX} ${trimmedUrl}`,
+      BOOTSTRAP_SECURE_DASHBOARD_PAIRING_HINT,
+      text,
+    ].join("\n\n"),
   };
   return nextPayloads;
 }

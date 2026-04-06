@@ -161,4 +161,35 @@ describe("gateway restart deferral", () => {
     expect(deliverCalled).toBe(false);
     expect(getTotalPendingReplies()).toBe(0);
   });
+
+  it("shares pending reply tracking across separate module loads", async () => {
+    vi.resetModules();
+    const registryModule = await import("../auto-reply/reply/dispatcher-registry.js");
+
+    vi.resetModules();
+    const { createReplyDispatcher: createReplyDispatcherFromFreshModule } = await import(
+      "../auto-reply/reply/reply-dispatcher.js"
+    );
+
+    const allowDelivery = createDeferred();
+    const dispatcher = createReplyDispatcherFromFreshModule({
+      deliver: async () => {
+        await allowDelivery.promise;
+      },
+    });
+
+    expect(registryModule.getTotalPendingReplies()).toBe(1);
+
+    dispatcher.sendFinalReply({ text: "Reply" });
+    dispatcher.markComplete();
+
+    await flushMicrotasks();
+    expect(registryModule.getTotalPendingReplies()).toBeGreaterThan(0);
+
+    allowDelivery.resolve();
+    await dispatcher.waitForIdle();
+
+    expect(registryModule.getTotalPendingReplies()).toBe(0);
+    registryModule.clearAllDispatchers();
+  });
 });

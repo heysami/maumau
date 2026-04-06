@@ -103,6 +103,7 @@ async function resolveRequestedModelAuthChoice(params: {
 export async function runModelAuthWizard(
   opts: {
     authChoice?: string;
+    setDefaultModel?: boolean;
   },
   runtime: RuntimeEnv,
   prompter: WizardPrompter,
@@ -118,6 +119,7 @@ export async function runModelAuthWizard(
   if (snapshot.exists && !snapshot.valid) {
     throw new Error("Config is invalid. Fix it in Settings -> Config, then try again.");
   }
+  const shouldSetDefaultModel = opts.setDefaultModel ?? true;
 
   let nextConfig: MaumauConfig = snapshot.valid ? snapshot.config : {};
   const workspaceDir =
@@ -159,11 +161,11 @@ export async function runModelAuthWizard(
       config: nextConfig,
       prompter,
       runtime,
-      setDefaultModel: true,
+      setDefaultModel: shouldSetDefaultModel,
     });
     nextConfig = authResult.config;
 
-    if (authResult.agentModelOverride) {
+    if (shouldSetDefaultModel && authResult.agentModelOverride) {
       nextConfig = applyPrimaryModel(nextConfig, authResult.agentModelOverride);
     }
   }
@@ -172,7 +174,8 @@ export async function runModelAuthWizard(
     resolveAgentModelPrimaryValue(nextConfig.agents?.defaults?.model),
   );
   const shouldPromptModelSelection =
-    authChoice === "ollama" || (authChoice !== "custom-api-key" && !hasConfiguredDefaultModel);
+    shouldSetDefaultModel &&
+    (authChoice === "ollama" || (authChoice !== "custom-api-key" && !hasConfiguredDefaultModel));
   if (shouldPromptModelSelection) {
     const preferredProvider = await resolvePreferredProviderForAuthChoice({
       choice: authChoice,

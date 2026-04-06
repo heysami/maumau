@@ -70,12 +70,20 @@ export type ResolvedTeamRunTarget = {
   requireDelegation: boolean;
 };
 
-export type TeamRoutingPreference = "ui_human_facing";
+export type TeamRoutingPreference = "ui_human_facing" | "design_assets";
 
 const UI_HUMAN_FACING_TEAM_HINT_RE =
-  /\b(ui|ux|design|designer|visual|content|frontend|accessibility|experience|human|user)\b/i;
+  /\b(ui|ux|frontend|front-end|front end|accessibility|experience|human|user|dashboard|screen|page|layout|component|responsive|content\/visual|ui\/ux)\b/i;
+const PRODUCT_IMPLEMENTATION_TEAM_HINT_RE =
+  /\b(architect|developer|implementation|ship|product|technical qa|visual\/ux qa|system architect)\b/i;
+const DESIGN_ASSET_TEAM_HINT_RE =
+  /\b(asset|manifest|vector|svg|image|raster|illustration|icon|logo|brand|branding|style guide|visual system|consistency|mood board|moodboard|image_generate|requirements qa|consistency qa)\b/i;
+const DESIGN_ASSET_SPECIALIST_TEAM_HINT_RE =
+  /\b(vector visual designer|image visual designer|requirements qa|consistency qa|image_generate|asset manifest|consistency guide)\b/i;
+const ASSET_ONLY_TEAM_HINT_RE =
+  /\b(asset-only|asset only|does not implement webpages|does not implement apps|does not implement webpages, apps, screens, or product code)\b/i;
 const STAGED_SPECIALIST_TEAM_HINT_RE =
-  /\b(architect|developer|qa|quality|review|implementation|content)\b/i;
+  /\b(qa|quality|review|workflow|manager-led|staged|specialist)\b/i;
 
 function buildTeamRoutingHintText(target: ResolvedTeamRunTarget): string {
   return [
@@ -92,16 +100,19 @@ function buildTeamRoutingHintText(target: ResolvedTeamRunTarget): string {
 }
 
 function describeTeamRoutingPreference(preference: TeamRoutingPreference): string {
-  return preference === "ui_human_facing" ? "UI/human-facing" : preference;
+  if (preference === "ui_human_facing") {
+    return "UI/human-facing";
+  }
+  if (preference === "design_assets") {
+    return "design asset";
+  }
+  return preference;
 }
 
 function scoreTeamForRoutingPreference(
   target: ResolvedTeamRunTarget,
   preference: TeamRoutingPreference,
 ): number {
-  if (preference !== "ui_human_facing") {
-    return 0;
-  }
   const hintText = buildTeamRoutingHintText(target);
   let score = 0;
   if (target.requireDelegation) {
@@ -110,8 +121,29 @@ function scoreTeamForRoutingPreference(
   if (target.requiredQaRoles.length > 0) {
     score += 3;
   }
-  if (UI_HUMAN_FACING_TEAM_HINT_RE.test(hintText)) {
+  if (preference === "ui_human_facing") {
+    if (UI_HUMAN_FACING_TEAM_HINT_RE.test(hintText)) {
+      score += 10;
+    }
+    if (PRODUCT_IMPLEMENTATION_TEAM_HINT_RE.test(hintText)) {
+      score += 8;
+    }
+    if (STAGED_SPECIALIST_TEAM_HINT_RE.test(hintText)) {
+      score += 2;
+    }
+    return score;
+  }
+  if (DESIGN_ASSET_TEAM_HINT_RE.test(hintText)) {
+    score += 12;
+  }
+  if (DESIGN_ASSET_SPECIALIST_TEAM_HINT_RE.test(hintText)) {
+    score += 8;
+  }
+  if (ASSET_ONLY_TEAM_HINT_RE.test(hintText)) {
     score += 10;
+  }
+  if (PRODUCT_IMPLEMENTATION_TEAM_HINT_RE.test(hintText)) {
+    score -= 8;
   }
   if (STAGED_SPECIALIST_TEAM_HINT_RE.test(hintText)) {
     score += 2;

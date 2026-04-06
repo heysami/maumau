@@ -4,7 +4,13 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../config/types.maumau.js";
 import type { CronJob } from "../cron/types.js";
-import type { ExecApprovalRecord } from "./exec-approval-manager.js";
+import {
+  ensureStarterTeamConfig,
+  STARTER_TEAM_MANAGER_AGENT_ID,
+  STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID,
+  STARTER_TEAM_TECHNICAL_QA_AGENT_ID,
+} from "../teams/presets.js";
+import { readDashboardWorkshopStore } from "./dashboard-workshop-saved.js";
 import {
   __testing,
   collectDashboardCalendar,
@@ -12,16 +18,20 @@ import {
   collectDashboardTeamSnapshots,
   collectDashboardTeamRuns,
   collectDashboardTasks,
+  collectDashboardWorkshop,
   ensureStoredDashboardTeamSnapshots,
   readStoredDashboardTeamSnapshots,
   refreshStoredDashboardTeamSnapshots,
+  saveDashboardWorkshop,
 } from "./dashboard.js";
+import type { ExecApprovalRecord } from "./exec-approval-manager.js";
 import {
-  ensureStarterTeamConfig,
-  STARTER_TEAM_MANAGER_AGENT_ID,
-  STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID,
-  STARTER_TEAM_TECHNICAL_QA_AGENT_ID,
-} from "../teams/presets.js";
+  AUTH_TOKEN,
+  createRequest,
+  createResponse,
+  createTestGatewayServer,
+  dispatchRequest,
+} from "./server-http.test-harness.js";
 
 function buildCronJob(params: {
   id: string;
@@ -36,12 +46,11 @@ function buildCronJob(params: {
     enabled: true,
     createdAtMs: params.nowMs - 60_000,
     updatedAtMs: params.nowMs - 5_000,
-    schedule:
-      params.schedule ?? {
-        kind: "every",
-        everyMs: 3_600_000,
-        anchorMs: params.nowMs - 3_600_000,
-      },
+    schedule: params.schedule ?? {
+      kind: "every",
+      everyMs: 3_600_000,
+      anchorMs: params.nowMs - 3_600_000,
+    },
     sessionTarget: "main",
     wakeMode: "now",
     payload: { kind: "systemEvent", text: "tick" },
@@ -61,7 +70,11 @@ async function writeSessionStore(
   await fs.writeFile(storePath, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
 }
 
-async function writeTranscript(storePath: string, sessionFile: string, text: string): Promise<void> {
+async function writeTranscript(
+  storePath: string,
+  sessionFile: string,
+  text: string,
+): Promise<void> {
   await writeTranscriptMessages(storePath, sessionFile, [{ role: "assistant", text }]);
 }
 
@@ -69,6 +82,21 @@ async function writeTranscriptMessages(
   storePath: string,
   sessionFile: string,
   messages: Array<{ role: "assistant" | "user"; text: string }>,
+): Promise<void> {
+  await writeTranscriptEntries(
+    storePath,
+    sessionFile,
+    messages.map((message) => ({
+      role: message.role,
+      content: [{ type: "text", text: message.text }],
+    })),
+  );
+}
+
+async function writeTranscriptEntries(
+  storePath: string,
+  sessionFile: string,
+  messages: unknown[],
 ): Promise<void> {
   const transcriptPath = path.join(path.dirname(storePath), sessionFile);
   await fs.writeFile(
@@ -78,9 +106,11 @@ async function writeTranscriptMessages(
         JSON.stringify({
           id: `msg-${index + 1}`,
           message: {
-            role: message.role,
-            content: [{ type: "text", text: message.text }],
-            timestamp: Date.now() + index,
+            ...(message as Record<string, unknown>),
+            timestamp:
+              typeof (message as { timestamp?: unknown }).timestamp === "number"
+                ? (message as { timestamp: number }).timestamp
+                : Date.now() + index,
           },
         }),
       )
@@ -140,7 +170,7 @@ describe("dashboard aggregations", () => {
     await writeTranscript(
       storePath,
       "sess-main.jsonl",
-      "Conversation info (untrusted metadata): ```json {\"foo\":\"bar\"}```\nPreview ready at https://example.com/preview/not-a-task",
+      'Conversation info (untrusted metadata): ```json {"foo":"bar"}```\nPreview ready at https://example.com/preview/not-a-task',
     );
     await writeTranscript(
       storePath,
@@ -197,7 +227,21 @@ describe("dashboard aggregations", () => {
     expect(snapshot.tasks[0]?.title).toBe("UI design");
     expect(snapshot.tasks[0]?.summary).toBeUndefined();
     expect(snapshot.tasks[0]?.blockerLinks).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "approval:approval-1" })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "approval:approval-1",
+          suggestion: "Open the related session, review the request, then approve or reject it.",
+        }),
+      ]),
+    );
+    expect(snapshot.today.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "approval:approval-1",
+          suggestion: "Open the related session, review the request, then approve or reject it.",
+          taskId: "task:agent:main:subagent:designer",
+        }),
+      ]),
     );
     expect(snapshot.tasks.some((task) => task.sessionKey === "main")).toBe(false);
     expect(snapshot.workshop).toEqual(
@@ -213,8 +257,427 @@ describe("dashboard aggregations", () => {
     expect(snapshot.today.scheduledToday.some((event) => event.kind === "approval_needed")).toBe(
       true,
     );
-    expect(snapshot.today.scheduledToday.some((event) => event.title.includes("Conversation info"))).toBe(
+    expect(
+      snapshot.today.scheduledToday.some((event) => event.title.includes("Conversation info")),
+    ).toBe(false);
+  });
+
+  it("prefers assistant follow-up advice for direct-session blockers", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-direct-blocker-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 6, 3, 30, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = "agent:main:telegram:direct:6925625562";
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-telegram-direct",
+        sessionFile: "sess-telegram-direct.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        status: "running",
+      },
+    });
+    await writeTranscriptEntries(storePath, "sess-telegram-direct.jsonl", [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Build checkout confirmation page." }],
+      },
+      {
+        role: "toolResult",
+        toolName: "sessions_spawn",
+        content: [
+          {
+            type: "text",
+            text: '{\n  "status": "forbidden",\n  "error": "This task requires UI/human-facing team execution. Use teams_run with teamId=\\"design-studio\\" instead of sessions_spawn."\n}',
+          },
+        ],
+        details: {
+          status: "forbidden",
+          error:
+            'This task requires UI/human-facing team execution. Use teams_run with teamId="design-studio" instead of sessions_spawn.',
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "[[reply_to_current]] I'm blocked from doing that directly from here.\n\nIf you want, I can try again through the required team path.",
+          },
+        ],
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionKey,
+          source: "direct_session",
+          status: "blocked",
+          title: "checkout confirmation page",
+          blockerLinks: expect.arrayContaining([
+            expect.objectContaining({
+              id: `tool-result:task:${sessionKey}`,
+              description: "I'm blocked from doing that directly from here.",
+              suggestion: "If you want, I can try again through the required team path.",
+            }),
+          ]),
+        }),
+      ]),
+    );
+    expect(snapshot.today.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `tool-result:task:${sessionKey}`,
+          taskId: `task:${sessionKey}`,
+          sessionKey,
+          suggestion: "If you want, I can try again through the required team path.",
+        }),
+      ]),
+    );
+  });
+
+  it("clears stale direct-session blockers after later recovery progress", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-direct-clear-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 6, 4, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = "agent:main:telegram:direct:6925625562";
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-telegram-recovered",
+        sessionFile: "sess-telegram-recovered.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        status: "running",
+      },
+    });
+    await writeTranscriptEntries(storePath, "sess-telegram-recovered.jsonl", [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Build the Mistborn page." }],
+      },
+      {
+        role: "toolResult",
+        toolName: "teams_run",
+        content: [
+          {
+            type: "text",
+            text: '{\n  "status": "forbidden",\n  "error": "This task requires asset-only design team execution. Use teams_run with teamId=\\"design-studio\\" instead of sessions_spawn."\n}',
+          },
+        ],
+        details: {
+          status: "forbidden",
+          error:
+            'This task requires asset-only design team execution. Use teams_run with teamId="design-studio" instead of sessions_spawn.',
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "The preferred team path was blocked. I'll use the required design team instead.",
+          },
+        ],
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const blockedSnapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(blockedSnapshot.tasks.some((task) => task.sessionKey === sessionKey)).toBe(true);
+
+    await writeTranscriptEntries(storePath, "sess-telegram-recovered.jsonl", [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Build the Mistborn page." }],
+      },
+      {
+        role: "toolResult",
+        toolName: "teams_run",
+        content: [
+          {
+            type: "text",
+            text: '{\n  "status": "forbidden",\n  "error": "This task requires asset-only design team execution. Use teams_run with teamId=\\"design-studio\\" instead of sessions_spawn."\n}',
+          },
+        ],
+        details: {
+          status: "forbidden",
+          error:
+            'This task requires asset-only design team execution. Use teams_run with teamId="design-studio" instead of sessions_spawn.',
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "The preferred team path was blocked. I'll use the required design team instead.",
+          },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolName: "teams_run",
+        content: [{ type: "text", text: '{\n  "status": "accepted"\n}' }],
+        details: {
+          status: "accepted",
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "It's in progress now - I've got the design team building the page and I'll send the result when it's ready.",
+          },
+        ],
+      },
+    ]);
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs: nowMs + 60_000,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks.some((task) => task.sessionKey === sessionKey)).toBe(false);
+    expect(snapshot.today.blockers.some((blocker) => blocker.sessionKey === sessionKey)).toBe(
       false,
+    );
+  });
+
+  it("uses the latest assistant blocker options after an earlier blocked handoff was retried", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-direct-latest-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 6, 4, 15, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = "agent:main:telegram:direct:6925625562";
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-telegram-latest-blocker",
+        sessionFile: "sess-telegram-latest-blocker.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        status: "running",
+      },
+    });
+    await writeTranscriptEntries(storePath, "sess-telegram-latest-blocker.jsonl", [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Build the Mistborn page." }],
+      },
+      {
+        role: "toolResult",
+        toolName: "teams_run",
+        content: [
+          {
+            type: "text",
+            text: '{\n  "status": "forbidden",\n  "error": "This task requires asset-only design team execution. Use teams_run with teamId=\\"design-studio\\" instead of sessions_spawn."\n}',
+          },
+        ],
+        details: {
+          status: "forbidden",
+          error:
+            'This task requires asset-only design team execution. Use teams_run with teamId="design-studio" instead of sessions_spawn.',
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "The preferred team path was blocked. I'll use the required design team instead.",
+          },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolName: "teams_run",
+        content: [{ type: "text", text: '{\n  "status": "accepted"\n}' }],
+        details: {
+          status: "accepted",
+        },
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "It's in progress now - I've got the design team building the page and I'll send the result when it's ready.",
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "[[reply_to_current]] I hit a routing blocker: the team I'm required to use here is asset-only, and it refused the job because this is actual webpage implementation, not just design assets.\n\nWhat I can do next:\n1. make you a Mistborn design brief instead\n2. try again once the implementation lane is available for webpage building\n3. just give you the full page content + structure here so it's ready to turn into a site fast",
+          },
+        ],
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionKey,
+          status: "blocked",
+          blockerLinks: expect.arrayContaining([
+            expect.objectContaining({
+              description:
+                "I hit a routing blocker: the team I'm required to use here is asset-only, and it refused the job because this is actual webpage implementation, not just design assets.",
+              suggestion:
+                "Next options: make you a Mistborn design brief instead; try again once the implementation lane is available for webpage building; or just give you the full page content + structure here so it's ready to turn into a site fast.",
+            }),
+          ]),
+        }),
+      ]),
+    );
+  });
+
+  it("adds actionable failure blockers to tasks and today's blocker list", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-failure-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 5, 2, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = "agent:main:subagent:developer";
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-failed-task",
+        sessionFile: "sess-failed-task.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        endedAt: nowMs - 500,
+        status: "failed",
+        teamId: "vibe-coder",
+        teamRole: "developer",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-failed-task.jsonl", [
+      {
+        role: "user",
+        text: "Implement the subscription checkout page.",
+      },
+      {
+        role: "assistant",
+        text: "TypeError: checkout schema was undefined.",
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionKey,
+          status: "blocked",
+          blockerLinks: expect.arrayContaining([
+            expect.objectContaining({
+              id: `failure:task:${sessionKey}`,
+              description: "TypeError: checkout schema was undefined.",
+              suggestion:
+                "Open the related session, inspect the latest failure, fix or retry it, then continue.",
+            }),
+          ]),
+        }),
+      ]),
+    );
+    expect(snapshot.today.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `failure:task:${sessionKey}`,
+          taskId: `task:${sessionKey}`,
+          suggestion:
+            "Open the related session, inspect the latest failure, fix or retry it, then continue.",
+        }),
+      ]),
     );
   });
 
@@ -306,7 +769,9 @@ describe("dashboard aggregations", () => {
 
     const dailyOccurrences = calendar.events.filter((event) => event.jobId === "daily-review");
     expect(dailyOccurrences.length).toBeGreaterThan(10);
-    expect(new Set(dailyOccurrences.map((event) => new Date(event.startAtMs).getUTCDate())).size).toBeGreaterThan(10);
+    expect(
+      new Set(dailyOccurrences.map((event) => new Date(event.startAtMs).getUTCDate())).size,
+    ).toBeGreaterThan(10);
   });
 
   it("uses the task subject from prompt/output context instead of only the role label", async () => {
@@ -399,15 +864,13 @@ describe("dashboard aggregations", () => {
 
     const vibeCoderSnapshot = result.snapshots.find((snapshot) => snapshot.teamId === "vibe-coder");
     expect(vibeCoderSnapshot).toBeTruthy();
-    expect(
-      vibeCoderSnapshot?.nodes.find((node) => node.role === "system architect")?.stage,
-    ).toBe("architecture");
+    expect(vibeCoderSnapshot?.nodes.find((node) => node.role === "system architect")?.stage).toBe(
+      "architecture",
+    );
     expect(vibeCoderSnapshot?.nodes.find((node) => node.role === "developer")?.stage).toBe(
       "execution",
     );
-    expect(vibeCoderSnapshot?.nodes.find((node) => node.role === "technical qa")?.stage).toBe(
-      "qa",
-    );
+    expect(vibeCoderSnapshot?.nodes.find((node) => node.role === "technical qa")?.stage).toBe("qa");
     expect(vibeCoderSnapshot?.edges.some((edge) => edge.kind === "flow")).toBe(true);
     expect(
       vibeCoderSnapshot?.edges.some(
@@ -446,12 +909,13 @@ describe("dashboard aggregations", () => {
     });
 
     const previewSnapshot = preview.snapshots.find((snapshot) => snapshot.teamId === "vibe-coder");
-    expect(previewSnapshot?.lifecycleStages?.find((stage) => stage.id === "manager_confirmation"))
-      .toEqual(
-        expect.objectContaining({
-          name: "Final Review",
-        }),
-      );
+    expect(
+      previewSnapshot?.lifecycleStages?.find((stage) => stage.id === "manager_confirmation"),
+    ).toEqual(
+      expect.objectContaining({
+        name: "Final Review",
+      }),
+    );
 
     const persisted = await readStoredDashboardTeamSnapshots({ stateDir: tempRoot });
     expect(persisted).toEqual({ generatedAtMs: 0, snapshots: [] });
@@ -565,8 +1029,7 @@ describe("dashboard aggregations", () => {
     await writeTranscriptMessages(storePath, "sess-vibe-manager.jsonl", [
       {
         role: "assistant",
-        text:
-          'WORK_ITEM:{"title":"Build the subscription upgrade checkout flow","summary":"Architecture is complete and QA is verifying the implementation.","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"qa","currentStageName":"QA","completedStageIds":["planning","architecture","execution"],"status":"in_progress"}}',
+        text: 'WORK_ITEM:{"title":"Build the subscription upgrade checkout flow","summary":"Architecture is complete and QA is verifying the implementation.","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"qa","currentStageName":"QA","completedStageIds":["planning","architecture","execution"],"status":"in_progress"}}',
       },
     ]);
     await writeTranscriptMessages(storePath, "sess-vibe-architect.jsonl", [
@@ -725,8 +1188,7 @@ describe("dashboard aggregations", () => {
     await writeTranscriptMessages(storePath, "sess-vibe-manager-review.jsonl", [
       {
         role: "assistant",
-        text:
-          'WORK_ITEM:{"title":"Ship the billing settings refresh","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"manager_confirmation","currentStageName":"Manager Confirmation","completedStageIds":["planning","architecture","execution","qa"]}}',
+        text: 'WORK_ITEM:{"title":"Ship the billing settings refresh","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","rootSessionKey":"agent:main:main","event":"stage_enter","currentStageId":"manager_confirmation","currentStageName":"Manager Confirmation","completedStageIds":["planning","architecture","execution","qa"]}}',
       },
     ]);
     await writeTranscriptMessages(storePath, "sess-vibe-architect-review.jsonl", [
@@ -1053,6 +1515,297 @@ describe("dashboard aggregations", () => {
       expect.objectContaining({
         title: "Mistborn Series Guide",
         previewUrl: "https://example.com/preview/for-req-er/preview-new/",
+      }),
+    );
+  });
+
+  it("prefers spawned workspace paths and persists project bindings when saving workshop items", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-save-project-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 6, 9, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const defaultWorkspace = path.join(tempRoot, "workspace-default");
+    const spawnedWorkspace = path.join(tempRoot, "workspace-spawned");
+    const siteDir = path.join(spawnedWorkspace, "site");
+    const sessionKey = "agent:main:subagent:designer";
+    const taskId = `task:${sessionKey}`;
+    const workshopItemId = `${taskId}:preview:${sessionKey}`;
+    const leaseId = "preview-save-project";
+    const previewUrl = `https://example.com/preview/for-req-er/${leaseId}/`;
+    await fs.mkdir(siteDir, { recursive: true });
+    await fs.mkdir(defaultWorkspace, { recursive: true });
+    await fs.writeFile(
+      path.join(siteDir, "index.html"),
+      "<html><body>saved workspace</body></html>\n",
+      "utf8",
+    );
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-designer",
+        sessionFile: "sess-designer.jsonl",
+        updatedAt: nowMs,
+        startedAt: nowMs - 60_000,
+        endedAt: nowMs - 5_000,
+        status: "done",
+        teamId: "vibe-coder",
+        teamRole: "ui/ux designer",
+        spawnedWorkspaceDir: spawnedWorkspace,
+      },
+    });
+    await writeTranscript(
+      storePath,
+      "sess-designer.jsonl",
+      `Preview ready at ${previewUrl}\nFILE:site`,
+    );
+    const leaseDir = path.join(tempRoot, "previews", "leases", leaseId);
+    await fs.mkdir(path.join(leaseDir, "content"), { recursive: true });
+    await fs.writeFile(
+      path.join(leaseDir, "lease.json"),
+      `${JSON.stringify(
+        {
+          id: leaseId,
+          visibility: "private",
+          sourcePath: siteDir,
+          storedPath: path.join(leaseDir, "content"),
+          isDirectory: true,
+          recipientHintSource: "fallback",
+          recipientHintNormalizedSlug: "requester",
+          recipientHintMaskedSlug: "req-er",
+          recipientHintDisplayLabel: "requester",
+          recipientHintVerified: false,
+          createdAt: new Date(nowMs - 60_000).toISOString(),
+          expiresAt: new Date(nowMs + 60_000).toISOString(),
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(leaseDir, "content", "index.html"),
+      "<html><body>saved workspace</body></html>\n",
+      "utf8",
+    );
+
+    const cfg = {
+      agents: {
+        default: "main",
+        defaults: {
+          workspace: defaultWorkspace,
+        },
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const saved = await saveDashboardWorkshop({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      itemIds: [workshopItemId],
+      projectName: "Alpha Project",
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(saved.savedCount).toBe(1);
+    expect(saved.updatedCount).toBe(0);
+    const workshopStore = await readDashboardWorkshopStore({ stateDir: tempRoot });
+    const resolvedSpawnedWorkspace = await fs.realpath(spawnedWorkspace);
+    expect(workshopStore.savedItems).toHaveLength(1);
+    expect(workshopStore.projectByWorkspace[resolvedSpawnedWorkspace]).toEqual(
+      expect.objectContaining({
+        name: "Alpha Project",
+        key: "alpha project",
+      }),
+    );
+
+    const tasks = await collectDashboardTasks({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(tasks.items[0]).toEqual(
+      expect.objectContaining({
+        workspaceId: resolvedSpawnedWorkspace,
+        projectName: "Alpha Project",
+        projectKey: "alpha project",
+      }),
+    );
+
+    const resaved = await saveDashboardWorkshop({
+      cfg,
+      nowMs: nowMs + 5_000,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      itemIds: [workshopItemId],
+      projectName: "Beta Project",
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+    expect(resaved.savedCount).toBe(0);
+    expect(resaved.updatedCount).toBe(1);
+    const updatedStore = await readDashboardWorkshopStore({ stateDir: tempRoot });
+    expect(updatedStore.savedItems).toHaveLength(1);
+    expect(updatedStore.savedItems[0]).toEqual(
+      expect.objectContaining({
+        projectName: "Beta Project",
+        projectKey: "beta project",
+      }),
+    );
+  });
+
+  it("serves saved workshop previews after the original preview lease is removed", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-saved-preview-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 6, 9, 30, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const workspaceDir = path.join(tempRoot, "workspace");
+    const siteDir = path.join(workspaceDir, "site");
+    const sessionKey = "agent:main:subagent:designer";
+    const taskId = `task:${sessionKey}`;
+    const workshopItemId = `${taskId}:preview:${sessionKey}`;
+    const leaseId = "preview-saved-http";
+    const previewUrl = `https://example.com/preview/for-req-er/${leaseId}/`;
+    await fs.mkdir(siteDir, { recursive: true });
+    await fs.writeFile(
+      path.join(siteDir, "index.html"),
+      "<html><body>durable saved preview</body></html>\n",
+      "utf8",
+    );
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-designer",
+        sessionFile: "sess-designer.jsonl",
+        updatedAt: nowMs,
+        startedAt: nowMs - 60_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "ui/ux designer",
+        spawnedWorkspaceDir: workspaceDir,
+      },
+    });
+    await writeTranscript(
+      storePath,
+      "sess-designer.jsonl",
+      `Preview ready at ${previewUrl}\nFILE:site`,
+    );
+    const leaseDir = path.join(tempRoot, "previews", "leases", leaseId);
+    await fs.mkdir(path.join(leaseDir, "content"), { recursive: true });
+    await fs.writeFile(
+      path.join(leaseDir, "lease.json"),
+      `${JSON.stringify(
+        {
+          id: leaseId,
+          visibility: "private",
+          sourcePath: siteDir,
+          storedPath: path.join(leaseDir, "content"),
+          isDirectory: true,
+          recipientHintSource: "fallback",
+          recipientHintNormalizedSlug: "requester",
+          recipientHintMaskedSlug: "req-er",
+          recipientHintDisplayLabel: "requester",
+          recipientHintVerified: false,
+          createdAt: new Date(nowMs - 60_000).toISOString(),
+          expiresAt: new Date(nowMs + 60_000).toISOString(),
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(leaseDir, "content", "index.html"),
+      "<html><body>durable saved preview</body></html>\n",
+      "utf8",
+    );
+
+    const cfg = {
+      agents: {
+        default: "main",
+        defaults: {
+          workspace: workspaceDir,
+        },
+      },
+      gateway: {
+        auth: {
+          mode: "token",
+          token: "test-token",
+        },
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const saveResult = await saveDashboardWorkshop({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      itemIds: [workshopItemId],
+      projectName: "Alpha Project",
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+    const savedPreviewUrl = saveResult.workshop.savedItems[0]?.previewUrl;
+    expect(savedPreviewUrl).toContain("/dashboard-workshop-embed/saved/");
+
+    await fs.rm(path.join(tempRoot, "previews", "leases", leaseId), {
+      recursive: true,
+      force: true,
+    });
+
+    const previousStateDir = process.env.MAUMAU_STATE_DIR;
+    process.env.MAUMAU_STATE_DIR = tempRoot;
+    try {
+      const server = createTestGatewayServer({ resolvedAuth: AUTH_TOKEN });
+      const response = createResponse();
+      await dispatchRequest(
+        server,
+        createRequest({
+          path: new URL(savedPreviewUrl ?? "http://localhost/invalid", "http://localhost").pathname,
+        }),
+        response.res,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(response.res.statusCode).toBe(200);
+      expect(response.getBody()).toContain("durable saved preview");
+    } finally {
+      if (previousStateDir === undefined) {
+        delete process.env.MAUMAU_STATE_DIR;
+      } else {
+        process.env.MAUMAU_STATE_DIR = previousStateDir;
+      }
+    }
+
+    const workshop = await collectDashboardWorkshop({
+      cfg,
+      nowMs: nowMs + 1_000,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+    expect(workshop.savedItems[0]).toEqual(
+      expect.objectContaining({
+        projectName: "Alpha Project",
       }),
     );
   });

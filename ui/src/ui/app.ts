@@ -56,10 +56,10 @@ import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { exportChatMarkdown } from "./chat/export.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
-import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
@@ -81,6 +81,7 @@ import type {
   CronRunLogEntry,
   CronStatus,
   DashboardCalendarResult,
+  DashboardTaskFilter,
   DashboardSnapshot,
   DashboardTeamSnapshotsResult,
   HealthSummary,
@@ -118,6 +119,16 @@ function resolveOnboardingMode(): boolean {
   }
   const normalized = raw.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatLocalDateOffset(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return formatLocalDate(date);
 }
 
 @customElement("maumau-app")
@@ -294,6 +305,7 @@ export class MaumauApp extends LitElement {
   @state() agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" = "files";
   @state() agentFilesLoading = false;
   @state() agentFilesError: string | null = null;
+  @state() agentFilesTargetId: string | null = null;
   @state() agentFilesList: AgentsFilesListResult | null = null;
   @state() agentFileContents: Record<string, string> = {};
   @state() agentFileDrafts: Record<string, string> = {};
@@ -324,6 +336,12 @@ export class MaumauApp extends LitElement {
   @state() dashboardLoading = false;
   @state() dashboardError: string | null = null;
   @state() dashboardSnapshot: DashboardSnapshot | null = null;
+  @state() dashboardWalletLoading = false;
+  @state() dashboardWalletError: string | null = null;
+  @state() dashboardWalletResult: import("./types.js").DashboardWalletResult | null = null;
+  @state() dashboardWalletStartDate = formatLocalDateOffset(-29);
+  @state() dashboardWalletEndDate = formatLocalDateOffset(0);
+  @state() dashboardWalletTimeZone: "local" | "utc" = "local";
   @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
   @state() dashboardCalendarAnchorAtMs: number | null = null;
   @state() dashboardTeamsLoading = false;
@@ -332,7 +350,7 @@ export class MaumauApp extends LitElement {
   @state() dashboardTeamRunsLoading = false;
   @state() dashboardTeamRunsError: string | null = null;
   @state() dashboardTeamRuns: import("./types.js").DashboardTeamRunsResult | null = null;
-  @state() dashboardTaskFilter: string | null = null;
+  @state() dashboardTaskFilter: DashboardTaskFilter = null;
   @state() dashboardTaskGroupSelection: string | null = null;
   @state() dashboardDoneFromDate = (() => {
     const d = new Date();
@@ -343,9 +361,15 @@ export class MaumauApp extends LitElement {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
   @state() dashboardWorkshopSelectedId: string | null = null;
+  @state() dashboardWorkshopTab: "saved" | "recent" = "recent";
+  @state() dashboardWorkshopSelectedIds: Set<string> = new Set();
+  @state() dashboardWorkshopProjectDraft = "";
+  @state() dashboardWorkshopSaving = false;
+  @state() dashboardWorkshopSaveError: string | null = null;
   @state() dashboardCalendarView: "month" | "week" | "day" = "month";
   @state() dashboardTeamSelection: string | null = null;
   @state() dashboardMemoryAgentId: string | null = null;
+  @state() dashboardAgentPanel: "memory" | "scope" = "memory";
   @state() mauOfficeLoading = false;
   @state() mauOfficeError: string | null = null;
   @state() mauOfficeState = createEmptyMauOfficeState();
@@ -421,6 +445,7 @@ export class MaumauApp extends LitElement {
 
   // Non-reactive (don’t trigger renders just for timer bookkeeping).
   usageQueryDebounceTimer: number | null = null;
+  dashboardWalletDateDebounceTimer: number | null = null;
 
   @state() cronLoading = false;
   @state() cronJobsLoadingMore = false;

@@ -58,6 +58,7 @@ export { decodeStrictBase64 };
 
 export type SpawnSubagentParams = {
   task: string;
+  routingTask?: string;
   label?: string;
   agentId?: string;
   intent?: "delegate" | "team_manager";
@@ -362,6 +363,7 @@ export async function spawnSubagentDirect(
   ctx: SpawnSubagentContext,
 ): Promise<SpawnSubagentResult> {
   const task = params.task;
+  const routingTask = params.routingTask ?? task;
   const label = params.label?.trim() || "";
   const requestedAgentId = params.agentId?.trim();
 
@@ -480,7 +482,7 @@ export async function spawnSubagentDirect(
     : implicitManagerSpecialistTarget?.agentId ?? defaultTargetAgentId;
   const executionRouteRequirement = resolveExecutionRouteRequirement({
     cfg,
-    task,
+    task: routingTask,
     sessionKey: requesterInternalKey,
     agentId: requesterAgentId,
   });
@@ -496,6 +498,16 @@ export async function spawnSubagentDirect(
     executionRouteRequirement.kind === "team_openprose" &&
     executionRouteRequirement.teamReady === true &&
     requiredTeamId === routedTeamId &&
+    normalizeAgentId(routedTeamConfig.managerAgentId) === targetAgentId;
+  const isRootManagerChoosingLinkedTeam =
+    params.intent === "team_manager" &&
+    params.skipAllowAgentsCheck === true &&
+    params.sessionPatch?.teamRole === "manager" &&
+    !!routedTeamConfig &&
+    requesterTeamContext?.team?.implicitForManagerSessions === true &&
+    executionRouteRequirement.kind === "team_openprose" &&
+    executionRouteRequirement.teamReady === true &&
+    !requiredTeamId &&
     normalizeAgentId(routedTeamConfig.managerAgentId) === targetAgentId;
   const requesterIsTeamManager =
     requesterTeamContext?.teamRole?.trim().toLowerCase() === "manager";
@@ -530,7 +542,8 @@ export async function spawnSubagentDirect(
     requesterAgentConfig?.executionStyle === "orchestrator" &&
     executionRouteRequirement.requiresTeam &&
     requesterTeamId !== requiredTeamId &&
-    !isRequiredTeamManagerSpawn
+    !isRequiredTeamManagerSpawn &&
+    !isRootManagerChoosingLinkedTeam
   ) {
     const suggestedTeamRun = executionRouteRequirement.teamId
       ? `teams_run with teamId="${executionRouteRequirement.teamId}"`
@@ -538,8 +551,8 @@ export async function spawnSubagentDirect(
     return {
       status: "forbidden",
       error: executionRouteRequirement.teamReady
-        ? `This task requires UI/human-facing team execution. Use ${suggestedTeamRun} instead of sessions_spawn.`
-        : `This task requires UI/human-facing team execution, but the team route is currently blocked: ${executionRouteRequirement.blockingReasons.join(" ") || "unknown blocking reason"}`,
+        ? `This task requires ${describeTeamExecutionRequirement(executionRouteRequirement.reason)}. Use ${suggestedTeamRun} instead of sessions_spawn.`
+        : `This task requires ${describeTeamExecutionRequirement(executionRouteRequirement.reason)}, but the team route is currently blocked: ${executionRouteRequirement.blockingReasons.join(" ") || "unknown blocking reason"}`,
     };
   }
   const teamSessionPatch: Record<string, unknown> = {};
@@ -1034,4 +1047,12 @@ export async function spawnSubagentDirect(
     modelApplied: resolvedModel ? modelApplied : undefined,
     attachments: attachmentsReceipt,
   };
+}
+function describeTeamExecutionRequirement(
+  reason: ReturnType<typeof resolveExecutionRouteRequirement>["reason"],
+): string {
+  if (reason === "design_assets") {
+    return "asset-only design team execution";
+  }
+  return "UI/human-facing team execution";
 }

@@ -227,6 +227,27 @@ export async function stopRunningMacAppIfPresent(
   );
 }
 
+export async function clearMacLaunchctlGatewayEnvOverrides(
+  runtime: RuntimeEnv,
+  opts?: { dryRun?: boolean },
+): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  for (const key of ["MAUMAU_GATEWAY_TOKEN", "MAUMAU_GATEWAY_PASSWORD"]) {
+    if (opts?.dryRun) {
+      runtime.log(`[dry-run] launchctl unsetenv ${key}`);
+      continue;
+    }
+
+    const code = await runMacProcessCommand(["launchctl", "unsetenv", key]);
+    if (code === 0) {
+      runtime.log(`Cleared launchctl ${key} override if present.`);
+    }
+  }
+}
+
 export async function listAgentSessionDirs(stateDir: string): Promise<string[]> {
   const root = path.join(stateDir, "agents");
   try {

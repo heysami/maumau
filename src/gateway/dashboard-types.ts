@@ -4,7 +4,8 @@ export type DashboardWorkItemVisibilityScope = "global" | "team_detail";
 export type DashboardWorkItemSource =
   | "team_session"
   | "approval_linked"
-  | "runtime_envelope";
+  | "runtime_envelope"
+  | "direct_session";
 
 export type DashboardWorkItemSessionLinkKind = "primary" | "child" | "approval";
 
@@ -24,6 +25,7 @@ export type DashboardWorkItemBlockerLink = {
   kind: DashboardWorkItemBlockerKind;
   title: string;
   description: string;
+  suggestion?: string;
   sessionKey?: string;
 };
 
@@ -67,6 +69,10 @@ export type DashboardWorkItem = {
   totalStepCount?: number;
   progressLabel?: string;
   progressPercent?: number;
+  workspaceId?: string;
+  workspaceLabel?: string;
+  projectName?: string;
+  projectKey?: string;
   sessionLinks: DashboardWorkItemSessionLink[];
   blockerLinks: DashboardWorkItemBlockerLink[];
   previewLinks: DashboardWorkshopPreviewLink[];
@@ -90,6 +96,35 @@ export type DashboardWorkshopItem = {
   embeddable: boolean;
   taskStatus: DashboardWorkItemStatus;
   taskAssigneeLabel?: string;
+  workspaceId?: string;
+  workspaceLabel?: string;
+  projectName?: string;
+  projectKey?: string;
+  isSaved?: boolean;
+  savedItemId?: string;
+  savedAtMs?: number;
+};
+
+export type DashboardSavedWorkshopItem = {
+  id: string;
+  sessionKey?: string;
+  taskId?: string;
+  title: string;
+  summary?: string;
+  taskTitle?: string;
+  updatedAtMs?: number;
+  savedAtMs: number;
+  agentId?: string;
+  previewUrl?: string;
+  embedUrl?: string;
+  artifactPath?: string;
+  embeddable: boolean;
+  taskStatus: DashboardWorkItemStatus;
+  taskAssigneeLabel?: string;
+  workspaceId?: string;
+  workspaceLabel?: string;
+  projectName?: string;
+  projectKey?: string;
 };
 
 export type DashboardCalendarEventKind =
@@ -152,6 +187,7 @@ export type DashboardBlocker = {
   severity: DashboardBlockerSeverity;
   title: string;
   description: string;
+  suggestion?: string;
   sessionKey?: string;
   jobId?: string;
   taskId?: string;
@@ -173,6 +209,15 @@ export type DashboardTasksResult = {
 export type DashboardWorkshopResult = {
   generatedAtMs: number;
   items: DashboardWorkshopItem[];
+  savedItems: DashboardSavedWorkshopItem[];
+};
+
+export type DashboardWorkshopSaveResult = {
+  generatedAtMs: number;
+  savedCount: number;
+  updatedCount: number;
+  projectUpdateCount: number;
+  workshop: DashboardWorkshopResult;
 };
 
 export type DashboardCalendarView = "month" | "week" | "day";
@@ -289,11 +334,42 @@ export type DashboardTeamRunsResult = {
   items: DashboardTeamRun[];
 };
 
+export type DashboardWalletCardId =
+  | "llm"
+  | "twilio"
+  | "deepgram-realtime"
+  | "deepgram-audio"
+  | "elevenlabs";
+
+export type DashboardWalletCard = {
+  id: DashboardWalletCardId;
+  records: number;
+  recordLabel: string;
+  totalValue: number;
+  totalUnit: "usd" | "duration_ms" | "characters";
+  totalLabel: string;
+  measurement: "exact" | "derived";
+  coverage: "full" | "partial";
+  secondaryValue?: number;
+  secondaryUnit?: "tokens";
+  secondaryLabel?: string;
+  note?: string;
+  missingTotals?: number;
+};
+
+export type DashboardWalletResult = {
+  generatedAtMs: number;
+  startDate: string;
+  endDate: string;
+  cards: DashboardWalletCard[];
+};
+
 export type DashboardSnapshot = {
   generatedAtMs: number;
   today: DashboardTodaySnapshot;
   tasks: DashboardWorkItem[];
   workshop: DashboardWorkshopItem[];
+  workshopSaved: DashboardSavedWorkshopItem[];
   calendar: DashboardCalendarEvent[];
   routines: DashboardRoutine[];
   memories: DashboardRecentMemoryEntry[];

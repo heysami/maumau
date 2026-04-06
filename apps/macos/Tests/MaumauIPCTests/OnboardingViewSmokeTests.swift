@@ -172,6 +172,12 @@ struct OnboardingViewSmokeTests {
             browserControlEnabled: true))
     }
 
+    @Test func `successful onboarding reconnects configured modes`() {
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .local) == .local)
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .remote) == .remote)
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .unconfigured) == nil)
+    }
+
     @Test func `local onboarding uses a deferred config draft store`() {
         let state = AppState(preview: true)
         state.connectionMode = .local

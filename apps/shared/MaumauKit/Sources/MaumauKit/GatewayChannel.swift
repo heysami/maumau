@@ -635,8 +635,9 @@ public actor GatewayChannelActor {
         self.connected = false
         self.keepaliveTask?.cancel()
         self.keepaliveTask = nil
-        await self.disconnectHandler?("receive failed: \(wrapped.localizedDescription)")
+        // Let callers recover/retry immediately instead of waiting behind any reconnect work.
         await self.failPending(wrapped)
+        await self.disconnectHandler?("receive failed: \(wrapped.localizedDescription)")
         await self.scheduleReconnect()
     }
 

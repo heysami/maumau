@@ -1,4 +1,6 @@
+import Foundation
 import Testing
+import MaumauKit
 import MaumauProtocol
 @testable import Maumau
 
@@ -67,6 +69,30 @@ struct ModelsSettingsTests {
         #expect(visible.last?.synthetic == true)
     }
 
+    @Test func `image generation options keep configured providers and saved refs`() {
+        let providers = [
+            ImageGenerationProviderCatalogEntry(
+                id: "google",
+                label: "Google",
+                defaultModel: "gemini-3-pro-image-preview",
+                models: ["gemini-3-pro-image-preview"],
+                configured: true),
+            ImageGenerationProviderCatalogEntry(
+                id: "openai",
+                label: "OpenAI",
+                defaultModel: "gpt-image-1",
+                models: ["gpt-image-1"],
+                configured: false),
+        ]
+
+        let visible = buildImageGenerationModelSettingsOptions(
+            providers: providers,
+            savedRefs: ["openai/gpt-image-1"])
+
+        #expect(visible.map(\.ref) == ["google/gemini-3-pro-image-preview", "openai/gpt-image-1"])
+        #expect(visible.last?.synthetic == true)
+    }
+
     @Test func `primary provider filtering stays scoped to the selected provider`() {
         let openAI = self.option(ref: "openai/gpt-5.4", providerId: "openai", modelId: "gpt-5.4", displayName: "GPT-5.4")
         let anthropic = self.option(
@@ -97,6 +123,49 @@ struct ModelsSettingsTests {
             primaryRef: "ollama/llama2:latest")
 
         #expect(modelId.isEmpty)
+    }
+
+    @Test func `image generation selection reads string configs and writes canonical payload`() {
+        let selection = resolveModelSettingsSelection(from: "  openai/gpt-image-1  ")
+        let payload = buildModelSettingsPayload(
+            primaryRef: selection.primaryRef,
+            fallbackRefs: [])
+
+        #expect(selection == ModelSettingsSelection(primaryRef: "openai/gpt-image-1", fallbackRefs: []))
+        #expect((payload?["primary"] as? String) == "openai/gpt-image-1")
+        #expect(payload?["fallbacks"] == nil)
+    }
+
+    @Test func `followup gateway catalog load skips auth failures`() {
+        let error = GatewayConnectAuthError(
+            message: "token mismatch",
+            detailCodeRaw: GatewayConnectAuthDetailCode.authTokenMismatch.rawValue,
+            canRetryWithDeviceToken: false)
+
+        #expect(shouldSkipFollowupGatewayCatalogLoad(after: error))
+    }
+
+    @Test func `followup gateway catalog load skips transport failures`() {
+        #expect(shouldSkipFollowupGatewayCatalogLoad(after: URLError(.cannotConnectToHost)))
+    }
+
+    @Test func `followup gateway catalog load skips gateway timeouts`() {
+        let error = NSError(
+            domain: "Gateway",
+            code: 5,
+            userInfo: [NSLocalizedDescriptionKey: "gateway request timed out after 5000ms"])
+
+        #expect(shouldSkipFollowupGatewayCatalogLoad(after: error))
+    }
+
+    @Test func `followup gateway catalog load keeps method errors retryable`() {
+        let error = GatewayResponseError(
+            method: "models.list",
+            code: "INVALID_REQUEST",
+            message: "bad request",
+            details: nil)
+
+        #expect(!shouldSkipFollowupGatewayCatalogLoad(after: error))
     }
 
     @Test func `next fallback skips primary and existing fallbacks`() {
@@ -174,6 +243,59 @@ struct ModelsSettingsTests {
             preferredProviderId: nil)
 
         #expect(providerId == "google")
+    }
+
+    @Test func `provider connect groups can be filtered to image generation providers`() {
+        let groups = [
+            ModelAuthChoiceGroup(
+                id: "openai",
+                label: "OpenAI",
+                hint: nil,
+                options: [
+                    ModelAuthChoiceOption(id: "openai-codex", label: "Codex", hint: nil, providerId: "openai-codex"),
+                    ModelAuthChoiceOption(id: "openai-api-key", label: "API key", hint: nil, providerId: "openai"),
+                ]),
+            ModelAuthChoiceGroup(
+                id: "anthropic",
+                label: "Anthropic",
+                hint: nil,
+                options: [
+                    ModelAuthChoiceOption(id: "apiKey", label: "API key", hint: nil, providerId: "anthropic"),
+                ]),
+        ]
+
+        let filtered = filterModelAuthChoiceGroups(
+            groups: groups,
+            allowedProviderIds: ["openai"])
+
+        #expect(filtered.map(\.id) == ["openai"])
+        #expect(filtered.first?.options.map(\.id) == ["openai-api-key"])
+    }
+
+    @Test func `image generation connect groups fall back to generic choices when catalog is unavailable`() {
+        let groups = [
+            ModelAuthChoiceGroup(
+                id: "openai",
+                label: "OpenAI",
+                hint: nil,
+                options: [
+                    ModelAuthChoiceOption(id: "openai-api-key", label: "API key", hint: nil, providerId: "openai"),
+                ]),
+            ModelAuthChoiceGroup(
+                id: "anthropic",
+                label: "Anthropic",
+                hint: nil,
+                options: [
+                    ModelAuthChoiceOption(id: "apiKey", label: "API key", hint: nil, providerId: "anthropic"),
+                ]),
+        ]
+
+        let fallback = resolveImageGenerationProviderConnectGroups(
+            groups: groups,
+            supportedProviderIds: [],
+            fallbackToGenericChoices: true)
+
+        #expect(fallback.map(\.id) == ["openai", "anthropic"])
     }
 
     @Test func `background automation draft trims hydrated values`() {

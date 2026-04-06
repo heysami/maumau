@@ -100,16 +100,16 @@ actor GatewayEndpointStore {
                 launchdSnapshot: launchdSnapshot)
             {
             case .password:
+                if let configPassword = self.resolveConfigPassword(isRemote: false, root: localRoot),
+                   !configPassword.isEmpty
+                {
+                    return configPassword
+                }
                 if let launchdPassword = launchdSnapshot?.password?
                     .trimmingCharacters(in: .whitespacesAndNewlines),
                    !launchdPassword.isEmpty
                 {
                     return launchdPassword
-                }
-                if let configPassword = self.resolveConfigPassword(isRemote: false, root: localRoot),
-                   !configPassword.isEmpty
-                {
-                    return configPassword
                 }
             case .token, .none, .trustedProxy:
                 return nil
@@ -194,19 +194,20 @@ actor GatewayEndpointStore {
                 launchdSnapshot: launchdSnapshot)
             {
             case .token:
-                // The macOS app should follow the supervised local gateway first:
-                // launchd-embedded creds (when present) win, then persisted config.
-                // Process env is only a last-resort fallback for ad-hoc local runs.
+                // Mirror the supervised gateway runtime: persisted config from the
+                // LaunchAgent's MAUMAU_CONFIG_PATH wins over any launchd-embedded
+                // fallback token. The launchd snapshot remains a fallback when
+                // the service env provides the only available credential.
+                if let configToken = self.resolveConfigToken(isRemote: false, root: localRoot),
+                   !configToken.isEmpty
+                {
+                    return configToken
+                }
                 if let launchdToken = launchdSnapshot?.token?
                     .trimmingCharacters(in: .whitespacesAndNewlines),
                    !launchdToken.isEmpty
                 {
                     return launchdToken
-                }
-                if let configToken = self.resolveConfigToken(isRemote: false, root: localRoot),
-                   !configToken.isEmpty
-                {
-                    return configToken
                 }
             case .password, .none, .trustedProxy:
                 return nil

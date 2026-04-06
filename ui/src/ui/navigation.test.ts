@@ -47,6 +47,7 @@ describe("iconForTab", () => {
     expect(iconForTab("teams")).toBe("folder");
     expect(iconForTab("sessions")).toBe("fileText");
     expect(iconForTab("dashboardToday")).toBe("sun");
+    expect(iconForTab("dashboardWallet")).toBe("creditCard");
     expect(iconForTab("dashboardMauOffice")).toBe("briefcase");
     expect(iconForTab("dashboardTasks")).toBe("checkSquare");
     expect(iconForTab("dashboardCalendar")).toBe("calendarDays");
@@ -82,7 +83,9 @@ describe("titleForTab", () => {
     expect(titleForTab("overview")).toBe("Overview");
     expect(titleForTab("teams")).toBe("Teams");
     expect(titleForTab("dashboardToday")).toBe("Today");
+    expect(titleForTab("dashboardWallet")).toBe("Wallet");
     expect(titleForTab("dashboardMauOffice")).toBe("MauOffice");
+    expect(titleForTab("dashboardMemories")).toBe("Agents");
     expect(titleForTab("cron")).toBe("Cron Jobs");
   });
 
@@ -108,6 +111,7 @@ describe("subtitleForTab", () => {
     expect(subtitleForTab("teams")).toContain("generated workflows");
     expect(subtitleForTab("dashboardMauOffice")).toContain("pixel office");
     expect(subtitleForTab("dashboardToday")).toContain("scheduled");
+    expect(subtitleForTab("dashboardWallet")).toContain("provider usage");
   });
 
   it("localizes standalone dashboard subtitles with the selected locale", async () => {
@@ -122,7 +126,9 @@ describe("dashboard locale inventory", () => {
     const locales = [id, de, es, pt_BR, zh_CN, zh_TW];
     for (const locale of locales) {
       expect((locale.tabs as { dashboardToday?: string }).dashboardToday).toBeTruthy();
+      expect((locale.tabs as { dashboardWallet?: string }).dashboardWallet).toBeTruthy();
       expect((locale.subtitles as { dashboardToday?: string }).dashboardToday).toBeTruthy();
+      expect((locale.subtitles as { dashboardWallet?: string }).dashboardWallet).toBeTruthy();
       expect((((locale.dashboard as { shell?: { eyebrow?: string } }).shell) ?? {}).eyebrow).toBeTruthy();
       expect((((locale.dashboard as { mauOffice?: { subtitle?: string } }).mauOffice) ?? {}).subtitle)
         .toBeTruthy();
@@ -173,7 +179,9 @@ describe("pathForTab", () => {
     expect(pathForTab("overview")).toBe("/overview");
     expect(pathForTab("teams")).toBe("/teams");
     expect(pathForTab("dashboardToday")).toBe("/dashboard/today");
+    expect(pathForTab("dashboardWallet")).toBe("/dashboard/wallet");
     expect(pathForTab("dashboardMauOffice")).toBe("/dashboard/mau-office");
+    expect(pathForTab("dashboardMemories")).toBe("/dashboard/agents");
   });
 
   it("prepends base path", () => {
@@ -189,11 +197,16 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/teams")).toBe("teams");
     expect(tabFromPath("/sessions")).toBe("sessions");
     expect(tabFromPath("/dashboard/today")).toBe("dashboardToday");
+    expect(tabFromPath("/dashboard/wallet")).toBe("dashboardWallet");
     expect(tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
   });
 
   it("keeps legacy MauOffice routes compatible", () => {
     expect(tabFromPath("/mau-office")).toBe("dashboardMauOffice");
+  });
+
+  it("keeps the legacy dashboard memories route compatible", () => {
+    expect(tabFromPath("/dashboard/memories")).toBe("dashboardMemories");
   });
 
   it("returns chat for root path", () => {
@@ -225,6 +238,7 @@ describe("inferBasePathFromPathname", () => {
     expect(inferBasePathFromPathname("/overview")).toBe("");
     expect(inferBasePathFromPathname("/teams")).toBe("");
     expect(inferBasePathFromPathname("/dashboard/today")).toBe("");
+    expect(inferBasePathFromPathname("/dashboard/wallet")).toBe("");
   });
 
   it("infers base path from nested paths", () => {

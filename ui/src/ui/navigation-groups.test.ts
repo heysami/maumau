@@ -74,7 +74,9 @@ describe("TAB_GROUPS", () => {
     const control = navigation.TAB_GROUPS.find((group) => group.label === "control");
     expect(control?.tabs).not.toContain("dashboardMauOffice");
     expect(control?.tabs).not.toContain("dashboardToday");
+    expect(control?.tabs).not.toContain("dashboardWallet");
     expect(navigation.tabFromPath("/dashboard/today")).toBe("dashboardToday");
+    expect(navigation.tabFromPath("/dashboard/wallet")).toBe("dashboardWallet");
     expect(navigation.tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
   });
 

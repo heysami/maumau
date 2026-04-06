@@ -26,6 +26,7 @@ import {
   resolveSessionTeamContext,
   resolveTeamRunTarget,
 } from "../../teams/runtime.js";
+import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import { isRequesterRemoteMessagingChannel } from "../../utils/message-channel.js";
 import type { SpawnedToolContext } from "../spawned-context.js";
@@ -47,6 +48,13 @@ const TeamsRunToolSchema = Type.Object({
 
 const QA_APPROVAL_RE = /^QA_APPROVAL:\s*(approved|blocked)\s*$/im;
 const TEAM_MANAGER_MAX_SPAWN_DEPTH = 2;
+const DESIGN_STUDIO_MANAGER_MAX_SPAWN_DEPTH = 3;
+
+function resolveTeamManagerMaxSpawnDepth(teamId: string): number {
+  return teamId.trim().toLowerCase() === DESIGN_STUDIO_TEAM_ID
+    ? DESIGN_STUDIO_MANAGER_MAX_SPAWN_DEPTH
+    : TEAM_MANAGER_MAX_SPAWN_DEPTH;
+}
 
 function shouldDefaultToAsyncTeamRun(params: {
   requesterTeamContext?: ReturnType<typeof resolveSessionTeamContext>;
@@ -438,6 +446,7 @@ export function createTeamsRunTool(
               requesterTailscaleLogin: opts?.requesterTailscaleLogin,
             }),
           }),
+          routingTask: task,
           label: `${targetTeam.name?.trim() || targetTeam.id} manager`,
           agentId: targetTeam.managerAgentId,
           intent: "team_manager",
@@ -451,7 +460,7 @@ export function createTeamsRunTool(
           sessionPatch: {
             teamId: targetTeam.id,
             teamRole: "manager",
-            subagentMaxSpawnDepth: TEAM_MANAGER_MAX_SPAWN_DEPTH,
+            subagentMaxSpawnDepth: resolveTeamManagerMaxSpawnDepth(targetTeam.id),
           },
         },
         {

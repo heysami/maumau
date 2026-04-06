@@ -31,6 +31,27 @@ function hasConfiguredSecretString(value: unknown): boolean {
   return normalizeSecretInputString(value) !== undefined;
 }
 
+function hasUsableSecretInput(params: {
+  value: unknown;
+  refValue?: unknown;
+  env: NodeJS.ProcessEnv;
+}): boolean {
+  const inlineValue = normalizeSecretInputString(params.value);
+  const inlineRef = coerceSecretRef(params.value);
+  if (inlineValue && !inlineRef) {
+    return true;
+  }
+
+  const ref = coerceSecretRef(params.refValue) ?? inlineRef;
+  if (!ref) {
+    return false;
+  }
+  if (ref.source !== "env") {
+    return true;
+  }
+  return normalizeSecretInputString(params.env[ref.id]) !== undefined;
+}
+
 export function evaluateStoredCredentialEligibility(params: {
   credential: AuthProfileCredential;
   now?: number;
@@ -71,4 +92,38 @@ export function evaluateStoredCredentialEligibility(params: {
     return { eligible: false, reasonCode: "missing_credential" };
   }
   return { eligible: true, reasonCode: "ok" };
+}
+
+export function hasUsableStoredCredential(params: {
+  credential: AuthProfileCredential;
+  env?: NodeJS.ProcessEnv;
+  now?: number;
+}): boolean {
+  const env = params.env ?? process.env;
+  const credential = params.credential;
+
+  if (credential.type === "api_key") {
+    return hasUsableSecretInput({
+      value: credential.key,
+      refValue: credential.keyRef,
+      env,
+    });
+  }
+
+  if (credential.type === "token") {
+    const expiryState = resolveTokenExpiryState(credential.expires, params.now);
+    if (expiryState === "expired" || expiryState === "invalid_expires") {
+      return false;
+    }
+    return hasUsableSecretInput({
+      value: credential.token,
+      refValue: credential.tokenRef,
+      env,
+    });
+  }
+
+  return (
+    normalizeSecretInputString(credential.access) !== undefined ||
+    normalizeSecretInputString(credential.refresh) !== undefined
+  );
 }

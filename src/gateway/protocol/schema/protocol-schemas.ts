@@ -24,9 +24,12 @@ import {
   AgentsFilesSetResultSchema,
   AgentsListParamsSchema,
   AgentsListResultSchema,
+  ImageGenerationProviderCatalogEntrySchema,
   AgentsUpdateParamsSchema,
   AgentsUpdateResultSchema,
   ModelChoiceSchema,
+  ModelsImageGenerationProvidersParamsSchema,
+  ModelsImageGenerationProvidersResultSchema,
   ModelsListParamsSchema,
   ModelsListResultSchema,
   PluginsStatusParamsSchema,
@@ -63,6 +66,8 @@ import {
   ConfigSchemaResponseSchema,
   ConfigSetParamsSchema,
   DashboardTeamsSnapshotParamsSchema,
+  DashboardWalletParamsSchema,
+  DashboardWorkshopSaveParamsSchema,
   UpdateRunParamsSchema,
 } from "./config.js";
 import {
@@ -158,16 +163,6 @@ import {
 } from "./sessions.js";
 import { PresenceEntrySchema, SnapshotSchema, StateVersionSchema } from "./snapshot.js";
 import {
-  WizardCancelParamsSchema,
-  WizardNextParamsSchema,
-  WizardNextResultSchema,
-  WizardStartParamsSchema,
-  WizardStartResultSchema,
-  WizardStatusParamsSchema,
-  WizardStatusResultSchema,
-  WizardStepSchema,
-} from "./wizard.js";
-import {
   TeamPromptEditAgentIdentityPatchSchema,
   TeamPromptEditAgentPatchSchema,
   TeamPromptEditCrossTeamLinkSchema,
@@ -179,6 +174,16 @@ import {
   TeamPromptEditWorkflowContractSchema,
   TeamPromptEditWorkflowPatchSchema,
 } from "./teams.js";
+import {
+  WizardCancelParamsSchema,
+  WizardNextParamsSchema,
+  WizardNextResultSchema,
+  WizardStartParamsSchema,
+  WizardStartResultSchema,
+  WizardStatusParamsSchema,
+  WizardStatusResultSchema,
+  WizardStepSchema,
+} from "./wizard.js";
 
 export const ProtocolSchemas = {
   ConnectParams: ConnectParamsSchema,
@@ -237,6 +242,8 @@ export const ProtocolSchemas = {
   SessionsUsageParams: SessionsUsageParamsSchema,
   ConfigGetParams: ConfigGetParamsSchema,
   DashboardTeamsSnapshotParams: DashboardTeamsSnapshotParamsSchema,
+  DashboardWalletParams: DashboardWalletParamsSchema,
+  DashboardWorkshopSaveParams: DashboardWorkshopSaveParamsSchema,
   ConfigSetParams: ConfigSetParamsSchema,
   ConfigApplyParams: ConfigApplyParamsSchema,
   ConfigPatchParams: ConfigPatchParamsSchema,
@@ -289,8 +296,11 @@ export const ProtocolSchemas = {
   AgentsListParams: AgentsListParamsSchema,
   AgentsListResult: AgentsListResultSchema,
   ModelChoice: ModelChoiceSchema,
+  ImageGenerationProviderCatalogEntry: ImageGenerationProviderCatalogEntrySchema,
   ModelsListParams: ModelsListParamsSchema,
   ModelsListResult: ModelsListResultSchema,
+  ModelsImageGenerationProvidersParams: ModelsImageGenerationProvidersParamsSchema,
+  ModelsImageGenerationProvidersResult: ModelsImageGenerationProvidersResultSchema,
   PluginsStatusParams: PluginsStatusParamsSchema,
   SkillsStatusParams: SkillsStatusParamsSchema,
   ToolsCatalogParams: ToolsCatalogParamsSchema,

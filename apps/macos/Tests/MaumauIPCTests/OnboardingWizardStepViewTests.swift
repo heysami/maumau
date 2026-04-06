@@ -144,6 +144,18 @@ struct OnboardingWizardStepViewTests {
         #expect(params["fresh"] == nil)
     }
 
+    @Test func `focused model auth params can preserve the existing default model`() {
+        let params = OnboardingWizardModel.focusedModelAuthStartParams(
+            authChoice: "google-api-key",
+            setDefaultModel: false)
+
+        #expect(params["entrypoint"] == AnyCodable("models-auth"))
+        #expect(params["authChoice"] == AnyCodable("google-api-key"))
+        #expect(params["embedded"] == AnyCodable(true))
+        #expect(params["fresh"] == AnyCodable(true))
+        #expect(params["setDefaultModel"] == AnyCodable(false))
+    }
+
     @Test func `wizard auto fetches next step when gateway is still running without a step`() {
         #expect(
             OnboardingWizardModel.shouldAutoFetchNextStep(

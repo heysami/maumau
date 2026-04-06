@@ -151,6 +151,14 @@ function buildCoreDistEntries(): Record<string, string> {
     // it by a deterministic path instead of a content-hashed chunk name.
     // See https://github.com/maumau/maumau/issues/51676
     "cli/memory-cli": "src/cli/memory-cli.ts",
+    // Keep the model-auth onboarding flow on stable filenames so a running
+    // gateway does not strand later auth-choice imports after dist/ rebuilds.
+    "wizard/model-auth": "src/wizard/model-auth.ts",
+    "commands/auth-choice": "src/commands/auth-choice.ts",
+    "commands/auth-choice-options": "src/commands/auth-choice-options.ts",
+    "commands/auth-choice-prompt": "src/commands/auth-choice-prompt.ts",
+    "commands/model-picker": "src/commands/model-picker.ts",
+    "commands/onboard-custom": "src/commands/onboard-custom.ts",
     // Keep lazy runtime boundaries on stable filenames so rebuilt dist/ trees
     // do not strand already-running processes on stale hashed chunks.
     ...srcRuntimeBoundaryEntries,

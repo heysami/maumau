@@ -56,6 +56,7 @@ describe("handleControlUiHttpRequest", () => {
     hostHeader?: string;
     remoteAddress?: string;
     config?: Parameters<typeof handleControlUiHttpRequest>[2]["config"];
+    resolvedAuth?: Parameters<typeof handleControlUiHttpRequest>[2]["resolvedAuth"];
     trustedProxies?: string[];
     allowRealIpFallback?: boolean;
   }) {
@@ -72,6 +73,7 @@ describe("handleControlUiHttpRequest", () => {
         ...(params.basePath ? { basePath: params.basePath } : {}),
         root: { kind: params.rootKind ?? "resolved", path: params.rootPath },
         config: params.config,
+        resolvedAuth: params.resolvedAuth,
         trustedProxies: params.trustedProxies,
         allowRealIpFallback: params.allowRealIpFallback,
       },
@@ -303,6 +305,49 @@ describe("handleControlUiHttpRequest", () => {
         expect(parsed.loopbackGatewayToken).toBe("loopback-secret");
       },
     });
+  });
+
+  it("prefers the active resolved auth token over newer config during bootstrap", async () => {
+    const previousTailnetDns = process.env.MAUMAU_TAILNET_DNS;
+    process.env.MAUMAU_TAILNET_DNS = "maumau.tailnet.ts.net";
+    try {
+      await withControlUiRoot({
+        fn: async (tmp) => {
+          const { end, handled } = runControlUiRequest({
+            url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+            method: "GET",
+            rootPath: tmp,
+            hostHeader: "127.0.0.1:18789",
+            remoteAddress: "127.0.0.1",
+            config: {
+              gateway: {
+                auth: { mode: "token", token: "future-config-token" },
+                tailscale: { mode: "serve" },
+              },
+            },
+            resolvedAuth: {
+              mode: "token",
+              token: "active-runtime-token",
+              password: undefined,
+              allowTailscale: false,
+            },
+          });
+          await waitForBootstrapPayload();
+          expect(handled).toBe(true);
+          const parsed = parseBootstrapPayload(end);
+          expect(parsed.loopbackGatewayToken).toBe("active-runtime-token");
+          expect(parsed.secureDashboardUrl).toBe(
+            "https://maumau.tailnet.ts.net/dashboard/today#token=active-runtime-token",
+          );
+        },
+      });
+    } finally {
+      if (previousTailnetDns === undefined) {
+        delete process.env.MAUMAU_TAILNET_DNS;
+      } else {
+        process.env.MAUMAU_TAILNET_DNS = previousTailnetDns;
+      }
+    }
   });
 
   it("omits the token for non-loopback bootstrap requests", async () => {

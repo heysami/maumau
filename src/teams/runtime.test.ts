@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createDesignStudioTeamConfig,
   createMainOrchestrationTeamConfig,
   createStarterTeamConfig,
+  DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID,
   MAIN_WORKER_AGENT_ID,
   STARTER_TEAM_MANAGER_AGENT_ID,
 } from "./presets.js";
@@ -26,7 +28,11 @@ const TEST_CONFIG = {
     ],
   },
   teams: {
-    list: [createMainOrchestrationTeamConfig(), createStarterTeamConfig()],
+    list: [
+      createMainOrchestrationTeamConfig(),
+      createStarterTeamConfig(),
+      createDesignStudioTeamConfig(),
+    ],
   },
 };
 
@@ -137,6 +143,24 @@ describe("resolveSessionTeamContext", () => {
         managerAgentId: "product-studio-manager",
         team: expect.objectContaining({
           id: "product-studio",
+        }),
+      }),
+    });
+  });
+
+  it("resolves design-asset routing through the linked design-studio team", () => {
+    const result = resolvePreferredTeamRunTarget({
+      cfg: TEST_CONFIG,
+      managerAgentId: "main",
+      preference: "design_assets",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      target: expect.objectContaining({
+        managerAgentId: DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID,
+        team: expect.objectContaining({
+          id: "design-studio",
         }),
       }),
     });

@@ -1,13 +1,15 @@
 export type UpdateAvailable = import("../../../src/infra/update-startup.js").UpdateAvailable;
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
-import type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 import type {
   DashboardCalendarResult as SharedDashboardCalendarResult,
   DashboardCalendarView as SharedDashboardCalendarView,
+  DashboardWalletCard as SharedDashboardWalletCard,
+  DashboardWalletResult as SharedDashboardWalletResult,
   DashboardRecentMemoryEntry as SharedDashboardRecentMemoryEntry,
   DashboardMemoriesResult as SharedDashboardMemoriesResult,
   DashboardRoutine as SharedDashboardRoutine,
   DashboardRoutinesResult as SharedDashboardRoutinesResult,
+  DashboardSavedWorkshopItem as SharedDashboardSavedWorkshopItem,
   DashboardSnapshot as SharedDashboardSnapshot,
   DashboardTask as SharedDashboardTask,
   DashboardTasksResult as SharedDashboardTasksResult,
@@ -18,17 +20,17 @@ import type {
   DashboardTodaySnapshot as SharedDashboardTodaySnapshot,
   DashboardWorkshopItem as SharedDashboardWorkshopItem,
   DashboardWorkshopResult as SharedDashboardWorkshopResult,
+  DashboardWorkshopSaveResult as SharedDashboardWorkshopSaveResult,
   DashboardWorkItem as SharedDashboardWorkItem,
   DashboardCalendarEvent as SharedDashboardCalendarEvent,
 } from "../../../src/gateway/dashboard-types.ts";
-import type {
-  TeamPromptEditResult as SharedTeamPromptEditResult,
-} from "../../../src/gateway/protocol/index.js";
+import type { TeamPromptEditResult as SharedTeamPromptEditResult } from "../../../src/gateway/protocol/index.js";
 import type {
   SessionPreviewItem as SharedSessionPreviewItem,
   SessionsPreviewEntry as SharedSessionsPreviewEntry,
   SessionsPreviewResult as SharedSessionsPreviewResult,
 } from "../../../src/gateway/session-utils.types.ts";
+import type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 import type {
   GatewayAgentRow as SharedGatewayAgentRow,
   SessionsListResultBase,
@@ -44,9 +46,13 @@ export type DashboardTeamRun = SharedDashboardTeamRun;
 export type DashboardTeamRunsResult = SharedDashboardTeamRunsResult;
 export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
 export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
+export type DashboardSavedWorkshopItem = SharedDashboardSavedWorkshopItem;
+export type DashboardWorkshopSaveResult = SharedDashboardWorkshopSaveResult;
 export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
 export type DashboardCalendarResult = SharedDashboardCalendarResult;
 export type DashboardCalendarView = SharedDashboardCalendarView;
+export type DashboardWalletCard = SharedDashboardWalletCard;
+export type DashboardWalletResult = SharedDashboardWalletResult;
 export type DashboardRoutine = SharedDashboardRoutine;
 export type DashboardRoutinesResult = SharedDashboardRoutinesResult;
 export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
@@ -54,6 +60,10 @@ export type DashboardMemoriesResult = SharedDashboardMemoriesResult;
 export type DashboardTeamSnapshot = SharedDashboardTeamSnapshot;
 export type DashboardTeamSnapshotsResult = SharedDashboardTeamSnapshotsResult;
 export type TeamPromptEditResult = SharedTeamPromptEditResult;
+export type DashboardTaskFilter =
+  | { kind: "task"; value: string }
+  | { kind: "project"; value: string }
+  | null;
 
 export type ChannelsStatusSnapshot = {
   ts: number;

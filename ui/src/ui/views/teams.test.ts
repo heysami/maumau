@@ -79,6 +79,15 @@ function buildProps(overrides: Partial<TeamsProps> = {}): TeamsProps {
 }
 
 describe("renderTeams", () => {
+  it("shows the bundled preset actions", async () => {
+    const container = document.createElement("div");
+    render(renderTeams(buildProps()), container);
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Add Vibe Coder");
+    expect(container.textContent).toContain("Add Design Studio");
+  });
+
   it("opens the prompt action for the selected team and workflow", async () => {
     const onOpenPrompt = vi.fn();
     const container = document.createElement("div");

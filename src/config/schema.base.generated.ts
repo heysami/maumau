@@ -12419,22 +12419,22 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "teams.list[].preset": {
       label: "Team Preset Metadata",
-      help: "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+      help: "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
       tags: ["advanced"],
     },
     "teams.list[].preset.id": {
       label: "Preset ID",
-      help: "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+      help: "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
       tags: ["advanced"],
     },
     "teams.list[].preset.source": {
       label: "Preset Source",
-      help: 'Preset origin marker: "bundled" for Maumau starter teams or "user" for locally-authored templates.',
+      help: 'Preset origin marker: "bundled" for Maumau bundled presets or "user" for locally-authored templates.',
       tags: ["advanced"],
     },
     "teams.list[].preset.version": {
       label: "Preset Version",
-      help: "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
+      help: "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
       tags: ["advanced"],
     },
     "agents.list.*.identity.avatar": {

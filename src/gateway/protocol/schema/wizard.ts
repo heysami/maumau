@@ -15,6 +15,7 @@ export const WizardStartParamsSchema = Type.Object(
     flow: Type.Optional(Type.Union([Type.Literal("quickstart"), Type.Literal("advanced")])),
     preset: Type.Optional(Type.Literal("conversation-automation")),
     authChoice: Type.Optional(Type.String()),
+    setDefaultModel: Type.Optional(Type.Boolean()),
     workspace: Type.Optional(Type.String()),
     acceptRisk: Type.Optional(Type.Boolean()),
     skipChannels: Type.Optional(Type.Boolean()),

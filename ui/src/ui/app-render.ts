@@ -12,7 +12,8 @@ import {
 import { resolveDefaultTeamWorkflowId } from "../../../src/teams/model.js";
 import {
   createBlankTeamConfig,
-  ensureStarterTeamConfig,
+  DESIGN_STUDIO_TEAM_ID,
+  ensureBundledTeamPresetConfig,
   STARTER_TEAM_ID,
 } from "../../../src/teams/presets.js";
 import { t } from "../i18n/index.ts";
@@ -30,7 +31,12 @@ import {
   switchChatSession,
 } from "./app-render.helpers.ts";
 import type { AppViewState } from "./app-view-state.ts";
-import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
+import {
+  loadAgentFileContent,
+  loadAgentFiles,
+  loadPinnedAgentFiles,
+  saveAgentFile,
+} from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog, saveAgentsConfig } from "./controllers/agents.ts";
@@ -48,11 +54,6 @@ import {
   updateConfigFormValue,
   removeConfigFormValue,
 } from "./controllers/config.ts";
-import {
-  closeTeamPromptDialog,
-  openTeamPromptDialog,
-  submitTeamPromptDialog,
-} from "./controllers/team-prompt.ts";
 import {
   loadCronRuns,
   loadMoreCronJobs,
@@ -72,7 +73,11 @@ import {
   updateCronJobsFilter,
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
-import { loadDashboardData, loadDashboardTeamSnapshots } from "./controllers/dashboard.ts";
+import {
+  loadDashboardData,
+  loadDashboardTeamSnapshots,
+  saveDashboardWorkshopSelection,
+} from "./controllers/dashboard.ts";
 import { loadDebug, callDebugMethod } from "./controllers/debug.ts";
 import {
   approveDevicePairing,
@@ -89,10 +94,6 @@ import {
 } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import {
-  loadMauOffice,
-  setMauOfficeRoomFocus,
-} from "./controllers/mau-office.ts";
-import {
   abortMauOfficeChat,
   closeMauOfficeChat,
   openMauOfficeChat,
@@ -100,6 +101,7 @@ import {
   setMauOfficeChatDraft,
   toggleMauOfficeChatMinimized,
 } from "./controllers/mau-office-chat.ts";
+import { loadMauOffice, setMauOfficeRoomFocus } from "./controllers/mau-office.ts";
 import {
   addMultiUserMemoryDraftIdentity,
   addMultiUserMemoryIdentity,
@@ -136,6 +138,11 @@ import {
   updateSkillEdit,
   updateSkillEnabled,
 } from "./controllers/skills.ts";
+import {
+  closeTeamPromptDialog,
+  openTeamPromptDialog,
+  submitTeamPromptDialog,
+} from "./controllers/team-prompt.ts";
 import "./components/dashboard-header.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
@@ -241,6 +248,10 @@ function uniquePreserveOrder(values: string[]): string[] {
     output.push(normalized);
   }
   return output;
+}
+
+function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 type DismissedUpdateBanner = {
@@ -518,9 +529,7 @@ export function renderApp(state: AppViewState) {
       `;
     }
     const calendarAnchorAtMs =
-      state.dashboardCalendarAnchorAtMs ??
-      state.dashboardCalendarResult?.anchorAtMs ??
-      Date.now();
+      state.dashboardCalendarAnchorAtMs ?? state.dashboardCalendarResult?.anchorAtMs ?? Date.now();
     const shiftCalendarAnchor = (direction: -1 | 1) => {
       const nextAnchor = new Date(calendarAnchorAtMs);
       if (state.dashboardCalendarView === "month") {
@@ -537,176 +546,314 @@ export function renderApp(state: AppViewState) {
       state.dashboardCalendarAnchorAtMs = nextAnchor.getTime();
       void loadDashboardData(state);
     };
+    const dashboardLoading =
+      state.tab === "dashboardWallet" ? state.dashboardWalletLoading : state.dashboardLoading;
+    const dashboardError =
+      state.tab === "dashboardWallet" ? state.dashboardWalletError : state.dashboardError;
+    const scheduleWalletReload = () => {
+      if (state.dashboardWalletDateDebounceTimer != null) {
+        clearTimeout(state.dashboardWalletDateDebounceTimer);
+      }
+      state.dashboardWalletDateDebounceTimer = globalThis.setTimeout(() => {
+        state.dashboardWalletDateDebounceTimer = null;
+        void loadDashboardData(state);
+      }, 160);
+    };
+    const resolveDashboardAgentId = () => {
+      const knownAgentIds = new Set((state.agentsList?.agents ?? []).map((agent) => agent.id));
+      const selectedAgentId =
+        state.dashboardMemoryAgentId && knownAgentIds.has(state.dashboardMemoryAgentId)
+          ? state.dashboardMemoryAgentId
+          : null;
+      return selectedAgentId ?? state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null;
+    };
+    const refreshDashboardAgentWorkspace = async (agentId: string) => {
+      state.dashboardMemoryAgentId = agentId;
+      state.agentFilesTargetId = agentId;
+      state.agentFilesList = null;
+      state.agentFilesError = null;
+      state.agentFilesLoading = false;
+      state.agentFileContents = {};
+      state.agentFileDrafts = {};
+      state.toolsCatalogResult = null;
+      state.toolsCatalogError = null;
+      state.toolsCatalogLoading = false;
+      await Promise.allSettled([
+        loadPinnedAgentFiles(state, agentId, [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME], {
+          preserveDraft: true,
+        }),
+        loadToolsCatalog(state, agentId),
+      ]);
+    };
+    const refreshDashboardAgentsPage = async () => {
+      await Promise.allSettled([loadDashboardData(state), loadAgents(state), loadConfig(state)]);
+      const agentId = resolveDashboardAgentId();
+      if (!agentId) {
+        state.dashboardMemoryAgentId = null;
+        state.agentFilesTargetId = null;
+        state.agentFilesList = null;
+        state.agentFilesError = null;
+        state.agentFilesLoading = false;
+        state.agentFileContents = {};
+        state.agentFileDrafts = {};
+        state.toolsCatalogResult = null;
+        state.toolsCatalogError = null;
+        state.toolsCatalogLoading = false;
+        state.dashboardAgentPanel = "memory";
+        return;
+      }
+      await refreshDashboardAgentWorkspace(agentId);
+    };
     return dashboardView.renderDashboard({
-        tab: state.tab,
-        loading: state.dashboardLoading,
-        error: state.dashboardError,
-        snapshot: state.dashboardSnapshot,
-        calendarResult: state.dashboardCalendarResult,
-        calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
-        teamsLoading: state.dashboardTeamsLoading,
-        teamsError: state.dashboardTeamsError,
-        teamSnapshots: state.dashboardTeamSnapshots,
-        teamRunsLoading: state.dashboardTeamRunsLoading,
-        teamRunsError: state.dashboardTeamRunsError,
-        teamRunsResult: state.dashboardTeamRuns,
-        attentionItems: state.attentionItems,
-        basePath: state.basePath,
-        taskFilter: state.dashboardTaskFilter,
-        taskGroupSelection: state.dashboardTaskGroupSelection,
-        doneFromDate: state.dashboardDoneFromDate,
-        doneToDate: state.dashboardDoneToDate,
-        workshopSelectedId: state.dashboardWorkshopSelectedId,
-        calendarView: state.dashboardCalendarView,
-        teamSelection: state.dashboardTeamSelection,
-        memoryAgentId: state.dashboardMemoryAgentId,
-        agentsList: state.agentsList,
-        agentFilesLoading: state.agentFilesLoading,
-        agentFilesError: state.agentFilesError,
-        agentFileContents: state.agentFileContents,
-        agentFileDrafts: state.agentFileDrafts,
-        agentFileSaving: state.agentFileSaving,
-        mauOfficeLoading: state.mauOfficeLoading,
-        mauOfficeError: state.mauOfficeError,
-        mauOfficeState: state.mauOfficeState,
-        mauOfficeChatOpen: state.mauOfficeChatOpen,
-        mauOfficeChatMinimized: state.mauOfficeChatMinimized,
-        mauOfficeChatActorId: state.mauOfficeChatActorId,
-        mauOfficeChatActorLabel: state.mauOfficeChatActorLabel,
-        mauOfficeChatSessionKey: state.mauOfficeChatSessionKey,
-        mauOfficeChatLoading: state.mauOfficeChatLoading,
-        mauOfficeChatSending: state.mauOfficeChatSending,
-        mauOfficeChatMessage: state.mauOfficeChatMessage,
-        mauOfficeChatMessages: state.mauOfficeChatMessages,
-        mauOfficeChatStream: state.mauOfficeChatStream,
-        mauOfficeChatStreamStartedAt: state.mauOfficeChatStreamStartedAt,
-        mauOfficeChatError: state.mauOfficeChatError,
-        mauOfficeChatPosition: {
-          x: state.mauOfficeChatPositionX,
-          y: state.mauOfficeChatPositionY,
-        },
-        onNavigate: (page) => state.setTab(tabForDashboardPage(page)),
-        onBackToControl: () => state.setTab("overview"),
-        onRefresh: () =>
-          void loadDashboardData(state, {
-            includeTeams: state.tab === "dashboardTeams",
-          }),
-        onRefreshTeams: () => void loadDashboardData(state, { includeTeams: true }),
-        onOpenTask: (task) => {
-          switchChatSession(state, task.sessionKey);
-          state.setTab("chat");
-        },
-        onFilterTasks: (taskId) => {
-          state.dashboardTaskFilter = taskId;
-          state.setTab("dashboardTasks");
-        },
-        onSelectTaskGroup: (selection) => {
-          state.dashboardTaskGroupSelection = selection;
-        },
-        onDoneDateRangeChange: ({ fromDate, toDate }) => {
-          if (typeof fromDate === "string") {
-            state.dashboardDoneFromDate = fromDate;
-          }
-          if (typeof toDate === "string") {
-            state.dashboardDoneToDate = toDate;
-          }
-        },
-        onSelectWorkshop: (itemId) => {
-          state.dashboardWorkshopSelectedId = itemId;
-        },
-        onCalendarViewChange: (view) => {
+      tab: state.tab,
+      loading: dashboardLoading,
+      error: dashboardError,
+      snapshot: state.dashboardSnapshot,
+      walletResult: state.dashboardWalletResult,
+      walletStartDate: state.dashboardWalletStartDate,
+      walletEndDate: state.dashboardWalletEndDate,
+      walletTimeZone: state.dashboardWalletTimeZone,
+      calendarResult: state.dashboardCalendarResult,
+      calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
+      teamsLoading: state.dashboardTeamsLoading,
+      teamsError: state.dashboardTeamsError,
+      teamSnapshots: state.dashboardTeamSnapshots,
+      teamRunsLoading: state.dashboardTeamRunsLoading,
+      teamRunsError: state.dashboardTeamRunsError,
+      teamRunsResult: state.dashboardTeamRuns,
+      attentionItems: state.attentionItems,
+      basePath: state.basePath,
+      taskFilter: state.dashboardTaskFilter,
+      taskGroupSelection: state.dashboardTaskGroupSelection,
+      doneFromDate: state.dashboardDoneFromDate,
+      doneToDate: state.dashboardDoneToDate,
+      workshopSelectedId: state.dashboardWorkshopSelectedId,
+      workshopTab: state.dashboardWorkshopTab,
+      workshopSelectedIds: state.dashboardWorkshopSelectedIds,
+      workshopProjectDraft: state.dashboardWorkshopProjectDraft,
+      workshopSaving: state.dashboardWorkshopSaving,
+      workshopSaveError: state.dashboardWorkshopSaveError,
+      calendarView: state.dashboardCalendarView,
+      teamSelection: state.dashboardTeamSelection,
+      memoryAgentId: state.dashboardMemoryAgentId,
+      agentPanel: state.dashboardAgentPanel,
+      agentsList: state.agentsList,
+      configForm: state.configForm,
+      configLoading: state.configLoading,
+      agentFilesLoading: state.agentFilesLoading,
+      agentFilesError: state.agentFilesError,
+      agentFilesList: state.agentFilesList,
+      agentFileContents: state.agentFileContents,
+      agentFileDrafts: state.agentFileDrafts,
+      agentFileSaving: state.agentFileSaving,
+      toolsCatalogLoading: state.toolsCatalogLoading,
+      toolsCatalogError: state.toolsCatalogError,
+      toolsCatalogResult: state.toolsCatalogResult,
+      mauOfficeLoading: state.mauOfficeLoading,
+      mauOfficeError: state.mauOfficeError,
+      mauOfficeState: state.mauOfficeState,
+      mauOfficeChatOpen: state.mauOfficeChatOpen,
+      mauOfficeChatMinimized: state.mauOfficeChatMinimized,
+      mauOfficeChatActorId: state.mauOfficeChatActorId,
+      mauOfficeChatActorLabel: state.mauOfficeChatActorLabel,
+      mauOfficeChatSessionKey: state.mauOfficeChatSessionKey,
+      mauOfficeChatLoading: state.mauOfficeChatLoading,
+      mauOfficeChatSending: state.mauOfficeChatSending,
+      mauOfficeChatMessage: state.mauOfficeChatMessage,
+      mauOfficeChatMessages: state.mauOfficeChatMessages,
+      mauOfficeChatStream: state.mauOfficeChatStream,
+      mauOfficeChatStreamStartedAt: state.mauOfficeChatStreamStartedAt,
+      mauOfficeChatError: state.mauOfficeChatError,
+      mauOfficeChatPosition: {
+        x: state.mauOfficeChatPositionX,
+        y: state.mauOfficeChatPositionY,
+      },
+      onNavigate: (page) => state.setTab(tabForDashboardPage(page)),
+      onBackToControl: () => state.setTab("overview"),
+      onRefresh: () =>
+        void (state.tab === "dashboardMemories"
+          ? refreshDashboardAgentsPage()
+          : loadDashboardData(state, {
+              includeTeams: state.tab === "dashboardTeams",
+            })),
+      onRefreshTeams: () => void loadDashboardData(state, { includeTeams: true }),
+      onOpenTask: (task) => {
+        switchChatSession(state, task.sessionKey);
+        state.setTab("chat");
+      },
+      onOpenSession: (sessionKey) => {
+        switchChatSession(state, sessionKey);
+        state.setTab("chat");
+      },
+      onFilterTasks: (filter) => {
+        state.dashboardTaskFilter = filter;
+        state.setTab("dashboardTasks");
+      },
+      onSelectTaskGroup: (selection) => {
+        state.dashboardTaskGroupSelection = selection;
+      },
+      onDoneDateRangeChange: ({ fromDate, toDate }) => {
+        if (typeof fromDate === "string") {
+          state.dashboardDoneFromDate = fromDate;
+        }
+        if (typeof toDate === "string") {
+          state.dashboardDoneToDate = toDate;
+        }
+      },
+      onSelectWorkshop: (itemId) => {
+        state.dashboardWorkshopSelectedId = itemId;
+      },
+      onWorkshopTabChange: (tab) => {
+        state.dashboardWorkshopTab = tab;
+        const items =
+          tab === "saved"
+            ? (state.dashboardSnapshot?.workshopSaved ?? [])
+            : (state.dashboardSnapshot?.workshop ?? []);
+        state.dashboardWorkshopSelectedId =
+          items.find((item) => item.id === state.dashboardWorkshopSelectedId)?.id ??
+          items[0]?.id ??
+          null;
+      },
+      onToggleWorkshopSelection: (itemId, selected) => {
+        const next = new Set(state.dashboardWorkshopSelectedIds);
+        if (selected) {
+          next.add(itemId);
+        } else {
+          next.delete(itemId);
+        }
+        state.dashboardWorkshopSelectedIds = next;
+      },
+      onWorkshopProjectDraftChange: (value) => {
+        state.dashboardWorkshopProjectDraft = value;
+        state.dashboardWorkshopSaveError = null;
+      },
+      onSaveWorkshopSelection: () => {
+        void saveDashboardWorkshopSelection(state);
+      },
+      onWalletDateRangeChange: ({ startDate, endDate }) => {
+        if (typeof startDate === "string") {
+          state.dashboardWalletStartDate = startDate;
+        }
+        if (typeof endDate === "string") {
+          state.dashboardWalletEndDate = endDate;
+        }
+        scheduleWalletReload();
+      },
+      onWalletTimeZoneChange: (timeZone) => {
+        if (state.dashboardWalletTimeZone === timeZone) {
+          return;
+        }
+        if (state.dashboardWalletDateDebounceTimer != null) {
+          clearTimeout(state.dashboardWalletDateDebounceTimer);
+          state.dashboardWalletDateDebounceTimer = null;
+        }
+        state.dashboardWalletTimeZone = timeZone;
+        void loadDashboardData(state);
+      },
+      onWalletPresetSelect: (days) => {
+        if (state.dashboardWalletDateDebounceTimer != null) {
+          clearTimeout(state.dashboardWalletDateDebounceTimer);
+          state.dashboardWalletDateDebounceTimer = null;
+        }
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - (days - 1));
+        state.dashboardWalletStartDate = formatLocalDate(start);
+        state.dashboardWalletEndDate = formatLocalDate(end);
+        void loadDashboardData(state);
+      },
+      onCalendarViewChange: (view) => {
+        state.dashboardCalendarView = view;
+        void loadDashboardData(state);
+      },
+      onCalendarNavigate: (direction) => {
+        shiftCalendarAnchor(direction);
+      },
+      onCalendarJumpToday: () => {
+        state.dashboardCalendarAnchorAtMs = Date.now();
+        void loadDashboardData(state);
+      },
+      onCalendarSelectDay: (anchorAtMs, view) => {
+        const withinVisibleWindow =
+          state.dashboardCalendarResult &&
+          anchorAtMs >= state.dashboardCalendarResult.startAtMs &&
+          anchorAtMs < state.dashboardCalendarResult.endAtMs;
+        state.dashboardCalendarAnchorAtMs = anchorAtMs;
+        if (view) {
           state.dashboardCalendarView = view;
+        }
+        if (!withinVisibleWindow || Boolean(view)) {
           void loadDashboardData(state);
-        },
-        onCalendarNavigate: (direction) => {
-          shiftCalendarAnchor(direction);
-        },
-        onCalendarJumpToday: () => {
-          state.dashboardCalendarAnchorAtMs = Date.now();
-          void loadDashboardData(state);
-        },
-        onCalendarSelectDay: (anchorAtMs, view) => {
-          const withinVisibleWindow =
-            state.dashboardCalendarResult &&
-            anchorAtMs >= state.dashboardCalendarResult.startAtMs &&
-            anchorAtMs < state.dashboardCalendarResult.endAtMs;
-          state.dashboardCalendarAnchorAtMs = anchorAtMs;
-          if (view) {
-            state.dashboardCalendarView = view;
+        }
+      },
+      onSelectTeam: (selection) => {
+        state.dashboardTeamSelection = selection;
+      },
+      onPromptTeamEdit: ({ teamId, teamLabel, workflowId, workflowLabel }) => {
+        state.teamsSelectedId = teamId;
+        state.teamsSelectedWorkflowId = workflowId;
+        state.setTab("teams");
+        openTeamPromptDialog(state, {
+          teamId,
+          teamLabel,
+          workflowId,
+          workflowLabel,
+        });
+      },
+      onSelectMemoryAgent: (agentId) => {
+        void refreshDashboardAgentWorkspace(agentId);
+      },
+      onSelectAgentPanel: (panel) => {
+        state.dashboardAgentPanel = panel;
+        if (panel === "scope") {
+          const agentId = resolveDashboardAgentId();
+          if (agentId) {
+            void Promise.allSettled([loadConfig(state), loadToolsCatalog(state, agentId)]);
           }
-          if (!withinVisibleWindow || Boolean(view)) {
-            void loadDashboardData(state);
-          }
-        },
-        onSelectTeam: (selection) => {
-          state.dashboardTeamSelection = selection;
-        },
-        onPromptTeamEdit: ({ teamId, teamLabel, workflowId, workflowLabel }) => {
-          state.teamsSelectedId = teamId;
-          state.teamsSelectedWorkflowId = workflowId;
-          state.setTab("teams");
-          openTeamPromptDialog(state, {
-            teamId,
-            teamLabel,
-            workflowId,
-            workflowLabel,
-          });
-        },
-        onSelectMemoryAgent: (agentId) => {
-          state.dashboardMemoryAgentId = agentId;
-          state.agentFilesList = null;
-          state.agentFilesError = null;
-          state.agentFileContents = {};
-          state.agentFileDrafts = {};
-          void loadAgentFiles(state, agentId);
-          void Promise.allSettled(
-            [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME].map((name) =>
-              loadAgentFileContent(state, agentId, name, { preserveDraft: true }),
-            ),
-          );
-        },
-        onMemoryDraftChange: (name, content) => {
-          state.agentFileDrafts = { ...state.agentFileDrafts, [name]: content };
-        },
-        onSaveMemoryFile: (name) => {
-          const agentId =
-            state.dashboardMemoryAgentId ??
-            state.agentsList?.defaultId ??
-            state.agentsList?.agents?.[0]?.id;
-          if (!agentId) {
-            return;
-          }
-          const content = state.agentFileDrafts[name] ?? state.agentFileContents[name] ?? "";
-          void saveAgentFile(state, agentId, name, content);
-        },
-        onRefreshMauOffice: () =>
-          void loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
-        onMauOfficeRoomFocus: (roomId) => {
-          state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
-        },
-        onMauOfficeActorOpen: (actorId) => {
-          void openMauOfficeChat(state, actorId, sessionDefaults);
-        },
-        onMauOfficeChatClose: () => {
-          closeMauOfficeChat(state);
-        },
-        onMauOfficeChatToggleMinimized: () => {
-          toggleMauOfficeChatMinimized(state);
-        },
-        onMauOfficeChatDraftChange: (next) => {
-          setMauOfficeChatDraft(state, next);
-        },
-        onMauOfficeChatSend: () => {
-          void sendMauOfficeChat(state);
-        },
-        onMauOfficeChatAbort: () => {
-          void abortMauOfficeChat(state);
-        },
-        onMauOfficeChatPositionChange: ({ x, y }) => {
-          state.mauOfficeChatPositionX = x;
-          state.mauOfficeChatPositionY = y;
-        },
-      });
+        }
+      },
+      onMemoryDraftChange: (name, content) => {
+        state.agentFileDrafts = { ...state.agentFileDrafts, [name]: content };
+      },
+      onSaveMemoryFile: (name) => {
+        const agentId =
+          state.dashboardMemoryAgentId ??
+          state.agentsList?.defaultId ??
+          state.agentsList?.agents?.[0]?.id;
+        if (!agentId) {
+          return;
+        }
+        const content = state.agentFileDrafts[name] ?? state.agentFileContents[name] ?? "";
+        void saveAgentFile(state, agentId, name, content);
+      },
+      onRefreshMauOffice: () =>
+        void loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
+      onMauOfficeRoomFocus: (roomId) => {
+        state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
+      },
+      onMauOfficeActorOpen: (actorId) => {
+        void openMauOfficeChat(state, actorId, sessionDefaults);
+      },
+      onMauOfficeChatClose: () => {
+        closeMauOfficeChat(state);
+      },
+      onMauOfficeChatToggleMinimized: () => {
+        toggleMauOfficeChatMinimized(state);
+      },
+      onMauOfficeChatDraftChange: (next) => {
+        setMauOfficeChatDraft(state, next);
+      },
+      onMauOfficeChatSend: () => {
+        void sendMauOfficeChat(state);
+      },
+      onMauOfficeChatAbort: () => {
+        void abortMauOfficeChat(state);
+      },
+      onMauOfficeChatPositionChange: ({ x, y }) => {
+        state.mauOfficeChatPositionX = x;
+        state.mauOfficeChatPositionY = y;
+      },
+    });
   }
 
   return html`
@@ -1320,6 +1467,7 @@ export function renderApp(state: AppViewState) {
                       state.agentsList?.agents?.[0]?.id ??
                       null;
                     if (state.agentsPanel === "files" && refreshedAgentId) {
+                      state.agentFilesTargetId = refreshedAgentId;
                       void loadAgentFiles(state, refreshedAgentId);
                     }
                     if (state.agentsPanel === "skills" && refreshedAgentId) {
@@ -1340,6 +1488,7 @@ export function renderApp(state: AppViewState) {
                       return;
                     }
                     state.agentsSelectedId = agentId;
+                    state.agentFilesTargetId = agentId;
                     state.agentFilesList = null;
                     state.agentFilesError = null;
                     state.agentFilesLoading = false;
@@ -1366,6 +1515,7 @@ export function renderApp(state: AppViewState) {
                   onSelectPanel: (panel) => {
                     state.agentsPanel = panel;
                     if (panel === "files" && resolvedAgentId) {
+                      state.agentFilesTargetId = resolvedAgentId;
                       if (state.agentFilesList?.agentId !== resolvedAgentId) {
                         state.agentFilesList = null;
                         state.agentFilesError = null;
@@ -2037,18 +2187,21 @@ export function renderApp(state: AppViewState) {
                     state.teamsSelectedWorkflowId = workflowId;
                   },
                   onCreateTeam: (preset) => {
-                    if (preset === "starter") {
-                      const nextConfig = ensureStarterTeamConfig(
+                    if (preset === "vibe-coder" || preset === "design-studio") {
+                      const presetTeamId =
+                        preset === "vibe-coder" ? STARTER_TEAM_ID : DESIGN_STUDIO_TEAM_ID;
+                      const nextConfig = ensureBundledTeamPresetConfig(
                         (getCurrentConfigValue() ?? {}) as MaumauConfig,
+                        presetTeamId,
                       );
                       updateConfigFormValue(state, ["agents"], nextConfig.agents ?? {});
                       updateConfigFormValue(state, ["teams"], nextConfig.teams ?? {});
                       state.teamsSelectedId =
-                        nextConfig.teams?.list?.find((team) => team.id === STARTER_TEAM_ID)?.id ??
-                        STARTER_TEAM_ID;
+                        nextConfig.teams?.list?.find((team) => team.id === presetTeamId)?.id ??
+                        presetTeamId;
                       state.teamsSelectedWorkflowId = resolveDefaultTeamWorkflowId(
-                        nextConfig.teams?.list?.find((team) => team.id === STARTER_TEAM_ID) ?? {
-                          id: STARTER_TEAM_ID,
+                        nextConfig.teams?.list?.find((team) => team.id === presetTeamId) ?? {
+                          id: presetTeamId,
                           managerAgentId: "main",
                         },
                       );

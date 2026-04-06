@@ -117,6 +117,38 @@ export function shouldIgnorePostCompletionAnnounceForSessionFromRuns(
   );
 }
 
+export function hasRequesterCompletionDeliveryRunStartedSinceFromRuns(
+  runs: Map<string, SubagentRunRecord>,
+  requesterSessionKey: string,
+  sinceMs: number,
+): boolean {
+  const key = requesterSessionKey.trim();
+  if (!key || !Number.isFinite(sinceMs)) {
+    return false;
+  }
+
+  for (const entry of runs.values()) {
+    if (entry.requesterSessionKey !== key) {
+      continue;
+    }
+    if (entry.expectsCompletionMessage !== true) {
+      continue;
+    }
+    // Some callers wait for child completion inline and then return the final
+    // result from the same turn. Only suppress the current-turn reply when the
+    // completion has actually been handed off for later requester delivery.
+    if (entry.suppressRequesterAnnounce === true) {
+      continue;
+    }
+    if (entry.createdAt < sinceMs) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
+
 export function countActiveRunsForSessionFromRuns(
   runs: Map<string, SubagentRunRecord>,
   controllerSessionKey: string,

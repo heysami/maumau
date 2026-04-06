@@ -539,12 +539,14 @@ describe("gateway e2e", () => {
       const wizardToken = nextGatewayId("wiz-model-auth-token");
       const port = await getFreeGatewayPort();
       let receivedAuthChoice: string | undefined;
+      let receivedSetDefaultModel: boolean | undefined;
       const server = await startGatewayServer(port, {
         bind: "loopback",
         auth: { mode: "token", token: wizardToken },
         controlUiEnabled: false,
         modelAuthWizardRunner: async (opts, _runtime, prompter) => {
           receivedAuthChoice = opts.authChoice;
+          receivedSetDefaultModel = opts.setDefaultModel;
           await prompter.note("Connect provider");
         },
       });
@@ -569,6 +571,7 @@ describe("gateway e2e", () => {
         }>("wizard.start", {
           entrypoint: "models-auth",
           authChoice: "openai-api-key",
+          setDefaultModel: false,
           embedded: true,
           fresh: true,
         });
@@ -578,6 +581,7 @@ describe("gateway e2e", () => {
         expect(start.step?.type).toBe("note");
         expect(start.step?.message).toBe("Connect provider");
         expect(receivedAuthChoice).toBe("openai-api-key");
+        expect(receivedSetDefaultModel).toBe(false);
 
         if (!start.sessionId || !start.step) {
           throw new Error("models-auth wizard did not return a session and step");

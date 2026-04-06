@@ -41,6 +41,15 @@ describe("control UI routing", () => {
     expect(app.querySelector(".dashboard-rail")).not.toBeNull();
   });
 
+  it("hydrates the wallet dashboard route from the location", async () => {
+    const app = mountApp("/dashboard/wallet");
+    await app.updateComplete;
+
+    expect(app.tab).toBe("dashboardWallet");
+    expect(window.location.pathname).toBe("/dashboard/wallet");
+    expect(app.querySelector(".dashboard-shell")).not.toBeNull();
+  });
+
   it("respects /ui base paths", async () => {
     const app = mountApp("/ui/cron");
     await app.updateComplete;
@@ -283,6 +292,7 @@ describe("control UI routing", () => {
           updatedAtMs: Date.now(),
         },
       ],
+      workshopSaved: [],
       calendar: [],
       routines: [],
       memories: [],

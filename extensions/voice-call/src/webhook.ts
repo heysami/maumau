@@ -83,6 +83,25 @@ type WebhookResponsePayload = {
   headers?: Record<string, string>;
 };
 
+type WalletRealtimeSession = {
+  provider: "deepgram-realtime";
+  streamSid: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+};
+
+type WalletRealtimeActiveSession = {
+  provider: "deepgram-realtime";
+  streamSid: string;
+  startedAt: number;
+};
+
+type WalletRealtimeSttState = {
+  sessions: WalletRealtimeSession[];
+  activeSession?: WalletRealtimeActiveSession;
+};
+
 function buildRequestUrl(
   requestUrl: string | undefined,
   requestHost: string | undefined,
@@ -156,6 +175,162 @@ export class VoiceCallWebhookServer {
     }
     clearTimeout(existing);
     this.pendingDisconnectHangups.delete(providerCallId);
+  }
+
+  private shouldTrackRealtimeWallet(): boolean {
+    return this.config.streaming.enabled && this.config.streaming.sttProvider === "deepgram-realtime";
+  }
+
+  private readRealtimeWalletState(call: CallRecord): WalletRealtimeSttState {
+    const raw = call.metadata?.walletRealtimeStt;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return { sessions: [] };
+    }
+
+    const sessions = Array.isArray(raw.sessions)
+      ? raw.sessions.flatMap((entry): WalletRealtimeSession[] => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return [];
+          }
+          const streamSid =
+            typeof entry.streamSid === "string" && entry.streamSid.trim() ? entry.streamSid : null;
+          const startedAt =
+            typeof entry.startedAt === "number" && Number.isFinite(entry.startedAt)
+              ? entry.startedAt
+              : null;
+          const endedAt =
+            typeof entry.endedAt === "number" && Number.isFinite(entry.endedAt) ? entry.endedAt : null;
+          const durationMs =
+            typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)
+              ? entry.durationMs
+              : null;
+          if (!streamSid || startedAt === null || endedAt === null || durationMs === null) {
+            return [];
+          }
+          return [
+            {
+              provider: "deepgram-realtime",
+              streamSid,
+              startedAt,
+              endedAt,
+              durationMs,
+            },
+          ];
+        })
+      : [];
+
+    const activeRaw = raw.activeSession;
+    if (!activeRaw || typeof activeRaw !== "object" || Array.isArray(activeRaw)) {
+      return { sessions };
+    }
+    const streamSid =
+      typeof activeRaw.streamSid === "string" && activeRaw.streamSid.trim()
+        ? activeRaw.streamSid
+        : null;
+    const startedAt =
+      typeof activeRaw.startedAt === "number" && Number.isFinite(activeRaw.startedAt)
+        ? activeRaw.startedAt
+        : null;
+    if (!streamSid || startedAt === null) {
+      return { sessions };
+    }
+    return {
+      sessions,
+      activeSession: {
+        provider: "deepgram-realtime",
+        streamSid,
+        startedAt,
+      },
+    };
+  }
+
+  private persistRealtimeWalletState(
+    call: CallRecord,
+    state: WalletRealtimeSttState,
+  ): void {
+    const nextCall: CallRecord = {
+      ...call,
+      metadata: {
+        ...(call.metadata ?? {}),
+        walletRealtimeStt:
+          state.activeSession || state.sessions.length > 0
+            ? {
+                sessions: state.sessions,
+                ...(state.activeSession ? { activeSession: state.activeSession } : {}),
+              }
+            : undefined,
+      },
+    };
+    if (nextCall.metadata?.walletRealtimeStt === undefined) {
+      delete nextCall.metadata.walletRealtimeStt;
+    }
+    this.manager.persistCall(nextCall);
+  }
+
+  private trackRealtimeWalletConnect(providerCallId: string, streamSid: string): void {
+    if (!this.shouldTrackRealtimeWallet()) {
+      return;
+    }
+    const call = this.manager.getCallByProviderCallId(providerCallId);
+    if (!call) {
+      return;
+    }
+
+    const wallet = this.readRealtimeWalletState(call);
+    if (wallet.activeSession?.streamSid === streamSid) {
+      return;
+    }
+
+    const now = Date.now();
+    const sessions = [...wallet.sessions];
+    if (wallet.activeSession) {
+      sessions.push({
+        provider: "deepgram-realtime",
+        streamSid: wallet.activeSession.streamSid,
+        startedAt: wallet.activeSession.startedAt,
+        endedAt: now,
+        durationMs: Math.max(0, now - wallet.activeSession.startedAt),
+      });
+    }
+
+    this.persistRealtimeWalletState(call, {
+      sessions,
+      activeSession: {
+        provider: "deepgram-realtime",
+        streamSid,
+        startedAt: now,
+      },
+    });
+  }
+
+  private trackRealtimeWalletDisconnect(providerCallId: string, streamSid: string): void {
+    if (!this.shouldTrackRealtimeWallet()) {
+      return;
+    }
+    const call = this.manager.getCallByProviderCallId(providerCallId);
+    if (!call) {
+      return;
+    }
+
+    const wallet = this.readRealtimeWalletState(call);
+    const activeSession = wallet.activeSession;
+    if (!activeSession || activeSession.streamSid !== streamSid) {
+      return;
+    }
+
+    const endedAt = Math.min(Date.now(), call.endedAt ?? Number.POSITIVE_INFINITY);
+    this.persistRealtimeWalletState(call, {
+      sessions: [
+        ...wallet.sessions,
+        {
+          provider: "deepgram-realtime",
+          streamSid,
+          startedAt: activeSession.startedAt,
+          endedAt,
+          durationMs: Math.max(0, endedAt - activeSession.startedAt),
+        },
+      ],
+    });
   }
 
   private shouldSuppressBargeInForInitialMessage(call: CallRecord | undefined): boolean {
@@ -270,6 +445,7 @@ export class VoiceCallWebhookServer {
       onConnect: (callId, streamSid) => {
         console.log(`[voice-call] Media stream connected: ${callId} -> ${streamSid}`);
         this.clearPendingDisconnectHangup(callId);
+        this.trackRealtimeWalletConnect(callId, streamSid);
 
         // Register stream with provider for TTS routing
         if (this.provider.name === "twilio") {
@@ -283,6 +459,7 @@ export class VoiceCallWebhookServer {
       },
       onDisconnect: (callId, streamSid) => {
         console.log(`[voice-call] Media stream disconnected: ${callId} (${streamSid})`);
+        this.trackRealtimeWalletDisconnect(callId, streamSid);
         if (this.provider.name === "twilio") {
           (this.provider as TwilioProvider).unregisterCallStream(callId, streamSid);
         }

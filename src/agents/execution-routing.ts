@@ -6,8 +6,20 @@ const UI_EXECUTION_ACTION_RE =
   /\b(build|create|make|implement|ship|design|redesign|prototype|code|develop|fix|update|polish|improve|generate)\b/i;
 const UI_EXECUTION_STRONG_SURFACE_RE =
   /\b(ui|ux|frontend|front-end|front end|website|web app|webpage|landing page|dashboard|screen|page layout|component library|design system|visual design|interaction design|responsive|accessibility|game|html|css|react|tailwind)\b/i;
+const DIRECT_UI_DELIVERABLE_RE =
+  /\b(build|create|make|implement|ship|design|redesign|prototype|code|develop|fix|update|polish|improve)\s+(?:a|an|the|new)?\s*(?:responsive|mobile-friendly|interactive|previewable|browser-based|browser)?\s*(?:ui|ux|frontend|website|web app|webpage|landing page|dashboard|screen|page|component library|design system)\b/i;
 const UI_EXECUTION_SUPPORTING_SURFACE_RE =
   /\b(interface|layout|copy|content design|visual|polish|usability|user flow|human interaction|human-facing|user-facing)\b/gi;
+const UI_IMPLEMENTATION_OWNER_SURFACE_RE =
+  /\b(ui|ux|frontend|front-end|front end|website|web app|webpage|landing page|dashboard|screen|page|html|css|react|tailwind)\b/i;
+const UI_IMPLEMENTATION_OWNER_OUTPUT_HINT_RE =
+  /\b(artifact|preview|deliverable|implementation|implement|implemented|code|coded|build|built|static|ship|full webpage|full page|full app|full screen)\b/i;
+const DESIGN_ASSET_ACTION_RE =
+  /\b(create|make|design|redesign|generate|explore|brainstorm|concept|iterate|produce|find|compare|choose|draw|illustrate|maintain|refresh|expand)\b/i;
+const DESIGN_ASSET_STRONG_SURFACE_RE =
+  /\b(asset|assets|image|images|illustration|illustrations|graphic|graphics|icon|icons|logo|logos|brand|branding|style guide|visual system|mood board|moodboard|vector|svg|raster|sprite|sprites|texture|textures|poster|cover art|thumbnail|thumbnails|concept art|character art|portrait|portraits|scene|scenes)\b/i;
+const DESIGN_ASSET_SUPPORTING_SURFACE_RE =
+  /\b(consistency|consistent|visual consistency|brand consistency|look and feel|palette|typography|imagery|art direction)\b/gi;
 
 export type ExecutionRouteRequirement = {
   kind: "none" | "team_openprose";
@@ -16,7 +28,7 @@ export type ExecutionRouteRequirement = {
   workflowId?: string;
   managerAgentId?: string;
   teamRuntime?: "openprose";
-  reason?: "ui_human_facing";
+  reason?: "ui_human_facing" | "design_assets";
   teamReady?: boolean;
   blockingReasons: string[];
 };
@@ -27,6 +39,27 @@ function normalizeForRouting(text: string): string {
 
 function countSupportingSurfaceMatches(text: string): number {
   return [...text.matchAll(UI_EXECUTION_SUPPORTING_SURFACE_RE)].length;
+}
+
+function countDesignSupportingSurfaceMatches(text: string): number {
+  return [...text.matchAll(DESIGN_ASSET_SUPPORTING_SURFACE_RE)].length;
+}
+
+function taskRequiresUiImplementationOwner(task: string): boolean {
+  const normalized = normalizeForRouting(task);
+  if (!normalized) {
+    return false;
+  }
+  if (!UI_EXECUTION_ACTION_RE.test(normalized)) {
+    return false;
+  }
+  if (DIRECT_UI_DELIVERABLE_RE.test(normalized)) {
+    return true;
+  }
+  return (
+    UI_IMPLEMENTATION_OWNER_SURFACE_RE.test(normalized) &&
+    UI_IMPLEMENTATION_OWNER_OUTPUT_HINT_RE.test(normalized)
+  );
 }
 
 export function taskRequiresSpecialistUiTeam(task: string): boolean {
@@ -42,6 +75,35 @@ export function taskRequiresSpecialistUiTeam(task: string): boolean {
     return true;
   }
   return countSupportingSurfaceMatches(normalized) >= 2;
+}
+
+export function taskRequiresDesignAssetTeam(task: string): boolean {
+  const normalized = normalizeForRouting(task);
+  if (!normalized) {
+    return false;
+  }
+  const hasAction = DESIGN_ASSET_ACTION_RE.test(normalized);
+  if (!hasAction) {
+    return false;
+  }
+  if (DESIGN_ASSET_STRONG_SURFACE_RE.test(normalized)) {
+    return true;
+  }
+  return countDesignSupportingSurfaceMatches(normalized) >= 2;
+}
+
+function resolveExecutionRoutePreference(task: string): "ui_human_facing" | "design_assets" | undefined {
+  const normalized = normalizeForRouting(task);
+  if (taskRequiresUiImplementationOwner(normalized)) {
+    return "ui_human_facing";
+  }
+  if (taskRequiresDesignAssetTeam(normalized)) {
+    return "design_assets";
+  }
+  if (taskRequiresSpecialistUiTeam(normalized)) {
+    return "ui_human_facing";
+  }
+  return undefined;
 }
 
 export function isExecutionWorkerAgentId(
@@ -82,7 +144,8 @@ export function resolveExecutionRouteRequirement(params: {
   sessionKey?: string;
   agentId?: string;
 }): ExecutionRouteRequirement {
-  if (!taskRequiresSpecialistUiTeam(params.task)) {
+  const preference = resolveExecutionRoutePreference(params.task);
+  if (!preference) {
     return {
       kind: "none",
       requiresTeam: false,
@@ -97,20 +160,34 @@ export function resolveExecutionRouteRequirement(params: {
         sessionKey: params.sessionKey,
       })
     : undefined;
+  const rootManagerOwnsInitialTeamChoice =
+    sessionTeamContext?.team?.implicitForManagerSessions === true &&
+    sessionTeamContext.teamRole?.trim().toLowerCase() === "manager";
   const teamTarget = resolvePreferredTeamRunTarget({
     cfg,
     sourceTeamId: sessionTeamContext?.teamId,
     managerAgentId: params.agentId ?? sessionTeamContext?.sessionAgentId,
-    preference: "ui_human_facing",
+    preference,
   });
   if (!teamTarget.ok) {
     return {
       kind: "team_openprose",
       requiresTeam: true,
       teamRuntime: "openprose",
-      reason: "ui_human_facing",
+      reason: preference,
       teamReady: false,
       blockingReasons: [teamTarget.error],
+    };
+  }
+
+  if (rootManagerOwnsInitialTeamChoice) {
+    return {
+      kind: "team_openprose",
+      requiresTeam: true,
+      teamRuntime: teamTarget.target.runtime,
+      reason: preference,
+      teamReady: teamTarget.target.contractReady,
+      blockingReasons: teamTarget.target.blockingReasons,
     };
   }
 
@@ -121,7 +198,7 @@ export function resolveExecutionRouteRequirement(params: {
     workflowId: teamTarget.target.workflow.id,
     managerAgentId: teamTarget.target.managerAgentId,
     teamRuntime: teamTarget.target.runtime,
-    reason: "ui_human_facing",
+    reason: preference,
     teamReady: teamTarget.target.contractReady,
     blockingReasons: teamTarget.target.blockingReasons,
   };

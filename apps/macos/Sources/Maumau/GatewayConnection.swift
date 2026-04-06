@@ -78,6 +78,7 @@ actor GatewayConnection {
         case webLoginWait = "web.login.wait"
         case channelsLogout = "channels.logout"
         case modelsList = "models.list"
+        case modelsImageGenerationProviders = "models.image-generation.providers"
         case modelsAuthChoices = "models.auth.choices"
         case pluginsStatus = "plugins.status"
         case chatHistory = "chat.history"

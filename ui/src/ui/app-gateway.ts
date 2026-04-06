@@ -173,25 +173,29 @@ type GatewayHostWithShutdownMessage = GatewayHost & {
 async function refreshLoopbackGatewayTokenFromBootstrap(
   host: GatewayHost,
   client: GatewayBrowserClient,
-) {
+  opts?: { reconnectOnChange?: boolean },
+): Promise<boolean> {
   if (!isLoopbackGatewayTarget(host.settings.gatewayUrl)) {
-    return;
+    return false;
   }
   const bootstrap = await loadControlUiBootstrapConfig(
     host as unknown as Parameters<typeof loadControlUiBootstrapConfig>[0],
   );
   const nextToken = bootstrap?.loopbackGatewayToken?.trim() ?? "";
   if (!nextToken || nextToken === host.settings.token.trim()) {
-    return;
+    return false;
   }
   if (host.client !== client) {
-    return;
+    return false;
   }
   applySettings(host as unknown as Parameters<typeof applySettings>[0], {
     ...host.settings,
     token: nextToken,
   });
-  connectGateway(host);
+  if (opts?.reconnectOnChange !== false) {
+    connectGateway(host);
+  }
+  return true;
 }
 
 function hasMauOfficeState(
@@ -309,14 +313,19 @@ export function connectGateway(host: GatewayHost) {
     gatewayUrl: host.settings.gatewayUrl,
     serverVersion: host.serverVersion,
   });
-  const client = new GatewayBrowserClient({
+  let client: GatewayBrowserClient;
+  client = new GatewayBrowserClient({
     url: host.settings.gatewayUrl,
     token: host.settings.token.trim() ? host.settings.token : undefined,
+    getToken: () => (host.settings.token.trim() ? host.settings.token : undefined),
     password: host.password.trim() ? host.password : undefined,
     clientName: "maumau-control-ui",
     clientVersion,
     mode: "webchat",
     instanceId: host.clientInstanceId,
+    beforeConnect: async () => {
+      await refreshLoopbackGatewayTokenFromBootstrap(host, client, { reconnectOnChange: false });
+    },
     onHello: (hello) => {
       if (host.client !== client) {
         return;

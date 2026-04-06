@@ -1,19 +1,22 @@
+import type { GatewayBrowserClient } from "../gateway.ts";
 import type { Tab } from "../navigation.ts";
 import { dashboardPageForTab } from "../navigation.ts";
-import type { GatewayBrowserClient } from "../gateway.ts";
-import { serializeConfigForm } from "./config/form-utils.ts";
 import type {
   ConfigSnapshot,
   DashboardCalendarResult,
   DashboardMemoriesResult,
   DashboardRoutinesResult,
   DashboardSnapshot,
+  DashboardTaskFilter,
   DashboardTasksResult,
   DashboardTeamRunsResult,
   DashboardTeamSnapshotsResult,
   DashboardTodaySnapshot,
+  DashboardWalletResult,
   DashboardWorkshopResult,
+  DashboardWorkshopSaveResult,
 } from "../types.ts";
+import { serializeConfigForm } from "./config/form-utils.ts";
 
 type DashboardHost = {
   client: GatewayBrowserClient | null;
@@ -24,6 +27,12 @@ type DashboardHost = {
   dashboardLoading: boolean;
   dashboardError: string | null;
   dashboardSnapshot: DashboardSnapshot | null;
+  dashboardWalletLoading: boolean;
+  dashboardWalletError: string | null;
+  dashboardWalletResult: DashboardWalletResult | null;
+  dashboardWalletStartDate: string;
+  dashboardWalletEndDate: string;
+  dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: DashboardCalendarResult | null;
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
@@ -31,6 +40,13 @@ type DashboardHost = {
   dashboardTeamRunsLoading: boolean;
   dashboardTeamRunsError: string | null;
   dashboardTeamRuns: DashboardTeamRunsResult | null;
+  dashboardTaskFilter: DashboardTaskFilter;
+  dashboardWorkshopSelectedId: string | null;
+  dashboardWorkshopTab: "saved" | "recent";
+  dashboardWorkshopSelectedIds: Set<string>;
+  dashboardWorkshopProjectDraft: string;
+  dashboardWorkshopSaving: boolean;
+  dashboardWorkshopSaveError: string | null;
   dashboardReloadTimer: number | null;
   configForm: Record<string, unknown> | null;
   configSnapshot: ConfigSnapshot | null;
@@ -38,6 +54,33 @@ type DashboardHost = {
   configFormMode: "form" | "raw";
   configRaw: string;
 };
+
+type DashboardDateInterpretationParams =
+  | { mode: "utc" }
+  | { mode: "specific"; utcOffset: string };
+
+function formatUtcOffset(timezoneOffsetMinutes: number): string {
+  const offsetFromUtcMinutes = -timezoneOffsetMinutes;
+  const sign = offsetFromUtcMinutes >= 0 ? "+" : "-";
+  const absMinutes = Math.abs(offsetFromUtcMinutes);
+  const hours = Math.floor(absMinutes / 60);
+  const minutes = absMinutes % 60;
+  return minutes === 0
+    ? `UTC${sign}${hours}`
+    : `UTC${sign}${hours}:${minutes.toString().padStart(2, "0")}`;
+}
+
+function buildDashboardDateInterpretationParams(
+  timeZone: "local" | "utc",
+): DashboardDateInterpretationParams {
+  if (timeZone === "utc") {
+    return { mode: "utc" };
+  }
+  return {
+    mode: "specific",
+    utcOffset: formatUtcOffset(new Date().getTimezoneOffset()),
+  };
+}
 
 function clearReloadTimer(host: DashboardHost) {
   if (host.dashboardReloadTimer == null) {
@@ -59,6 +102,7 @@ function createEmptyDashboardSnapshot(): DashboardSnapshot {
     },
     tasks: [],
     workshop: [],
+    workshopSaved: [],
     calendar: [],
     routines: [],
     memories: [],
@@ -84,7 +128,34 @@ function applyTasks(snapshot: DashboardSnapshot, result: DashboardTasksResult) {
 
 function applyWorkshop(snapshot: DashboardSnapshot, result: DashboardWorkshopResult) {
   snapshot.workshop = result.items;
+  snapshot.workshopSaved = result.savedItems;
   snapshot.generatedAtMs = Math.max(snapshot.generatedAtMs, result.generatedAtMs);
+}
+
+function synchronizeWorkshopState(
+  host: DashboardHost,
+  result: DashboardWorkshopResult,
+  opts?: { preferSaved?: boolean; defaultToSaved?: boolean },
+) {
+  if (opts?.preferSaved && result.savedItems.length > 0) {
+    host.dashboardWorkshopTab = "saved";
+  } else if (result.savedItems.length === 0) {
+    host.dashboardWorkshopTab = "recent";
+  } else if (opts?.defaultToSaved) {
+    host.dashboardWorkshopTab = "saved";
+  } else if (host.dashboardWorkshopTab !== "saved" && host.dashboardWorkshopTab !== "recent") {
+    host.dashboardWorkshopTab = "saved";
+  }
+  const activeItems = host.dashboardWorkshopTab === "saved" ? result.savedItems : result.items;
+  if (!activeItems.some((item) => item.id === host.dashboardWorkshopSelectedId)) {
+    host.dashboardWorkshopSelectedId = activeItems[0]?.id ?? null;
+  }
+  const nextSelectedIds = new Set(
+    [...host.dashboardWorkshopSelectedIds].filter((itemId) =>
+      result.items.some((item) => item.id === itemId),
+    ),
+  );
+  host.dashboardWorkshopSelectedIds = nextSelectedIds;
 }
 
 function applyCalendar(snapshot: DashboardSnapshot, result: DashboardCalendarResult) {
@@ -120,31 +191,43 @@ function resolveDashboardDraftConfigRaw(host: DashboardHost): string | undefined
   return undefined;
 }
 
-async function loadDashboardPageData(
-  host: DashboardHost,
-): Promise<void> {
+async function loadDashboardPageData(host: DashboardHost): Promise<void> {
   if (!host.client || !host.connected) {
     return;
   }
-  const snapshot = ensureDashboardSnapshot(host);
   const page = dashboardPageForTab(host.tab);
   switch (page) {
+    case "wallet": {
+      const result = await host.client.request<DashboardWalletResult>("dashboard.wallet", {
+        startDate: host.dashboardWalletStartDate,
+        endDate: host.dashboardWalletEndDate,
+        ...buildDashboardDateInterpretationParams(host.dashboardWalletTimeZone),
+      });
+      host.dashboardWalletResult = result;
+      return;
+    }
     case "today": {
+      const snapshot = ensureDashboardSnapshot(host);
       const today = await host.client.request<DashboardTodaySnapshot>("dashboard.today", {});
       applyToday(snapshot, today);
       return;
     }
     case "tasks": {
+      const snapshot = ensureDashboardSnapshot(host);
       const tasks = await host.client.request<DashboardTasksResult>("dashboard.tasks", {});
       applyTasks(snapshot, tasks);
       return;
     }
     case "workshop": {
+      const snapshot = ensureDashboardSnapshot(host);
+      const hasWorkshopData = Boolean(snapshot.workshop.length || snapshot.workshopSaved.length);
       const workshop = await host.client.request<DashboardWorkshopResult>("dashboard.workshop", {});
       applyWorkshop(snapshot, workshop);
+      synchronizeWorkshopState(host, workshop, { defaultToSaved: !hasWorkshopData });
       return;
     }
     case "calendar": {
+      const snapshot = ensureDashboardSnapshot(host);
       const calendar = await host.client.request<DashboardCalendarResult>("dashboard.calendar", {
         view: host.dashboardCalendarView,
         anchorAtMs: host.dashboardCalendarAnchorAtMs ?? undefined,
@@ -154,11 +237,13 @@ async function loadDashboardPageData(
       return;
     }
     case "routines": {
+      const snapshot = ensureDashboardSnapshot(host);
       const routines = await host.client.request<DashboardRoutinesResult>("dashboard.routines", {});
       applyRoutines(snapshot, routines);
       return;
     }
     case "memories": {
+      const snapshot = ensureDashboardSnapshot(host);
       const memories = await host.client.request<DashboardMemoriesResult>("dashboard.memories", {});
       applyMemories(snapshot, memories);
       return;
@@ -206,10 +291,7 @@ export async function loadDashboardTeamRuns(
     host.dashboardTeamRunsError = null;
   }
   try {
-    const res = await host.client.request<DashboardTeamRunsResult>(
-      "dashboard.teams.runs",
-      {},
-    );
+    const res = await host.client.request<DashboardTeamRunsResult>("dashboard.teams.runs", {});
     host.dashboardTeamRuns = res;
     host.dashboardTeamRunsError = null;
   } catch (error) {
@@ -223,24 +305,76 @@ export async function loadDashboardData(
   host: DashboardHost,
   opts?: { includeTeams?: boolean; quiet?: boolean },
 ): Promise<void> {
-  if (!host.client || !host.connected || (host.dashboardLoading && !opts?.quiet)) {
+  const page = dashboardPageForTab(host.tab);
+  const isWalletPage = page === "wallet";
+  const isLoading = isWalletPage ? host.dashboardWalletLoading : host.dashboardLoading;
+  if (!host.client || !host.connected || (isLoading && !opts?.quiet)) {
     return;
   }
-  host.dashboardLoading = true;
-  if (!opts?.quiet) {
-    host.dashboardError = null;
+  if (isWalletPage) {
+    host.dashboardWalletLoading = true;
+    if (!opts?.quiet) {
+      host.dashboardWalletError = null;
+    }
+  } else {
+    host.dashboardLoading = true;
+    if (!opts?.quiet) {
+      host.dashboardError = null;
+    }
   }
   try {
     await loadDashboardPageData(host);
-    host.dashboardError = null;
+    if (isWalletPage) {
+      host.dashboardWalletError = null;
+    } else {
+      host.dashboardError = null;
+    }
   } catch (error) {
-    host.dashboardError = String(error);
+    if (isWalletPage) {
+      host.dashboardWalletError = String(error);
+    } else {
+      host.dashboardError = String(error);
+    }
   } finally {
-    host.dashboardLoading = false;
+    if (isWalletPage) {
+      host.dashboardWalletLoading = false;
+    } else {
+      host.dashboardLoading = false;
+    }
   }
-  if (opts?.includeTeams || host.tab === "dashboardTasks") {
+  if (!isWalletPage && (opts?.includeTeams || host.tab === "dashboardTasks")) {
     await loadDashboardTeamSnapshots(host, opts);
     await loadDashboardTeamRuns(host, opts);
+  }
+}
+
+export async function saveDashboardWorkshopSelection(host: DashboardHost): Promise<void> {
+  if (!host.client || !host.connected || host.dashboardWorkshopSaving) {
+    return;
+  }
+  const itemIds = [...host.dashboardWorkshopSelectedIds];
+  const projectName = host.dashboardWorkshopProjectDraft.trim();
+  if (itemIds.length === 0 || !projectName) {
+    return;
+  }
+  host.dashboardWorkshopSaving = true;
+  host.dashboardWorkshopSaveError = null;
+  try {
+    const result = await host.client.request<DashboardWorkshopSaveResult>(
+      "dashboard.workshop.save",
+      {
+        itemIds,
+        projectName,
+      },
+    );
+    const snapshot = ensureDashboardSnapshot(host);
+    applyWorkshop(snapshot, result.workshop);
+    host.dashboardWorkshopSelectedIds = new Set();
+    synchronizeWorkshopState(host, result.workshop, { preferSaved: true });
+  } catch (error) {
+    host.dashboardWorkshopSaveError = String(error);
+  } finally {
+    host.dashboardWorkshopSaving = false;
   }
 }
 
@@ -249,10 +383,13 @@ export function scheduleDashboardReload(
   opts?: { delayMs?: number; includeTeams?: boolean },
 ) {
   clearReloadTimer(host);
-  host.dashboardReloadTimer = globalThis.setTimeout(() => {
-    host.dashboardReloadTimer = null;
-    void loadDashboardData(host, { includeTeams: opts?.includeTeams, quiet: true });
-  }, Math.max(0, opts?.delayMs ?? 120));
+  host.dashboardReloadTimer = globalThis.setTimeout(
+    () => {
+      host.dashboardReloadTimer = null;
+      void loadDashboardData(host, { includeTeams: opts?.includeTeams, quiet: true });
+    },
+    Math.max(0, opts?.delayMs ?? 120),
+  );
 }
 
 export function clearScheduledDashboardReload(host: DashboardHost) {

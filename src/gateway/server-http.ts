@@ -34,6 +34,7 @@ import {
   handleControlUiHttpRequest,
   type ControlUiRootState,
 } from "./control-ui.js";
+import { handleDashboardWorkshopSavedHttpRequest } from "./dashboard-workshop-saved.js";
 import { handleOpenAiEmbeddingsHttpRequest } from "./embeddings-http.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
@@ -875,6 +876,18 @@ export function createGatewayHttpServer(opts: {
           run: () => handleSlackHttpRequest(req, res),
         },
         {
+          name: "dashboard-workshop-saved",
+          run: () =>
+            handleDashboardWorkshopSavedHttpRequest({
+              req,
+              res,
+              auth: resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
+            }),
+        },
+        {
           name: "preview",
           run: () =>
             handlePreviewHttpRequest({
@@ -980,6 +993,9 @@ export function createGatewayHttpServer(opts: {
             handleControlUiHttpRequest(req, res, {
               basePath: controlUiBasePath,
               config: configSnapshot,
+              // Keep bootstrap token auth aligned with the running gateway
+              // process during deferred onboarding restarts.
+              resolvedAuth,
               root: controlUiRoot,
               trustedProxies,
               allowRealIpFallback,

@@ -2,14 +2,17 @@
 
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
+import { createEmptyMauOfficeState } from "../controllers/mau-office.ts";
 import type {
+  DashboardSavedWorkshopItem,
   DashboardSnapshot,
   DashboardTask,
   DashboardTeamRun,
   DashboardTeamRunsResult,
   DashboardTeamSnapshotsResult,
+  DashboardWalletResult,
+  DashboardWorkshopItem,
 } from "../types.ts";
-import { createEmptyMauOfficeState } from "../controllers/mau-office.ts";
 import { renderDashboard } from "./dashboard.ts";
 
 function buildTask(overrides: Partial<DashboardTask> = {}): DashboardTask {
@@ -32,16 +35,47 @@ function buildSnapshot(tasks: DashboardTask[]): DashboardSnapshot {
     generatedAtMs: 1,
     today: {
       generatedAtMs: 1,
-      inProgressTasks: tasks.filter((task) => task.status === "in_progress" || task.status === "review"),
+      inProgressTasks: tasks.filter(
+        (task) => task.status === "in_progress" || task.status === "review",
+      ),
       scheduledToday: [],
       blockers: [],
       recentMemory: [],
     },
     tasks,
     workshop: [],
+    workshopSaved: [],
     calendar: [],
     routines: [],
     memories: [],
+  };
+}
+
+function buildWorkshopItem(overrides: Partial<DashboardWorkshopItem> = {}): DashboardWorkshopItem {
+  return {
+    id: "workshop:recent",
+    title: "Preview sandbox",
+    taskId: "task:root",
+    taskStatus: "done",
+    sessionKey: "main",
+    previewUrl: "https://example.com/demo",
+    embeddable: false,
+    updatedAtMs: 1,
+    ...overrides,
+  };
+}
+
+function buildSavedWorkshopItem(
+  overrides: Partial<DashboardSavedWorkshopItem> = {},
+): DashboardSavedWorkshopItem {
+  return {
+    id: "saved:1",
+    title: "Saved preview",
+    taskStatus: "done",
+    savedAtMs: 2,
+    embeddable: false,
+    previewUrl: "/dashboard-workshop-embed/saved/saved:1/123/sig/",
+    ...overrides,
   };
 }
 
@@ -61,10 +95,25 @@ function buildTeamSnapshots(): DashboardTeamSnapshotsResult {
         openProsePreview: "agent manager:",
         lifecycleStages: [
           { id: "planning", name: "Planning", status: "in_progress", roles: ["manager"] },
-          { id: "architecture", name: "Architecture", status: "in_progress", roles: ["system architect"] },
-          { id: "execution", name: "Execution", status: "in_progress", roles: ["developer", "designer"] },
+          {
+            id: "architecture",
+            name: "Architecture",
+            status: "in_progress",
+            roles: ["system architect"],
+          },
+          {
+            id: "execution",
+            name: "Execution",
+            status: "in_progress",
+            roles: ["developer", "designer"],
+          },
           { id: "qa", name: "QA", status: "in_progress", roles: ["technical qa"] },
-          { id: "manager_confirmation", name: "Manager Confirmation", status: "review", roles: ["manager"] },
+          {
+            id: "manager_confirmation",
+            name: "Manager Confirmation",
+            status: "review",
+            roles: ["manager"],
+          },
         ],
         nodes: [
           {
@@ -158,6 +207,10 @@ function buildProps(
     loading: false,
     error: null,
     snapshot: buildSnapshot([]),
+    walletResult: null,
+    walletStartDate: "2026-03-01",
+    walletEndDate: "2026-03-30",
+    walletTimeZone: "local",
     calendarResult: null,
     calendarAnchorAtMs: null,
     teamsLoading: false,
@@ -173,15 +226,27 @@ function buildProps(
     doneFromDate: "",
     doneToDate: "",
     workshopSelectedId: null,
+    workshopTab: "recent",
+    workshopSelectedIds: new Set(),
+    workshopProjectDraft: "",
+    workshopSaving: false,
+    workshopSaveError: null,
     calendarView: "month",
     teamSelection: "vibe-coder:default",
     memoryAgentId: null,
+    agentPanel: "memory",
     agentsList: null,
+    configForm: null,
+    configLoading: false,
     agentFilesLoading: false,
     agentFilesError: null,
+    agentFilesList: null,
     agentFileContents: {},
     agentFileDrafts: {},
     agentFileSaving: false,
+    toolsCatalogLoading: false,
+    toolsCatalogError: null,
+    toolsCatalogResult: null,
     mauOfficeLoading: false,
     mauOfficeError: null,
     mauOfficeState: createEmptyMauOfficeState(),
@@ -203,10 +268,18 @@ function buildProps(
     onRefresh: vi.fn(),
     onRefreshTeams: vi.fn(),
     onOpenTask: vi.fn(),
+    onOpenSession: vi.fn(),
     onFilterTasks: vi.fn(),
     onSelectTaskGroup: vi.fn(),
     onDoneDateRangeChange: vi.fn(),
     onSelectWorkshop: vi.fn(),
+    onWorkshopTabChange: vi.fn(),
+    onToggleWorkshopSelection: vi.fn(),
+    onWorkshopProjectDraftChange: vi.fn(),
+    onSaveWorkshopSelection: vi.fn(),
+    onWalletDateRangeChange: vi.fn(),
+    onWalletTimeZoneChange: vi.fn(),
+    onWalletPresetSelect: vi.fn(),
     onCalendarViewChange: vi.fn(),
     onCalendarNavigate: vi.fn(),
     onCalendarJumpToday: vi.fn(),
@@ -214,6 +287,7 @@ function buildProps(
     onSelectTeam: vi.fn(),
     onPromptTeamEdit: vi.fn(),
     onSelectMemoryAgent: vi.fn(),
+    onSelectAgentPanel: vi.fn(),
     onMemoryDraftChange: vi.fn(),
     onSaveMemoryFile: vi.fn(),
     onRefreshMauOffice: vi.fn(),
@@ -229,7 +303,161 @@ function buildProps(
   };
 }
 
+function buildWalletResult(overrides: Partial<DashboardWalletResult> = {}): DashboardWalletResult {
+  return {
+    generatedAtMs: 1,
+    startDate: "2026-03-01",
+    endDate: "2026-03-30",
+    cards: [
+      {
+        id: "llm",
+        records: 42,
+        recordLabel: "Usage records",
+        totalValue: 12.34,
+        totalUnit: "usd",
+        totalLabel: "Cost",
+        measurement: "exact",
+        coverage: "full",
+        secondaryValue: 123_456,
+        secondaryUnit: "tokens",
+        secondaryLabel: "Tokens",
+      },
+      {
+        id: "deepgram-audio",
+        records: 2,
+        recordLabel: "Requests",
+        totalValue: 90_000,
+        totalUnit: "duration_ms",
+        totalLabel: "Audio time",
+        measurement: "derived",
+        coverage: "partial",
+        note: "1 record(s) are missing duration totals.",
+        missingTotals: 1,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function clickButton(container: HTMLElement, selector: string) {
+  const button = container.querySelector<HTMLButtonElement>(selector);
+  expect(button).not.toBeNull();
+  button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+}
+
 describe("dashboard view", () => {
+  it("renders the wallet cards with totals, records, and partial notes", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardWallet",
+          snapshot: null,
+          walletResult: buildWalletResult(),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Wallet");
+    expect(container.textContent).toContain("LLM");
+    expect(container.textContent).toContain("$12.34");
+    expect(container.textContent).toContain("42 usage records");
+    expect(container.textContent).toContain("Tokens: 123k");
+    expect(container.textContent).toContain("Deepgram Audio");
+    expect(container.textContent).toContain("Partial");
+    expect(container.textContent).toContain("1 record(s) are missing duration totals.");
+  });
+
+  it("renders the dashboard agents scope tab for the selected agent", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardMemories",
+          agentPanel: "scope",
+          memoryAgentId: "main",
+          agentsList: {
+            defaultId: "main",
+            mainKey: "main",
+            scope: "workspace",
+            agents: [
+              {
+                id: "main",
+                name: "Operator",
+                identity: { name: "Operator" },
+              },
+            ],
+          } as Parameters<typeof renderDashboard>[0]["agentsList"],
+          configForm: {
+            agents: {
+              defaults: {
+                workspace: "/tmp/default",
+                model: "openai/gpt-5.4",
+              },
+              list: [
+                {
+                  id: "main",
+                  name: "Operator",
+                  skills: ["memory-core", "review"],
+                  tools: {
+                    profile: "coding",
+                    alsoAllow: ["message"],
+                    deny: ["web_fetch"],
+                  },
+                },
+              ],
+            },
+          },
+          agentFilesList: {
+            agentId: "main",
+            workspace: "/tmp/main",
+            files: [],
+          },
+          toolsCatalogResult: {
+            agentId: "main",
+            profiles: [{ id: "coding", label: "Coding" }],
+            groups: [
+              {
+                id: "web",
+                label: "Web",
+                source: "core",
+                tools: [
+                  {
+                    id: "web_fetch",
+                    label: "web_fetch",
+                    description: "Fetch web content",
+                    source: "core",
+                    defaultProfiles: ["full"],
+                  },
+                  {
+                    id: "message",
+                    label: "message",
+                    description: "Send messages",
+                    source: "core",
+                    defaultProfiles: ["messaging"],
+                  },
+                ],
+              },
+            ],
+          } as Parameters<typeof renderDashboard>[0]["toolsCatalogResult"],
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Agents");
+    expect(container.textContent).toContain("Agent Context");
+    expect(container.textContent).toContain("Tool Access");
+    expect(container.textContent).toContain("Denied");
+    expect(container.textContent).toContain("web_fetch");
+    expect(container.textContent).toContain("message");
+  });
+
   it("shows the configured team task entry even when there are no delegated team tasks yet", async () => {
     const container = document.createElement("div");
 
@@ -390,5 +618,241 @@ describe("dashboard view", () => {
 
     expect(container.textContent).toContain("Done");
     expect(container.textContent).toContain("Finalize launch polish");
+  });
+
+  it("shows the recent workshop save bar, saved badges, and project mismatch warning", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardWorkshop",
+          snapshot: {
+            ...buildSnapshot([]),
+            workshop: [
+              buildWorkshopItem({
+                id: "workshop:recent-1",
+                title: "Recent preview",
+                projectName: "Alpha",
+                projectKey: "alpha",
+                isSaved: true,
+              }),
+            ],
+          },
+          workshopTab: "recent",
+          workshopSelectedId: "workshop:recent-1",
+          workshopSelectedIds: new Set(["workshop:recent-1"]),
+          workshopProjectDraft: "Beta",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Save Selection");
+    expect(container.textContent).toContain("Recent preview");
+    expect(container.textContent).toContain("Saved");
+    expect(container.textContent).toContain("already belong to another project");
+  });
+
+  it("renders saved workshop items from the saved tab by default", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardWorkshop",
+          snapshot: {
+            ...buildSnapshot([]),
+            workshopSaved: [
+              buildSavedWorkshopItem({ title: "Saved playground", projectName: "Alpha" }),
+            ],
+          },
+          workshopTab: "saved",
+          workshopSelectedId: "saved:1",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Saved playground");
+    expect(container.textContent).toContain("Saved");
+    expect(container.textContent).toContain("Alpha");
+  });
+
+  it("filters the task board by project when a project filter is active", async () => {
+    const container = document.createElement("div");
+    const alphaTask = buildTask({ title: "Alpha task", projectName: "Alpha", projectKey: "alpha" });
+    const betaTask = buildTask({
+      id: "task:beta",
+      sessionKey: "beta",
+      title: "Beta task",
+      projectName: "Beta",
+      projectKey: "beta",
+    });
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardTasks",
+          snapshot: buildSnapshot([alphaTask, betaTask]),
+          taskFilter: { kind: "project", value: "alpha" },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Alpha task");
+    expect(container.textContent).not.toContain("Beta task");
+    expect(container.textContent).toContain("All projects");
+  });
+
+  it("renders blocker details and a recommended next step on blocked task cards", async () => {
+    const container = document.createElement("div");
+    const blockedTask = buildTask({
+      status: "blocked",
+      blockerLinks: [
+        {
+          id: "failure:task:root",
+          kind: "failure",
+          title: "Task blocked: Build checkout flow",
+          description: "TypeError: checkout schema was undefined.",
+          suggestion:
+            "Open the related session, inspect the latest failure, fix or retry it, then continue.",
+          sessionKey: "main",
+        },
+      ],
+    });
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardTasks",
+          snapshot: buildSnapshot([blockedTask]),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("TypeError: checkout schema was undefined.");
+    expect(container.textContent).toContain("Recommended next step");
+    expect(container.textContent).toContain(
+      "Open the related session, inspect the latest failure, fix or retry it, then continue.",
+    );
+  });
+
+  it("opens the related session from a today blocker CTA", async () => {
+    const container = document.createElement("div");
+    const onOpenSession = vi.fn();
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+          snapshot: {
+            ...buildSnapshot([]),
+            today: {
+              generatedAtMs: 1,
+              inProgressTasks: [],
+              scheduledToday: [],
+              recentMemory: [],
+              blockers: [
+                {
+                  id: "approval:1",
+                  severity: "warning",
+                  title: "Exec approval needed",
+                  description: "Approve the deploy command.",
+                  suggestion:
+                    "Open the related session, review the request, then approve or reject it.",
+                  sessionKey: "agent:main:subagent:designer",
+                },
+              ],
+            },
+          },
+          onOpenSession,
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    clickButton(container, ".dashboard-blocker-card__actions button");
+    expect(onOpenSession).toHaveBeenCalledWith("agent:main:subagent:designer");
+  });
+
+  it("routes today blocker CTAs to tasks or routines when session jumps are unavailable", async () => {
+    const container = document.createElement("div");
+    const onFilterTasks = vi.fn();
+    const onNavigate = vi.fn();
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+          snapshot: {
+            ...buildSnapshot([]),
+            today: {
+              generatedAtMs: 1,
+              inProgressTasks: [],
+              scheduledToday: [],
+              recentMemory: [],
+              blockers: [
+                {
+                  id: "failure:task:root",
+                  severity: "error",
+                  title: "Task blocked: Build checkout flow",
+                  description: "QA reported a blocking regression.",
+                  suggestion:
+                    "Open the related task to inspect the blocker and coordinate the next fix.",
+                  taskId: "task:root",
+                },
+                {
+                  id: "cron-error:daily-review",
+                  severity: "warning",
+                  title: "Routine failed: Daily review",
+                  description: "The latest routine run failed.",
+                  suggestion:
+                    "Open Routines to inspect the failing job and decide whether it needs a fix or a rerun.",
+                  jobId: "daily-review",
+                },
+              ],
+            },
+          },
+          onFilterTasks,
+          onNavigate,
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const buttons = container.querySelectorAll<HTMLButtonElement>(".dashboard-blocker-card__actions button");
+    expect(buttons).toHaveLength(2);
+
+    buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+
+    expect(onFilterTasks).toHaveBeenCalledWith({ kind: "task", value: "task:root" });
+    expect(onNavigate).toHaveBeenCalledWith("routines");
+  });
+
+  it("keeps non-blocked task cards free of blocker guidance", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardTasks",
+          snapshot: buildSnapshot([buildTask()]),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).not.toContain("Recommended next step");
   });
 });

@@ -14,7 +14,25 @@ import { readCronRunLogEntriesPageAll } from "../cron/run-log.js";
 import { computeNextRunAtMs } from "../cron/schedule.js";
 import type { CronService } from "../cron/service.js";
 import type { CronJob } from "../cron/types.js";
-import type { ExecApprovalRecord } from "./exec-approval-manager.js";
+import { isWithinDir } from "../infra/path-safety.js";
+import { parseAgentSessionKey } from "../routing/session-key.js";
+import { hasInterSessionUserProvenance } from "../sessions/input-provenance.js";
+import {
+  findLifecycleStageById,
+  findLifecycleStageByRole,
+  formatLifecycleProgressLabel,
+  resolveTeamWorkflowLifecycleStages,
+} from "../teams/lifecycle.js";
+import {
+  findTeamWorkflow,
+  findTeamConfig,
+  listConfiguredTeams,
+  listTeamMembers,
+  listTeamWorkflows,
+  resolveAgentDisplayName,
+} from "../teams/model.js";
+import { generateTeamOpenProsePreview } from "../teams/openprose.js";
+import { resolveSessionTeamContext } from "../teams/runtime.js";
 import { resolveGatewayAuth } from "./auth.js";
 import type {
   DashboardBlocker,
@@ -36,14 +54,25 @@ import type {
   DashboardTeamSnapshot,
   DashboardTeamSnapshotsResult,
   DashboardTodaySnapshot,
+  DashboardSavedWorkshopItem,
   DashboardWorkshopItem,
   DashboardWorkshopPreviewLink,
   DashboardWorkshopResult,
+  DashboardWorkshopSaveResult,
   DashboardWorkItem,
   DashboardWorkItemBlockerLink,
   DashboardWorkItemSessionLink,
   DashboardWorkItemVisibilityScope,
 } from "./dashboard-types.js";
+import {
+  buildSavedWorkshopEmbedPath,
+  copySourceIntoSavedWorkshopStore,
+  normalizeDashboardProjectName,
+  readDashboardWorkshopStore,
+  writeDashboardWorkshopStore,
+  type DashboardWorkshopSavedItemRecord,
+} from "./dashboard-workshop-saved.js";
+import type { ExecApprovalRecord } from "./exec-approval-manager.js";
 import {
   buildPreviewEmbedPathFromPreviewUrl,
   resolvePreviewArtifactInfoFromPreviewUrl,
@@ -55,23 +84,6 @@ import {
   readFirstUserMessageFromTranscript,
   readSessionMessages,
 } from "./session-utils.js";
-import { parseAgentSessionKey } from "../routing/session-key.js";
-import {
-  findTeamWorkflow,
-  findTeamConfig,
-  listConfiguredTeams,
-  listTeamMembers,
-  listTeamWorkflows,
-  resolveAgentDisplayName,
-} from "../teams/model.js";
-import { resolveSessionTeamContext } from "../teams/runtime.js";
-import {
-  findLifecycleStageById,
-  findLifecycleStageByRole,
-  formatLifecycleProgressLabel,
-  resolveTeamWorkflowLifecycleStages,
-} from "../teams/lifecycle.js";
-import { generateTeamOpenProsePreview } from "../teams/openprose.js";
 
 const DASHBOARD_DIRNAME = "dashboard";
 const TEAMS_DIRNAME = "teams";
@@ -117,13 +129,14 @@ export const __testing = {
   },
   resetDepsForTests() {
     dashboardDeps.prepareSimpleCompletionModelForAgent = prepareSimpleCompletionModelForAgent;
-    dashboardDeps.completeWithPreparedSimpleCompletionModel = completeWithPreparedSimpleCompletionModel;
+    dashboardDeps.completeWithPreparedSimpleCompletionModel =
+      completeWithPreparedSimpleCompletionModel;
   },
   buildWorkshopItemsForTests(
     tasks: DashboardWorkItem[],
     params?: { cfg?: MaumauConfig; nowMs?: number; stateDir?: string },
   ) {
-    return buildWorkshopItems(tasks, params ?? {});
+    return buildWorkshopItems(tasks, params ?? {}).then((result) => result.items);
   },
 };
 
@@ -244,7 +257,9 @@ function buildFallbackTeamSummary(params: {
 }): string {
   const workflow = findTeamWorkflow(params.team, params.workflowId);
   const managerName = resolveAgentDisplayName(params.cfg, params.team.managerAgentId);
-  const specialists = listTeamMembers(params.team).map((member) => member.role.trim()).filter(Boolean);
+  const specialists = listTeamMembers(params.team)
+    .map((member) => member.role.trim())
+    .filter(Boolean);
   const required = workflow.contract?.requiredRoles?.filter(Boolean) ?? [];
   const qaRequired = workflow.contract?.requiredQaRoles?.filter(Boolean) ?? [];
   const specialistLine =
@@ -257,8 +272,7 @@ function buildFallbackTeamSummary(params: {
       : workflow.contract?.requireDelegation
         ? "Delegation is required before the manager can finish."
         : "Delegation is optional for this workflow.";
-  const qaLine =
-    qaRequired.length > 0 ? `Required QA roles: ${qaRequired.join(", ")}.` : "";
+  const qaLine = qaRequired.length > 0 ? `Required QA roles: ${qaRequired.join(", ")}.` : "";
   return clampWords(
     `${params.team.name?.trim() || params.team.id} is led by ${managerName}. ${workflow.name?.trim() || workflow.id} keeps the manager at the center of delegation. ${specialistLine} ${requiredLine} ${qaLine}`.trim(),
     MAX_SUMMARY_WORDS,
@@ -285,7 +299,9 @@ function classifyTeamNodeStage(params: {
     return "support";
   }
   if (
-    /\b(architect|architecture|planner|planning|strategy|strategist|research)\b/.test(normalizedRole)
+    /\b(architect|architecture|planner|planning|strategy|strategist|research)\b/.test(
+      normalizedRole,
+    )
   ) {
     return "architecture";
   }
@@ -416,7 +432,8 @@ function buildTeamSnapshotGraph(params: {
   const workflow = findTeamWorkflow(params.team, params.workflowId);
   const nodes: DashboardTeamNode[] = [];
   const edges: DashboardTeamEdge[] = [];
-  const requiredRolesList = workflow.contract?.requiredRoles?.map((role) => normalizeTeamRole(role)) ?? [];
+  const requiredRolesList =
+    workflow.contract?.requiredRoles?.map((role) => normalizeTeamRole(role)) ?? [];
   const requiredRoles = new Set(requiredRolesList);
   const requiredQaRoles = new Set(
     workflow.contract?.requiredQaRoles?.map((role) => normalizeTeamRole(role)) ?? [],
@@ -468,7 +485,9 @@ function buildTeamSnapshotGraph(params: {
     const nodeId = `${params.team.id}:${workflow.id}:${link.type}:${link.targetId}`;
     const linkedTeamName =
       link.type === "team"
-        ? listConfiguredTeams(params.cfg).find((candidate) => candidate.id === link.targetId)?.name?.trim()
+        ? listConfiguredTeams(params.cfg)
+            .find((candidate) => candidate.id === link.targetId)
+            ?.name?.trim()
         : undefined;
     nodes.push({
       id: nodeId,
@@ -490,7 +509,8 @@ function buildTeamSnapshotGraph(params: {
       from: managerId,
       to: nodeId,
       kind: link.type === "team" ? "links" : "delegates",
-      label: link.description?.trim() || (link.type === "team" ? "cross-team" : "borrowed specialist"),
+      label:
+        link.description?.trim() || (link.type === "team" ? "cross-team" : "borrowed specialist"),
     });
   }
 
@@ -599,7 +619,9 @@ async function readStoredTeamSnapshotStore(params?: {
       version: parsed.version === 2 ? 2 : 1,
       generatedAtMs: typeof parsed.generatedAtMs === "number" ? parsed.generatedAtMs : 0,
       teamsConfigFingerprint:
-        typeof parsed.teamsConfigFingerprint === "string" ? parsed.teamsConfigFingerprint : undefined,
+        typeof parsed.teamsConfigFingerprint === "string"
+          ? parsed.teamsConfigFingerprint
+          : undefined,
       snapshots: parsed.snapshots as DashboardTeamSnapshot[],
     };
   } catch {
@@ -705,7 +727,10 @@ function serializeForChangeCheck(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-export function haveTeamsConfigChanged(previous: MaumauConfig | undefined, next: MaumauConfig): boolean {
+export function haveTeamsConfigChanged(
+  previous: MaumauConfig | undefined,
+  next: MaumauConfig,
+): boolean {
   return serializeForChangeCheck(previous?.teams) !== serializeForChangeCheck(next.teams);
 }
 
@@ -722,7 +747,10 @@ function isPublishedPreviewUrl(value: string | undefined): boolean {
   }
 }
 
-function parsePreviewArtifacts(messages: unknown[]): { previewUrl?: string; artifactPath?: string } {
+function parsePreviewArtifacts(messages: unknown[]): {
+  previewUrl?: string;
+  artifactPath?: string;
+} {
   let artifactPath: string | undefined;
   let previewUrl: string | undefined;
   for (const message of messages) {
@@ -769,6 +797,11 @@ type DerivedTaskContext = {
   summary?: string;
 };
 
+type TrustedTranscriptBlocker = {
+  description: string;
+  suggestion: string;
+};
+
 function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvelope | null {
   for (const message of messages) {
     const text = extractMessageText(message);
@@ -790,8 +823,7 @@ function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvel
         title: normalizeText(parsed.title) || undefined,
         summary: normalizeText(parsed.summary) || undefined,
         teamRun:
-          teamRunRaw &&
-          normalizeText(teamRunRaw.kind).toLowerCase() === "team_run"
+          teamRunRaw && normalizeText(teamRunRaw.kind).toLowerCase() === "team_run"
             ? {
                 kind: "team_run",
                 teamId: normalizeText(teamRunRaw.teamId) || undefined,
@@ -800,10 +832,10 @@ function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvel
                 event: (() => {
                   const event = normalizeText(teamRunRaw.event).toLowerCase();
                   return event === "started" ||
-                      event === "stage_enter" ||
-                      event === "stage_complete" ||
-                      event === "blocked" ||
-                      event === "completed"
+                    event === "stage_enter" ||
+                    event === "stage_complete" ||
+                    event === "blocked" ||
+                    event === "completed"
                     ? event
                     : undefined;
                 })(),
@@ -817,10 +849,10 @@ function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvel
                 status: (() => {
                   const status = normalizeText(teamRunRaw.status);
                   return status === "blocked" ||
-                      status === "in_progress" ||
-                      status === "review" ||
-                      status === "done" ||
-                      status === "idle"
+                    status === "in_progress" ||
+                    status === "review" ||
+                    status === "done" ||
+                    status === "idle"
                     ? status
                     : undefined;
                 })(),
@@ -832,6 +864,184 @@ function parseTrustedWorkItemEnvelope(messages: unknown[]): TrustedWorkItemEnvel
     }
   }
   return null;
+}
+
+function resolveTrustedTranscriptBlockerSuggestion(description: string): string {
+  const teamIdMatch = /teamId=(?:"([^"]+)"|'([^']+)'|`([^`]+)`|([a-z0-9._:-]+))/i.exec(description);
+  const teamId = teamIdMatch?.[1] || teamIdMatch?.[2] || teamIdMatch?.[3] || teamIdMatch?.[4];
+  if (teamId) {
+    return `Open the related session, rerun this through the ${teamId} team, then continue.`;
+  }
+  if (/\bteams_run\b/i.test(description)) {
+    return "Open the related session, rerun this through the recommended team, then continue.";
+  }
+  const agentIdMatch = /agentId=(?:"([^"]+)"|'([^']+)'|`([^`]+)`|([a-z0-9._:-]+))/i.exec(
+    description,
+  );
+  const agentId = agentIdMatch?.[1] || agentIdMatch?.[2] || agentIdMatch?.[3] || agentIdMatch?.[4];
+  if (agentId) {
+    return `Open the related session, rerun this through the ${agentId} worker session, then continue.`;
+  }
+  if (/\bsessions_spawn\b/i.test(description)) {
+    return "Open the related session, rerun this through the recommended worker session, then continue.";
+  }
+  return "Open the related session, follow the tool guidance, then continue.";
+}
+
+function stripTranscriptDisplayMarkup(text: string): string {
+  return normalizeText(
+    text
+      .replace(/\[\[[^\]]+\]\]/g, " ")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1"),
+  );
+}
+
+function joinReadableOptions(items: string[]): string {
+  if (items.length === 0) {
+    return "";
+  }
+  if (items.length === 1) {
+    return items[0] || "";
+  }
+  if (items.length === 2) {
+    return `${items[0]} or ${items[1]}`;
+  }
+  return `${items.slice(0, -1).join("; ")}; or ${items.at(-1)}`;
+}
+
+function extractAssistantNextStepSuggestion(text: string): string | undefined {
+  const normalized = stripTranscriptDisplayMarkup(text);
+  if (!normalized) {
+    return undefined;
+  }
+  const headerMatch = /what i can do next:/i.exec(normalized);
+  if (headerMatch) {
+    const items = normalized
+      .slice(headerMatch.index + headerMatch[0].length)
+      .split(/\n/)
+      .map((line) => {
+        const match = /^\s*(?:[-*]|\d+\.)\s+(.+)$/.exec(line.trim());
+        return match?.[1] ? stripTranscriptDisplayMarkup(match[1]) : "";
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+    if (items.length > 0) {
+      return excerptText(`Next options: ${joinReadableOptions(items)}.`, 360);
+    }
+  }
+  const ifYouWantMatch = /if you want,?[^.!?\n]*(?:[.!?]|$)/i.exec(normalized);
+  if (ifYouWantMatch?.[0]) {
+    return excerptText(ifYouWantMatch[0], 360);
+  }
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => normalizeText(sentence))
+    .filter(Boolean);
+  const recoverySentence = sentences.find((sentence) =>
+    /\b(i(?:'|’)ll|i can|try again|use the required|rerun this|draft|make you|give you)\b/i.test(
+      sentence,
+    ),
+  );
+  return recoverySentence ? excerptText(recoverySentence, 360) : undefined;
+}
+
+function extractAssistantTranscriptBlocker(text: string): TrustedTranscriptBlocker | null {
+  const normalized = stripTranscriptDisplayMarkup(text);
+  if (
+    !normalized ||
+    !/\b(blocked|blocker|refused the job|no preview link exists yet|no workspace changes were made|no [a-z ]+ was created)\b/i.test(
+      normalized,
+    )
+  ) {
+    return null;
+  }
+  const paragraphs = normalized
+    .split(/\n\s*\n/)
+    .map((paragraph) => normalizeText(paragraph))
+    .filter(Boolean);
+  const description = excerptText(
+    paragraphs.find((paragraph) => /\b(blocked|blocker|refused the job)\b/i.test(paragraph)) ||
+      paragraphs[0] ||
+      normalized,
+    220,
+  );
+  return {
+    description,
+    suggestion: extractAssistantNextStepSuggestion(normalized) || description,
+  };
+}
+
+function isResolvedTranscriptToolStatus(status: string): boolean {
+  return (
+    status === "accepted" ||
+    status === "ok" ||
+    status === "done" ||
+    status === "completed" ||
+    status === "running" ||
+    status === "in_progress"
+  );
+}
+
+function isResolvedAssistantUpdate(text: string): boolean {
+  const normalized = stripTranscriptDisplayMarkup(text);
+  if (!normalized || /\b(blocked|blocker)\b/i.test(normalized)) {
+    return false;
+  }
+  return (
+    /\b(in progress|working on it|done starting|all set|finished|ready)\b/i.test(normalized) ||
+    /\bI(?:'|’)ll send (?:it|the result|the preview)\b/i.test(normalized) ||
+    /\bI(?:'|’)ve got .* building\b/i.test(normalized)
+  );
+}
+
+function findTrustedTranscriptBlocker(messages: unknown[]): TrustedTranscriptBlocker | null {
+  let activeToolBlocker: TrustedTranscriptBlocker | null = null;
+  let activeAssistantBlocker: TrustedTranscriptBlocker | null = null;
+  for (const message of messages) {
+    if (!isObject(message)) {
+      continue;
+    }
+    const role = normalizeText(message.role).toLowerCase();
+    if (role === "toolresult") {
+      const details = isObject(message.details) ? message.details : null;
+      const status = normalizeText(details?.status).toLowerCase();
+      if (status === "forbidden") {
+        const description = excerptText(
+          normalizeText(details?.error) ||
+            extractMessageText(message) ||
+            "A required tool action was denied.",
+          220,
+        );
+        activeToolBlocker = {
+          description,
+          suggestion: resolveTrustedTranscriptBlockerSuggestion(description),
+        };
+        activeAssistantBlocker = null;
+        continue;
+      }
+      if (isResolvedTranscriptToolStatus(status)) {
+        activeToolBlocker = null;
+        activeAssistantBlocker = null;
+      }
+      continue;
+    }
+    if (role !== "assistant") {
+      continue;
+    }
+    const text = extractMessageText(message);
+    const assistantBlocker = extractAssistantTranscriptBlocker(text);
+    if (assistantBlocker) {
+      activeAssistantBlocker = assistantBlocker;
+      activeToolBlocker = null;
+      continue;
+    }
+    if (isResolvedAssistantUpdate(text)) {
+      activeToolBlocker = null;
+      activeAssistantBlocker = null;
+    }
+  }
+  return activeAssistantBlocker ?? activeToolBlocker;
 }
 
 function excerptText(text: string, maxLen = 180): string {
@@ -915,17 +1125,35 @@ function deriveTaskContextFromText(text: string | undefined): DerivedTaskContext
 }
 
 function deriveTaskContextFromMessages(messages: unknown[]): DerivedTaskContext {
+  let subject: string | undefined;
+  let summary: string | undefined;
   for (const message of messages) {
-    const role = isObject(message) ? normalizeText(message.role).toLowerCase() : "";
-    if (role && role !== "assistant" && role !== "user") {
+    if (!isObject(message)) {
       continue;
     }
-    const derived = deriveTaskContextFromText(extractMessageText(message));
-    if (derived.subject || derived.summary) {
-      return derived;
+    const role = normalizeText(message.role).toLowerCase();
+    if (role !== "assistant" && role !== "user") {
+      continue;
+    }
+    if (role === "user" && hasInterSessionUserProvenance(message)) {
+      continue;
+    }
+    const text = extractMessageText(message);
+    if (role === "assistant" && extractAssistantTranscriptBlocker(text)) {
+      continue;
+    }
+    const derived = deriveTaskContextFromText(text);
+    if (!subject && role === "user" && derived.subject) {
+      subject = derived.subject;
+    }
+    if (!summary && derived.summary) {
+      summary = derived.summary;
+    }
+    if (subject && summary) {
+      break;
     }
   }
-  return {};
+  return { subject, summary };
 }
 
 function mergeDerivedTaskContext(
@@ -978,10 +1206,7 @@ function resolveCalendarWindow(view: DashboardCalendarView, anchorAtMs: number) 
   };
 }
 
-async function writeDashboardJsonFile(
-  filePath: string,
-  payload: string,
-): Promise<void> {
+async function writeDashboardJsonFile(filePath: string, payload: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now().toString(36)}`;
   await fs.writeFile(tmpPath, payload, "utf8");
@@ -1069,7 +1294,10 @@ function formatRoleLabel(role: string | undefined): string | undefined {
 }
 
 function normalizeComparableText(value: string | undefined): string {
-  return normalizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function humanizeIdentifier(value: string | undefined): string | undefined {
@@ -1136,7 +1364,7 @@ function resolveArtifactDisplayLabel(params: {
     } catch {
       return "";
     }
-        })();
+  })();
   if (!artifactBase && looksLikeOpaqueArtifactToken(fallbackFromUrl)) {
     return undefined;
   }
@@ -1274,13 +1502,15 @@ function isLegacyTaskTitle(params: {
   const teamLabel = params.teamLabel || params.teamId || "Team";
   const roleLabel = formatRoleLabel(params.teamRole) || params.assigneeLabel || "Manager";
   return (
-    normalizeComparableText(params.title) ===
-    normalizeComparableText(`${teamLabel} ${roleLabel}`)
+    normalizeComparableText(params.title) === normalizeComparableText(`${teamLabel} ${roleLabel}`)
   );
 }
 
 function isLoopbackHost(hostname: string): boolean {
-  const normalized = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  const normalized = hostname
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase();
   return (
     normalized === "localhost" ||
     normalized === "::1" ||
@@ -1294,19 +1524,13 @@ function resolvePreviewEmbeddable(previewUrl: string | undefined): boolean {
   if (!normalized) {
     return false;
   }
-  if (
-    normalized.startsWith("/") ||
-    normalized.startsWith("./") ||
-    normalized.startsWith("../")
-  ) {
+  if (normalized.startsWith("/") || normalized.startsWith("./") || normalized.startsWith("../")) {
     return true;
   }
   try {
     const parsed = new URL(normalized);
     return (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:" ||
-      isLoopbackHost(parsed.hostname)
+      parsed.protocol === "http:" || parsed.protocol === "https:" || isLoopbackHost(parsed.hostname)
     );
   } catch {
     return false;
@@ -1342,7 +1566,9 @@ function countCompletedLifecycleStages(
   if (!Array.isArray(stageIds) || stageIds.length === 0) {
     return 0;
   }
-  const validStageIds = new Set(resolveTeamWorkflowLifecycleStages(workflow).map((stage) => stage.id));
+  const validStageIds = new Set(
+    resolveTeamWorkflowLifecycleStages(workflow).map((stage) => stage.id),
+  );
   const seen = new Set<string>();
   for (const stageId of stageIds) {
     const normalized = normalizeText(stageId).toLowerCase();
@@ -1396,11 +1622,8 @@ function resolveLifecycleProgressFields(params: {
       : undefined;
   const currentStage = currentStageFromEnvelope ?? currentStageFromRole;
   const currentStageLabel =
-    params.envelope?.teamRun?.currentStageName ||
-    currentStage?.name ||
-    undefined;
-  const completedStageIds =
-    params.envelope?.teamRun?.completedStageIds?.filter(Boolean) ?? [];
+    params.envelope?.teamRun?.currentStageName || currentStage?.name || undefined;
+  const completedStageIds = params.envelope?.teamRun?.completedStageIds?.filter(Boolean) ?? [];
   let completedStepCount = workflow
     ? countCompletedLifecycleStages(completedStageIds, workflow)
     : 0;
@@ -1416,9 +1639,7 @@ function resolveLifecycleProgressFields(params: {
   const progressPercent =
     totalStepCount > 0 ? Math.round((completedStepCount / totalStepCount) * 100) : undefined;
   const lifecycleStatus =
-    params.envelope?.teamRun?.status ||
-    currentStage?.status ||
-    params.fallbackStatus;
+    params.envelope?.teamRun?.status || currentStage?.status || params.fallbackStatus;
 
   return {
     status: lifecycleStatus,
@@ -1457,6 +1678,104 @@ function resolveTaskStatus(params: {
     return "done";
   }
   return "idle";
+}
+
+async function canonicalizeWorkspaceId(
+  rawWorkspaceDir: string | undefined,
+): Promise<string | undefined> {
+  const normalized = normalizeText(rawWorkspaceDir);
+  if (!normalized) {
+    return undefined;
+  }
+  const resolved = path.resolve(normalized);
+  try {
+    return await fs.realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function resolveWorkspaceLabel(workspaceId: string | undefined): string | undefined {
+  const normalized = normalizeText(workspaceId);
+  if (!normalized) {
+    return undefined;
+  }
+  const label = path.basename(normalized);
+  return label && label !== "." && label !== path.sep ? label : normalized;
+}
+
+async function resolveTrustedWorkspaceMetadata(params: {
+  cfg: MaumauConfig;
+  agentId: string;
+  entry?: SessionEntry;
+}): Promise<Pick<DashboardWorkItem, "workspaceId" | "workspaceLabel">> {
+  const workspaceId = await canonicalizeWorkspaceId(
+    normalizeText(params.entry?.spawnedWorkspaceDir) ||
+      resolveAgentWorkspaceDir(params.cfg, params.agentId),
+  );
+  return {
+    workspaceId,
+    workspaceLabel: resolveWorkspaceLabel(workspaceId),
+  };
+}
+
+type DetailedDashboardWorkshopItem = DashboardWorkshopItem & {
+  sourceIdentity: string;
+  sourceArtifactPath?: string;
+};
+
+function resolveProjectBindingForWorkspaceId(
+  workspaceId: string | undefined,
+  projectByWorkspace: Record<string, { name: string; key: string }>,
+): Pick<DashboardWorkItem, "projectName" | "projectKey"> {
+  const normalizedWorkspaceId = normalizeText(workspaceId);
+  if (!normalizedWorkspaceId) {
+    return {};
+  }
+  const binding = projectByWorkspace[normalizedWorkspaceId];
+  if (!binding) {
+    return {};
+  }
+  return {
+    projectName: binding.name,
+    projectKey: binding.key,
+  };
+}
+
+function annotateWorkItemsWithProjects(
+  items: DashboardWorkItem[],
+  projectByWorkspace: Record<string, { name: string; key: string }>,
+): DashboardWorkItem[] {
+  return items.map((item) => ({
+    ...item,
+    ...resolveProjectBindingForWorkspaceId(item.workspaceId, projectByWorkspace),
+  }));
+}
+
+function annotateTeamRunsWithProjects(
+  runs: DashboardTeamRun[],
+  projectByWorkspace: Record<string, { name: string; key: string }>,
+): DashboardTeamRun[] {
+  return runs.map((run) => ({
+    ...run,
+    items: annotateWorkItemsWithProjects(run.items, projectByWorkspace),
+  }));
+}
+
+function resolveArtifactPathWithinWorkspace(params: {
+  workspaceId?: string;
+  artifactPath?: string;
+}): string | undefined {
+  const workspaceId = normalizeText(params.workspaceId);
+  const artifactPath = normalizeText(params.artifactPath);
+  if (!workspaceId || !artifactPath) {
+    return undefined;
+  }
+  const resolved = path.resolve(workspaceId, artifactPath);
+  if (resolved !== workspaceId && !isWithinDir(workspaceId, resolved)) {
+    return undefined;
+  }
+  return resolved;
 }
 
 function resolveTrustedTeamContext(
@@ -1519,10 +1838,7 @@ function resolveTrustedTaskTitle(params: {
     return `${roleTitle} for ${params.subject}`;
   }
   return (
-    roleTitle ||
-    params.teamLabel ||
-    params.assigneeLabel ||
-    "Workspace task"
+    roleTitle || params.subject || params.teamLabel || params.assigneeLabel || "Workspace task"
   );
 }
 
@@ -1598,19 +1914,46 @@ function buildFailureBlocker(params: {
   sessionKey: string;
   status?: string;
 }): DashboardWorkItemBlockerLink[] {
-  if (
-    params.status !== "failed" &&
-    params.status !== "killed" &&
-    params.status !== "timeout"
-  ) {
+  if (params.status !== "failed" && params.status !== "killed" && params.status !== "timeout") {
     return [];
   }
+  const description =
+    cleanTaskSummary(params.summary, params.title) ||
+    (params.status === "timeout"
+      ? "The session timed out before the task could complete."
+      : params.status === "killed"
+        ? "The session was stopped before the task could complete."
+        : "The session failed before the task could complete.");
   return [
     {
       id: `failure:${params.taskId}`,
       kind: "failure",
       title: `Task blocked: ${params.title}`,
-      description: params.summary || "This task needs intervention before it can continue.",
+      description,
+      suggestion:
+        "Open the related session, inspect the latest failure, fix or retry it, then continue.",
+      sessionKey: params.sessionKey,
+    },
+  ];
+}
+
+function buildTrustedTranscriptBlocker(params: {
+  taskId: string;
+  title: string;
+  sessionKey: string;
+  messages: unknown[];
+}): DashboardWorkItemBlockerLink[] {
+  const blocker = findTrustedTranscriptBlocker(params.messages);
+  if (!blocker) {
+    return [];
+  }
+  return [
+    {
+      id: `tool-result:${params.taskId}`,
+      kind: "failure",
+      title: `Task blocked: ${params.title}`,
+      description: blocker.description,
+      suggestion: blocker.suggestion,
       sessionKey: params.sessionKey,
     },
   ];
@@ -1642,8 +1985,7 @@ function mergeWorkItem(
   existing: DashboardWorkItem | undefined,
   candidate: DashboardWorkItem,
 ): DashboardWorkItem {
-  const mergedStatus =
-    candidate.blockerLinks.length > 0 ? "blocked" : candidate.status;
+  const mergedStatus = candidate.blockerLinks.length > 0 ? "blocked" : candidate.status;
   return {
     ...existing,
     ...candidate,
@@ -1655,13 +1997,14 @@ function mergeWorkItem(
           WORK_ITEM_RETENTION_MS
         : undefined,
     sessionLinks: mergeSessionLinks(existing?.sessionLinks ?? [], candidate.sessionLinks),
-    blockerLinks: mergeBlockerLinks(existing?.blockerLinks ?? [], candidate.blockerLinks),
+    // Refresh blockers from the current trusted transcript so stale guidance drops away.
+    blockerLinks: candidate.blockerLinks,
     // Refresh previews from the current trusted transcript so stale noise drops away.
     previewLinks: candidate.previewLinks,
   };
 }
 
-function buildCandidateWorkItem(params: {
+async function buildCandidateWorkItem(params: {
   cfg: MaumauConfig;
   row: {
     key: string;
@@ -1677,8 +2020,9 @@ function buildCandidateWorkItem(params: {
   store: Record<string, SessionEntry>;
   agentLabelById: Map<string, string>;
   teamLabelById: Map<string, string>;
+  hasPendingApproval: boolean;
   nowMs: number;
-}): DashboardWorkItem | null {
+}): Promise<DashboardWorkItem | null> {
   if (!params.row.updatedAt) {
     return null;
   }
@@ -1709,22 +2053,12 @@ function buildCandidateWorkItem(params: {
     !hasExplicitTeamMetadata &&
     teamContext?.teamRole?.toLowerCase() === "manager" &&
     (Boolean(envelope?.teamRun) || (params.row.childSessions?.length ?? 0) > 0);
-  if (
-    !teamContext?.teamId &&
-    !teamContext?.teamRole &&
-    !envelope?.teamRun
-  ) {
-    return null;
-  }
-  if (!hasExplicitTeamMetadata && !hasRelevantImplicitManagerActivity && !envelope?.teamRun) {
-    return null;
-  }
   const artifacts = parsePreviewArtifacts(orderedMessages);
   const taskId = resolveWorkItemId(params.row.key);
   const title = resolveTrustedTaskTitle({
-    teamLabel: teamContext.teamId ? params.teamLabelById.get(teamContext.teamId) : undefined,
-    teamId: teamContext.teamId,
-    teamRole: teamContext.teamRole,
+    teamLabel: teamContext?.teamId ? params.teamLabelById.get(teamContext.teamId) : undefined,
+    teamId: teamContext?.teamId,
+    teamRole: teamContext?.teamRole,
     assigneeLabel,
     envelope,
     artifactPath: artifacts.artifactPath,
@@ -1738,26 +2072,56 @@ function buildCandidateWorkItem(params: {
     previewUrl: artifacts.previewUrl,
     messageSummary: messageContext.summary,
   });
+  const blockerLinks = mergeBlockerLinks(
+    buildFailureBlocker({
+      taskId,
+      title,
+      summary,
+      sessionKey: params.row.key,
+      status: params.row.status,
+    }),
+    buildTrustedTranscriptBlocker({
+      taskId,
+      title,
+      sessionKey: params.row.key,
+      messages,
+    }),
+  );
+  const hasDirectBlockerSignal = blockerLinks.length > 0 || params.hasPendingApproval;
+  if (
+    !teamContext?.teamId &&
+    !teamContext?.teamRole &&
+    !envelope?.teamRun &&
+    !hasDirectBlockerSignal
+  ) {
+    return null;
+  }
+  if (
+    !hasExplicitTeamMetadata &&
+    !hasRelevantImplicitManagerActivity &&
+    !envelope?.teamRun &&
+    !hasDirectBlockerSignal
+  ) {
+    return null;
+  }
   const status = resolveTaskStatus({
     row: params.row,
-    blockerIds: [],
+    blockerIds: blockerLinks.map((blocker) => blocker.id),
   });
   const lifecycle = resolveLifecycleProgressFields({
     cfg: params.cfg,
-    teamId: envelope?.teamRun?.teamId || teamContext.teamId,
+    teamId: envelope?.teamRun?.teamId || teamContext?.teamId,
     workflowId: envelope?.teamRun?.workflowId,
-    teamRole: teamContext.teamRole,
+    teamRole: teamContext?.teamRole,
     envelope,
     fallbackStatus: status,
     rowStatus: params.row.status,
   });
   const updatedAtMs = params.row.updatedAt ?? params.nowMs;
-  const blockerLinks = buildFailureBlocker({
-    taskId,
-    title,
-    summary,
-    sessionKey: params.row.key,
-    status: params.row.status,
+  const workspace = await resolveTrustedWorkspaceMetadata({
+    cfg: params.cfg,
+    agentId,
+    entry: params.entry,
   });
   return {
     id: taskId,
@@ -1766,15 +2130,19 @@ function buildCandidateWorkItem(params: {
     summary,
     status: blockerLinks.length > 0 ? "blocked" : lifecycle.status,
     visibilityScope: "global",
-    source: envelope ? "runtime_envelope" : "team_session",
+    source: envelope
+      ? "runtime_envelope"
+      : teamContext?.teamId || teamContext?.teamRole
+        ? "team_session"
+        : "direct_session",
     agentId,
     assigneeLabel,
-    teamId: envelope?.teamRun?.teamId || teamContext.teamId,
+    teamId: envelope?.teamRun?.teamId || teamContext?.teamId,
     teamLabel:
-      (envelope?.teamRun?.teamId || teamContext.teamId)
-        ? params.teamLabelById.get(envelope?.teamRun?.teamId || teamContext.teamId || "")
+      envelope?.teamRun?.teamId || teamContext?.teamId
+        ? params.teamLabelById.get(envelope?.teamRun?.teamId || teamContext?.teamId || "")
         : undefined,
-    teamRole: teamContext.teamRole,
+    teamRole: teamContext?.teamRole,
     teamWorkflowId: lifecycle.teamWorkflowId,
     teamWorkflowLabel: lifecycle.teamWorkflowLabel,
     updatedAtMs,
@@ -1795,14 +2163,16 @@ function buildCandidateWorkItem(params: {
     totalStepCount: lifecycle.totalStepCount,
     progressLabel: lifecycle.progressLabel,
     progressPercent: lifecycle.progressPercent,
+    workspaceId: workspace.workspaceId,
+    workspaceLabel: workspace.workspaceLabel,
     sessionLinks: [
       {
         sessionKey: params.row.key,
         kind: "primary",
         agentId,
         assigneeLabel,
-        teamId: teamContext.teamId,
-        teamRole: teamContext.teamRole,
+        teamId: teamContext?.teamId,
+        teamRole: teamContext?.teamRole,
       },
     ],
     blockerLinks,
@@ -1886,7 +2256,10 @@ function resolveStatusPriority(status: DashboardTaskStatus): number {
   }
 }
 
-function mergeRollupStatus(current: DashboardTaskStatus, next: DashboardTaskStatus): DashboardTaskStatus {
+function mergeRollupStatus(
+  current: DashboardTaskStatus,
+  next: DashboardTaskStatus,
+): DashboardTaskStatus {
   return resolveStatusPriority(next) >= resolveStatusPriority(current) ? next : current;
 }
 
@@ -1953,8 +2326,7 @@ function buildTeamRunsFromWorkItems(params: {
     const totalStepCount =
       managerItem.totalStepCount ?? resolveLifecycleDisplayStepCount(lifecycleStages);
     const completedStepCount =
-      managerItem.completedStepCount ??
-      (managerItem.status === "done" ? totalStepCount : 0);
+      managerItem.completedStepCount ?? (managerItem.status === "done" ? totalStepCount : 0);
     const progressLabel =
       managerItem.progressLabel ??
       formatLifecycleProgressLabel({
@@ -1999,9 +2371,10 @@ function buildTeamRunsFromWorkItems(params: {
         currentRoot.totalStepCount = totalStepCount || undefined;
         currentRoot.progressLabel = progressLabel;
         currentRoot.progressPercent = progressPercent;
-        currentRoot.status = blockerLinks.length > 0
-          ? "blocked"
-          : mergeRollupStatus(currentRoot.status, managerItem.status);
+        currentRoot.status =
+          blockerLinks.length > 0
+            ? "blocked"
+            : mergeRollupStatus(currentRoot.status, managerItem.status);
         currentRoot.blockerLinks = mergeBlockerLinks(currentRoot.blockerLinks, blockerLinks);
         currentRoot.blockerIds = currentRoot.blockerLinks.map((blocker) => blocker.id);
         itemsById.set(currentRoot.id, currentRoot);
@@ -2058,7 +2431,9 @@ function buildTeamRunsFromWorkItems(params: {
 
   return {
     allItems: Array.from(itemsById.values()),
-    teamRuns: teamRuns.toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0)),
+    teamRuns: teamRuns.toSorted(
+      (left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0),
+    ),
   };
 }
 
@@ -2078,11 +2453,20 @@ async function reconcileDashboardWorkItems(params: {
     childSessions?: string[];
   }>;
   approvals: ReadonlyArray<ExecApprovalRecord>;
-}): Promise<{ allItems: DashboardWorkItem[]; globalItems: DashboardWorkItem[]; teamRuns: DashboardTeamRun[] }> {
+}): Promise<{
+  allItems: DashboardWorkItem[];
+  globalItems: DashboardWorkItem[];
+  teamRuns: DashboardTeamRun[];
+}> {
   const existingStore = await readStoredDashboardWorkItems({ stateDir: params.stateDir });
   const existingById = new Map(existingStore.items.map((item) => [item.id, item]));
   const nextById = new Map(existingById);
   const taskIdBySessionKey = new Map<string, string>();
+  const activeSessionKeys = new Set(params.sessions.map((row) => row.key));
+  const candidateSessionKeys = new Set<string>();
+  const approvalSessionKeys = new Set(
+    params.approvals.map((approval) => normalizeText(approval.request.sessionKey)).filter(Boolean),
+  );
   const agentLabelById = new Map<string, string>();
   for (const agent of listAgentsForGateway(params.cfg).agents) {
     agentLabelById.set(agent.id, agent.identity?.name?.trim() || agent.name?.trim() || agent.id);
@@ -2093,7 +2477,7 @@ async function reconcileDashboardWorkItems(params: {
 
   for (const row of params.sessions) {
     const entry = params.store[row.key];
-    const candidate = buildCandidateWorkItem({
+    const candidate = await buildCandidateWorkItem({
       cfg: params.cfg,
       row,
       entry,
@@ -2101,15 +2485,27 @@ async function reconcileDashboardWorkItems(params: {
       store: params.store,
       agentLabelById,
       teamLabelById,
+      hasPendingApproval: approvalSessionKeys.has(row.key),
       nowMs: params.nowMs,
     });
     if (!candidate) {
       continue;
     }
+    candidateSessionKeys.add(candidate.sessionKey);
     const merged = mergeWorkItem(existingById.get(candidate.id), candidate);
     nextById.set(merged.id, merged);
     for (const link of merged.sessionLinks) {
       taskIdBySessionKey.set(link.sessionKey, merged.id);
+    }
+  }
+
+  for (const item of existingById.values()) {
+    if (
+      item.source === "direct_session" &&
+      activeSessionKeys.has(item.sessionKey) &&
+      !candidateSessionKeys.has(item.sessionKey)
+    ) {
+      nextById.delete(item.id);
     }
   }
 
@@ -2129,6 +2525,7 @@ async function reconcileDashboardWorkItems(params: {
       kind: "approval",
       title: "Exec approval needed",
       description: approval.request.command,
+      suggestion: "Open the related session, review the request, then approve or reject it.",
       sessionKey,
     });
     approvalBlockersByTaskId.set(taskId, blockers);
@@ -2137,7 +2534,9 @@ async function reconcileDashboardWorkItems(params: {
   const allRetainedItems = [...nextById.values()]
     .map((item) => {
       const approvalBlockers = approvalBlockersByTaskId.get(item.id) ?? [];
-      const nonApprovalBlockers = item.blockerLinks.filter((blocker) => blocker.kind !== "approval");
+      const nonApprovalBlockers = item.blockerLinks.filter(
+        (blocker) => blocker.kind !== "approval",
+      );
       const blockerLinks = mergeBlockerLinks(nonApprovalBlockers, approvalBlockers);
       const status = blockerLinks.length > 0 ? "blocked" : item.status;
       const retainedUntilMs =
@@ -2234,6 +2633,8 @@ function buildCronBlockers(cronJobs: CronJob[], nowMs: number): DashboardBlocker
         severity: "error",
         title: `Routine failed: ${job.name}`,
         description: job.state.lastError || "The latest routine run failed.",
+        suggestion:
+          "Open Routines to inspect the failing job and decide whether it needs a fix or a rerun.",
         jobId: job.id,
       });
     }
@@ -2247,6 +2648,8 @@ function buildCronBlockers(cronJobs: CronJob[], nowMs: number): DashboardBlocker
         severity: "warning",
         title: `Routine overdue: ${job.name}`,
         description: "This routine is past its expected next run time.",
+        suggestion:
+          "Open Routines to inspect the late job and confirm whether it should run now or be adjusted.",
         jobId: job.id,
       });
     }
@@ -2260,8 +2663,21 @@ function buildApprovalBlockers(approvals: ReadonlyArray<ExecApprovalRecord>): Da
     severity: "warning",
     title: "Exec approval needed",
     description: approval.request.command,
+    suggestion: "Open the related session, review the request, then approve or reject it.",
     sessionKey: approval.request.sessionKey || undefined,
   }));
+}
+
+function mergeDashboardBlockers(
+  existing: DashboardBlocker[],
+  next: DashboardBlocker[],
+): DashboardBlocker[] {
+  const merged = new Map<string, DashboardBlocker>();
+  for (const blocker of [...existing, ...next]) {
+    const current = merged.get(blocker.id);
+    merged.set(blocker.id, current ? { ...current, ...blocker } : blocker);
+  }
+  return [...merged.values()];
 }
 
 function classifyRoutineVisibility(job: CronJob): DashboardRoutineVisibility {
@@ -2338,11 +2754,58 @@ async function buildRoutinesFromCronJobs(params: {
   return routines;
 }
 
+function buildSavedWorkshopItems(params: {
+  savedRecords: DashboardWorkshopSavedItemRecord[];
+  cfg?: MaumauConfig;
+  nowMs?: number;
+}): DashboardSavedWorkshopItem[] {
+  const resolvedAuth = resolveGatewayAuth({
+    authConfig: params.cfg?.gateway?.auth,
+    env: process.env,
+  });
+  return params.savedRecords
+    .slice()
+    .sort((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
+    .map((record) => ({
+      id: record.id,
+      title: record.title,
+      summary: record.summary,
+      taskTitle: record.taskTitle,
+      updatedAtMs: record.updatedAtMs,
+      savedAtMs: record.savedAtMs,
+      agentId: record.agentId,
+      previewUrl: buildSavedWorkshopEmbedPath({
+        savedItemId: record.id,
+        auth: resolvedAuth,
+        nowMs: params.nowMs,
+      }),
+      embedUrl: buildSavedWorkshopEmbedPath({
+        savedItemId: record.id,
+        auth: resolvedAuth,
+        nowMs: params.nowMs,
+      }),
+      artifactPath: record.artifactPath,
+      embeddable: record.embeddable,
+      taskStatus: record.taskStatus,
+      taskAssigneeLabel: record.taskAssigneeLabel,
+      workspaceId: record.workspaceId,
+      workspaceLabel: record.workspaceLabel,
+      projectName: record.projectName,
+      projectKey: record.projectKey,
+      taskId: record.taskId,
+      sessionKey: record.sessionKey,
+    }));
+}
+
 async function buildWorkshopItems(
   tasks: DashboardWorkItem[],
   params: { cfg?: MaumauConfig; nowMs?: number; stateDir?: string },
-): Promise<DashboardWorkshopItem[]> {
-  const items: Array<DashboardWorkshopItem & { dedupeKey: string }> = [];
+): Promise<{ items: DashboardWorkshopItem[]; savedItems: DashboardSavedWorkshopItem[] }> {
+  const workshopStore = await readDashboardWorkshopStore({ stateDir: params.stateDir });
+  const savedRecordBySourceIdentity = new Map(
+    workshopStore.savedItems.map((record) => [record.sourceIdentity, record] as const),
+  );
+  const items: Array<DetailedDashboardWorkshopItem & { dedupeKey: string }> = [];
   const resolvedAuth = resolveGatewayAuth({
     authConfig: params.cfg?.gateway?.auth,
     env: process.env,
@@ -2361,11 +2824,16 @@ async function buildWorkshopItems(
         artifactPath: preview.artifactPath,
         previewUrl: preview.previewUrl,
       });
-      const title =
-        previewDocumentLabel ||
-        artifactLabel ||
-        task.title ||
-        "Untitled preview";
+      const sourceIdentity = resolveWorkshopDeduplicationKey({
+        previewSourcePath: previewInfo?.sourcePath,
+        previewDocumentLabel,
+        artifactLabel,
+        taskTitle: task.title,
+        artifactPath: preview.artifactPath,
+        fallbackId: preview.id,
+      });
+      const savedRecord = savedRecordBySourceIdentity.get(sourceIdentity);
+      const title = previewDocumentLabel || artifactLabel || task.title || "Untitled preview";
       const summaryText = normalizeText(task.summary);
       const artifactSummary =
         summaryText &&
@@ -2394,25 +2862,76 @@ async function buildWorkshopItems(
         embeddable: preview.embeddable,
         taskStatus: task.status,
         taskAssigneeLabel: task.assigneeLabel,
-        dedupeKey: resolveWorkshopDeduplicationKey({
-          previewSourcePath: previewInfo?.sourcePath,
-          previewDocumentLabel,
-          artifactLabel,
-          taskTitle: task.title,
-          artifactPath: preview.artifactPath,
-          fallbackId: preview.id,
-        }),
+        workspaceId: task.workspaceId ?? savedRecord?.workspaceId,
+        workspaceLabel: task.workspaceLabel ?? savedRecord?.workspaceLabel,
+        projectName: task.projectName ?? savedRecord?.projectName,
+        projectKey: task.projectKey ?? savedRecord?.projectKey,
+        isSaved: Boolean(savedRecord),
+        savedItemId: savedRecord?.id,
+        savedAtMs: savedRecord?.savedAtMs,
+        sourceIdentity,
+        sourceArtifactPath:
+          previewInfo?.storedPath ||
+          resolveArtifactPathWithinWorkspace({
+            workspaceId: task.workspaceId,
+            artifactPath: preview.artifactPath,
+          }),
+        dedupeKey: sourceIdentity,
       });
     }
   }
   const deduped = new Map<string, DashboardWorkshopItem>();
-  for (const item of items.toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))) {
+  for (const item of items.toSorted(
+    (left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0),
+  )) {
     if (!deduped.has(item.dedupeKey)) {
-      const { dedupeKey: _dedupeKey, ...workshopItem } = item;
+      const {
+        dedupeKey: _dedupeKey,
+        sourceIdentity: _sourceIdentity,
+        sourceArtifactPath: _sourceArtifactPath,
+        ...workshopItem
+      } = item;
       deduped.set(item.dedupeKey, workshopItem);
     }
   }
-  return [...deduped.values()];
+  return {
+    items: [...deduped.values()],
+    savedItems: buildSavedWorkshopItems({
+      savedRecords: workshopStore.savedItems,
+      cfg: params.cfg,
+      nowMs: params.nowMs,
+    }),
+  };
+}
+
+async function resolveWorkshopSaveSource(params: {
+  item: DashboardWorkshopItem;
+  stateDir?: string;
+}): Promise<{ sourceIdentity: string; sourcePath?: string }> {
+  const previewInfo = await resolvePreviewArtifactInfoFromPreviewUrl({
+    previewUrl: params.item.previewUrl,
+    stateDir: params.stateDir,
+  });
+  const artifactLabel = resolveArtifactDisplayLabel({
+    artifactPath: params.item.artifactPath,
+    previewUrl: params.item.previewUrl,
+  });
+  return {
+    sourceIdentity: resolveWorkshopDeduplicationKey({
+      previewSourcePath: previewInfo?.sourcePath,
+      previewDocumentLabel: previewInfo?.documentLabel,
+      artifactLabel,
+      taskTitle: params.item.taskTitle,
+      artifactPath: params.item.artifactPath,
+      fallbackId: params.item.id,
+    }),
+    sourcePath:
+      previewInfo?.storedPath ||
+      resolveArtifactPathWithinWorkspace({
+        workspaceId: params.item.workspaceId,
+        artifactPath: params.item.artifactPath,
+      }),
+  };
 }
 
 function buildApprovalCalendarEvents(
@@ -2477,7 +2996,10 @@ function resolveRoutineOccurrenceStatus(params: {
   if (matchedRun?.status === "error") {
     return "error";
   }
-  if (params.job.state.runningAtMs && Math.abs(params.job.state.runningAtMs - params.occurrenceAtMs) <= toleranceMs) {
+  if (
+    params.job.state.runningAtMs &&
+    Math.abs(params.job.state.runningAtMs - params.occurrenceAtMs) <= toleranceMs
+  ) {
     return "running";
   }
   if (matchedRun?.status === "ok" || params.occurrenceAtMs < params.nowMs) {
@@ -2547,18 +3069,13 @@ function buildCalendarEvents(params: {
     endAtMs: window.endAtMs,
     view: params.view,
     events: events
-      .filter(
-        (event) =>
-          event.startAtMs >= window.startAtMs && event.startAtMs < window.endAtMs,
-      )
+      .filter((event) => event.startAtMs >= window.startAtMs && event.startAtMs < window.endAtMs)
       .toSorted((left, right) => left.startAtMs - right.startAtMs)
       .slice(0, MAX_CALENDAR_EVENTS),
   };
 }
 
-async function collectDashboardDataset(
-  params: CollectDashboardCalendarParams,
-): Promise<{
+async function collectDashboardDataset(params: CollectDashboardCalendarParams): Promise<{
   snapshot: DashboardSnapshot;
   tasks: DashboardTasksResult;
   teamRuns: DashboardTeamRunsResult;
@@ -2592,7 +3109,20 @@ async function collectDashboardDataset(
     sessions: sessionsResult.sessions,
     approvals,
   });
-  const workshopItems = await buildWorkshopItems(workItems.allItems, {
+  const workshopStore = await readDashboardWorkshopStore({ stateDir: params.stateDir });
+  const annotatedAllItems = annotateWorkItemsWithProjects(
+    workItems.allItems,
+    workshopStore.projectByWorkspace,
+  );
+  const annotatedGlobalItems = annotateWorkItemsWithProjects(
+    workItems.globalItems,
+    workshopStore.projectByWorkspace,
+  );
+  const annotatedTeamRuns = annotateTeamRunsWithProjects(
+    workItems.teamRuns,
+    workshopStore.projectByWorkspace,
+  );
+  const workshop = await buildWorkshopItems(annotatedAllItems, {
     cfg,
     nowMs,
     stateDir: params.stateDir,
@@ -2636,22 +3166,26 @@ async function collectDashboardDataset(
   const recentMemory = await collectRecentMemoryEntries({ cfg, nowMs });
   const approvalBlockers = buildApprovalBlockers(approvals);
   const cronBlockers = buildCronBlockers(cronJobs, nowMs);
-  const taskBlockers: DashboardBlocker[] = workItems.globalItems
+  const taskBlockers: DashboardBlocker[] = annotatedGlobalItems
     .flatMap((task) =>
       task.blockerLinks.map((blocker) => ({
         id: blocker.id,
         severity: blocker.kind === "approval" ? "warning" : "error",
         title: blocker.title,
         description: blocker.description,
+        suggestion: blocker.suggestion,
         sessionKey: blocker.sessionKey,
         taskId: task.id,
       })),
     )
     .slice(0, 24);
-  const blockers = [...approvalBlockers, ...cronBlockers, ...taskBlockers].slice(0, 32);
+  const blockers = mergeDashboardBlockers(
+    mergeDashboardBlockers(approvalBlockers, cronBlockers),
+    taskBlockers,
+  ).slice(0, 32);
   const today: DashboardTodaySnapshot = {
     generatedAtMs: nowMs,
-    inProgressTasks: workItems.globalItems
+    inProgressTasks: annotatedGlobalItems
       .filter((task) => task.status === "in_progress" || task.status === "review")
       .slice(0, 8),
     scheduledToday: todayCalendar.events,
@@ -2663,23 +3197,25 @@ async function collectDashboardDataset(
     snapshot: {
       generatedAtMs: nowMs,
       today,
-      tasks: workItems.allItems,
-      workshop: workshopItems,
+      tasks: annotatedAllItems,
+      workshop: workshop.items,
+      workshopSaved: workshop.savedItems,
       calendar: calendarResult.events,
       routines,
       memories: recentMemory,
     },
     tasks: {
       generatedAtMs: nowMs,
-      items: workItems.allItems,
+      items: annotatedAllItems,
     },
     teamRuns: {
       generatedAtMs: nowMs,
-      items: workItems.teamRuns,
+      items: annotatedTeamRuns,
     },
     workshop: {
       generatedAtMs: nowMs,
-      items: workshopItems,
+      items: workshop.items,
+      savedItems: workshop.savedItems,
     },
     calendar: calendarResult,
     routines: {
@@ -2746,6 +3282,141 @@ export async function collectDashboardWorkshop(
     anchorAtMs: params.nowMs,
   });
   return dataset.workshop;
+}
+
+export async function saveDashboardWorkshop(
+  params: CollectDashboardSnapshotParams & {
+    itemIds: string[];
+    projectName: string;
+  },
+): Promise<DashboardWorkshopSaveResult> {
+  const cfg = params.cfg ?? loadConfig();
+  const nowMs = params.nowMs ?? Date.now();
+  const project = normalizeDashboardProjectName(params.projectName);
+  if (!project.name || !project.key) {
+    throw new Error("project name is required");
+  }
+  const requestedIds = new Set(params.itemIds.map((entry) => normalizeText(entry)).filter(Boolean));
+  if (requestedIds.size === 0) {
+    throw new Error("select at least one workshop item to save");
+  }
+  const current = await collectDashboardWorkshop({
+    ...params,
+    cfg,
+    nowMs,
+  });
+  const selectedItems = current.items.filter((item) => requestedIds.has(item.id));
+  if (selectedItems.length === 0) {
+    throw new Error("selected workshop items were not found");
+  }
+  const store = await readDashboardWorkshopStore({ stateDir: params.stateDir });
+  const nextSavedById = new Map(store.savedItems.map((record) => [record.id, record]));
+  const savedBySourceIdentity = new Map(
+    store.savedItems.map((record) => [record.sourceIdentity, record]),
+  );
+  const nextProjectByWorkspace = { ...store.projectByWorkspace };
+  let savedCount = 0;
+  let updatedCount = 0;
+  const changedWorkspaces = new Set<string>();
+
+  for (const item of selectedItems) {
+    const source = await resolveWorkshopSaveSource({
+      item,
+      stateDir: params.stateDir,
+    });
+    if (!source.sourcePath) {
+      throw new Error(`Could not resolve a readable artifact for "${item.title}".`);
+    }
+    const existing = savedBySourceIdentity.get(source.sourceIdentity);
+    const copied = await copySourceIntoSavedWorkshopStore({
+      sourcePath: source.sourcePath,
+      id: existing?.id,
+      stateDir: params.stateDir,
+    });
+    if (!copied) {
+      throw new Error(`Could not copy the selected artifact for "${item.title}".`);
+    }
+    if (item.workspaceId) {
+      const priorProjectKey = nextProjectByWorkspace[item.workspaceId]?.key;
+      nextProjectByWorkspace[item.workspaceId] = {
+        name: project.name,
+        key: project.key,
+        updatedAtMs: nowMs,
+      };
+      if (priorProjectKey !== project.key) {
+        changedWorkspaces.add(item.workspaceId);
+      }
+    }
+    const record: DashboardWorkshopSavedItemRecord = {
+      id: copied.id,
+      sessionKey: item.sessionKey,
+      taskId: item.taskId,
+      sourceIdentity: source.sourceIdentity,
+      title: item.title,
+      summary: item.summary,
+      taskTitle: item.taskTitle,
+      updatedAtMs: item.updatedAtMs ?? nowMs,
+      savedAtMs: existing?.savedAtMs ?? nowMs,
+      agentId: item.agentId,
+      artifactPath: item.artifactPath,
+      embeddable: item.embeddable,
+      taskStatus: item.taskStatus,
+      taskAssigneeLabel: item.taskAssigneeLabel,
+      workspaceId: item.workspaceId,
+      workspaceLabel: item.workspaceLabel,
+      projectName: project.name,
+      projectKey: project.key,
+      sourcePreviewUrl: item.previewUrl,
+      storedPath: copied.storedPath,
+      isDirectory: copied.isDirectory,
+      rootFileName: copied.rootFileName,
+    };
+    nextSavedById.set(record.id, record);
+    savedBySourceIdentity.set(source.sourceIdentity, record);
+    if (existing) {
+      updatedCount += 1;
+    } else {
+      savedCount += 1;
+    }
+  }
+
+  const nextSavedItems = Array.from(nextSavedById.values())
+    .map((record) => {
+      const workspaceProject = record.workspaceId
+        ? nextProjectByWorkspace[record.workspaceId]
+        : undefined;
+      if (!workspaceProject) {
+        return record;
+      }
+      return {
+        ...record,
+        projectName: workspaceProject.name,
+        projectKey: workspaceProject.key,
+      };
+    })
+    .sort((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0));
+
+  await writeDashboardWorkshopStore(
+    {
+      version: 1,
+      updatedAtMs: nowMs,
+      projectByWorkspace: nextProjectByWorkspace,
+      savedItems: nextSavedItems,
+    },
+    params.stateDir,
+  );
+
+  return {
+    generatedAtMs: nowMs,
+    savedCount,
+    updatedCount,
+    projectUpdateCount: changedWorkspaces.size,
+    workshop: await collectDashboardWorkshop({
+      ...params,
+      cfg,
+      nowMs,
+    }),
+  };
 }
 
 export async function collectDashboardCalendar(

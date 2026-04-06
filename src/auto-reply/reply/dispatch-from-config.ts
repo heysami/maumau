@@ -1,5 +1,6 @@
 import { resolveSendableOutboundReplyParts } from "maumau/plugin-sdk/reply-payload";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import { hasRequesterCompletionDeliveryRunStartedSince } from "../../agents/subagent-registry.js";
 import {
   resolveConversationBindingRecord,
   touchConversationBindingRecord,
@@ -39,7 +40,11 @@ import {
 import { getGlobalHookRunner, getGlobalPluginRegistry } from "../../plugins/hook-runner-global.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { normalizeTtsAutoMode, resolveConfiguredTtsMode } from "../../tts/tts-config.js";
-import { INTERNAL_MESSAGE_CHANNEL, normalizeMessageChannel } from "../../utils/message-channel.js";
+import {
+  INTERNAL_MESSAGE_CHANNEL,
+  isRequesterRemoteMessagingChannel,
+  normalizeMessageChannel,
+} from "../../utils/message-channel.js";
 import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { BlockReplyContext, GetReplyOptions, ReplyPayload } from "../types.js";
@@ -159,11 +164,12 @@ export async function dispatchReplyFromConfig(params: {
 }): Promise<DispatchFromConfigResult> {
   const { ctx, cfg, dispatcher } = params;
   const diagnosticsEnabled = isDiagnosticsEnabled(cfg);
+  const turnStartedAt = Date.now();
   const channel = String(ctx.Surface ?? ctx.Provider ?? "unknown").toLowerCase();
   const chatId = ctx.To ?? ctx.From;
   const messageId = ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
   const sessionKey = ctx.SessionKey;
-  const startTime = diagnosticsEnabled ? Date.now() : 0;
+  const startTime = diagnosticsEnabled ? turnStartedAt : 0;
   const canTrackSession = diagnosticsEnabled && Boolean(sessionKey);
 
   const recordProcessed = (
@@ -269,6 +275,7 @@ export async function dispatchReplyFromConfig(params: {
   const shouldSuppressTyping =
     shouldRouteToOriginating || originatingChannel === INTERNAL_MESSAGE_CHANNEL;
   const ttsChannel = shouldRouteToOriginating ? originatingChannel : currentSurface;
+  const requesterDeliveryChannel = shouldRouteToOriginating ? originatingChannel : currentSurface;
   const requesterAuth = resolveCommandAuthorization({
     ctx,
     cfg,
@@ -681,6 +688,16 @@ export async function dispatchReplyFromConfig(params: {
     }
 
     const replies = replyResult ? (Array.isArray(replyResult) ? replyResult : [replyResult]) : [];
+    const handoffCompletionDeliveryStartedThisTurn = Boolean(
+      sessionKey &&
+        isRequesterRemoteMessagingChannel(requesterDeliveryChannel) &&
+        hasRequesterCompletionDeliveryRunStartedSince(sessionKey, turnStartedAt),
+    );
+    if (handoffCompletionDeliveryStartedThisTurn) {
+      logVerbose(
+        `dispatch-from-config: suppressing synthetic external final add-ons for ${sessionKey} because this turn already handed completion delivery to a subagent flow`,
+      );
+    }
     const previewReceiptPayloads = await maybeBuildPreviewReceiptPayloads({
       cfg,
       payloads: replies,
@@ -726,6 +743,10 @@ export async function dispatchReplyFromConfig(params: {
           accountId: ctx.AccountId,
           threadId: routeThreadId,
           cfg,
+          // This assistant final already exists in the session transcript.
+          // Avoid mirroring the routed delivery back into the same session and
+          // producing a second near-identical outbound reply.
+          mirror: false,
           isGroup,
           groupId,
         });
@@ -742,29 +763,31 @@ export async function dispatchReplyFromConfig(params: {
         queuedFinal = dispatcher.sendFinalReply(ttsReply) || queuedFinal;
       }
     }
-    for (const payload of previewReceiptPayloads) {
-      if (shouldRouteToOriginating && originatingChannel && originatingTo) {
-        const result = await routeReplyRuntime.routeReply({
-          payload,
-          channel: originatingChannel,
-          to: originatingTo,
-          sessionKey: ctx.SessionKey,
-          accountId: ctx.AccountId,
-          threadId: routeThreadId,
-          cfg,
-          isGroup,
-          groupId,
-        });
-        if (!result.ok) {
-          logVerbose(
-            `dispatch-from-config: route-reply (preview receipt) failed: ${result.error ?? "unknown error"}`,
-          );
-          continue;
+    if (!handoffCompletionDeliveryStartedThisTurn) {
+      for (const payload of previewReceiptPayloads) {
+        if (shouldRouteToOriginating && originatingChannel && originatingTo) {
+          const result = await routeReplyRuntime.routeReply({
+            payload,
+            channel: originatingChannel,
+            to: originatingTo,
+            sessionKey: ctx.SessionKey,
+            accountId: ctx.AccountId,
+            threadId: routeThreadId,
+            cfg,
+            isGroup,
+            groupId,
+          });
+          if (!result.ok) {
+            logVerbose(
+              `dispatch-from-config: route-reply (preview receipt) failed: ${result.error ?? "unknown error"}`,
+            );
+            continue;
+          }
+          queuedFinal = true;
+          routedFinalCount += 1;
+        } else {
+          queuedFinal = dispatcher.sendFinalReply(payload) || queuedFinal;
         }
-        queuedFinal = true;
-        routedFinalCount += 1;
-      } else {
-        queuedFinal = dispatcher.sendFinalReply(payload) || queuedFinal;
       }
     }
 
@@ -773,6 +796,7 @@ export async function dispatchReplyFromConfig(params: {
     // This handles the case where block streaming succeeds and drops final payloads,
     // but we still want TTS audio to be generated from the accumulated block content.
     if (
+      !handoffCompletionDeliveryStartedThisTurn &&
       ttsMode === "final" &&
       replies.length === 0 &&
       blockCount > 0 &&
@@ -803,6 +827,9 @@ export async function dispatchReplyFromConfig(params: {
               accountId: ctx.AccountId,
               threadId: routeThreadId,
               cfg,
+              // This TTS-only media is derived from the already-persisted
+              // assistant final, so do not append a mirrored assistant turn.
+              mirror: false,
               isGroup,
               groupId,
             });

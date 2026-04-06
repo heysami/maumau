@@ -7,6 +7,7 @@ import { selectStyled } from "../terminal/prompt-select-styled.js";
 import { stylePromptMessage, stylePromptTitle } from "../terminal/prompt-style.js";
 import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
 import {
+  clearMacLaunchctlGatewayEnvOverrides,
   listAgentSessionDirs,
   removePath,
   removeMacAppStateArtifacts,
@@ -168,6 +169,7 @@ export async function resetCommand(runtime: RuntimeEnv, opts: ResetOptions) {
   if (scope === "clean") {
     await stopRunningMacAppIfPresent(runtime, { dryRun });
     await uninstallGatewayServiceIfPresent(runtime, { dryRun });
+    await clearMacLaunchctlGatewayEnvOverrides(runtime, { dryRun });
     await removeStateAndLinkedPaths(
       { stateDir, configPath, oauthDir, configInsideState, oauthInsideState },
       runtime,

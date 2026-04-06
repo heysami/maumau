@@ -13,7 +13,11 @@ import {
   resolveDefaultTeamWorkflowId,
 } from "../../../../src/teams/model.js";
 import { generateTeamOpenProsePreview } from "../../../../src/teams/openprose.js";
-import { createNextTeamWorkflowConfig, STARTER_TEAM_ID } from "../../../../src/teams/presets.js";
+import {
+  createNextTeamWorkflowConfig,
+  DESIGN_STUDIO_TEAM_ID,
+  STARTER_TEAM_ID,
+} from "../../../../src/teams/presets.js";
 import type { AgentsListResult } from "../types.ts";
 import { renderTeamPromptDialog } from "./team-prompt-dialog.ts";
 
@@ -34,7 +38,7 @@ export type TeamsProps = {
   selectedWorkflowId: string | null;
   onSelectTeam: (teamId: string) => void;
   onSelectWorkflow: (workflowId: string) => void;
-  onCreateTeam: (preset: "custom" | "starter") => void;
+  onCreateTeam: (preset: "custom" | "vibe-coder" | "design-studio") => void;
   onReplaceTeam: (teamId: string, nextTeam: TeamConfig) => void;
   onDeleteTeam: (teamId: string) => void;
   promptOpen: boolean;
@@ -355,8 +359,11 @@ export function renderTeams(props: TeamsProps) {
           <button class="btn btn--sm" @click=${() => props.onCreateTeam("custom")}>
             Create Team
           </button>
-          <button class="btn btn--sm" @click=${() => props.onCreateTeam("starter")}>
-            Create Starter Team
+          <button class="btn btn--sm" @click=${() => props.onCreateTeam("vibe-coder")}>
+            Add Vibe Coder
+          </button>
+          <button class="btn btn--sm" @click=${() => props.onCreateTeam("design-studio")}>
+            Add Design Studio
           </button>
           <button
             class="btn btn--sm"
@@ -391,13 +398,16 @@ export function renderTeams(props: TeamsProps) {
             <section class="card" style="margin-top: 18px;">
               <div class="card-title">No Teams Yet</div>
               <div class="card-sub">
-                Existing installs keep working without Teams. Create a custom team or add the bundled
-                vibe-coder starter when you are ready.
+                Existing installs keep working without Teams. Create a custom team or add a bundled
+                preset when you are ready.
               </div>
               <div class="row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
                 <button class="btn" @click=${() => props.onCreateTeam("custom")}>Create Team</button>
-                <button class="btn primary" @click=${() => props.onCreateTeam("starter")}>
-                  Create Starter Team
+                <button class="btn" @click=${() => props.onCreateTeam("vibe-coder")}>
+                  Add Vibe Coder
+                </button>
+                <button class="btn primary" @click=${() => props.onCreateTeam("design-studio")}>
+                  Add Design Studio
                 </button>
               </div>
             </section>
@@ -416,7 +426,10 @@ export function renderTeams(props: TeamsProps) {
                     const active = selectedTeam?.id === team.id;
                     const memberCount = resolveTeamMembers(team).length;
                     const workflowCount = listTeamWorkflows(team).length;
-                    const isStarter = team.preset?.id === STARTER_TEAM_ID;
+                    const isBundledPreset =
+                      team.preset?.source === "bundled" &&
+                      (team.preset?.id === STARTER_TEAM_ID ||
+                        team.preset?.id === DESIGN_STUDIO_TEAM_ID);
                     return html`
                       <button
                         type="button"
@@ -429,7 +442,7 @@ export function renderTeams(props: TeamsProps) {
                           <span class="muted">
                             · ${memberCount} specialist${memberCount === 1 ? "" : "s"}
                             · ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}${
-                              isStarter ? " · starter" : ""
+                              isBundledPreset ? " · bundled preset" : ""
                             }
                           </span>
                         </span>

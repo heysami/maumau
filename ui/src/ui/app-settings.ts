@@ -9,10 +9,10 @@ import {
 } from "./app-polling.ts";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import type { MaumauApp } from "./app.ts";
-import { loadAgentFileContent, loadAgentFiles } from "./controllers/agent-files.ts";
+import { loadPinnedAgentFiles } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
-import { loadAgents } from "./controllers/agents.ts";
+import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronRuns, loadCronStatus } from "./controllers/cron.ts";
@@ -68,15 +68,31 @@ type SettingsHost = {
   pendingGatewayToken?: string | null;
   syncMauOfficeTicker?: () => void;
   dashboardMemoryAgentId?: string | null;
+  dashboardAgentPanel?: "memory" | "scope";
   dashboardLoading?: boolean;
   dashboardError?: string | null;
   dashboardSnapshot?: import("./types.ts").DashboardSnapshot | null;
+  dashboardWalletLoading?: boolean;
+  dashboardWalletError?: string | null;
+  dashboardWalletResult?: import("./types.ts").DashboardWalletResult | null;
+  dashboardWalletStartDate?: string;
+  dashboardWalletEndDate?: string;
+  dashboardWalletTimeZone?: "local" | "utc";
   dashboardTeamsLoading?: boolean;
   dashboardTeamsError?: string | null;
   dashboardTeamSnapshots?: import("./types.ts").DashboardTeamSnapshotsResult | null;
   dashboardTeamRunsLoading?: boolean;
   dashboardTeamRunsError?: string | null;
   dashboardTeamRuns?: import("./types.ts").DashboardTeamRunsResult | null;
+  agentFilesLoading?: boolean;
+  agentFilesError?: string | null;
+  agentFilesTargetId?: string | null;
+  agentFilesList?: import("./types.ts").AgentsFilesListResult | null;
+  agentFileContents?: Record<string, string>;
+  agentFileDrafts?: Record<string, string>;
+  toolsCatalogLoading?: boolean;
+  toolsCatalogError?: string | null;
+  toolsCatalogResult?: import("./types.ts").ToolsCatalogResult | null;
   dashboardReloadTimer?: number | null;
 };
 
@@ -243,25 +259,41 @@ export async function refreshActiveTab(host: SettingsHost) {
       await loadMauOffice(host as unknown as MaumauApp);
     }
     if (host.tab === "dashboardMemories") {
-      await loadAgents(host as unknown as MaumauApp);
+      await Promise.allSettled([
+        loadAgents(host as unknown as MaumauApp),
+        loadConfig(host as unknown as MaumauApp),
+      ]);
+      const knownAgentIds = new Set((host.agentsList?.agents ?? []).map((entry) => entry.id));
       const dashboardMemoryAgentId =
-        host.dashboardMemoryAgentId ??
+        (host.dashboardMemoryAgentId && knownAgentIds.has(host.dashboardMemoryAgentId)
+          ? host.dashboardMemoryAgentId
+          : null) ??
         host.agentsList?.defaultId ??
         host.agentsList?.agents?.[0]?.id ??
         null;
       if (dashboardMemoryAgentId) {
         host.dashboardMemoryAgentId = dashboardMemoryAgentId;
-        await loadAgentFiles(host as unknown as MaumauApp, dashboardMemoryAgentId);
-        await Promise.allSettled(
-          [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME].map((name) =>
-            loadAgentFileContent(
-              host as unknown as MaumauApp,
-              dashboardMemoryAgentId,
-              name,
-              { preserveDraft: true },
-            ),
+        await Promise.allSettled([
+          loadPinnedAgentFiles(
+            host as unknown as MaumauApp,
+            dashboardMemoryAgentId,
+            [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME],
+            { preserveDraft: true },
           ),
-        );
+          loadToolsCatalog(host as unknown as MaumauApp, dashboardMemoryAgentId),
+        ]);
+      } else {
+        host.dashboardMemoryAgentId = null;
+        host.agentFilesTargetId = null;
+        host.agentFilesList = null;
+        host.agentFilesError = null;
+        host.agentFilesLoading = false;
+        host.agentFileContents = {};
+        host.agentFileDrafts = {};
+        host.toolsCatalogResult = null;
+        host.toolsCatalogError = null;
+        host.toolsCatalogLoading = false;
+        host.dashboardAgentPanel = "memory";
       }
     }
     return;

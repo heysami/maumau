@@ -89,6 +89,8 @@ import {
   type ConfigGetParams,
   ConfigGetParamsSchema,
   type DashboardTeamsSnapshotParams,
+  type DashboardWalletParams,
+  type DashboardWorkshopSaveParams,
   type ConfigPatchParams,
   ConfigPatchParamsSchema,
   type ConfigSchemaLookupParams,
@@ -102,6 +104,8 @@ import {
   type ConfigSetParams,
   ConfigSetParamsSchema,
   DashboardTeamsSnapshotParamsSchema,
+  DashboardWalletParamsSchema,
+  DashboardWorkshopSaveParamsSchema,
   type ConnectParams,
   ConnectParamsSchema,
   type CronAddParams,
@@ -160,8 +164,14 @@ import {
   LogsTailParamsSchema,
   type LogsTailResult,
   LogsTailResultSchema,
+  type ModelsImageGenerationProvidersParams,
+  ModelsImageGenerationProvidersParamsSchema,
+  type ModelsImageGenerationProvidersResult,
+  ModelsImageGenerationProvidersResultSchema,
   type ModelsListParams,
   ModelsListParamsSchema,
+  type ModelsListResult,
+  ModelsListResultSchema,
   type PluginsStatusParams,
   PluginsStatusParamsSchema,
   type NodeDescribeParams,
@@ -386,8 +396,15 @@ export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
 export const validateSessionsUsageParams =
   ajv.compile<SessionsUsageParams>(SessionsUsageParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
-export const validateDashboardTeamsSnapshotParams =
-  ajv.compile<DashboardTeamsSnapshotParams>(DashboardTeamsSnapshotParamsSchema);
+export const validateDashboardTeamsSnapshotParams = ajv.compile<DashboardTeamsSnapshotParams>(
+  DashboardTeamsSnapshotParamsSchema,
+);
+export const validateDashboardWalletParams = ajv.compile<DashboardWalletParams>(
+  DashboardWalletParamsSchema,
+);
+export const validateDashboardWorkshopSaveParams = ajv.compile<DashboardWorkshopSaveParams>(
+  DashboardWorkshopSaveParamsSchema,
+);
 export const validateConfigSetParams = ajv.compile<ConfigSetParams>(ConfigSetParamsSchema);
 export const validateConfigApplyParams = ajv.compile<ConfigApplyParams>(ConfigApplyParamsSchema);
 export const validateConfigPatchParams = ajv.compile<ConfigPatchParams>(ConfigPatchParamsSchema);
@@ -403,10 +420,12 @@ export const validateWizardNextParams = ajv.compile<WizardNextParams>(WizardNext
 export const validateWizardCancelParams = ajv.compile<WizardCancelParams>(WizardCancelParamsSchema);
 export const validateWizardStatusParams = ajv.compile<WizardStatusParams>(WizardStatusParamsSchema);
 export const validateTalkModeParams = ajv.compile<TalkModeParams>(TalkModeParamsSchema);
-export const validateTeamPromptEditParams =
-  ajv.compile<TeamPromptEditParams>(TeamPromptEditParamsSchema);
-export const validateTeamPromptEditResult =
-  ajv.compile<TeamPromptEditResult>(TeamPromptEditResultSchema);
+export const validateTeamPromptEditParams = ajv.compile<TeamPromptEditParams>(
+  TeamPromptEditParamsSchema,
+);
+export const validateTeamPromptEditResult = ajv.compile<TeamPromptEditResult>(
+  TeamPromptEditResultSchema,
+);
 export const validateTalkConfigParams = ajv.compile<TalkConfigParams>(TalkConfigParamsSchema);
 export const validateTalkConfigResult = ajv.compile<TalkConfigResult>(TalkConfigResultSchema);
 export const validateTalkSpeakParams = ajv.compile<TalkSpeakParams>(TalkSpeakParamsSchema);
@@ -418,6 +437,8 @@ export const validateChannelsLogoutParams = ajv.compile<ChannelsLogoutParams>(
   ChannelsLogoutParamsSchema,
 );
 export const validateModelsListParams = ajv.compile<ModelsListParams>(ModelsListParamsSchema);
+export const validateModelsImageGenerationProvidersParams =
+  ajv.compile<ModelsImageGenerationProvidersParams>(ModelsImageGenerationProvidersParamsSchema);
 export const validatePluginsStatusParams =
   ajv.compile<PluginsStatusParams>(PluginsStatusParamsSchema);
 export const validateSkillsStatusParams = ajv.compile<SkillsStatusParams>(SkillsStatusParamsSchema);
@@ -612,7 +633,10 @@ export {
   AgentsFilesSetResultSchema,
   AgentsListParamsSchema,
   AgentsListResultSchema,
+  ModelsImageGenerationProvidersParamsSchema,
+  ModelsImageGenerationProvidersResultSchema,
   ModelsListParamsSchema,
+  ModelsListResultSchema,
   PluginsStatusParamsSchema,
   SkillsStatusParamsSchema,
   ToolsCatalogParamsSchema,
@@ -757,6 +781,9 @@ export type {
   ExecApprovalsSnapshot,
   LogsTailParams,
   LogsTailResult,
+  ModelsImageGenerationProvidersParams,
+  ModelsImageGenerationProvidersResult,
+  ModelsListResult,
   PollParams,
   UpdateRunParams,
   ChatInjectParams,
