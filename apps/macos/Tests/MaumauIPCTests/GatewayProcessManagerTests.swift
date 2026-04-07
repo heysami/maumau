@@ -232,6 +232,72 @@ struct GatewayProcessManagerTests {
         }
     }
 
+    @Test func `readiness wait resets a stuck probe connection before retrying`() async throws {
+        final class AttemptCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value = 0
+
+            func next() -> Int {
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                let current = self.value
+                self.value += 1
+                return current
+            }
+        }
+
+        let attempts = AttemptCounter()
+        let session = GatewayTestWebSocketSession(
+            taskFactory: {
+                let attempt = attempts.next()
+                if attempt == 0 {
+                    return GatewayTestWebSocketTask(
+                        receiveHook: { task, receiveIndex in
+                            if receiveIndex == 0 {
+                                return .data(GatewayWebSocketTestSupport.connectChallengeData())
+                            }
+                            if receiveIndex == 1 {
+                                let id = task.snapshotConnectRequestID() ?? "connect"
+                                return .data(GatewayWebSocketTestSupport.connectOkData(id: id))
+                            }
+                            try await Task.sleep(nanoseconds: 6_000_000_000)
+                            throw CancellationError()
+                        })
+                }
+
+                return GatewayTestWebSocketTask(
+                    sendHook: { task, message, sendIndex in
+                        guard sendIndex > 0 else { return }
+                        guard let id = GatewayWebSocketTestSupport.requestID(from: message) else { return }
+                        task.emitReceiveSuccess(.data(GatewayWebSocketTestSupport.okResponseData(id: id)))
+                    })
+            })
+        let url = try #require(URL(string: "ws://example.invalid"))
+        let connection = GatewayConnection(
+            configProvider: { (url: url, token: nil, password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+
+        let manager = GatewayProcessManager.shared
+        manager.setTestingConnection(connection)
+        manager.setTestingDesiredActive(true)
+        manager.setTestingStatus(.starting)
+        defer {
+            manager.setTestingConnection(nil)
+            manager.setTestingStatus(.stopped)
+            manager.setTestingDesiredActive(false)
+        }
+
+        let ready = await manager.waitForGatewayReady(timeout: 8.0)
+
+        #expect(ready)
+        #expect(session.snapshotMakeCount() >= 2)
+        if case .running = manager.status {
+            #expect(Bool(true))
+        } else {
+            Issue.record("expected gateway manager to recover after resetting a stuck readiness probe")
+        }
+    }
+
     @Test func `concurrent readiness waits share one polling task`() async throws {
         let readyAt = Date().addingTimeInterval(0.55)
         let session = GatewayTestWebSocketSession(

@@ -1,4 +1,5 @@
 import Foundation
+import MaumauKit
 import Observation
 
 @MainActor
@@ -56,6 +57,7 @@ final class GatewayProcessManager {
     private var testingManagedAuthRecoveryHandler: ((Error) async -> Bool)?
     #endif
     private let logger = Logger(subsystem: "ai.maumau", category: "gateway.process")
+    private let readinessProbeConnection = GatewayConnection()
 
     private let logLimit = 20000 // characters to keep in-memory
     private let environmentRefreshMinInterval: TimeInterval = 30
@@ -64,6 +66,13 @@ final class GatewayProcessManager {
         return self.testingConnection ?? .shared
         #else
         return .shared
+        #endif
+    }
+    private var readinessConnection: GatewayConnection {
+        #if DEBUG
+        return self.testingConnection ?? self.readinessProbeConnection
+        #else
+        return self.readinessProbeConnection
         #endif
     }
 
@@ -162,6 +171,10 @@ final class GatewayProcessManager {
         self.readinessWait = nil
         self.status = .stopped
         self.logger.info("gateway stop requested")
+        let readinessConnection = self.readinessConnection
+        Task {
+            await readinessConnection.shutdown()
+        }
         if CommandResolver.connectionModeIsRemote() {
             return
         }
@@ -520,16 +533,28 @@ final class GatewayProcessManager {
             if Date() >= wait.deadline {
                 self.appendLog("[gateway] readiness wait timed out\n")
                 self.logger.warning("gateway readiness wait timed out")
+                await self.readinessConnection.shutdown()
                 return false
             }
 
             do {
-                _ = try await self.connection.requestRawWithoutRecovery(
-                    method: .health,
-                    timeoutMs: Self.readinessHealthTimeoutMs)
+                _ = try await AsyncTimeout.withTimeoutMs(
+                    timeoutMs: Int(Self.readinessHealthTimeoutMs),
+                    onTimeout: {
+                        NSError(
+                            domain: "Gateway",
+                            code: 5,
+                            userInfo: [NSLocalizedDescriptionKey: "gateway readiness probe timed out"])
+                    },
+                    operation: {
+                        try await self.readinessConnection.requestRawWithoutRecovery(
+                            method: .health,
+                            timeoutMs: Self.readinessHealthTimeoutMs)
+                    })
                 await self.markGatewayReady(reason: "gateway became ready")
                 return true
             } catch {
+                await self.readinessConnection.shutdown()
                 do {
                     try await Task.sleep(nanoseconds: 300_000_000)
                 } catch {

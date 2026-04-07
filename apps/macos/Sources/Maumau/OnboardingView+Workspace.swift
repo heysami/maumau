@@ -1,6 +1,10 @@
 import Foundation
 
 extension OnboardingView {
+    var defersLocalWorkspaceConfigSave: Bool {
+        self.state.connectionMode == .local && self.onboardingChannelsStore.defersConfigSaves
+    }
+
     func loadWorkspaceDefaults(force: Bool = false) async {
         guard force || self.workspacePath.isEmpty else { return }
         let configured = await self.loadAgentWorkspace()
@@ -62,7 +66,7 @@ extension OnboardingView {
 
     @discardableResult
     func saveAgentWorkspace(_ workspace: String?) async -> Bool {
-        let (success, errorMessage) = await OnboardingView.buildAndSaveWorkspace(workspace)
+        let (success, errorMessage) = await self.buildAndSaveWorkspace(workspace)
 
         if let errorMessage {
             self.workspaceStatus = errorMessage
@@ -71,11 +75,18 @@ extension OnboardingView {
     }
 
     @MainActor
-    private static func buildAndSaveWorkspace(_ workspace: String?) async -> (Bool, String?) {
+    private func buildAndSaveWorkspace(_ workspace: String?) async -> (Bool, String?) {
         var root = await ConfigStore.load()
+        if self.defersLocalWorkspaceConfigSave {
+            root = self.onboardingChannelsStore.editableConfigRoot(fallback: root)
+        }
         AgentWorkspaceConfig.setWorkspace(in: &root, workspace: workspace)
         do {
-            try await ConfigStore.save(root)
+            if self.defersLocalWorkspaceConfigSave {
+                self.onboardingChannelsStore.replaceConfigDraft(root, dirty: true)
+            } else {
+                try await ConfigStore.save(root)
+            }
             return (true, nil)
         } catch {
             let errorMessage = "Failed to save config: \(error.localizedDescription)"

@@ -192,6 +192,17 @@ describe("buildGatewayReloadPlan", () => {
     expect(plan.noopPaths).toContain("diagnostics.stuckSessionWarnMs");
   });
 
+  it("treats first-user bootstrap config writes as no-op", () => {
+    const changedPaths = [
+      "commands.ownerAllowFrom",
+      "plugins.entries.multi-user-memory.config.adminUserIds",
+      "plugins.entries.multi-user-memory.config.users.sam.identities",
+    ];
+    const plan = buildGatewayReloadPlan(changedPaths);
+    expect(plan.restartGateway).toBe(false);
+    expect(plan.noopPaths).toEqual(expect.arrayContaining(changedPaths));
+  });
+
   it("defaults unknown paths to restart", () => {
     const plan = buildGatewayReloadPlan(["unknownField"]);
     expect(plan.restartGateway).toBe(true);

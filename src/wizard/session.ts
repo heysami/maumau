@@ -220,11 +220,9 @@ export class WizardSession {
   }
 
   async next(): Promise<WizardNextResult> {
-    if (this.currentStep) {
-      return { done: false, step: this.currentStep, status: this.status };
-    }
-    if (this.status !== "running") {
-      return { done: true, status: this.status, error: this.error };
+    const immediate = this.peekNextResult();
+    if (immediate) {
+      return immediate;
     }
     if (!this.stepDeferred) {
       this.stepDeferred = createDeferred();
@@ -321,5 +319,15 @@ export class WizardSession {
 
   getError(): string | undefined {
     return this.error;
+  }
+
+  peekNextResult(): WizardNextResult | null {
+    if (this.currentStep) {
+      return { done: false, step: this.currentStep, status: this.status };
+    }
+    if (this.status !== "running") {
+      return { done: true, status: this.status, error: this.error };
+    }
+    return null;
   }
 }

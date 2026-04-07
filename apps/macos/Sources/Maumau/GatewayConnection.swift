@@ -557,6 +557,9 @@ actor GatewayConnection {
                 }
                 return try await client.request(method: method, params: params, timeoutMs: timeoutMs)
             } catch {
+                if error is GatewayResponseError || error is GatewayDecodingError {
+                    throw error
+                }
                 lastError = error
             }
         }

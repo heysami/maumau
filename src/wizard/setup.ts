@@ -126,9 +126,9 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
       ? config.wizard.lastRunMode.trim().toLowerCase()
       : "";
 
-  // Embedded onboarding can persist partial local setup before the final
-  // completion metadata is written. If that session later retries, treat that
-  // incomplete wizard marker as fresh setup instead of "existing config".
+  // Older embedded onboarding builds persisted a partial local setup marker
+  // before the final completion metadata was written. Keep treating that shape
+  // as fresh setup so interrupted upgrades can still resume cleanly.
   if (!wizardLastRunAt && wizardLastRunCommand === "onboard" && wizardLastRunMode === "local") {
     return true;
   }
@@ -170,31 +170,6 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
   }
 
   return hasToken !== hasPassword;
-}
-
-function applyEmbeddedLocalWizardInProgressMetadata(
-  opts: OnboardOptions,
-  mode: OnboardMode,
-  config: MaumauConfig,
-): MaumauConfig {
-  if (!opts.embedded || mode !== "local") {
-    return config;
-  }
-
-  const wizardLastRunAt =
-    typeof config.wizard?.lastRunAt === "string" ? config.wizard.lastRunAt.trim() : "";
-  if (wizardLastRunAt) {
-    return config;
-  }
-
-  return {
-    ...config,
-    wizard: {
-      ...config.wizard,
-      lastRunCommand: "onboard",
-      lastRunMode: "local",
-    },
-  };
 }
 
 async function resolveRetainedGatewaySettings(params: {
@@ -676,12 +651,6 @@ export async function runSetupWizard(
   });
   let settings: GatewayWizardSettings;
   const { logConfigUpdated } = await import("../config/logging.js");
-  const writeLocalSetupProgressConfig = async (config: MaumauConfig): Promise<MaumauConfig> => {
-    const configWithProgress = applyEmbeddedLocalWizardInProgressMetadata(opts, mode, config);
-    await writeConfigFile(configWithProgress);
-    logConfigUpdated(runtime);
-    return configWithProgress;
-  };
 
   async function repairRetainedDefaultModelIfNeeded(config: MaumauConfig): Promise<MaumauConfig> {
     if (resolveAgentModelPrimaryValue(config.agents?.defaults?.model)) {
@@ -697,7 +666,7 @@ export async function runSetupWizard(
     });
 
     if (resolveAgentModelPrimaryValue(repaired.agents?.defaults?.model)) {
-      return await writeLocalSetupProgressConfig(repaired);
+      return repaired;
     }
 
     return repaired;
@@ -836,7 +805,6 @@ export async function runSetupWizard(
       });
     }
 
-    nextConfig = await writeLocalSetupProgressConfig(nextConfig);
   }
 
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {

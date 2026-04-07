@@ -27,29 +27,29 @@ struct ChannelsStoreConfigTests {
 
     @Test func `apply deferred onboarding config persists staged config once`() async throws {
         var savedRoot: [String: Any]?
-        await ConfigStore._testSetOverrides(.init(
+        try await ConfigStore._withTestOverrides(.init(
             isRemoteMode: { false },
             saveLocal: { savedRoot = $0 }))
-
-        let store = ChannelsStore(deferConfigSaves: true)
-        store.replaceConfigDraft([
-            "channels": [
-                "telegram": [
-                    "enabled": true,
-                    "botToken": "secret-token",
+        {
+            let store = ChannelsStore(deferConfigSaves: true)
+            store.replaceConfigDraft([
+                "channels": [
+                    "telegram": [
+                        "enabled": true,
+                        "botToken": "secret-token",
+                    ],
                 ],
-            ],
-        ], dirty: true)
+            ], dirty: true)
 
-        let saved = await store.applyDeferredConfigChanges()
+            let saved = await store.applyDeferredConfigChanges()
 
-        #expect(saved)
-        let channels = try #require(savedRoot?["channels"] as? [String: Any])
-        let telegram = try #require(channels["telegram"] as? [String: Any])
-        #expect(telegram["enabled"] as? Bool == true)
-        #expect(telegram["botToken"] as? String == "secret-token")
-        #expect(store.configDirty == false)
-
-        await ConfigStore._testClearOverrides()
+            #expect(saved)
+            let channels = try #require(savedRoot?["channels"] as? [String: Any])
+            let telegram = try #require(channels["telegram"] as? [String: Any])
+            #expect(telegram["enabled"] as? Bool == true)
+            #expect(telegram["botToken"] as? String == "secret-token")
+            #expect(store.configDirty == false)
+        }
     }
+
 }

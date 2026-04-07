@@ -708,7 +708,7 @@ describe("runSetupWizard", () => {
     );
   });
 
-  it("marks embedded local setup writes as in progress before completion", async () => {
+  it("writes embedded local setup config only once at completion", async () => {
     writeConfigFile.mockClear();
 
     const prompter = buildWizardPrompter({});
@@ -732,14 +732,7 @@ describe("runSetupWizard", () => {
       prompter,
     );
 
-    expect(writeConfigFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        wizard: expect.objectContaining({
-          lastRunCommand: "onboard",
-          lastRunMode: "local",
-        }),
-      }),
-    );
+    expect(writeConfigFile).toHaveBeenCalledTimes(1);
   });
 
   async function runTuiHatchTest(params: {

@@ -1048,7 +1048,9 @@ extension OnboardingView {
                                     if saved {
                                         self.workspaceStatus =
                                             macLocalized(
-                                                "Saved to ~/.maumau/maumau.json (agents.defaults.workspace)",
+                                                self.defersLocalWorkspaceConfigSave
+                                                    ? "Changes apply when you finish setup."
+                                                    : "Saved to ~/.maumau/maumau.json (agents.defaults.workspace)",
                                                 language: self.state.effectiveOnboardingLanguage)
                                     }
                                 }

@@ -156,18 +156,11 @@ func resolveImageGenerationProviderConnectGroups(
 }
 
 func shouldSkipFollowupGatewayCatalogLoad(after error: Error) -> Bool {
-    if GatewayAuthFailureClassifier.isAuthFailure(error) {
-        return true
-    }
-
-    let nsError = error as NSError
-    if nsError.domain == URLError.errorDomain {
-        return true
-    }
-    if nsError.domain == "Gateway", nsError.code == 5 {
-        return true
-    }
-    return false
+    // Auth failures are sticky until the endpoint/token changes, so a second
+    // gateway catalog request just repeats the same error. Transport hiccups
+    // and timeouts often recover by the very next request, so keep the
+    // follow-up image-generation load retryable.
+    GatewayAuthFailureClassifier.isAuthFailure(error)
 }
 
 func modelSettingsProviderId(for ref: String?) -> String? {
@@ -1947,7 +1940,7 @@ struct ModelsSettings: View {
             let response: ModelAuthChoicesResponse = try await GatewayConnection.shared.requestDecoded(
                 method: .modelsAuthChoices,
                 params: nil,
-                timeoutMs: 10000)
+                timeoutMs: 15000)
             self.providerConnectGroups = response.groups
             let availableGroups = self.availableProviderConnectGroups
             if let selection = resolveModelAuthSelection(

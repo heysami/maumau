@@ -987,6 +987,7 @@ private let indonesianMacStrings: [String: String] = [
     "Copy setup command": "Salin perintah setup",
     "Create workspace": "Buat workspace",
     "Open folder": "Buka folder",
+    "Changes apply when you finish setup.": "Perubahan akan diterapkan saat Anda menyelesaikan setup.",
     "Saved to ~/.maumau/maumau.json (agents.defaults.workspace)":
         "Disimpan ke ~/.maumau/maumau.json (agents.defaults.workspace)",
     "Maumau will use this folder during setup. If it doesn’t exist yet, the setup wizard can create it and seed the bootstrap files.":

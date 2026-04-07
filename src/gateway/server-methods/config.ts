@@ -32,9 +32,16 @@ import {
   type RestartSentinelPayload,
   writeRestartSentinel,
 } from "../../infra/restart-sentinel.js";
-import { scheduleGatewaySigusr1Restart } from "../../infra/restart.js";
+import {
+  DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS,
+  scheduleGatewaySigusr1Restart,
+} from "../../infra/restart.js";
 import { loadMaumauPlugins } from "../../plugins/loader.js";
-import { diffConfigPaths } from "../config-reload.js";
+import {
+  buildGatewayReloadPlan,
+  diffConfigPaths,
+  resolveGatewayReloadSettings,
+} from "../config-reload.js";
 import {
   formatControlPlaneActor,
   resolveControlPlaneActor,
@@ -202,6 +209,32 @@ function summarizeConfigValidationIssues(issues: ReadonlyArray<ConfigValidationI
   }`;
 }
 
+function describeConfigSetReload(params: {
+  previousConfig: MaumauConfig | undefined;
+  nextConfig: MaumauConfig;
+}) {
+  const changedPaths = diffConfigPaths(params.previousConfig ?? {}, params.nextConfig);
+  const reloadSettings = resolveGatewayReloadSettings(params.nextConfig);
+  const reloadPlan = buildGatewayReloadPlan(changedPaths);
+  const restartExpected =
+    changedPaths.length > 0 &&
+    (reloadSettings.mode === "restart" ||
+      (reloadSettings.mode === "hybrid" && reloadPlan.restartGateway));
+
+  return {
+    changedPaths,
+    reload: {
+      mode: reloadSettings.mode,
+      debounceMs: reloadSettings.debounceMs,
+      deferralTimeoutMs:
+        params.nextConfig.gateway?.reload?.deferralTimeoutMs ??
+        DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS,
+      restartExpected,
+      restartReasons: restartExpected ? reloadPlan.restartReasons : [],
+    },
+  };
+}
+
 function resolveConfigRestartRequest(params: unknown): {
   sessionKey: string | undefined;
   note: string | undefined;
@@ -367,7 +400,7 @@ export const configHandlers: GatewayRequestHandlers = {
     }
     respond(true, result, undefined);
   },
-  "config.set": async ({ params, respond, context }) => {
+  "config.set": async ({ params, respond, client, context }) => {
     if (!assertValidParams(params, validateConfigSetParams, "config.set", respond)) {
       return;
     }
@@ -379,18 +412,29 @@ export const configHandlers: GatewayRequestHandlers = {
     if (!parsed) {
       return;
     }
+    const { changedPaths, reload } = describeConfigSetReload({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+    });
+    const actor = resolveControlPlaneActor(client);
+    context?.logGateway?.info(
+      `config.set write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)}`,
+    );
     await writeConfigFile(parsed.config, writeOptions);
     await refreshDashboardTeamSnapshotsIfNeeded({
       previousConfig: snapshot.config,
       nextConfig: parsed.config,
       logger: context?.logGateway,
     });
+    const nextSnapshot = await readConfigFileSnapshot();
     respond(
       true,
       {
         ok: true,
         path: createConfigIO().configPath,
+        hash: resolveConfigSnapshotHash(nextSnapshot),
         config: redactConfigObject(parsed.config, parsed.schema.uiHints),
+        reload,
       },
       undefined,
     );

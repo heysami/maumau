@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   readConfigFileSnapshot: vi.fn(),
   writeConfigFile: vi.fn(),
   buildAuthChoiceGroups: vi.fn(),
+  resolvePreferredProvidersForAuthChoices: vi.fn(),
   applyAuthChoice: vi.fn(),
   resolvePreferredProviderForAuthChoice: vi.fn(),
   warnIfModelConfigLooksOff: vi.fn(),
@@ -24,6 +25,11 @@ vi.mock("../config/config.js", async (importOriginal) => {
 
 vi.mock("../commands/auth-choice-options.js", () => ({
   buildAuthChoiceGroups: (...args: unknown[]) => mocks.buildAuthChoiceGroups(...args),
+}));
+
+vi.mock("../plugins/provider-auth-choice-preference.js", () => ({
+  resolvePreferredProvidersForAuthChoices: (...args: unknown[]) =>
+    mocks.resolvePreferredProvidersForAuthChoices(...args),
 }));
 
 vi.mock("../commands/auth-choice.js", () => ({
@@ -63,6 +69,7 @@ describe("runModelAuthWizard", () => {
     mocks.readConfigFileSnapshot.mockReset();
     mocks.writeConfigFile.mockReset();
     mocks.buildAuthChoiceGroups.mockReset();
+    mocks.resolvePreferredProvidersForAuthChoices.mockReset();
     mocks.applyAuthChoice.mockReset();
     mocks.resolvePreferredProviderForAuthChoice.mockReset();
     mocks.warnIfModelConfigLooksOff.mockReset();
@@ -81,6 +88,9 @@ describe("runModelAuthWizard", () => {
         },
       ],
     });
+    mocks.resolvePreferredProvidersForAuthChoices.mockResolvedValue(
+      new Map<string, string>([["gemini-api-key", "google"]]),
+    );
     mocks.promptAuthChoiceGrouped.mockResolvedValue("gemini-api-key");
     mocks.warnIfModelConfigLooksOff.mockResolvedValue(undefined);
     mocks.applyPrimaryModel.mockImplementation((cfg: unknown) => cfg);
@@ -138,6 +148,50 @@ describe("runModelAuthWizard", () => {
             model: { primary: "openai-codex/gpt-5.4" },
           },
         },
+      }),
+    );
+  });
+
+  it("annotates grouped auth choices with provider ids from the batched resolver", async () => {
+    mocks.buildAuthChoiceGroups.mockReturnValue({
+      groups: [
+        {
+          value: "openai",
+          label: "OpenAI",
+          options: [{ value: "openai-api-key", label: "API key" }],
+        },
+        {
+          value: "anthropic",
+          label: "Anthropic",
+          options: [{ value: "claude-cli", label: "Claude CLI" }],
+        },
+      ],
+    });
+    mocks.resolvePreferredProvidersForAuthChoices.mockResolvedValue(
+      new Map<string, string>([
+        ["openai-api-key", "openai"],
+        ["claude-cli", "anthropic"],
+      ]),
+    );
+
+    const { resolveModelAuthChoiceGroups } = await import("./model-auth.js");
+    const groups = await resolveModelAuthChoiceGroups();
+
+    expect(groups).toEqual([
+      {
+        value: "openai",
+        label: "OpenAI",
+        options: [{ value: "openai-api-key", label: "API key", providerId: "openai" }],
+      },
+      {
+        value: "anthropic",
+        label: "Anthropic",
+        options: [{ value: "claude-cli", label: "Claude CLI", providerId: "anthropic" }],
+      },
+    ]);
+    expect(mocks.resolvePreferredProvidersForAuthChoices).toHaveBeenCalledWith(
+      expect.objectContaining({
+        choices: ["openai-api-key", "claude-cli"],
       }),
     );
   });

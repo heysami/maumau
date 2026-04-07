@@ -99,7 +99,13 @@ describe("gateway config methods", () => {
     const res = await rpcReq<{
       ok?: boolean;
       path?: string;
+      hash?: string;
       config?: Record<string, unknown>;
+      reload?: {
+        restartExpected?: boolean;
+        debounceMs?: number;
+        deferralTimeoutMs?: number;
+      };
     }>(requireWs(), "config.set", {
       raw: JSON.stringify(current.payload?.config ?? {}, null, 2),
       baseHash: current.payload?.hash,
@@ -107,7 +113,12 @@ describe("gateway config methods", () => {
 
     expect(res.ok).toBe(true);
     expect(res.payload?.path).toBe(createConfigIO().configPath);
+    expect(typeof res.payload?.hash).toBe("string");
     expect(res.payload?.config).toBeTruthy();
+    expect(typeof res.payload?.reload?.restartExpected).toBe("boolean");
+    expect(typeof res.payload?.reload?.debounceMs).toBe("number");
+    expect(typeof res.payload?.reload?.deferralTimeoutMs).toBe("number");
+    expect(Array.isArray(res.payload?.reload?.restartReasons)).toBe(true);
   });
 
   it("returns config.set validation details in the top-level error message", async () => {

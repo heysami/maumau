@@ -13,8 +13,6 @@ import { formatForLog } from "../ws-log.js";
 import type { GatewayRequestContext, GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
-const EMBEDDED_WIZARD_START_STEP_TIMEOUT_MS = 750;
-
 function readWizardStatus(session: WizardSession) {
   return {
     status: session.getStatus(),
@@ -48,23 +46,14 @@ async function readWizardStartResult(params: {
     return await params.session.next();
   }
 
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const result = await Promise.race([
-      params.session.next(),
-      new Promise<ReturnType<typeof buildWizardWarmupStep>>((resolve) => {
-        timeoutHandle = setTimeout(
-          () => resolve(buildWizardWarmupStep()),
-          EMBEDDED_WIZARD_START_STEP_TIMEOUT_MS,
-        );
-      }),
-    ]);
-    return result;
-  } finally {
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
+  const immediate = params.session.peekNextResult();
+  if (immediate) {
+    return immediate;
   }
+
+  // Embedded clients should always get a visible progress step immediately, even if
+  // the first real prompt is still doing cold-start work that can starve timers.
+  return buildWizardWarmupStep();
 }
 
 function findWizardSessionOrRespond(params: {

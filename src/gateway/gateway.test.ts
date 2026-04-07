@@ -509,6 +509,96 @@ describe("gateway e2e", () => {
   );
 
   it(
+    "returns the embedded warmup step immediately even when startup blocks the event loop after yielding",
+    { timeout: GATEWAY_E2E_TIMEOUT_MS },
+    async () => {
+      const envSnapshot = captureEnv([
+        "HOME",
+        "MAUMAU_STATE_DIR",
+        "MAUMAU_CONFIG_PATH",
+        "MAUMAU_GATEWAY_TOKEN",
+        "MAUMAU_SKIP_CHANNELS",
+        "MAUMAU_SKIP_GMAIL_WATCHER",
+        "MAUMAU_SKIP_CRON",
+        "MAUMAU_SKIP_CANVAS_HOST",
+        "MAUMAU_SKIP_BROWSER_CONTROL_SERVER",
+      ]);
+
+      process.env.MAUMAU_SKIP_CHANNELS = "1";
+      process.env.MAUMAU_SKIP_GMAIL_WATCHER = "1";
+      process.env.MAUMAU_SKIP_CRON = "1";
+      process.env.MAUMAU_SKIP_CANVAS_HOST = "1";
+      process.env.MAUMAU_SKIP_BROWSER_CONTROL_SERVER = "1";
+      delete process.env.MAUMAU_GATEWAY_TOKEN;
+
+      const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-wizard-warmup-blocked-home-"));
+      process.env.HOME = tempHome;
+      delete process.env.MAUMAU_STATE_DIR;
+      delete process.env.MAUMAU_CONFIG_PATH;
+
+      const wizardToken = nextGatewayId("wiz-warmup-blocked-token");
+      const port = await getFreeGatewayPort();
+      const server = await startGatewayServer(port, {
+        bind: "loopback",
+        auth: { mode: "token", token: wizardToken },
+        controlUiEnabled: false,
+        wizardRunner: async (_opts, _runtime, prompter) => {
+          await Promise.resolve();
+          const blockedUntil = Date.now() + 1_500;
+          while (Date.now() < blockedUntil) {
+            // Busy-wait to simulate cold-start work that starves the timer queue.
+          }
+          await prompter.note("Ready");
+        },
+      });
+
+      const client = await connectGatewayClient({
+        url: `ws://127.0.0.1:${port}`,
+        token: wizardToken,
+        clientDisplayName: "vitest-wizard-warmup-blocked",
+      });
+
+      try {
+        const startedAt = Date.now();
+        const start = await client.request<{
+          sessionId?: string;
+          done: boolean;
+          status: "running" | "done" | "cancelled" | "error";
+          step?: {
+            id: string;
+            type: "note" | "select" | "text" | "confirm" | "multiselect" | "progress";
+            title?: string;
+            message?: string;
+          };
+          error?: string;
+        }>("wizard.start", {
+          mode: "local",
+          flow: "quickstart",
+          acceptRisk: true,
+          skipChannels: true,
+          skipSkills: true,
+          skipSearch: true,
+          skipUi: true,
+          embedded: true,
+          fresh: true,
+        });
+        const elapsedMs = Date.now() - startedAt;
+
+        expect(elapsedMs).toBeLessThan(750);
+        expect(start.done).toBe(false);
+        expect(start.status).toBe("running");
+        expect(start.step?.type).toBe("progress");
+        expect(start.step?.title).toBe("Preparing setup");
+      } finally {
+        await client.close();
+        await server.close({ reason: "wizard warmup blocked" });
+        await fs.rm(tempHome, { recursive: true, force: true });
+        envSnapshot.restore();
+      }
+    },
+  );
+
+  it(
     "starts the focused models-auth wizard with the selected auth choice",
     { timeout: GATEWAY_E2E_TIMEOUT_MS },
     async () => {

@@ -189,6 +189,31 @@ struct OnboardingViewSmokeTests {
         #expect(view.onboardingChannelsStore.defersConfigSaves)
     }
 
+    @Test func `local onboarding workspace save stages config without persisting`() async {
+        var persistedSaveCount = 0
+        await ConfigStore._withTestOverrides(.init(
+            isRemoteMode: { false },
+            loadLocal: { [:] },
+            saveLocal: { _ in persistedSaveCount += 1 }))
+        {
+            let state = AppState(preview: true)
+            state.connectionMode = .local
+            let view = OnboardingView(
+                state: state,
+                permissionMonitor: PermissionMonitor.shared,
+                discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+            let saved = await view.saveAgentWorkspace("~/maumau-workspace")
+
+            #expect(saved)
+            #expect(persistedSaveCount == 0)
+            #expect(view.onboardingChannelsStore.configDirty)
+            #expect(
+                AgentWorkspaceConfig.workspace(from: view.onboardingChannelsStore.configDraft)
+                    == "~/maumau-workspace")
+        }
+    }
+
     @Test func `conversation automation page prep does not overwrite earlier voice settings`() async {
         let state = AppState(preview: true)
         state.connectionMode = .local
@@ -529,7 +554,9 @@ struct OnboardingViewSmokeTests {
         let params = OnboardingView.managedBrowserStartParams()
         #expect(params["method"] == AnyCodable("POST"))
         #expect(params["path"] == AnyCodable("/start"))
-        #expect(params["profile"] == AnyCodable("maumau"))
+        #expect(params["query"] == AnyCodable([
+            "profile": AnyCodable("maumau"),
+        ]))
         #expect(params["timeoutMs"] == AnyCodable(15000))
     }
 

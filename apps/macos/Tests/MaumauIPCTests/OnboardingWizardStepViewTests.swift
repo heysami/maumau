@@ -1,3 +1,4 @@
+import Foundation
 import MaumauKit
 import MaumauProtocol
 import SwiftUI
@@ -17,6 +18,53 @@ private actor WizardReadinessProbeRecorder {
     func recordProbe() {
         self.probeCalls += 1
     }
+}
+
+private actor WizardRequestCounter {
+    private var value = 0
+
+    func increment() {
+        self.value += 1
+    }
+
+    func snapshot() -> Int {
+        self.value
+    }
+}
+
+private func wizardRequestFrameObject(from message: URLSessionWebSocketTask.Message) -> [String: Any]? {
+    let data: Data? = switch message {
+    case let .data(payload):
+        payload
+    case let .string(payload):
+        payload.data(using: .utf8)
+    @unknown default:
+        nil
+    }
+    guard let data else { return nil }
+    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+}
+
+private func wizardStartResponseData(id: String) -> Data {
+    let json = """
+    {
+      "type": "res",
+      "id": "\(id)",
+      "ok": true,
+      "payload": {
+        "sessionId": "wizard-session",
+        "done": false,
+        "status": "running",
+        "step": {
+          "id": "step-1",
+          "type": "note",
+          "title": "Welcome",
+          "message": "Hello from the wizard"
+        }
+      }
+    }
+    """
+    return Data(json.utf8)
 }
 
 @Suite(.serialized)
@@ -357,6 +405,67 @@ struct OnboardingWizardStepViewTests {
         #expect(wizard.isSatisfiedForOnboarding)
         #expect(!wizard.isComplete)
         #expect(!wizard.isBlocking)
+    }
+
+    @Test func `model auth start uses the wizard's dedicated gateway connection`() async throws {
+        let requestCount = WizardRequestCounter()
+        let url = try #require(URL(string: "ws://wizard.test"))
+        let session = GatewayTestWebSocketSession(
+            taskFactory: {
+                GatewayTestWebSocketTask(
+                    sendHook: { task, message, sendIndex in
+                        guard sendIndex == 1 else { return }
+                        let frame = try #require(wizardRequestFrameObject(from: message))
+                        #expect(frame["method"] as? String == GatewayConnection.Method.wizardStart.rawValue)
+                        await requestCount.increment()
+                        let id = try #require(frame["id"] as? String)
+                        task.emitReceiveSuccess(.data(wizardStartResponseData(id: id)))
+                    })
+            })
+        let connection = GatewayConnection(
+            configProvider: { (url: url, token: nil, password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+        let wizard = OnboardingWizardModel(gatewayConnection: connection, requestTimeoutMs: 500)
+
+        await wizard.startModelAuthIfNeeded(authChoice: "google-api-key", setDefaultModel: false)
+
+        let requestAttempts = await requestCount.snapshot()
+        #expect(requestAttempts == 1)
+        #expect(wizard.sessionId == "wizard-session")
+        #expect(wizard.status == "running")
+        #expect(wizard.errorMessage == nil)
+        #expect(wizard.currentStep?.id == "step-1")
+        #expect(wizard.currentStep?.message == "Hello from the wizard")
+    }
+
+    @Test func `model auth start times out instead of spinning forever`() async {
+        let url = URL(string: "ws://wizard-timeout.test")!
+        let session = GatewayTestWebSocketSession(
+            taskFactory: {
+                GatewayTestWebSocketTask(
+                    receiveHook: { task, receiveIndex in
+                        if receiveIndex == 0 {
+                            return .data(GatewayWebSocketTestSupport.connectChallengeData())
+                        }
+                        if receiveIndex == 1 {
+                            let id = task.snapshotConnectRequestID() ?? "connect"
+                            return .data(GatewayWebSocketTestSupport.connectOkData(id: id))
+                        }
+                        try await Task.sleep(nanoseconds: 5_000_000_000)
+                        throw CancellationError()
+                    })
+            })
+        let connection = GatewayConnection(
+            configProvider: { (url: url, token: nil, password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+        let wizard = OnboardingWizardModel(gatewayConnection: connection, requestTimeoutMs: 50)
+
+        await wizard.startModelAuthIfNeeded(authChoice: "google-api-key", setDefaultModel: false)
+
+        #expect(wizard.sessionId == nil)
+        #expect(wizard.status == "error")
+        #expect(wizard.isStarting == false)
+        #expect(wizard.errorMessage == "The setup flow took too long to start. Retry setup.")
     }
 
     @Test func `legacy compatibility auto selects quickstart and later`() {

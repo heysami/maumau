@@ -22,7 +22,8 @@ const SIGUSR1_AUTH_GRACE_MS = 5000;
 const DEFAULT_DEFERRAL_POLL_MS = 500;
 // Default to 5 minutes to avoid aborting in-flight subagent LLM calls.
 // Configurable via gateway.reload.deferralTimeoutMs.
-const DEFAULT_DEFERRAL_MAX_WAIT_MS = 300_000;
+export const DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS = 300_000;
+const DEFAULT_DEFERRAL_MAX_WAIT_MS = DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS;
 const RESTART_COOLDOWN_MS = 30_000;
 
 const restartLog = createSubsystemLogger("restart");

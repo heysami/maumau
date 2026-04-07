@@ -145,17 +145,17 @@ struct ModelsSettingsTests {
         #expect(shouldSkipFollowupGatewayCatalogLoad(after: error))
     }
 
-    @Test func `followup gateway catalog load skips transport failures`() {
-        #expect(shouldSkipFollowupGatewayCatalogLoad(after: URLError(.cannotConnectToHost)))
+    @Test func `followup gateway catalog load keeps transport failures retryable`() {
+        #expect(!shouldSkipFollowupGatewayCatalogLoad(after: URLError(.cannotConnectToHost)))
     }
 
-    @Test func `followup gateway catalog load skips gateway timeouts`() {
+    @Test func `followup gateway catalog load keeps gateway timeouts retryable`() {
         let error = NSError(
             domain: "Gateway",
             code: 5,
             userInfo: [NSLocalizedDescriptionKey: "gateway request timed out after 5000ms"])
 
-        #expect(shouldSkipFollowupGatewayCatalogLoad(after: error))
+        #expect(!shouldSkipFollowupGatewayCatalogLoad(after: error))
     }
 
     @Test func `followup gateway catalog load keeps method errors retryable`() {
