@@ -155,6 +155,7 @@ export type AppViewState = {
   multiUserMemoryLoading: boolean;
   multiUserMemoryError: string | null;
   multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null;
+  multiUserMemoryActiveTab: "overview" | "users" | "groups" | "settings";
   multiUserMemoryNewUserId: string;
   multiUserMemoryNewUserDisplayName: string;
   multiUserMemoryNewUserLanguage: import("../../../src/i18n/languages.ts").LanguageId;

@@ -8,6 +8,8 @@ export const en: TranslationMap = {
     offline: "Offline",
     connect: "Connect",
     refresh: "Refresh",
+    close: "Close",
+    edit: "Edit",
     enabled: "Enabled",
     disabled: "Disabled",
     na: "n/a",
@@ -322,14 +324,25 @@ export const en: TranslationMap = {
       title: "Multi-User Memory",
       subtitle:
         "Manage people, groups, identities, and approval-aware shared memory from one place.",
+      dialogHint:
+        "Changes update the staged config immediately. Use Save & Apply in the page header when you are ready to persist them.",
       enableHint:
         "The multi-user memory plugin is not the active memory slot yet. Enable it here, then apply the config so runtime pages can load.",
       unsaved: "You have unsaved multi-user memory changes.",
+    },
+    tabs: {
+      ariaLabel: "Multi-user memory sections",
+      overview: "Overview",
+      users: "Users",
+      groups: "Groups",
+      settings: "Plugin Settings",
     },
     actions: {
       enable: "Enable Plugin",
       save: "Save",
       apply: "Save & Apply",
+      addUser: "Add User",
+      addGroup: "Add Group",
       createUser: "Create User",
       createGroup: "Create Group",
       clearDraft: "Clear Draft",
@@ -364,6 +377,7 @@ export const en: TranslationMap = {
       createTitle: "Create User",
       createSubtitle:
         "Create a person profile, set their language, and link their channel identities.",
+      editTitle: "Edit User",
       title: "Users",
       subtitle:
         "Each user owns their private memory and sees shared group memory through memberships.",
@@ -371,6 +385,7 @@ export const en: TranslationMap = {
       empty: "No curated users yet. Create one manually or seed a draft from a provisional sender.",
       adminUsers: "Admin Users",
       adminUsersHelp: "These canonical users can manage the multi-user memory layer.",
+      adminAccess: "Admin Access",
       userId: "Internal User Id",
       displayName: "Display Name",
       language: "Preferred Language",
@@ -383,10 +398,19 @@ export const en: TranslationMap = {
       identitiesEmpty: "No identities linked yet.",
       autoIdHint: "Internal user id is generated automatically from the display name.",
       seedIdentity: "The next created user will also link {channel} / {senderId}.",
+      columns: {
+        user: "User",
+        channel: "Channel",
+        id: "Id",
+        language: "Language",
+        status: "Status",
+        actions: "Actions",
+      },
     },
     groups: {
       createTitle: "Create Group",
       createSubtitle: "Groups define shared memory scopes and memberships.",
+      editTitle: "Edit Group",
       title: "Groups",
       subtitle:
         "Use memberships and parent groups to build overlapping or nested shared memory areas.",
@@ -402,6 +426,13 @@ export const en: TranslationMap = {
       parents: "Parent Groups",
       parentsHelp: "Use parent groups for broader scopes like family, parents, or household.",
       parentsEmpty: "Create more groups to build nesting.",
+      columns: {
+        group: "Group",
+        users: "Users",
+        parents: "Parents",
+        status: "Status",
+        actions: "Actions",
+      },
     },
     runtime: {
       provisionalTitle: "Detected Senders",

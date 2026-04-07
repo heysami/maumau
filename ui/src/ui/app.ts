@@ -260,6 +260,7 @@ export class MaumauApp extends LitElement {
   @state() multiUserMemoryLoading = false;
   @state() multiUserMemoryError: string | null = null;
   @state() multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null = null;
+  @state() multiUserMemoryActiveTab: "overview" | "users" | "groups" | "settings" = "overview";
   @state() multiUserMemoryNewUserId = "";
   @state() multiUserMemoryNewUserDisplayName = "";
   @state() multiUserMemoryNewUserLanguage: LanguageId = DEFAULT_LANGUAGE_ID;
@@ -860,7 +861,7 @@ export class MaumauApp extends LitElement {
     }
     const stepIntervalMs = 1000 / 30;
     const tick = (frameAt: number) => {
-      if (this.tab !== "dashboardMauOffice" || this.mauOfficeState.loaded !== true) {
+      if (this.tab !== "dashboardMauOffice" || !this.mauOfficeState.loaded) {
         this.mauOfficeTicker = window.requestAnimationFrame(tick);
         return;
       }

@@ -565,7 +565,9 @@ export function renderApp(state: AppViewState) {
         state.dashboardMemoryAgentId && knownAgentIds.has(state.dashboardMemoryAgentId)
           ? state.dashboardMemoryAgentId
           : null;
-      return selectedAgentId ?? state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null;
+      return (
+        selectedAgentId ?? state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null
+      );
     };
     const refreshDashboardAgentWorkspace = async (agentId: string) => {
       state.dashboardMemoryAgentId = agentId;
@@ -1998,6 +2000,7 @@ export function renderApp(state: AppViewState) {
           state.tab === "users"
             ? lazyRender(lazyUsers, (m) =>
                 m.renderUsers({
+                  activeTab: state.multiUserMemoryActiveTab,
                   configLoading: state.configLoading,
                   configReady: Boolean(state.configSnapshot),
                   configSaving: state.configSaving,
@@ -2012,6 +2015,9 @@ export function renderApp(state: AppViewState) {
                   newUserLanguage: state.multiUserMemoryNewUserLanguage,
                   newUserIdentities: state.multiUserMemoryNewUserIdentities,
                   newGroupLabel: state.multiUserMemoryNewGroupLabel,
+                  onTabChange: (tab) => {
+                    state.multiUserMemoryActiveTab = tab;
+                  },
                   onReload: () => {
                     void (async () => {
                       await loadConfig(state);

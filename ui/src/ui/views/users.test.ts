@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 import { i18n } from "../../i18n/index.ts";
 import { renderUsers } from "./users.ts";
 
-function createUsersProps() {
+type UsersProps = Parameters<typeof renderUsers>[0];
+
+function createUsersProps(overrides: Partial<UsersProps> = {}): UsersProps {
   return {
+    activeTab: "overview" as const,
     configLoading: false,
     configReady: true,
     configSaving: false,
@@ -66,6 +69,7 @@ function createUsersProps() {
     newUserLanguage: "en",
     newUserIdentities: [],
     newGroupLabel: "",
+    onTabChange: () => undefined,
     onReload: () => undefined,
     onSave: () => undefined,
     onApply: () => undefined,
@@ -96,17 +100,32 @@ function createUsersProps() {
     onToggleGroupParent: () => undefined,
     onCreateUserFromProvisional: () => undefined,
     onUseProvisionalAsDraft: () => undefined,
+    ...overrides,
   };
 }
 
 describe("renderUsers", () => {
   it("shows the secure dashboard phone link whenever detected senders are present", () => {
-    i18n.setLocale("en");
+    void i18n.setLocale("en");
     const container = document.createElement("div");
     render(renderUsers(createUsersProps()), container);
 
     expect(container.textContent).toContain("Detected senders are ready to review here.");
-    const link = container.querySelector('a[href="https://tailnet.example/dashboard/today#token=abc123"]');
+    const link = container.querySelector(
+      'a[href="https://tailnet.example/dashboard/today#token=abc123"]',
+    );
     expect(link).not.toBeNull();
+  });
+
+  it("renders the users table in the users tab", () => {
+    void i18n.setLocale("en");
+    const container = document.createElement("div");
+    render(renderUsers(createUsersProps({ activeTab: "users" })), container);
+
+    expect(container.textContent).toContain("Add User");
+    expect(container.textContent).toContain("Channel");
+    expect(container.textContent).toContain("Id");
+    expect(container.textContent).toContain("Edit");
+    expect(container.querySelector("table.data-table")).not.toBeNull();
   });
 });
