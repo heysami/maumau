@@ -371,6 +371,59 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain("1 record(s) are missing duration totals.");
   });
 
+  it("keeps the shell title as the only page title and resolves calendar view labels", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardCalendar",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.querySelector(".dashboard-shell__title")?.textContent).toBe("Calendar");
+    expect(container.querySelector(".dashboard-page__header .card-title")).toBeNull();
+    expect(container.querySelector(".dashboard-page__toolbar")).toBeNull();
+    expect(container.querySelector(".dashboard-calendar__header")).not.toBeNull();
+    expect(container.querySelector(".dashboard-calendar-agenda")).toBeNull();
+    expect(container.textContent).not.toContain(
+      "Month, week, and day views for routines, cron, and activity.",
+    );
+    expect(container.textContent).not.toContain(
+      "User-facing reminders, routines, and approvals across the selected window.",
+    );
+    expect(container.querySelector(".dashboard-calendar__header.card")).toBeNull();
+
+    const viewLabels = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dashboard-segmented__item"),
+    ).map((button) => button.textContent?.trim());
+    expect(viewLabels).toEqual(["Month", "Week", "Day"]);
+    expect(container.textContent).not.toContain("dashboard.dashboard.calendar.views.month");
+  });
+
+  it("keeps simple refresh actions in the shell header instead of a separate spacer row", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.querySelector(".dashboard-page__toolbar")).toBeNull();
+    expect(container.querySelector(".dashboard-shell__actions")?.textContent).toContain("Refresh");
+    expect(container.querySelector(".dashboard-shell__actions")?.textContent).toContain(
+      "Go to Advance Dashboard",
+    );
+  });
+
   it("renders the dashboard agents scope tab for the selected agent", async () => {
     const container = document.createElement("div");
 

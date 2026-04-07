@@ -10,7 +10,6 @@ import {
   DASHBOARD_PAGE_ORDER,
   dashboardPageForTab,
   iconForTab,
-  subtitleForTab,
   tabForDashboardPage,
   titleForTab,
   type DashboardPage,
@@ -161,13 +160,53 @@ const TASK_STATUS_ORDER: DashboardTask["status"][] = [
 ];
 
 const CALENDAR_VIEW_LABELS: Record<DashboardProps["calendarView"], string> = {
-  month: "dashboard.calendar.views.month",
-  week: "dashboard.calendar.views.week",
-  day: "dashboard.calendar.views.day",
+  month: "calendar.views.month",
+  week: "calendar.views.week",
+  day: "calendar.views.day",
 };
 
 function dt(key: string, params?: Record<string, string>): string {
   return t(`dashboard.${key}`, params);
+}
+
+function renderPageToolbar(actions: unknown) {
+  if (actions === undefined || actions === null || actions === nothing) {
+    return nothing;
+  }
+  return html`<div class="dashboard-page__actions dashboard-page__toolbar">${actions}</div>`;
+}
+
+function renderShellPageActions(props: DashboardProps, page: DashboardPage) {
+  switch (page) {
+    case "today":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "wallet":
+      return html`
+        ${
+          props.walletResult
+            ? html`<span class="pill">${formatRelativeTimestamp(props.walletResult.generatedAtMs)}</span>`
+            : nothing
+        }
+        <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
+      `;
+    case "tasks":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "workshop":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "routines":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "teams":
+      return html`
+        ${props.teamsLoading ? html`<span class="pill">${dt("shell.refreshing")}</span>` : nothing}
+        <button class="btn btn--sm" @click=${props.onRefreshTeams}>${dt("teams.refresh")}</button>
+      `;
+    case "memories":
+      return html`
+        <button class="btn btn--sm" @click=${props.onRefresh}>${dt("memories.refreshActivity")}</button>
+      `;
+    default:
+      return nothing;
+  }
 }
 
 function formatDateTime(value: number | undefined): string {
@@ -1409,7 +1448,7 @@ function renderWalletPage(props: DashboardProps) {
       : cards.length === 0
         ? html`
           <section class="card dashboard-wallet-card">
-            <div class="card-title">${titleForTab("dashboardWallet")}</div>
+            <div class="card-title">${t("usage.empty.title")}</div>
             <div class="card-sub">${t("usage.empty.subtitle")}</div>
           </section>
         `
@@ -1451,21 +1490,6 @@ function renderWalletPage(props: DashboardProps) {
 
   return html`
     <section class="dashboard-page">
-      <section class="dashboard-hero card">
-        <div>
-          <div class="card-title">${titleForTab("dashboardWallet")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardWallet")}</div>
-        </div>
-        <div class="dashboard-hero__actions">
-          ${
-            props.walletResult
-              ? html`<span class="pill">${formatRelativeTimestamp(props.walletResult.generatedAtMs)}</span>`
-              : nothing
-          }
-          <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
-        </div>
-      </section>
-
       <section class="card dashboard-wallet-controls">
         <div class="dashboard-wallet-controls__presets">
           ${presets.map(
@@ -1536,29 +1560,6 @@ function renderTodayPage(props: DashboardProps) {
   const today = props.snapshot?.today;
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-hero card">
-        <div>
-          <div class="card-title">${titleForTab("dashboardToday")}</div>
-          <div class="card-sub">
-            ${
-              today
-                ? dt("today.summary", {
-                    active: String(today.inProgressTasks.length),
-                    scheduled: String(today.scheduledToday.length),
-                    blockers: String(today.blockers.length),
-                  })
-                : dt("today.loading")
-            }
-          </div>
-        </div>
-        <div class="dashboard-hero__actions">
-          <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
-          <button class="btn btn--sm" @click=${props.onBackToControl}>
-            ${dt("shell.goToAdvance")}
-          </button>
-        </div>
-      </div>
-
       <div class="dashboard-grid dashboard-grid--today">
         <section class="card">
           <div class="card-title">${dt("today.inProgressTitle")}</div>
@@ -1839,31 +1840,22 @@ function renderTasksPage(props: DashboardProps) {
     null;
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardTasks")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardTasks")}</div>
-        </div>
-        <div class="dashboard-page__actions">
-          ${
-            props.taskFilter
-              ? html`
-                <span class="pill">
-                  ${
-                    props.taskFilter.kind === "project"
-                      ? dt("tasks.projectFiltered")
-                      : dt("tasks.filtered")
-                  }
-                </span>
-                <button class="btn btn--sm" @click=${() => props.onFilterTasks(null)}>
-                  ${dt("tasks.clearFilter")}
-                </button>
-              `
-              : nothing
-          }
-          <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
-        </div>
-      </div>
+      ${
+        props.taskFilter
+          ? renderPageToolbar(html`
+              <span class="pill">
+                ${
+                  props.taskFilter.kind === "project"
+                    ? dt("tasks.projectFiltered")
+                    : dt("tasks.filtered")
+                }
+              </span>
+              <button class="btn btn--sm" @click=${() => props.onFilterTasks(null)}>
+                ${dt("tasks.clearFilter")}
+              </button>
+            `)
+          : nothing
+      }
       <div class="dashboard-task-strip">
         <div class="dashboard-task-strip__item">
           <span class="dashboard-task-strip__label">${dt("tasks.total")}</span>
@@ -2035,15 +2027,6 @@ function renderWorkshopPage(props: DashboardProps) {
   const artifactDetail = selected ? workshopArtifactDetail(selected) : null;
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardWorkshop")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardWorkshop")}</div>
-        </div>
-        <div class="dashboard-page__actions">
-          <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
-        </div>
-      </div>
       <div class="dashboard-workshop__toolbar card">
         <div class="dashboard-segmented" role="tablist" aria-label=${dt("workshop.tabsAriaLabel")}>
           <button
@@ -2331,16 +2314,18 @@ function renderCalendarPage(props: DashboardProps) {
     (_, index) => calendar.startAtMs + index * dayMs,
   );
   const eventsByDay = groupCalendarEventsByDay(calendar.events);
-  const selectedDayEvents = eventsByDay.get(selectedDay) ?? [];
   const hourSlots = Array.from({ length: 24 }, (_, hour) => hour);
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardCalendar")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardCalendar")}</div>
+      <div class="dashboard-calendar__header">
+        <div class="dashboard-calendar__summary">
+          <div class="dashboard-calendar__range">${formatCalendarRange(calendar, anchorAtMs)}</div>
+          <div class="dashboard-note__meta dashboard-calendar__meta">
+            <span>${dt("calendar.visibleItems", { count: String(calendar.events.length) })}</span>
+            <span>${dt("calendar.selectedDay", { day: formatLongDayLabel(selectedDay) })}</span>
+          </div>
         </div>
-        <div class="dashboard-page__actions">
+        <div class="dashboard-calendar__controls">
           <div class="dashboard-segmented">
             ${(Object.keys(CALENDAR_VIEW_LABELS) as Array<DashboardProps["calendarView"]>).map(
               (view) => html`
@@ -2361,18 +2346,6 @@ function renderCalendarPage(props: DashboardProps) {
           </div>
         </div>
       </div>
-      <div class="dashboard-calendar__toolbar card">
-        <div>
-          <div class="dashboard-calendar__range">${formatCalendarRange(calendar, anchorAtMs)}</div>
-          <div class="card-sub">
-            ${dt("calendar.toolbarSubtitle")}
-          </div>
-        </div>
-        <div class="dashboard-note__meta">
-          <span>${dt("calendar.visibleItems", { count: String(calendar.events.length) })}</span>
-          <span>${dt("calendar.selectedDay", { day: formatLongDayLabel(selectedDay) })}</span>
-        </div>
-      </div>
       ${
         calendar.view === "month"
           ? html`
@@ -2389,7 +2362,8 @@ function renderCalendarPage(props: DashboardProps) {
                   <div class="dashboard-calendar-month__grid">
                     ${visibleDays.map((day) => {
                       const dayEvents = eventsByDay.get(day) ?? [];
-                      const overflowCount = Math.max(0, dayEvents.length - 3);
+                      const visibleEventCount = 4;
+                      const overflowCount = Math.max(0, dayEvents.length - visibleEventCount);
                       return html`
                         <button
                           type="button"
@@ -2405,7 +2379,7 @@ function renderCalendarPage(props: DashboardProps) {
                             }
                           </div>
                           <div class="dashboard-calendar-month__items">
-                            ${dayEvents.slice(0, 3).map(
+                            ${dayEvents.slice(0, visibleEventCount).map(
                               (event) => html`
                                 <div class="dashboard-calendar-month__item">
                                   <span class="dashboard-calendar-month__item-time">${formatTimeLabel(event.startAtMs)}</span>
@@ -2424,39 +2398,6 @@ function renderCalendarPage(props: DashboardProps) {
                     })}
                   </div>
                 </div>
-                <aside class="dashboard-calendar-agenda card">
-                  <div class="card-title">${formatLongDayLabel(selectedDay)}</div>
-                  <div class="card-sub">
-                    ${
-                      selectedDayEvents.length === 0
-                        ? dt("calendar.nothingScheduled")
-                        : dt("calendar.scheduledCount", { count: String(selectedDayEvents.length) })
-                    }
-                  </div>
-                  <div class="dashboard-calendar-agenda__list">
-                    ${selectedDayEvents.map(
-                      (event) => html`
-                        <article class="dashboard-calendar__event dashboard-calendar__event--${event.status}">
-                          <div class="dashboard-calendar__event-title">${event.title}</div>
-                          <div class="dashboard-calendar__event-meta">
-                            <span>${formatTimeLabel(event.startAtMs)}</span>
-                            <span>${calendarKindLabel(event.kind)}</span>
-                          </div>
-                          ${
-                            event.description
-                              ? html`<div class="dashboard-note__body">${event.description}</div>`
-                              : nothing
-                          }
-                        </article>
-                      `,
-                    )}
-                    ${
-                      selectedDayEvents.length === 0
-                        ? html`<div class="dashboard-empty">${dt("calendar.pickDifferentDay")}</div>`
-                        : nothing
-                    }
-                  </div>
-                </aside>
               </div>
             `
           : html`
@@ -2520,13 +2461,6 @@ function renderRoutinesPage(props: DashboardProps) {
   const routines = props.snapshot?.routines ?? [];
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardRoutines")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardRoutines")}</div>
-        </div>
-        <button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>
-      </div>
       <div class="dashboard-list dashboard-list--cards">
         ${routines.map(
           (routine) => html`
@@ -2647,16 +2581,6 @@ function renderTeamsPage(props: DashboardProps) {
           : 0;
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardTeams")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardTeams")}</div>
-        </div>
-        <div class="dashboard-page__actions">
-          <button class="btn btn--sm" @click=${props.onRefreshTeams}>${dt("teams.refresh")}</button>
-          ${props.teamsLoading ? html`<span class="pill">${dt("shell.refreshing")}</span>` : nothing}
-        </div>
-      </div>
       ${props.teamsError ? html`<div class="callout danger">${props.teamsError}</div>` : nothing}
       <div class="dashboard-team-layout">
         <aside class="dashboard-team-list">
@@ -2941,15 +2865,6 @@ function renderMemoriesPage(props: DashboardProps) {
   const editableFiles = [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME];
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-page__header">
-        <div>
-          <div class="card-title">${titleForTab("dashboardMemories")}</div>
-          <div class="card-sub">${subtitleForTab("dashboardMemories")}</div>
-        </div>
-        <div class="dashboard-page__actions">
-          <button class="btn btn--sm" @click=${props.onRefresh}>${dt("memories.refreshActivity")}</button>
-        </div>
-      </div>
       <div class="dashboard-memory-layout">
         <section class="card">
           <div class="card-title">${dt("memories.agents")}</div>
@@ -3034,6 +2949,7 @@ function renderMemoriesPage(props: DashboardProps) {
 
 export function renderDashboard(props: DashboardProps) {
   const page = dashboardPageForTab(props.tab) ?? "today";
+  const shellPageActions = renderShellPageActions(props, page);
   return html`
     <div class="dashboard-shell">
       <header class="dashboard-shell__header">
@@ -3044,6 +2960,7 @@ export function renderDashboard(props: DashboardProps) {
         <div class="dashboard-shell__actions">
           ${props.error ? html`<span class="pill danger">${props.error}</span>` : nothing}
           ${props.loading ? html`<span class="pill">${dt("shell.refreshing")}</span>` : nothing}
+          ${shellPageActions}
           <button class="btn btn--sm" @click=${props.onBackToControl}>
             ${dt("shell.goToAdvance")}
           </button>

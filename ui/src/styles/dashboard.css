@@ -157,17 +157,8 @@
   flex-wrap: wrap;
 }
 
-.dashboard-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.dashboard-hero__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.dashboard-page__toolbar {
+  justify-content: flex-end;
 }
 
 .dashboard-wallet-controls {
@@ -788,17 +779,40 @@
   color: var(--text-strong);
 }
 
-.dashboard-calendar__toolbar {
+.dashboard-calendar__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-calendar__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .dashboard-calendar__range {
   font-size: clamp(22px, 3vw, 30px);
   font-weight: 720;
   color: var(--text-strong);
+  line-height: 1.1;
+}
+
+.dashboard-calendar__controls,
+.dashboard-calendar__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dashboard-calendar__meta {
+  color: var(--muted);
 }
 
 .dashboard-calendar__nav {
@@ -808,10 +822,7 @@
 }
 
 .dashboard-calendar-month-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.95fr);
-  gap: 18px;
-  align-items: start;
+  display: block;
 }
 
 .dashboard-calendar-month {
@@ -847,7 +858,7 @@
   align-content: start;
   gap: 10px;
   width: 100%;
-  min-height: 146px;
+  min-height: 178px;
   padding: 12px;
   border: 0;
   border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
@@ -933,8 +944,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .dashboard-calendar-month__more {
@@ -942,17 +953,6 @@
   font-size: 12px;
   font-weight: 650;
   color: var(--muted);
-}
-
-.dashboard-calendar-agenda {
-  display: grid;
-  gap: 14px;
-}
-
-.dashboard-calendar-agenda__list {
-  display: grid;
-  gap: 10px;
-  align-content: start;
 }
 
 .dashboard-timegrid-wrap {
@@ -1404,8 +1404,7 @@
 
   .dashboard-shell__header,
   .dashboard-page__header,
-  .dashboard-task-group__header,
-  .dashboard-hero {
+  .dashboard-task-group__header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1457,9 +1456,14 @@
     grid-auto-columns: minmax(84vw, 1fr);
   }
 
-  .dashboard-calendar__toolbar,
+  .dashboard-calendar__header,
   .dashboard-workshop__hero {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-calendar__controls {
+    justify-content: space-between;
   }
 
   .dashboard-timegrid {
@@ -1491,15 +1495,13 @@
 
   .dashboard-page__actions,
   .dashboard-workshop__actions,
-  .dashboard-task__actions,
-  .dashboard-hero__actions {
+  .dashboard-task__actions {
     width: 100%;
   }
 
   .dashboard-page__actions .btn,
   .dashboard-workshop__actions .btn,
-  .dashboard-task__actions .btn,
-  .dashboard-hero__actions .btn {
+  .dashboard-task__actions .btn {
     flex: 1 1 auto;
     justify-content: center;
   }
