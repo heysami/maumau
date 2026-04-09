@@ -345,6 +345,10 @@ export class MaumauApp extends LitElement {
   @state() dashboardWalletTimeZone: "local" | "utc" = "local";
   @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
   @state() dashboardCalendarAnchorAtMs: number | null = null;
+  @state() dashboardUserChannelsResult: import("./types.js").DashboardUserChannelsResult | null =
+    null;
+  @state() dashboardUserChannelId: string | null = null;
+  @state() dashboardUserChannelAccountId: string | null = null;
   @state() dashboardTeamsLoading = false;
   @state() dashboardTeamsError: string | null = null;
   @state() dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null = null;

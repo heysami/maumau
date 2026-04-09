@@ -273,11 +273,11 @@ describe("tryDispatchAcpReply", () => {
     ttsMocks.resolveTtsConfig.mockReturnValue({ mode: "final" });
     sessionMetaMocks.readAcpSessionEntry.mockReset();
     sessionMetaMocks.readAcpSessionEntry.mockReturnValue(null);
-  bindingServiceMocks.listBySession.mockReset();
-  bindingServiceMocks.listBySession.mockReturnValue([]);
-  previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockReset();
-  previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([]);
-});
+    bindingServiceMocks.listBySession.mockReset();
+    bindingServiceMocks.listBySession.mockReturnValue([]);
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockReset();
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([]);
+  });
 
   it("routes ACP block output to originating channel", async () => {
     setReadyAcpResolution();

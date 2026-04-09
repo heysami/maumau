@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MaumauConfig } from "../config/config.js";
 import {
-  isExecutionWorkerAgentId,
-  resolveExecutionRouteRequirement,
-  shouldOmitCodingAgentSkillForRun,
-  taskRequiresDesignAssetTeam,
-  taskRequiresSpecialistUiTeam,
-} from "./execution-routing.js";
-import {
   createDesignStudioTeamAgents,
   createDesignStudioTeamConfig,
   createMainOrchestrationTeamConfig,
@@ -15,6 +8,13 @@ import {
   createStarterTeamConfig,
   MAIN_WORKER_AGENT_ID,
 } from "../teams/presets.js";
+import {
+  isExecutionWorkerAgentId,
+  resolveExecutionRouteRequirement,
+  shouldOmitCodingAgentSkillForRun,
+  taskRequiresDesignAssetTeam,
+  taskRequiresSpecialistUiTeam,
+} from "./execution-routing.js";
 
 function createReadyVibeCoderConfig(): MaumauConfig {
   return {
@@ -106,8 +106,7 @@ describe("execution-routing", () => {
   it("keeps the root manager route generic so root OpenProse can choose the linked team", () => {
     const requirement = resolveExecutionRouteRequirement({
       cfg: createReadyVibeCoderConfig(),
-      task:
-        "Build a landing page with polished visuals and responsive UI, then collaborate with the design team for any asset subsets that need deeper exploration.",
+      task: "Build a landing page with polished visuals and responsive UI, then collaborate with the design team for any asset subsets that need deeper exploration.",
       agentId: "main",
       sessionKey: "main",
     });
@@ -193,8 +192,7 @@ Core deliverable:
   it("keeps workspace bootstrap and persona markdown edits off specialist-team routing", () => {
     const requirement = resolveExecutionRouteRequirement({
       cfg: createReadyVibeCoderConfig(),
-      task:
-        "In /Users/samiaji/.maumau/workspace, update the bootstrap/setup files based on this conversation. Update IDENTITY.md and USER.md, delete BOOTSTRAP.md if appropriate, create memory/2026-04-06.md and MEMORY.md if needed, and commit the changes in git.",
+      task: "In /Users/samiaji/.maumau/workspace, update the bootstrap/setup files based on this conversation. Update IDENTITY.md and USER.md, delete BOOTSTRAP.md if appropriate, create memory/2026-04-06.md and MEMORY.md if needed, and commit the changes in git.",
       agentId: "main",
     });
 
@@ -222,7 +220,11 @@ Core deliverable:
           executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
         },
         list: [
-          { id: "main", executionStyle: "orchestrator", executionWorkerAgentId: MAIN_WORKER_AGENT_ID },
+          {
+            id: "main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+          },
           { id: MAIN_WORKER_AGENT_ID, tools: { profile: "coding" } },
           ...createStarterTeamAgents().map((agent) =>
             agent.id.startsWith("vibe-coder")
@@ -253,9 +255,7 @@ Core deliverable:
   });
 
   it("recognizes configured execution workers", () => {
-    expect(
-      isExecutionWorkerAgentId(createReadyVibeCoderConfig(), MAIN_WORKER_AGENT_ID),
-    ).toBe(true);
+    expect(isExecutionWorkerAgentId(createReadyVibeCoderConfig(), MAIN_WORKER_AGENT_ID)).toBe(true);
     expect(isExecutionWorkerAgentId(createReadyVibeCoderConfig(), "helper")).toBe(false);
   });
 

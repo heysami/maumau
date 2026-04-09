@@ -51,13 +51,15 @@ export const id: TranslationMap = {
     mauOffice: "Kantor piksel langsung dengan aktivitas.",
     teams: "Tim yang dipimpin manajer dan alur kerja yang dihasilkan.",
     dashboardToday: "Apa yang aktif, terjadwal, terblokir, dan baru diingat hari ini.",
-    dashboardWallet: "Total penggunaan berbatas waktu untuk biaya, durasi panggilan, audio, dan karakter.",
+    dashboardWallet:
+      "Total penggunaan berbatas waktu untuk biaya, durasi panggilan, audio, dan karakter.",
     dashboardMauOffice: "Aktivitas kantor piksel langsung.",
     dashboardTasks: "Kanban langsung yang berasal dari sesi dan run delegasi.",
     dashboardWorkshop: "Preview interaktif yang terhubung kembali ke tugas yang membuatnya.",
     dashboardCalendar: "Tampilan bulan, minggu, dan hari untuk rutinitas, cron, dan aktivitas.",
     dashboardRoutines: "Rutinitas yang menghadap pengguna dari otomatisasi dan cron yang ada.",
-    dashboardTeams: "Bagan organisasi dan alur delegasi yang dihasilkan dari konfigurasi tim tersimpan.",
+    dashboardTeams:
+      "Bagan organisasi dan alur delegasi yang dihasilkan dari konfigurasi tim tersimpan.",
     dashboardMemories: "Memori, file, dan cakupan runtime untuk agen yang dipilih.",
     chat: "Chat gateway untuk intervensi cepat.",
     config: "Edit maumau.json.",
@@ -167,7 +169,8 @@ export const id: TranslationMap = {
       prev: "Sebelumnya",
       today: "Hari ini",
       next: "Berikutnya",
-      toolbarSubtitle: "Pengingat, rutinitas, dan persetujuan yang menghadap pengguna untuk rentang yang dipilih.",
+      toolbarSubtitle:
+        "Pengingat, rutinitas, dan persetujuan yang menghadap pengguna untuk rentang yang dipilih.",
       visibleItems: "{count} item terlihat",
       selectedDay: "{day}",
       moreItems: "+{count} lagi",
@@ -352,7 +355,8 @@ export const id: TranslationMap = {
       telephonyProviderHint:
         "Pilih provider panggilan telepon bawaan yang harus disiapkan preset ini.",
       sttProvider: "Speech-to-text realtime",
-      sttProviderHint: "Pilih engine speech-to-text yang harus disiapkan Maumau untuk panggilan telepon.",
+      sttProviderHint:
+        "Pilih engine speech-to-text yang harus disiapkan Maumau untuk panggilan telepon.",
       sttProviderDeepgram: "Deepgram Nova-3",
       sttProviderOpenAI: "OpenAI Realtime",
       language: "Bahasa otomatisasi",

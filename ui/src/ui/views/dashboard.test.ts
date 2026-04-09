@@ -213,6 +213,9 @@ function buildProps(
     walletTimeZone: "local",
     calendarResult: null,
     calendarAnchorAtMs: null,
+    userChannelsResult: null,
+    userChannelId: null,
+    userChannelAccountId: null,
     teamsLoading: false,
     teamsError: null,
     teamSnapshots: buildTeamSnapshots(),
@@ -247,6 +250,9 @@ function buildProps(
     toolsCatalogLoading: false,
     toolsCatalogError: null,
     toolsCatalogResult: null,
+    whatsappMessage: null,
+    whatsappQrDataUrl: null,
+    whatsappBusy: false,
     mauOfficeLoading: false,
     mauOfficeError: null,
     mauOfficeState: createEmptyMauOfficeState(),
@@ -284,6 +290,13 @@ function buildProps(
     onCalendarNavigate: vi.fn(),
     onCalendarJumpToday: vi.fn(),
     onCalendarSelectDay: vi.fn(),
+    onSelectUserChannel: vi.fn(),
+    onSelectUserChannelAccount: vi.fn(),
+    onOpenUserManagement: vi.fn(),
+    onConnectUserChannel: vi.fn(),
+    onSaveUserChannelAllowlist: vi.fn(),
+    onSaveUserChannelChats: vi.fn(),
+    onStartWhatsApp: vi.fn(),
     onSelectTeam: vi.fn(),
     onPromptTeamEdit: vi.fn(),
     onSelectMemoryAgent: vi.fn(),
@@ -882,7 +895,9 @@ describe("dashboard view", () => {
     );
     await Promise.resolve();
 
-    const buttons = container.querySelectorAll<HTMLButtonElement>(".dashboard-blocker-card__actions button");
+    const buttons = container.querySelectorAll<HTMLButtonElement>(
+      ".dashboard-blocker-card__actions button",
+    );
     expect(buttons).toHaveLength(2);
 
     buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
@@ -907,5 +922,134 @@ describe("dashboard view", () => {
     await Promise.resolve();
 
     expect(container.textContent).not.toContain("Recommended next step");
+  });
+
+  it("shows onboarding quick setup channels and keeps advanced channels out of this picker", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardUserChannels",
+          snapshot: null,
+          userChannelsResult: {
+            generatedAtMs: 1,
+            channels: [],
+            availableChannels: [
+              {
+                channelId: "whatsapp",
+                label: "WhatsApp",
+                detailLabel: "WhatsApp Web",
+                fields: [],
+                guidance: {
+                  identity: "A WhatsApp number or linked device becomes the agent identity.",
+                  requirements: ["A phone number or WhatsApp account that will belong to the agent."],
+                  setupSteps: ["Back in Maumau, press Link WhatsApp to show the QR code."],
+                  artifacts: ["You do not paste a token for WhatsApp."],
+                },
+                quickSetup: {
+                  kind: "whatsapp",
+                  sectionTitle: "Bot identity",
+                  title: "WhatsApp Agent",
+                  headline: "No number linked yet",
+                  message: "Link the WhatsApp number or linked device the bot will use.",
+                  badge: "Not linked",
+                  setupNote: "Advanced access or routing changes stay in full Settings → Channels.",
+                },
+              },
+              {
+                channelId: "discord",
+                label: "Discord",
+                detailLabel: "Discord Bot",
+                fields: [
+                  {
+                    key: "token",
+                    label: "Discord bot token",
+                    placeholder: "Paste the Discord bot token",
+                    required: true,
+                    secret: true,
+                  },
+                ],
+                guidance: {
+                  identity: "A Discord bot application becomes the agent identity.",
+                  requirements: ["A Discord account."],
+                  setupSteps: ["Go to discord.com/developers/applications and click New Application."],
+                  artifacts: ["What you paste here: the Discord bot token."],
+                },
+                quickSetup: {
+                  kind: "single-secret",
+                  sectionTitle: "Bot identity",
+                  title: "Discord Agent",
+                  headline: "No bot token saved yet",
+                  message: "Paste the Discord bot token from the Developer Portal.",
+                  badge: "Needs token",
+                  buttonTitle: "Save Discord bot",
+                  setupNote:
+                    "Onboarding opens Discord DMs so people can message the bot immediately after you invite or install it.",
+                },
+              },
+            ],
+          },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Quick setup channels");
+    expect(container.textContent).toContain("Discord");
+    expect(container.textContent).toContain("WhatsApp");
+    expect(container.textContent).toContain("More channels and advanced channel settings live in Settings");
+    expect(container.textContent).toContain("Not linked");
+    expect(container.textContent).toContain("Not configured");
+    expect(container.textContent).not.toContain("Signal");
+  });
+
+  it("shows the onboarding waiting-for-scan whatsapp state when a QR is active", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardUserChannels",
+          snapshot: null,
+          whatsappQrDataUrl: "data:image/png;base64,ZmFrZQ==",
+          userChannelsResult: {
+            generatedAtMs: 1,
+            channels: [],
+            availableChannels: [
+              {
+                channelId: "whatsapp",
+                label: "WhatsApp",
+                detailLabel: "WhatsApp Web",
+                fields: [],
+                guidance: {
+                  identity: "A WhatsApp number or linked device becomes the agent identity.",
+                  requirements: ["A phone number or WhatsApp account that will belong to the agent."],
+                  setupSteps: ["Back in Maumau, press Link WhatsApp to show the QR code."],
+                  artifacts: ["You do not paste a token for WhatsApp."],
+                },
+                quickSetup: {
+                  kind: "whatsapp",
+                  sectionTitle: "Bot identity",
+                  title: "WhatsApp Agent",
+                  headline: "No number linked yet",
+                  message: "Link the WhatsApp number or linked device the bot will use.",
+                  badge: "Not linked",
+                  setupNote: "Advanced access or routing changes stay in full Settings → Channels.",
+                },
+              },
+            ],
+          },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Waiting for scan");
+    expect(container.textContent).toContain(
+      "Scan the QR with the WhatsApp number or linked device the bot will use.",
+    );
   });
 });

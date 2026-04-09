@@ -1,11 +1,11 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
+import { resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import {
   completeWithPreparedSimpleCompletionModel,
   prepareSimpleCompletionModelForAgent,
 } from "../../agents/simple-completion-runtime.js";
-import { resolveDefaultAgentId } from "../../agents/agent-scope.js";
-import { parseConfigJson5, type MaumauConfig } from "../../config/config.js";
 import { listAgentEntries } from "../../commands/agents.config.js";
+import { parseConfigJson5, type MaumauConfig } from "../../config/config.js";
 import {
   findTeamConfig,
   findTeamWorkflow,
@@ -123,11 +123,7 @@ function parseDraftConfigOrThrow(rawConfig: string): MaumauConfig {
   return parsed.parsed as MaumauConfig;
 }
 
-function buildPromptContext(params: {
-  cfg: MaumauConfig;
-  teamId: string;
-  workflowId?: string;
-}) {
+function buildPromptContext(params: { cfg: MaumauConfig; teamId: string; workflowId?: string }) {
   const team = findTeamConfig(params.cfg, params.teamId);
   if (!team) {
     throw new Error(`team "${params.teamId}" not found in the current draft config`);
@@ -241,8 +237,12 @@ function buildUserPrompt(params: {
           description: "optional or null",
           managerAgentId: "optional or null",
           implicitForManagerSessions: true,
-          members: [{ agentId: "existing-agent-id", role: "role", description: "optional or null" }],
-          crossTeamLinks: [{ type: "team", targetId: "existing-team-id", description: "optional or null" }],
+          members: [
+            { agentId: "existing-agent-id", role: "role", description: "optional or null" },
+          ],
+          crossTeamLinks: [
+            { type: "team", targetId: "existing-team-id", description: "optional or null" },
+          ],
         },
         workflowPatch: {
           name: "optional or null",
@@ -367,10 +367,7 @@ export const teamsHandlers: GatewayRequestHandlers = {
       respond(
         false,
         undefined,
-        errorShape(
-          ErrorCodes.UNAVAILABLE,
-          error instanceof Error ? error.message : String(error),
-        ),
+        errorShape(ErrorCodes.UNAVAILABLE, error instanceof Error ? error.message : String(error)),
       );
     }
   },

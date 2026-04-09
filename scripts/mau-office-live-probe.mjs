@@ -21,9 +21,7 @@ async function main() {
   const dashboardUrl =
     process.argv[2] || process.env.MAU_OFFICE_DASHBOARD_URL || process.env.DASHBOARD_URL;
   if (!dashboardUrl) {
-    throw new Error(
-      "Provide a tokenized dashboard URL as argv[2] or MAU_OFFICE_DASHBOARD_URL.",
-    );
+    throw new Error("Provide a tokenized dashboard URL as argv[2] or MAU_OFFICE_DASHBOARD_URL.");
   }
 
   await mkdir(tmpRoot, { recursive: true });

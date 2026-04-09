@@ -167,9 +167,8 @@ describe("gateway restart deferral", () => {
     const registryModule = await import("../auto-reply/reply/dispatcher-registry.js");
 
     vi.resetModules();
-    const { createReplyDispatcher: createReplyDispatcherFromFreshModule } = await import(
-      "../auto-reply/reply/reply-dispatcher.js"
-    );
+    const { createReplyDispatcher: createReplyDispatcherFromFreshModule } =
+      await import("../auto-reply/reply/reply-dispatcher.js");
 
     const allowDelivery = createDeferred();
     const dispatcher = createReplyDispatcherFromFreshModule({

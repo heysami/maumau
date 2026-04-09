@@ -61,10 +61,12 @@ export const de: TranslationMap = {
     dashboardWallet: "Zeitgebundene Provider-Nutzung fur Kosten, Anrufzeit, Audio und Zeichen.",
     dashboardMauOffice: "Live-Aktivität im Pixelbüro.",
     dashboardTasks: "Live-Kanban aus Sitzungen und delegierten Läufen.",
-    dashboardWorkshop: "Interaktive Vorschauen, die auf die Aufgaben zurückverweisen, die sie erzeugt haben.",
+    dashboardWorkshop:
+      "Interaktive Vorschauen, die auf die Aufgaben zurückverweisen, die sie erzeugt haben.",
     dashboardCalendar: "Monats-, Wochen- und Tagesansichten für Routinen, Cron und Aktivität.",
     dashboardRoutines: "Nutzerorientierte Routinen aus vorhandener Automatisierung und Cron-Jobs.",
-    dashboardTeams: "Generierte Organigramme und Delegationsfluss aus gespeicherter Teamkonfiguration.",
+    dashboardTeams:
+      "Generierte Organigramme und Delegationsfluss aus gespeicherter Teamkonfiguration.",
     dashboardMemories: "Ausgewählter Agent, Memory-Dateien und Laufzeitbereich.",
     usage: "API-Nutzung und Kosten überwachen.",
     cron: "Aufweckzeiten und wiederkehrende Agent-Läufe planen.",
@@ -152,7 +154,8 @@ export const de: TranslationMap = {
     },
     workshop: {
       gatewayPreview: "Gateway-Vorschau",
-      defaultSummary: "Interaktives Vorschauartefakt, das mit dieser Workspace-Aufgabe verknüpft ist.",
+      defaultSummary:
+        "Interaktives Vorschauartefakt, das mit dieser Workspace-Aufgabe verknüpft ist.",
       empty: "Noch keine interaktiven Ausgaben.",
       filterTasks: "Aufgaben filtern",
       openTasks: "Aufgaben öffnen",
@@ -178,7 +181,8 @@ export const de: TranslationMap = {
       prev: "Zurück",
       today: "Heute",
       next: "Weiter",
-      toolbarSubtitle: "Nutzerorientierte Erinnerungen, Routinen und Freigaben im gewählten Zeitraum.",
+      toolbarSubtitle:
+        "Nutzerorientierte Erinnerungen, Routinen und Freigaben im gewählten Zeitraum.",
       visibleItems: "{count} sichtbare Elemente",
       selectedDay: "{day}",
       moreItems: "+{count} mehr",
@@ -205,8 +209,7 @@ export const de: TranslationMap = {
       liveRuns: "Aktive Team-Läufe",
       liveRunsSubtitle:
         "Detaillierter Lifecycle-Fortschritt, Blocker und delegierte Rollenarbeit für diesen Workflow.",
-      liveRunsEmpty:
-        "Für diesen Workflow gibt es noch keine aktiven oder aufbewahrten Team-Läufe.",
+      liveRunsEmpty: "Für diesen Workflow gibt es noch keine aktiven oder aufbewahrten Team-Läufe.",
       generatedSummary: "LLM-Zusammenfassung",
       fallbackSummary: "Deterministischer Fallback",
       noManager: "Kein Manager",

@@ -150,15 +150,15 @@ describe("teams tools", () => {
       return {};
     });
     hoisted.countPendingDescendantRunsMock.mockReset().mockReturnValue(0);
-    hoisted.getLatestSubagentRunByChildSessionKeyMock.mockReset().mockImplementation(
-      (sessionKey: string) => ({
+    hoisted.getLatestSubagentRunByChildSessionKeyMock
+      .mockReset()
+      .mockImplementation((sessionKey: string) => ({
         runId: "run-team-1",
         childSessionKey: sessionKey,
         createdAt: 1,
         endedAt: 2,
         cleanupCompletedAt: 3,
-      }),
-    );
+      }));
     hoisted.handoffSubagentCompletionToRequesterMock.mockReset().mockReturnValue(true);
     hoisted.listDescendantRunsForRequesterMock.mockReset().mockReturnValue([]);
     hoisted.resolveSessionTeamContextMock.mockReset().mockReturnValue(undefined);
@@ -748,8 +748,8 @@ describe("teams tools", () => {
       wakeOnDescendantSettle: false,
     }));
     hoisted.countPendingDescendantRunsMock.mockReturnValue(1);
-    hoisted.handoffSubagentCompletionToRequesterMock.mockImplementation((runId: string) =>
-      runId === "run-team-2:wake",
+    hoisted.handoffSubagentCompletionToRequesterMock.mockImplementation(
+      (runId: string) => runId === "run-team-2:wake",
     );
 
     const tool = createTeamsRunTool({
@@ -784,8 +784,6 @@ describe("teams tools", () => {
       1,
       "run-team-2:wake",
     );
-    expect(hoisted.handoffSubagentCompletionToRequesterMock).not.toHaveBeenCalledWith(
-      "run-team-1",
-    );
+    expect(hoisted.handoffSubagentCompletionToRequesterMock).not.toHaveBeenCalledWith("run-team-1");
   });
 });

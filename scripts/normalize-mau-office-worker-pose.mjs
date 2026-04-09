@@ -22,7 +22,12 @@ function parseArgs(argv) {
     targetRig: args.get("target-rig"),
     targetPose: args.get("target-pose"),
     frameCount: args.get("frame-count") ? Number.parseInt(args.get("frame-count"), 10) : undefined,
-    directions: args.get("directions")?.split(",").map((part) => part.trim()).filter(Boolean) ?? DEFAULT_DIRECTIONS,
+    directions:
+      args
+        .get("directions")
+        ?.split(",")
+        .map((part) => part.trim())
+        .filter(Boolean) ?? DEFAULT_DIRECTIONS,
   };
 }
 
@@ -44,7 +49,10 @@ function resolveFrameIndices(sourceFrameCount, targetFrameCount) {
 }
 
 async function opaqueBounds(file) {
-  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(file)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
   let minX = info.width;
   let minY = info.height;
   let maxX = -1;

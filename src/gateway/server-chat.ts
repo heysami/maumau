@@ -709,7 +709,12 @@ export function createAgentEventHandler({
             delete data.result;
             delete data.partialResult;
             return sessionKey
-              ? { ...eventForClients, sessionKey, data, ...(isHeartbeat ? { isHeartbeat: true } : {}) }
+              ? {
+                  ...eventForClients,
+                  sessionKey,
+                  data,
+                  ...(isHeartbeat ? { isHeartbeat: true } : {}),
+                }
               : { ...eventForClients, data, ...(isHeartbeat ? { isHeartbeat: true } : {}) };
           })()
         : agentPayload;

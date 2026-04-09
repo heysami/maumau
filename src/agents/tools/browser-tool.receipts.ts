@@ -165,14 +165,18 @@ function parseAmountValue(amount: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function categorizeReceipt(item: Pick<GmailReceiptDigestItem, "merchant" | "subject" | "snippet">): string {
+function categorizeReceipt(
+  item: Pick<GmailReceiptDigestItem, "merchant" | "subject" | "snippet">,
+): string {
   const haystack = [item.merchant, item.subject, item.snippet]
     .map((entry) => entry?.toLowerCase() ?? "")
     .join(" ");
   if (/(uber|grab|lyft|delta|united|airbnb|booking|hotel)/.test(haystack)) {
     return "travel";
   }
-  if (/(netflix|spotify|apple|google one|dropbox|notion|slack|figma|openai|anthropic)/.test(haystack)) {
+  if (
+    /(netflix|spotify|apple|google one|dropbox|notion|slack|figma|openai|anthropic)/.test(haystack)
+  ) {
     return "software";
   }
   if (/(electric|water|internet|phone|utility|bill pay)/.test(haystack)) {
@@ -204,7 +208,9 @@ function normalizeDigestItems(rawItems: unknown, limit: number): GmailReceiptDig
     const subject = trimToUndefined((entry as { subject?: unknown }).subject);
     const snippet = trimToUndefined((entry as { snippet?: unknown }).snippet);
     const dateText = trimToUndefined((entry as { dateText?: unknown }).dateText);
-    const currency = trimToUndefined((entry as { currency?: unknown }).currency) ?? normalizeCurrencySymbol(amount);
+    const currency =
+      trimToUndefined((entry as { currency?: unknown }).currency) ??
+      normalizeCurrencySymbol(amount);
     const amountValue =
       typeof (entry as { amountValue?: unknown }).amountValue === "number"
         ? ((entry as { amountValue?: number }).amountValue ?? undefined)
@@ -331,9 +337,9 @@ async function openSearchTarget(params: {
   profile: string;
   searchUrl: string;
 }): Promise<string> {
-  const tabs = await params.deps.browserTabs(params.baseUrl, { profile: params.profile }).catch(
-    () => [],
-  );
+  const tabs = await params.deps
+    .browserTabs(params.baseUrl, { profile: params.profile })
+    .catch(() => []);
   const gmailTab = tabs.find((tab) => tab.url.includes("mail.google.com"));
   if (gmailTab?.targetId) {
     await params.deps.browserNavigate(params.baseUrl, {
@@ -487,11 +493,7 @@ export async function runGmailReceiptDigest(params: {
   lookbackDays?: number;
   limit?: number;
 }): Promise<GmailReceiptDigestResult> {
-  const lookbackDays = normalizePositiveInteger(
-    params.lookbackDays,
-    DEFAULT_LOOKBACK_DAYS,
-    365,
-  );
+  const lookbackDays = normalizePositiveInteger(params.lookbackDays, DEFAULT_LOOKBACK_DAYS, 365);
   const limit = normalizePositiveInteger(params.limit, DEFAULT_RESULT_LIMIT, MAX_RESULT_LIMIT);
   const searchQuery = buildSearchQuery(params.query, lookbackDays);
   const searchUrl = buildSearchUrl(searchQuery);
@@ -514,10 +516,7 @@ export async function runGmailReceiptDigest(params: {
   let usedFallback = false;
   let fallbackReason: string | undefined;
 
-  if (
-    primaryLane.capabilityId === "browser-existing-session" &&
-    shouldAttemptClawdFallback(page)
-  ) {
+  if (primaryLane.capabilityId === "browser-existing-session" && shouldAttemptClawdFallback(page)) {
     const clawdLane = resolveClawdFallbackLane({
       capabilities,
       cfg: params.cfg,

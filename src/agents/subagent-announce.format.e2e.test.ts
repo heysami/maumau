@@ -504,7 +504,9 @@ Relevant detail:
     expect(event?.followupDetails).toContain("Worker/Team used:");
     expect(event?.followupDetails).toContain("Git:");
     expect(event?.followupDetails).toContain("Relevant detail:");
-    expect(event?.replyInstruction).toContain("Do not include Git details or execution receipt details");
+    expect(event?.replyInstruction).toContain(
+      "Do not include Git details or execution receipt details",
+    );
     expect(call?.params?.message).toContain("<<<BEGIN_INTERNAL_FOLLOWUP_DETAILS>>>");
   });
 
@@ -553,7 +555,9 @@ Git:
     expect(event?.followupDetails).toContain("Execution receipt:");
     expect(event?.followupDetails).toContain("Worker/Team used:");
     expect(event?.followupDetails).toContain("Git:");
-    expect(event?.replyInstruction).toContain("Do not include Git details or execution receipt details");
+    expect(event?.replyInstruction).toContain(
+      "Do not include Git details or execution receipt details",
+    );
   });
 
   it("uses child-run announce identity for direct idempotency", async () => {

@@ -684,31 +684,21 @@ describe("buildAuthChoiceOptions", () => {
       embedded: true,
     });
 
-    expect(groups.find((group) => group.value === "openai")?.options.map((option) => option.value)).toEqual([
-      "openai-codex",
-      "openai-api-key",
-    ]);
-    expect(groups.find((group) => group.value === "anthropic")?.options.map((option) => option.value)).toEqual([
-      "apiKey",
-      "token",
-    ]);
-    expect(groups.find((group) => group.value === "google")?.options.map((option) => option.value)).toEqual([
-      "gemini-api-key",
-      "google-gemini-cli",
-    ]);
-    expect(groups.find((group) => group.value === "minimax")?.options.map((option) => option.value)).toEqual([
-      "minimax-global-api",
-      "minimax-global-oauth",
-      "minimax-cn-api",
-      "minimax-cn-oauth",
-    ]);
-    expect(groups.find((group) => group.value === "zai")?.options.map((option) => option.value)).toEqual([
-      "zai-api-key",
-      "zai-global",
-      "zai-coding-global",
-      "zai-cn",
-      "zai-coding-cn",
-    ]);
+    expect(
+      groups.find((group) => group.value === "openai")?.options.map((option) => option.value),
+    ).toEqual(["openai-codex", "openai-api-key"]);
+    expect(
+      groups.find((group) => group.value === "anthropic")?.options.map((option) => option.value),
+    ).toEqual(["apiKey", "token"]);
+    expect(
+      groups.find((group) => group.value === "google")?.options.map((option) => option.value),
+    ).toEqual(["gemini-api-key", "google-gemini-cli"]);
+    expect(
+      groups.find((group) => group.value === "minimax")?.options.map((option) => option.value),
+    ).toEqual(["minimax-global-api", "minimax-global-oauth", "minimax-cn-api", "minimax-cn-oauth"]);
+    expect(
+      groups.find((group) => group.value === "zai")?.options.map((option) => option.value),
+    ).toEqual(["zai-api-key", "zai-global", "zai-coding-global", "zai-cn", "zai-coding-cn"]);
     expect(groups.find((group) => group.value === "openai")?.options[0]?.hint).toContain(
       "Best for:",
     );

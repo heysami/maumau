@@ -88,8 +88,8 @@ import {
   resolveDefaultModelForAgent,
   resolveThinkingDefault,
 } from "./model-selection.js";
-import { rewriteTranscriptEntriesInSessionFile } from "./pi-embedded-runner/transcript-rewrite.js";
 import { prepareSessionManagerForRun } from "./pi-embedded-runner/session-manager-init.js";
+import { rewriteTranscriptEntriesInSessionFile } from "./pi-embedded-runner/transcript-rewrite.js";
 import { runEmbeddedPiAgent } from "./pi-embedded.js";
 import { buildWorkspaceSkillSnapshot } from "./skills.js";
 import { getSkillsSnapshotVersion } from "./skills/refresh.js";

@@ -58,11 +58,13 @@ function buildManagerPrompt(team: TeamConfig, workflow: TeamWorkflowConfig): str
       "Emit lifecycle updates as standalone `WORK_ITEM:` JSON lines when the team run starts, when you enter a stage, when you complete a stage, if the run becomes blocked, and when the run is done.",
     );
     lines.push(
-      "Each lifecycle `WORK_ITEM:` line should include `teamRun.kind=\"team_run\"`, `teamId`, `workflowId`, the current stage id/name, completed stage ids, and the coarse lifecycle status.",
+      'Each lifecycle `WORK_ITEM:` line should include `teamRun.kind="team_run"`, `teamId`, `workflowId`, the current stage id/name, completed stage ids, and the coarse lifecycle status.',
     );
   }
   if (workflow.contract?.requireDelegation === true) {
-    lines.push("Workflow contract: delegation is required. Do not complete the task without specialist participation.");
+    lines.push(
+      "Workflow contract: delegation is required. Do not complete the task without specialist participation.",
+    );
   }
   const requiredRoles = workflow.contract?.requiredRoles?.filter(Boolean) ?? [];
   if (requiredRoles.length > 0) {
@@ -72,7 +74,9 @@ function buildManagerPrompt(team: TeamConfig, workflow: TeamWorkflowConfig): str
   if (requiredQaRoles.length > 0) {
     lines.push(`Required QA approval roles: ${requiredQaRoles.join(", ")}.`);
   }
-  lines.push("The generated OpenProse workflow is the execution contract, not an illustrative outline.");
+  lines.push(
+    "The generated OpenProse workflow is the execution contract, not an illustrative outline.",
+  );
   lines.push(
     "Manager-authored reasoning, self-review, or commentary does not satisfy required specialist or QA participation.",
   );
@@ -175,9 +179,7 @@ function buildSpecialistPrompt(params: {
     lines.push(
       "For built webpages, apps, screens, and other user-facing UI deliverables, block approval if the result lacks both a prominent illustration/image/hero visual and meaningful icon use in key places.",
     );
-    lines.push(
-      "Do not approve plain text-heavy layouts that omit both of those visual anchors.",
-    );
+    lines.push("Do not approve plain text-heavy layouts that omit both of those visual anchors.");
     lines.push(
       "If the deliverable includes or calls for an illustration, block approval when it is treated as a vector stand-in. Illustration work must stay in the image lane; vector is only acceptable for icons or simple code-native motion graphics.",
     );
@@ -244,7 +246,10 @@ function buildVibeCoderStarterFlow(params: {
   const architect = findSpecialistBindingByRole(specialistBindings, "system architect");
   const developer = findSpecialistBindingByRole(specialistBindings, "developer");
   const uiUxDesigner = findSpecialistBindingByRole(specialistBindings, "ui ux designer");
-  const contentVisualDesigner = findSpecialistBindingByRole(specialistBindings, "content visual designer");
+  const contentVisualDesigner = findSpecialistBindingByRole(
+    specialistBindings,
+    "content visual designer",
+  );
   const technicalQa = findSpecialistBindingByRole(specialistBindings, "technical qa");
   const visualUxQa = findSpecialistBindingByRole(specialistBindings, "visual ux qa");
   const linkedTeamChoices = buildLinkedTeamChoicesDescription(team);
@@ -278,7 +283,7 @@ function buildVibeCoderStarterFlow(params: {
       context: ["task", "plan"],
     }),
     "",
-    'loop until **the architecture is approved for execution** (max: 3):',
+    "loop until **the architecture is approved for execution** (max: 3):",
     ...indent(
       buildAgentRunLines({
         variableName: "architecture_review",
@@ -291,7 +296,7 @@ function buildVibeCoderStarterFlow(params: {
       }),
       "  ",
     ),
-    '  if **the architecture still needs revision before execution can begin**:',
+    "  if **the architecture still needs revision before execution can begin**:",
     ...indent(
       buildAgentRunLines({
         variableName: "architecture",
@@ -304,7 +309,7 @@ function buildVibeCoderStarterFlow(params: {
       "    ",
     ),
     "",
-    'if **the architecture is still not approved for execution**:',
+    "if **the architecture is still not approved for execution**:",
     "  output result = session: manager",
     '    prompt: "The task is blocked in architecture review. Summarize the current stage status, unresolved blockers, and the next actions required before execution can start."',
     "    context: { task, plan, architecture, architecture_review }",
@@ -371,7 +376,7 @@ function buildVibeCoderStarterFlow(params: {
     ...(hasLinkedDesignTeam
       ? [
           "",
-          'if **the content or visual brief requires a linked design-team run before QA can begin**:',
+          "if **the content or visual brief requires a linked design-team run before QA can begin**:",
           "  let design_team_stage = resume: manager",
           `    prompt: "Decide whether one or more linked design-team runs are needed from: ${linkedTeamChoices}. Be literal about ownership. If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, vibe-coder remains the implementation owner even when the request also mentions images, illustration, visual systems, placeholder assets, moodboards, art direction, or design-studio by name. Use the linked design team only for explicit asset subsets that come from the placeholder asset register. Explain why the current execution lane is insufficient for those asset subsets, preserve the content/visual designer's placeholder asset register as the source of truth, and prepare an asset-only delegation brief that lists each placeholder asset id or name, exact placement or UI location, what the asset should depict or communicate, nearby context, and any known size, aspect, composition, or usage constraints. Use teams_run with the chosen linked team instead of sessions_spawn. The linked design team should return approved assets, visual directions, and QA notes mapped back to those placeholder asset ids; page/app implementation stays in vibe-coder."`,
           `    context: { task, plan, architecture, execution_stage, ${[
@@ -386,7 +391,7 @@ function buildVibeCoderStarterFlow(params: {
         ]
       : []),
     "# Step 5: QA verifies completed work and sends failures back for rework",
-    'loop until **technical QA and visual UX QA both approve the completed work** (max: 3):',
+    "loop until **technical QA and visual UX QA both approve the completed work** (max: 3):",
     ...indent(
       buildAgentRunLines({
         variableName: "qa_stage",
@@ -449,7 +454,7 @@ function buildVibeCoderStarterFlow(params: {
       }),
       "    ",
     ),
-    '  if **either QA review has blocking issues or requests changes before the task can close**:',
+    "  if **either QA review has blocking issues or requests changes before the task can close**:",
     ...indent(
       buildAgentRunLines({
         variableName: "rework_stage",
@@ -542,7 +547,7 @@ function buildVibeCoderStarterFlow(params: {
       ? [
           ...indent(
             [
-              '      if **the QA blockers require additional linked design-team work before the next QA pass**:',
+              "      if **the QA blockers require additional linked design-team work before the next QA pass**:",
               "        let design_rework_stage = resume: manager",
               `          prompt: "Decide whether one or more linked design-team runs are needed from: ${linkedTeamChoices}. Be literal about ownership: implementation still stays in vibe-coder, and the linked design team should return only updated assets or design guidance for placeholder asset subsets, not page/app implementation. Summarize the QA blockers that require asset-only linked design work, keep the existing placeholder asset register as the source of truth, and call out which placeholder asset ids, placements, or intended depictions need revision. Use teams_run with the chosen linked team instead of sessions_spawn."`,
               `          context: { task, plan, architecture, execution_stage, rework_stage, design_team_result, ${[
@@ -561,7 +566,7 @@ function buildVibeCoderStarterFlow(params: {
         ]
       : []),
     "",
-    'if **technical QA or visual UX QA still has blocking issues after the rework loop**:',
+    "if **technical QA or visual UX QA still has blocking issues after the rework loop**:",
     "  output result = session: manager",
     '    prompt: "The task remains blocked in QA. Summarize the current stage status, unresolved blockers, and the work that must happen before the task can be marked done."',
     `    context: { task, plan, architecture, execution_stage, qa_stage, design_team_result, ${[
@@ -629,7 +634,7 @@ function buildDesignStudioFlow(
     '  prompt: "Decide whether the task is asset-only design work. This team does not implement webpages, apps, screens, or product code. If the task primarily asks for a built page/app/UI or other implementation deliverable, block clearly and say implementation should stay in vibe-coder while design-studio only returns asset deliverables, approved assets, and design guidance."',
     "  context: { task }",
     "",
-    'if **the task primarily requires page, app, screen, or product implementation instead of asset-only design work**:',
+    "if **the task primarily requires page, app, screen, or product implementation instead of asset-only design work**:",
     "  output result = session: manager",
     '    prompt: "The request is blocked for this team because it requires implementation instead of asset-only design work. Explain that design-studio only returns assets and design guidance, name the missing implementation lane, and summarize any asset brief that could still be delegated here later."',
     "    context: { task, scope_check }",
@@ -671,7 +676,7 @@ function buildDesignStudioFlow(
     }),
     "",
     "# Step 2: the manager loops asset-by-asset until the manifest is complete",
-    'loop until **all required assets are approved or the run is blocked** (max: 8):',
+    "loop until **all required assets are approved or the run is blocked** (max: 8):",
     ...indent(
       buildAgentRunLines({
         variableName: "current_asset",
@@ -684,7 +689,7 @@ function buildDesignStudioFlow(
       }),
       "  ",
     ),
-    '  if **all required assets are already approved**:',
+    "  if **all required assets are already approved**:",
     ...indent(
       buildAgentRunLines({
         variableName: "final_signoff",
@@ -702,20 +707,20 @@ function buildDesignStudioFlow(
     "      context: { task, plan, asset_manifest, consistency_guide, approved_assets, final_signoff }",
     "    return",
     "",
-    '  if **the current asset is blocked before production can start**:',
+    "  if **the current asset is blocked before production can start**:",
     "    output result = session: manager",
     '      prompt: "The design run is blocked before production can continue. Summarize the current asset, the unresolved blocker, and the next action required."',
     "      context: { task, asset_manifest, consistency_guide, approved_assets, current_asset }",
     "    return",
     "",
-    '  if **the current asset belongs to the vector lane**:',
+    "  if **the current asset belongs to the vector lane**:",
     "    let vector_option_2 = resume: manager",
     '      prompt: "Initialize the second vector option slot as not_requested unless the current asset brief requires it."',
     "      context: { current_asset }",
     "    let vector_option_3 = resume: manager",
     '      prompt: "Initialize the third vector option slot as not_requested unless the current asset brief requires it."',
     "      context: { current_asset }",
-    '    loop until **the current vector asset is approved by requirements QA and consistency QA** (max: 3):',
+    "    loop until **the current vector asset is approved by requirements QA and consistency QA** (max: 3):",
     "      parallel:",
     ...indent(
       buildAgentRunLines({
@@ -723,7 +728,13 @@ function buildDesignStudioFlow(
         binding: vectorDesigner.binding,
         prompt:
           "Create option 1 for the current vector asset. Return vector directions, SVG-friendly structure, or vector-oriented deliverables that satisfy the asset brief and consistency guide. This lane is only for actual icons and simple code-native graphic elements meant to be rendered or animated directly in HTML/CSS/SVG/canvas. Do not use emoji, Unicode symbols, letters, punctuation, or decorative glyphs as icon replacements. Do not return HTML, CSS, JS, webpage implementation, character art, portraits, creatures, scene illustration, hero illustration, or any other illustration work.",
-        context: ["task", "asset_manifest", "consistency_guide", "approved_assets", "current_asset"],
+        context: [
+          "task",
+          "asset_manifest",
+          "consistency_guide",
+          "approved_assets",
+          "current_asset",
+        ],
       }),
       "        ",
     ),
@@ -792,12 +803,7 @@ function buildDesignStudioFlow(
         binding: requirementsQa.binding,
         prompt:
           "Verify the selected vector candidate against the current asset brief and requirements, including the placeholder asset location, intended purpose, any slot constraints, and the rule that vector deliverables may only be actual icons or simple code-native graphics. Block emoji, Unicode symbols, letters, punctuation, decorative glyph stand-ins, and any illustration drift. End your reply with exactly one line: QA_APPROVAL: approved or QA_APPROVAL: blocked.",
-        context: [
-          "task",
-          "asset_manifest",
-          "current_asset",
-          "vector_selected_candidate",
-        ],
+        context: ["task", "asset_manifest", "current_asset", "vector_selected_candidate"],
       }),
       "        ",
     ),
@@ -860,7 +866,7 @@ function buildDesignStudioFlow(
       }),
       "        ",
     ),
-    '    if **the current vector asset still has blocking issues after the rework loop**:',
+    "    if **the current vector asset still has blocking issues after the rework loop**:",
     "      output result = session: manager",
     '        prompt: "The design run remains blocked on a vector asset. Summarize the current asset, the unresolved blockers, and the next work required."',
     "        context: { task, asset_manifest, consistency_guide, approved_assets, current_asset, vector_selected_candidate, vector_requirements_review, vector_consistency_review }",
@@ -886,14 +892,14 @@ function buildDesignStudioFlow(
       "    ",
     ),
     "",
-    '  if **the current asset belongs to the image lane**:',
+    "  if **the current asset belongs to the image lane**:",
     "    let image_option_2 = resume: manager",
     '      prompt: "Initialize the second image option slot as not_requested unless the current asset brief requires it."',
     "      context: { current_asset }",
     "    let image_option_3 = resume: manager",
     '      prompt: "Initialize the third image option slot as not_requested unless the current asset brief requires it."',
     "      context: { current_asset }",
-    '    loop until **the current image asset is approved by requirements QA and consistency QA** (max: 3):',
+    "    loop until **the current image asset is approved by requirements QA and consistency QA** (max: 3):",
     "      parallel:",
     ...indent(
       buildAgentRunLines({
@@ -901,7 +907,13 @@ function buildDesignStudioFlow(
         binding: imageDesigner.binding,
         prompt:
           "Create option 1 for the current image asset. Use image_generate for the actual raster generation or editing work. Do not substitute CSS-only direction, vector specs, SVG illustration, implementation notes, emoji, Unicode symbols, or other stand-ins for an image-lane deliverable. If image_generate or an image-generation model/provider is unavailable, return a clear blocked result instead of pretending the image was produced.",
-        context: ["task", "asset_manifest", "consistency_guide", "approved_assets", "current_asset"],
+        context: [
+          "task",
+          "asset_manifest",
+          "consistency_guide",
+          "approved_assets",
+          "current_asset",
+        ],
       }),
       "        ",
     ),
@@ -970,12 +982,7 @@ function buildDesignStudioFlow(
         binding: requirementsQa.binding,
         prompt:
           "Verify the selected image candidate against the current asset brief and requirements, including the placeholder asset location, intended purpose, and any slot constraints. End your reply with exactly one line: QA_APPROVAL: approved or QA_APPROVAL: blocked.",
-        context: [
-          "task",
-          "asset_manifest",
-          "current_asset",
-          "image_selected_candidate",
-        ],
+        context: ["task", "asset_manifest", "current_asset", "image_selected_candidate"],
       }),
       "        ",
     ),
@@ -1038,7 +1045,7 @@ function buildDesignStudioFlow(
       }),
       "        ",
     ),
-    '    if **the current image asset still has blocking issues after the rework loop**:',
+    "    if **the current image asset still has blocking issues after the rework loop**:",
     "      output result = session: manager",
     '        prompt: "The design run remains blocked on an image asset. Summarize the current asset, the unresolved blockers, and the next work required."',
     "        context: { task, asset_manifest, consistency_guide, approved_assets, current_asset, image_selected_candidate, image_requirements_review, image_consistency_review }",
@@ -1097,14 +1104,14 @@ function buildRootOrchestrationFlow(params: {
     `  prompt: "Classify the task as one of: direct reply, execution worker, or linked team. Use direct reply only for casual chat, explanation, or lightweight read-only help. Use the execution worker for bounded execution, implementation, research, browser work, troubleshooting, or direct completion that does not need staged specialist collaboration. Use one or more linked teams when the task needs staged specialist handoffs. Be literal about team ownership. If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose the implementation team first as the initial owner. That stays true even if the request also asks for images, illustrations, placeholder assets, moodboards, SVG/CSS motifs, art direction, visual systems, or design-studio collaboration. Choose the asset-only design team first only when the requested deliverable is asset-only and does not include page/app implementation: icons, logos, illustrations, image sets, moodboards, style guides, vector/raster option exploration, or consistency review. If a task spans both implementation and asset-design work, start with the implementation team and let that manager call the asset-only design team for the parts it owns. If the task will produce a previewable HTML/static web artifact for a remote/chat requester, plan for durable preview delivery instead of only local paths or LAN URLs whenever capability truth says private preview is ready. If durable preview publishing is unavailable for this requester or route, plan for a verified requester-openable non-loopback fallback URL instead of only filesystem paths. If you choose linked-team work, name the exact linked team id or sequence from: ${linkedTeamsDescription}."`,
     "  context: { task }",
     "",
-    'if **the task can be completed as a direct manager reply without delegation**:',
+    "if **the task can be completed as a direct manager reply without delegation**:",
     "  output result = session: manager",
     '    prompt: "Respond directly without delegation. Do not claim worker, team, QA, or preview activity that did not actually happen."',
     "    context: { task, triage }",
     "  return",
     "",
     "# Step 2: bounded execution runs through the execution worker",
-    'if **the task fits bounded execution and does not require linked-team staging**:',
+    "if **the task fits bounded execution and does not require linked-team staging**:",
     ...indent(
       buildAgentRunLines({
         variableName: "execution_stage",
@@ -1134,7 +1141,7 @@ function buildRootOrchestrationFlow(params: {
     "  return",
     "",
     "# Step 3: linked specialist teams own staged implementation or asset-design work",
-    'if **the task requires staged specialist collaboration beyond the execution worker**:',
+    "if **the task requires staged specialist collaboration beyond the execution worker**:",
     "  let linked_team_stage = resume: manager",
     `    prompt: "Choose the initial linked team or linked-team sequence from: ${linkedTeamsDescription}. Explain why the execution worker lane is insufficient, prepare the delegation brief, and use teams_run with the chosen linked team instead of sessions_spawn. Be literal about ownership. If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose the implementation team first even when the prompt also asks for images, illustration, placeholder assets, moodboards, visual systems, or design collaboration. Then let that manager involve the asset-only design team only for the asset subsets it owns. Choose the asset-only design team first only when the requested deliverable is asset-only and does not include page/app implementation. Require the asset-only design team to return assets or design guidance rather than page/app implementation. If the deliverable is a previewable UI artifact for a remote/chat requester, require the linked team to return preview/share state and the correct link when capability truth says private preview is ready. If durable preview publishing is unavailable for this requester or route but the user still needs a live UI now, require a verified requester-openable non-loopback fallback URL instead of only localhost instructions or filesystem paths. If no preview/share URL is available yet, require a standalone FILE:<workspace-relative-path> line for the artifact."`,
     "    context: { task, triage }",

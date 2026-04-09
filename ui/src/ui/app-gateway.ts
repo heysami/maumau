@@ -19,9 +19,9 @@ import { loadAgents } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
+import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import { scheduleDashboardReload } from "./controllers/dashboard.ts";
 import { loadDevices } from "./controllers/devices.ts";
-import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import {
   addExecApproval,
@@ -31,17 +31,17 @@ import {
 } from "./controllers/exec-approval.ts";
 import { loadHealthState } from "./controllers/health.ts";
 import {
+  applyMauOfficeChatEvent,
+  refreshMauOfficeChatForSessionMessage,
+  type MauOfficeChatHost,
+} from "./controllers/mau-office-chat.ts";
+import {
   applyMauOfficeAgentEvent,
   applyMauOfficePresence,
   applyMauOfficeSessionMessageEvent,
   applyMauOfficeSessionToolEvent,
   scheduleMauOfficeReload,
 } from "./controllers/mau-office.ts";
-import {
-  applyMauOfficeChatEvent,
-  refreshMauOfficeChatForSessionMessage,
-  type MauOfficeChatHost,
-} from "./controllers/mau-office-chat.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions, subscribeSessions } from "./controllers/sessions.ts";
 import {
@@ -67,7 +67,10 @@ function isGenericBrowserFetchFailure(message: string): boolean {
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  const normalized = hostname
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase();
   return (
     normalized === "localhost" ||
     normalized === "::1" ||
@@ -198,9 +201,7 @@ async function refreshLoopbackGatewayTokenFromBootstrap(
   return true;
 }
 
-function hasMauOfficeState(
-  host: GatewayHost,
-): host is GatewayHost & {
+function hasMauOfficeState(host: GatewayHost): host is GatewayHost & {
   mauOfficeState: import("./controllers/mau-office.ts").MauOfficeState;
 } {
   return Boolean((host as { mauOfficeState?: unknown }).mauOfficeState);

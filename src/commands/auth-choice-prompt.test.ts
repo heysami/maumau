@@ -112,10 +112,7 @@ describe("promptAuthChoiceGrouped", () => {
     });
 
     const prompter = {
-      select: vi
-        .fn()
-        .mockResolvedValueOnce("openai")
-        .mockResolvedValueOnce("openai-codex"),
+      select: vi.fn().mockResolvedValueOnce("openai").mockResolvedValueOnce("openai-codex"),
       note: vi.fn(async () => {}),
     };
 

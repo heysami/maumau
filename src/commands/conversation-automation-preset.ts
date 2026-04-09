@@ -165,7 +165,9 @@ export function applyConversationAutomationPresetConfig(
       ? "allowlist"
       : "owner";
   const telephonyEnabled =
-    options.telephonyEnabled === undefined ? undefined : enabled && options.telephonyEnabled === true;
+    options.telephonyEnabled === undefined
+      ? undefined
+      : enabled && options.telephonyEnabled === true;
   const telephonyProvider = resolveConversationAutomationTelephonyProvider(
     options.telephonyProvider,
   );
@@ -241,17 +243,19 @@ export function applyConversationAutomationPresetConfig(
         tts?: Record<string, unknown>;
       }
     | undefined) ?? { enabled: false };
-  const existingStreaming = (voiceCallConfig.streaming as
-    | {
-        openai?: Record<string, unknown>;
-        deepgram?: Record<string, unknown>;
-      }
-    | undefined) ?? {};
-  const existingTts = (voiceCallConfig.tts as
-    | {
-        elevenlabs?: Record<string, unknown>;
-      }
-    | undefined) ?? {};
+  const existingStreaming =
+    (voiceCallConfig.streaming as
+      | {
+          openai?: Record<string, unknown>;
+          deepgram?: Record<string, unknown>;
+        }
+      | undefined) ?? {};
+  const existingTts =
+    (voiceCallConfig.tts as
+      | {
+          elevenlabs?: Record<string, unknown>;
+        }
+      | undefined) ?? {};
 
   return {
     ...nextConfig,

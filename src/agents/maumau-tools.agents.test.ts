@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
 import { createMainOrchestrationTeamConfig, MAIN_WORKER_AGENT_ID } from "../teams/presets.js";
+import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
 
 let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
   session: createPerSenderSessionConfig(),

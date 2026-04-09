@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { runGmailReceiptDigest } from "./browser-tool.receipts.js";
 
 const listSessionCapabilities = vi.fn();
@@ -32,21 +31,19 @@ describe("runGmailReceiptDigest", () => {
       },
     ]);
     const deps = createBrowserDeps();
-    deps.browserAct
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({
-        result: {
-          state: "ready",
-          items: [
-            {
-              merchant: "Netflix",
-              amount: "US$12.99",
-              subject: "Netflix receipt",
-              snippet: "Monthly subscription",
-            },
-          ],
-        },
-      });
+    deps.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
+      result: {
+        state: "ready",
+        items: [
+          {
+            merchant: "Netflix",
+            amount: "US$12.99",
+            subject: "Netflix receipt",
+            snippet: "Monthly subscription",
+          },
+        ],
+      },
+    });
 
     const result = await runGmailReceiptDigest({
       cfg: {},

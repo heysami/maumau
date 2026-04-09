@@ -178,7 +178,9 @@ export class VoiceCallWebhookServer {
   }
 
   private shouldTrackRealtimeWallet(): boolean {
-    return this.config.streaming.enabled && this.config.streaming.sttProvider === "deepgram-realtime";
+    return (
+      this.config.streaming.enabled && this.config.streaming.sttProvider === "deepgram-realtime"
+    );
   }
 
   private readRealtimeWalletState(call: CallRecord): WalletRealtimeSttState {
@@ -199,7 +201,9 @@ export class VoiceCallWebhookServer {
               ? entry.startedAt
               : null;
           const endedAt =
-            typeof entry.endedAt === "number" && Number.isFinite(entry.endedAt) ? entry.endedAt : null;
+            typeof entry.endedAt === "number" && Number.isFinite(entry.endedAt)
+              ? entry.endedAt
+              : null;
           const durationMs =
             typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)
               ? entry.durationMs
@@ -244,10 +248,7 @@ export class VoiceCallWebhookServer {
     };
   }
 
-  private persistRealtimeWalletState(
-    call: CallRecord,
-    state: WalletRealtimeSttState,
-  ): void {
+  private persistRealtimeWalletState(call: CallRecord, state: WalletRealtimeSttState): void {
     const nextCall: CallRecord = {
       ...call,
       metadata: {

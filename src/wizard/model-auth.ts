@@ -45,19 +45,19 @@ export async function resolveModelAuthChoiceGroups(params?: {
   });
 
   return groups.map((group) => ({
-      value: group.value,
-      label: group.label,
-      ...(group.hint ? { hint: group.hint } : {}),
-      options: group.options.map((option) => {
-        const providerId = providerIdsByChoice.get(option.value);
-        return {
-          value: option.value,
-          label: option.label,
-          ...(option.hint ? { hint: option.hint } : {}),
-          ...(providerId ? { providerId } : {}),
-        };
-      }),
-    }));
+    value: group.value,
+    label: group.label,
+    ...(group.hint ? { hint: group.hint } : {}),
+    options: group.options.map((option) => {
+      const providerId = providerIdsByChoice.get(option.value);
+      return {
+        value: option.value,
+        label: option.label,
+        ...(option.hint ? { hint: option.hint } : {}),
+        ...(providerId ? { providerId } : {}),
+      };
+    }),
+  }));
 }
 
 async function resolveRequestedModelAuthChoice(params: {

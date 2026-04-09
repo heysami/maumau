@@ -87,9 +87,7 @@ export const TeamPromptEditWorkflowPatchSchema = Type.Object(
         Type.Null(),
       ]),
     ),
-    contract: Type.Optional(
-      Type.Union([TeamPromptEditWorkflowContractSchema, Type.Null()]),
-    ),
+    contract: Type.Optional(Type.Union([TeamPromptEditWorkflowContractSchema, Type.Null()])),
   },
   { additionalProperties: false },
 );
@@ -109,9 +107,7 @@ export const TeamPromptEditAgentPatchSchema = Type.Object(
   {
     agentId: NonEmptyString,
     name: Type.Optional(NullableNonEmptyString),
-    identity: Type.Optional(
-      Type.Union([TeamPromptEditAgentIdentityPatchSchema, Type.Null()]),
-    ),
+    identity: Type.Optional(Type.Union([TeamPromptEditAgentIdentityPatchSchema, Type.Null()])),
   },
   { additionalProperties: false },
 );

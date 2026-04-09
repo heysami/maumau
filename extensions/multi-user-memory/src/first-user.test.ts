@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { installDiscordRegistryHooks } from "../../../src/auto-reply/test-helpers/command-auth-registry-fixture.js";
 import type { MaumauPluginApi } from "../api.js";
 import type { MultiUserMemoryConfig } from "./config.js";
 import { maybeBootstrapFirstObservedUser } from "./first-user.js";
-import { installDiscordRegistryHooks } from "../../../src/auto-reply/test-helpers/command-auth-registry-fixture.js";
 
 installDiscordRegistryHooks();
 

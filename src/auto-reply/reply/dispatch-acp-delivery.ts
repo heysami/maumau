@@ -1,8 +1,8 @@
 import { hasOutboundReplyContent } from "maumau/plugin-sdk/reply-payload";
 import { normalizeChatType } from "../../channels/chat-type.js";
 import type { MaumauConfig } from "../../config/config.js";
-import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
+import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import { logVerbose } from "../../globals.js";
 import { runMessageAction } from "../../infra/outbound/message-action-runner.js";
 import { maybeApplyTtsToPayload } from "../../tts/tts.js";

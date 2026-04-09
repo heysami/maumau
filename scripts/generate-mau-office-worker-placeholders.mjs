@@ -47,7 +47,10 @@ async function deriveSleepFloorFrame(sourcePath, targetPath) {
     },
   });
   await ensureDir(path.dirname(targetPath));
-  await canvas.composite([{ input: rotatedBuffer, left, top }]).png().toFile(targetPath);
+  await canvas
+    .composite([{ input: rotatedBuffer, left, top }])
+    .png()
+    .toFile(targetPath);
 }
 
 for (const rigId of WORKER_RIG_IDS) {

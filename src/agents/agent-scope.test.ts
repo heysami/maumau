@@ -98,10 +98,7 @@ describe("resolveAgentConfig", () => {
           executionStyle: "orchestrator",
           executionWorkerAgentId: "main-worker",
         },
-        list: [
-          { id: "main", default: true },
-          { id: "main-worker" },
-        ],
+        list: [{ id: "main", default: true }, { id: "main-worker" }],
       },
     };
 

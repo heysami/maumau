@@ -8,13 +8,7 @@ import {
   MAU_OFFICE_WORKER_RIGS,
 } from "./mau-office-contract.ts";
 
-export type MauOfficePixellabAssetFamily =
-  | "board"
-  | "floor"
-  | "prop"
-  | "shell"
-  | "ui"
-  | "worker";
+export type MauOfficePixellabAssetFamily = "board" | "floor" | "prop" | "shell" | "ui" | "worker";
 
 export type MauOfficePixellabProvenance = {
   asset: string;
@@ -41,7 +35,10 @@ export function collectMauOfficeReferencedAssetPaths(): string[] {
   for (const tile of MAU_OFFICE_LAYOUT.map.floorTiles) {
     assets.add(tile.asset);
   }
-  for (const sprite of [...MAU_OFFICE_LAYOUT.map.wallSprites, ...MAU_OFFICE_LAYOUT.map.propSprites]) {
+  for (const sprite of [
+    ...MAU_OFFICE_LAYOUT.map.wallSprites,
+    ...MAU_OFFICE_LAYOUT.map.propSprites,
+  ]) {
     assets.add(sprite.asset);
   }
   for (const label of MAU_OFFICE_LAYOUT.map.labels) {
@@ -154,7 +151,8 @@ function existing(
     tool: "existing_pack",
     jobId: `existing:${asset.replaceAll("/", ":")}`,
     selectedOutput: asset.split("/").pop() ?? asset,
-    prompt: "Preserve the existing MauOffice UI or worker sprite while refitting the surrounding scene.",
+    prompt:
+      "Preserve the existing MauOffice UI or worker sprite while refitting the surrounding scene.",
     postprocess: ["keep original native canvas", "reuse existing accepted pack asset"],
     beautyCritique,
   });
@@ -556,8 +554,7 @@ for (const asset of [
   );
 }
 
-const UI_ENTRIES: Record<string, MauOfficePixellabProvenance> = {
-};
+const UI_ENTRIES: Record<string, MauOfficePixellabProvenance> = {};
 
 for (const asset of Object.values(MAU_OFFICE_PATH_TARGET_ASSETS)) {
   UI_ENTRIES[asset] = entry({
@@ -616,7 +613,10 @@ for (const asset of Object.values(MAU_OFFICE_PATH_TURN_ASSETS)) {
   });
 }
 
-for (const asset of [...Object.values(MAU_OFFICE_BUBBLE_FRAME_ASSETS), MAU_OFFICE_BUBBLE_TAIL_ASSET]) {
+for (const asset of [
+  ...Object.values(MAU_OFFICE_BUBBLE_FRAME_ASSETS),
+  MAU_OFFICE_BUBBLE_TAIL_ASSET,
+]) {
   UI_ENTRIES[asset] = entry({
     asset,
     family: "ui",
@@ -656,12 +656,10 @@ const PLACEHOLDER_WORKER_POSE_NOTES = {
     "Placeholder forward-reach loop derived locally from the standing idle frames until dedicated Pixellab acting poses land.",
   dance:
     "Placeholder dance loop remixed locally from the walking cadence so the renderer can address a playful in-place animation family now.",
-  jump:
-    "Placeholder jump-ready loop derived from the standing idle frames until a real overhead passing pose is generated.",
+  jump: "Placeholder jump-ready loop derived from the standing idle frames until a real overhead passing pose is generated.",
   chase:
     "Placeholder chase loop remixed locally from the walking cadence until a forward-lean sprint/point pose is generated.",
-  chat:
-    "Placeholder chatting loop derived from the standing idle frames until a dedicated conversational gesture set is generated.",
+  chat: "Placeholder chatting loop derived from the standing idle frames until a dedicated conversational gesture set is generated.",
   "sleep-floor":
     "Placeholder floor-sleep loop derived locally by rotating the seated side pose onto the floor plane until a dedicated sleep pose is generated.",
 } as const;
@@ -679,8 +677,8 @@ const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
     ...rig.sleepFloor.frames,
   ])
   .reduce<Record<string, MauOfficePixellabProvenance>>((acc, asset) => {
-    const placeholderPose = Object.keys(PLACEHOLDER_WORKER_POSE_NOTES).find((pose) =>
-      asset.includes(`/${pose}-`) || asset.includes(`/${pose}/`),
+    const placeholderPose = Object.keys(PLACEHOLDER_WORKER_POSE_NOTES).find(
+      (pose) => asset.includes(`/${pose}-`) || asset.includes(`/${pose}/`),
     ) as keyof typeof PLACEHOLDER_WORKER_POSE_NOTES | undefined;
     if (placeholderPose) {
       const rigId = asset.split("/")[2] ?? "worker";
@@ -700,7 +698,11 @@ const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
                 "bottom-align it to the floor plane without directional variants",
                 "keep a simple four-frame placeholder loop until a dedicated sleep pose exists",
               ]
-            : ["reuse the existing rig's accepted stand or walk frames as source art", "derive a named placeholder animation family with local nearest-neighbor edits only", "keep the placeholder loop on the shared 64px MauOffice worker slot until dedicated Pixellab acting poses replace it"],
+            : [
+                "reuse the existing rig's accepted stand or walk frames as source art",
+                "derive a named placeholder animation family with local nearest-neighbor edits only",
+                "keep the placeholder loop on the shared 64px MauOffice worker slot until dedicated Pixellab acting poses replace it",
+              ],
         beautyCritique: `${rigId} ${placeholderPose} is currently a wired placeholder so MauOffice can reference the animation family without missing assets.`,
       });
       return acc;
@@ -915,21 +917,21 @@ const WORKER_ENTRIES = Object.values(MAU_OFFICE_WORKER_RIGS)
                 "keep the same bottom-aligned foot row and side-view width as the current human rig",
                 "preserve the four-frame idle cadence for north, east, south, and west",
               ]
-          : walkPose
-            ? [
-                "download the Pixellab walking-6-frames output",
-                "resize each 92px animation frame into the shared 64px MauOffice worker slot",
-                "bottom-align the feet to the shared MauOffice worker foot row",
-                "widen the silhouette slightly to match the office cast proportions",
-                "preserve the four direction folders and six-frame cadence",
-              ]
-            : [
-                "download the Pixellab rotation output",
-                "resize the 92px character canvas into the shared 64px MauOffice worker slot",
-                "bottom-align the feet to the shared MauOffice worker foot row",
-                "widen the silhouette slightly to match the office cast proportions",
-                "keep the human visitor proportions inside the existing worker scale band",
-              ],
+            : walkPose
+              ? [
+                  "download the Pixellab walking-6-frames output",
+                  "resize each 92px animation frame into the shared 64px MauOffice worker slot",
+                  "bottom-align the feet to the shared MauOffice worker foot row",
+                  "widen the silhouette slightly to match the office cast proportions",
+                  "preserve the four direction folders and six-frame cadence",
+                ]
+              : [
+                  "download the Pixellab rotation output",
+                  "resize the 92px character canvas into the shared 64px MauOffice worker slot",
+                  "bottom-align the feet to the shared MauOffice worker foot row",
+                  "widen the silhouette slightly to match the office cast proportions",
+                  "keep the human visitor proportions inside the existing worker scale band",
+                ],
         beautyCritique:
           "The human visitor rig reads like the same MauOffice cast as the animal agents, with matching chunky proportions and pixel treatment but a human face instead of an anthropomorphic head.",
       });

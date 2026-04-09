@@ -133,15 +133,21 @@ describe("generateTeamOpenProsePreview", () => {
     expect(preview).toContain("exact placement or UI location");
     expect(preview).toContain("what the asset should depict or communicate");
     expect(preview).toContain("asset-only delegation brief");
-    expect(preview).toContain("at least one prominent illustration, image, or hero visual, or a clearly intentional icon system used in key places");
-    expect(preview).toContain("block approval if the result lacks both a prominent illustration/image/hero visual and meaningful icon use in key places");
+    expect(preview).toContain(
+      "at least one prominent illustration, image, or hero visual, or a clearly intentional icon system used in key places",
+    );
+    expect(preview).toContain(
+      "block approval if the result lacks both a prominent illustration/image/hero visual and meaningful icon use in key places",
+    );
     expect(preview).toContain(
       "Do not satisfy illustration, hero visual, or other prominent decorative image requirements with vector art, SVG illustration, CSS-only composition, code-native decorative graphics, emoji, Unicode symbols, or typography tricks.",
     );
     expect(preview).toContain(
       "emoji, Unicode symbols, letters, punctuation, and decorative glyphs are not acceptable icon replacements.",
     );
-    expect(preview).toContain("If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, vibe-coder remains the implementation owner");
+    expect(preview).toContain(
+      "If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, vibe-coder remains the implementation owner",
+    );
     expect(preview).toContain("implementation stays in vibe-coder");
     expect(preview).toContain("mapped back to those placeholder asset ids");
     expect(preview).toContain("design_team_result = resume: manager");
@@ -199,9 +205,7 @@ describe("generateTeamOpenProsePreview", () => {
       team: designStudio,
     });
 
-    expect(preview).toContain(
-      "# Step 0: the manager confirms this is asset-only design work",
-    );
+    expect(preview).toContain("# Step 0: the manager confirms this is asset-only design work");
     expect(preview).toContain(
       "This team does not implement webpages, apps, screens, or product code.",
     );
@@ -256,7 +260,9 @@ describe("generateTeamOpenProsePreview", () => {
       "including the placeholder asset location, intended purpose, and any slot constraints.",
     );
     expect(preview).toContain("QA_APPROVAL: approved or QA_APPROVAL: blocked.");
-    expect(preview).toContain("Verify the selected image candidate against the shared consistency guide");
+    expect(preview).toContain(
+      "Verify the selected image candidate against the shared consistency guide",
+    );
     expect(preview).toContain("approved_assets");
   });
 
@@ -278,13 +284,21 @@ describe("generateTeamOpenProsePreview", () => {
       "# Step 1: the manager triages the request and chooses the execution path",
     );
     expect(preview).toContain("execution_worker_result = session: execution_worker");
-    expect(preview).toContain("use teams_run with the chosen linked team instead of sessions_spawn.");
+    expect(preview).toContain(
+      "use teams_run with the chosen linked team instead of sessions_spawn.",
+    );
     expect(preview).toContain(
       "Choose the initial linked team or linked-team sequence from: vibe-coder (Use for staged UI/product implementation, architecture, development, and ship-readiness QA.), design-studio (Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.).",
     );
-    expect(preview).toContain("If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose the implementation team first as the initial owner.");
-    expect(preview).toContain("That stays true even if the request also asks for images, illustrations, placeholder assets, moodboards, SVG/CSS motifs, art direction, visual systems, or design-studio collaboration.");
-    expect(preview).toContain("Choose the asset-only design team first only when the requested deliverable is asset-only and does not include page/app implementation.");
+    expect(preview).toContain(
+      "If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose the implementation team first as the initial owner.",
+    );
+    expect(preview).toContain(
+      "That stays true even if the request also asks for images, illustrations, placeholder assets, moodboards, SVG/CSS motifs, art direction, visual systems, or design-studio collaboration.",
+    );
+    expect(preview).toContain(
+      "Choose the asset-only design team first only when the requested deliverable is asset-only and does not include page/app implementation.",
+    );
     expect(preview).toContain(
       "plan for durable preview delivery instead of only local paths or LAN URLs whenever capability truth says private preview is ready.",
     );

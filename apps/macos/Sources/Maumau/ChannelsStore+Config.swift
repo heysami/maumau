@@ -2,14 +2,7 @@ import Foundation
 import MaumauProtocol
 
 extension ChannelsStore {
-    static let inlineOnboardingChannelIDs = [
-        "whatsapp",
-        "telegram",
-        "discord",
-        "imessage",
-        "slack",
-        "line",
-    ]
+    static let inlineOnboardingChannelIDs = UserChannelQuickSetupRegistry.channelOrder
     static let settingsVisibleChannelIDs = inlineOnboardingChannelIDs + [
         "googlechat",
         "signal",

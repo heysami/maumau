@@ -367,7 +367,7 @@ export function createMaumauCodingTools(options?: {
     options?.config && agentId
       ? (resolveAgentConfig(options.config, agentId)?.executionStyle ??
         (agentId === "main"
-          ? options.config.agents?.defaults?.executionStyle ?? "orchestrator"
+          ? (options.config.agents?.defaults?.executionStyle ?? "orchestrator")
           : undefined))
       : undefined;
   const workspaceOnly = fsPolicy.workspaceOnly;

@@ -5,7 +5,9 @@ import type { PluginWebSearchProviderEntry } from "../plugins/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 
 const runTui = vi.hoisted(() => vi.fn(async () => {}));
-const openManagedBrowserProfile = vi.hoisted(() => vi.fn(async () => ({ ok: true, profile: "maumau" })));
+const openManagedBrowserProfile = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, profile: "maumau" })),
+);
 const probeGatewayReachable = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const waitForGatewayReachable = vi.hoisted(() => vi.fn(async () => {}));
 const setupWizardShellCompletion = vi.hoisted(() => vi.fn(async () => {}));

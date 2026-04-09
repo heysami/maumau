@@ -1,3 +1,4 @@
+import { applyOnboardingTailscaleGatewayAuth } from "../commands/onboard-gateway-tailscale-auth.js";
 import {
   normalizeGatewayTokenInput,
   randomToken,
@@ -24,7 +25,6 @@ import { promptSecretRefForSetup } from "../plugins/provider-auth-ref.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { validateIPv4AddressInput } from "../shared/net/ipv4.js";
 import type { WizardPrompter } from "./prompts.js";
-import { applyOnboardingTailscaleGatewayAuth } from "../commands/onboard-gateway-tailscale-auth.js";
 import { resolveSetupSecretInputString } from "./setup.secret-input.js";
 import type {
   GatewayWizardSettings,
@@ -128,9 +128,9 @@ export async function configureGatewayForSetup(
     if (!tailscaleBin) {
       await prompter.note(TAILSCALE_MISSING_BIN_NOTE_LINES.join("\n"), "Tailscale Warning");
     } else {
-      const exposure = await probeTailscaleExposure(
-        tailscaleMode as "serve" | "funnel",
-      ).catch(() => null);
+      const exposure = await probeTailscaleExposure(tailscaleMode as "serve" | "funnel").catch(
+        () => null,
+      );
       if (exposure?.blockedReason === "doctor_failed") {
         const label = tailscaleMode === "funnel" ? "Funnel" : "Serve";
         await prompter.note(

@@ -26,7 +26,13 @@ describe("maybeApplyConversationAutomationPreset", () => {
     const select = vi.fn(
       async (
         params: WizardSelectParams<
-          "standard" | "conversation-automation" | "twilio" | "telnyx" | "plivo" | "deepgram-realtime" | "openai-realtime"
+          | "standard"
+          | "conversation-automation"
+          | "twilio"
+          | "telnyx"
+          | "plivo"
+          | "deepgram-realtime"
+          | "openai-realtime"
         >,
       ) => {
         if (params.message === "Setup preset") {

@@ -46,6 +46,7 @@ import {
 } from "../../bootstrap-budget.js";
 import { makeBootstrapWarn, resolveBootstrapContextForRun } from "../../bootstrap-files.js";
 import { createCacheTrace } from "../../cache-trace.js";
+import { summarizeCapabilitiesForPrompt } from "../../capabilities.js";
 import {
   listChannelSupportedActions,
   resolveChannelMessageToolHints,
@@ -53,6 +54,10 @@ import {
 import { ensureCustomApiRegistered } from "../../custom-api-registry.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../defaults.js";
 import { resolveMaumauDocsPath } from "../../docs-path.js";
+import {
+  isExecutionWorkerAgentId,
+  resolveExecutionRouteRequirement,
+} from "../../execution-routing.js";
 import { isTimeoutError } from "../../failover-error.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
 import { resolveModelAuthMode } from "../../model-auth.js";
@@ -78,6 +83,7 @@ import { createPreparedEmbeddedPiSettingsManager } from "../../pi-project-settin
 import { applyPiAutoCompactionGuard } from "../../pi-settings.js";
 import { toClientToolDefinitions } from "../../pi-tool-definition-adapter.js";
 import { createMaumauCodingTools, resolveToolLoopDetectionConfig } from "../../pi-tools.js";
+import { buildAgentRoleContractNotes } from "../../role-contract.js";
 import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSandboxRuntimeStatus } from "../../sandbox/runtime-status.js";
 import { repairSessionFileIfNeeded } from "../../session-file-repair.js";
@@ -95,12 +101,6 @@ import {
 } from "../../skills.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
-import { summarizeCapabilitiesForPrompt } from "../../capabilities.js";
-import {
-  isExecutionWorkerAgentId,
-  resolveExecutionRouteRequirement,
-} from "../../execution-routing.js";
-import { buildAgentRoleContractNotes } from "../../role-contract.js";
 import { sanitizeToolCallIdsForCloudCodeAssist } from "../../tool-call-id.js";
 import { resolveEffectiveToolFsWorkspaceOnly } from "../../tool-fs-policy.js";
 import { normalizeToolName } from "../../tool-policy.js";
@@ -1783,7 +1783,9 @@ export async function runEmbeddedAttempt(
         groupSpace: params.groupSpace,
       }),
     );
-    const agentConfig = params.config ? resolveAgentConfig(params.config, sessionAgentId) : undefined;
+    const agentConfig = params.config
+      ? resolveAgentConfig(params.config, sessionAgentId)
+      : undefined;
     const executionRouteRequirement = resolveExecutionRouteRequirement({
       cfg: params.config,
       task: params.prompt,
@@ -1791,8 +1793,8 @@ export async function runEmbeddedAttempt(
       agentId: sessionAgentId,
     });
     if (agentConfig?.executionStyle === "orchestrator") {
-	      workspaceNotes.push(
-	        [
+      workspaceNotes.push(
+        [
           "Execution contract:",
           "This agent is in orchestrator mode.",
           "Direct replies are for casual chat, explanation, and lightweight read-only answers only.",
@@ -1813,41 +1815,43 @@ export async function runEmbeddedAttempt(
                 }.`
               : `This task requires ${executionRouteRequirement.teamRuntime === "openprose" ? "OpenProse-backed " : ""}team execution, but that route is currently blocked: ${executionRouteRequirement.blockingReasons.join(" ") || "unknown blocking reason"}.`
             : `For coding, artifact creation, browser/account work, installs, hosting, spending/email tasks, or multi-step troubleshooting, delegate to ${
-	                agentConfig.executionWorkerAgentId ? `sessions_spawn with agentId="${agentConfig.executionWorkerAgentId}"` : "sessions_spawn"
-	              } or teams_run instead of doing the work directly.`,
-	          "When a delegated task will produce a previewable HTML/static web artifact for a remote/chat requester, require the chosen worker or team to return a durable preview link whenever capability truth says private preview is ready instead of stopping at local paths or LAN URLs.",
+                agentConfig.executionWorkerAgentId
+                  ? `sessions_spawn with agentId="${agentConfig.executionWorkerAgentId}"`
+                  : "sessions_spawn"
+              } or teams_run instead of doing the work directly.`,
+          "When a delegated task will produce a previewable HTML/static web artifact for a remote/chat requester, require the chosen worker or team to return a durable preview link whenever capability truth says private preview is ready instead of stopping at local paths or LAN URLs.",
           "If durable preview publishing is unavailable for this requester or route but the user still needs a live previewable UI now, require the chosen worker or team to proactively arrange a simple host-local server, verify it, and return a requester-openable non-loopback URL instead of only localhost instructions or filesystem paths.",
           "When a delegated task creates or updates a local previewable artifact and no preview/share URL is available, require a standalone FILE:<workspace-relative-path> line in the result so delivery can recognize the artifact.",
-	          "Do not append execution receipt labels such as Mode, Worker/Team used, QA state, Capability path used, or Preview/share state unless the user explicitly asks for them.",
-	        ].join(" "),
-	      );
-	    }
-	    if (isExecutionWorkerAgentId(params.config, sessionAgentId)) {
+          "Do not append execution receipt labels such as Mode, Worker/Team used, QA state, Capability path used, or Preview/share state unless the user explicitly asks for them.",
+        ].join(" "),
+      );
+    }
+    if (isExecutionWorkerAgentId(params.config, sessionAgentId)) {
       workspaceNotes.push(
         [
-	          "Execution role:",
-	          "This is an execution-only worker session.",
-	          "Implement directly with local workspace tools.",
-	          "Do not use teams_run, the coding-agent delegation skill, or external coding-agent handoffs from this worker.",
-	          "If you produce a previewable HTML/static web artifact for a remote/chat requester and capability truth says private preview is ready, proactively use preview_publish and return the durable preview link instead of only local file paths or LAN URLs.",
+          "Execution role:",
+          "This is an execution-only worker session.",
+          "Implement directly with local workspace tools.",
+          "Do not use teams_run, the coding-agent delegation skill, or external coding-agent handoffs from this worker.",
+          "If you produce a previewable HTML/static web artifact for a remote/chat requester and capability truth says private preview is ready, proactively use preview_publish and return the durable preview link instead of only local file paths or LAN URLs.",
           "If durable preview publishing is unavailable for this requester or route but the requester still needs a live previewable UI now, proactively arrange a simple host-local server, verify it, and return a requester-openable non-loopback URL instead of only localhost instructions or filesystem paths.",
           "If you create or update a local previewable artifact and no preview/share URL is available yet, include a standalone FILE:<workspace-relative-path> line for the app file or directory in your final result.",
-	          "If local write/edit/exec/process tools are missing, report an execution contract failure instead of claiming the task is complete.",
-	        ].join(" "),
-	      );
-	    }
-	    const capabilityPromptLines = await summarizeCapabilitiesForPrompt({
+          "If local write/edit/exec/process tools are missing, report an execution contract failure instead of claiming the task is complete.",
+        ].join(" "),
+      );
+    }
+    const capabilityPromptLines = await summarizeCapabilitiesForPrompt({
       config: params.config,
       agentSessionKey: params.sessionKey,
-	      senderIsOwner: params.senderIsOwner,
-	      senderName: params.senderName,
-	      senderUsername: params.senderUsername,
-	      requesterTailscaleLogin: params.requesterTailscaleLogin,
-	      messageChannel: params.messageChannel ?? params.messageProvider,
-	      groupId: params.groupId,
-	      groupChannel: params.groupChannel,
-	      groupSpace: params.groupSpace,
-	    });
+      senderIsOwner: params.senderIsOwner,
+      senderName: params.senderName,
+      senderUsername: params.senderUsername,
+      requesterTailscaleLogin: params.requesterTailscaleLogin,
+      messageChannel: params.messageChannel ?? params.messageProvider,
+      groupId: params.groupId,
+      groupChannel: params.groupChannel,
+      groupSpace: params.groupSpace,
+    });
     if (capabilityPromptLines.length > 0) {
       workspaceNotes.push("Capability truth:");
       workspaceNotes.push(...capabilityPromptLines);

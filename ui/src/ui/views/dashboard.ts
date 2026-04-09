@@ -1,6 +1,6 @@
 import { html, nothing } from "lit";
-import { formatDurationCompact } from "../../../../src/infra/format-time/format-duration.ts";
 import { repeat } from "lit/directives/repeat.js";
+import { formatDurationCompact } from "../../../../src/infra/format-time/format-duration.ts";
 import { t } from "../../i18n/index.ts";
 import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "../agent-workspace-constants.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
@@ -22,6 +22,7 @@ import type {
   DashboardCalendarEvent,
   DashboardRecentMemoryEntry,
   DashboardSnapshot,
+  DashboardUserChannelsResult,
   DashboardWalletCard,
   DashboardWalletResult,
   DashboardSavedWorkshopItem,
@@ -43,6 +44,7 @@ import {
   resolveToolProfile,
   resolveToolSections,
 } from "./agents-utils.ts";
+import { renderDashboardUserChannelsPage } from "./dashboard-user-channels.ts";
 import { renderMauOffice } from "./mau-office.ts";
 
 type DashboardProps = {
@@ -56,6 +58,9 @@ type DashboardProps = {
   walletTimeZone: "local" | "utc";
   calendarResult: DashboardCalendarResult | null;
   calendarAnchorAtMs: number | null;
+  userChannelsResult: DashboardUserChannelsResult | null;
+  userChannelId: string | null;
+  userChannelAccountId: string | null;
   teamsLoading: boolean;
   teamsError: string | null;
   teamSnapshots: DashboardTeamSnapshotsResult | null;
@@ -127,6 +132,25 @@ type DashboardProps = {
   onCalendarNavigate: (direction: -1 | 1) => void;
   onCalendarJumpToday: () => void;
   onCalendarSelectDay: (anchorAtMs: number, view?: "month" | "week" | "day") => void;
+  onSelectUserChannel: (channelId: string) => void;
+  onSelectUserChannelAccount: (channelId: string, accountId: string) => void;
+  onOpenUserManagement: () => void;
+  onConnectUserChannel: (params: {
+    channelId: string;
+    fields: Record<string, string>;
+  }) => void;
+  onSaveUserChannelAllowlist: (params: {
+    channelId: string;
+    accountId: string;
+    scope: "dm" | "group";
+    entries: string;
+  }) => void;
+  onSaveUserChannelChats: (params: {
+    channelId: string;
+    accountId: string;
+    policy: "allowlist" | "open" | "disabled";
+    entries: string;
+  }) => void;
   onSelectTeam: (selection: string | null) => void;
   onPromptTeamEdit: (params: {
     teamId: string;
@@ -149,6 +173,10 @@ type DashboardProps = {
   onMauOfficeChatSend: () => void;
   onMauOfficeChatAbort: () => void;
   onMauOfficeChatPositionChange: (position: { x: number; y: number }) => void;
+  whatsappMessage: string | null;
+  whatsappQrDataUrl: string | null;
+  whatsappBusy: boolean;
+  onStartWhatsApp: (force: boolean) => void;
 };
 
 const TASK_STATUS_ORDER: DashboardTask["status"][] = [
@@ -194,6 +222,8 @@ function renderShellPageActions(props: DashboardProps, page: DashboardPage) {
     case "workshop":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "routines":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "user-channels":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "teams":
       return html`
@@ -1215,7 +1245,9 @@ function renderDashboardAgentScope(
   agentId: string | null,
 ) {
   if (!selectedAgent || !agentId) {
-    return html`<div class="dashboard-empty">Select an agent to inspect its scope.</div>`;
+    return html`
+      <div class="dashboard-empty">Select an agent to inspect its scope.</div>
+    `;
   }
   const defaultId = props.agentsList?.defaultId ?? null;
   const context = buildAgentContext(
@@ -1315,7 +1347,9 @@ function renderDashboardAgentScope(
                   ${skillAllowlist.map((skill) => html`<span class="chip mono">${skill}</span>`)}
                 </div>
               `
-            : html`<div class="muted" style="margin-top: 12px;">All skills are enabled for this agent.</div>`
+            : html`
+                <div class="muted" style="margin-top: 12px">All skills are enabled for this agent.</div>
+              `
         }
       </section>
 
@@ -1333,13 +1367,15 @@ function renderDashboardAgentScope(
         </div>
         ${
           props.configLoading && !props.configForm
-            ? html`<div class="callout info" style="margin-top: 12px;">Loading gateway config…</div>`
+            ? html`
+                <div class="callout info" style="margin-top: 12px">Loading gateway config…</div>
+              `
             : nothing
         }
         ${
           !props.configLoading && !props.configForm
             ? html`
-                <div class="callout info" style="margin-top: 12px;">
+                <div class="callout info" style="margin-top: 12px">
                   Gateway config is unavailable, so this scope view is using runtime defaults only.
                 </div>
               `
@@ -1348,14 +1384,14 @@ function renderDashboardAgentScope(
         ${
           props.toolsCatalogLoading && !runtimeCatalog
             ? html`
-                <div class="callout info" style="margin-top: 12px;">Loading runtime tool catalog…</div>
+                <div class="callout info" style="margin-top: 12px">Loading runtime tool catalog…</div>
               `
             : nothing
         }
         ${
           props.toolsCatalogError
             ? html`
-                <div class="callout info" style="margin-top: 12px;">
+                <div class="callout info" style="margin-top: 12px">
                   Tool catalog unavailable. Showing the fallback tool groups instead.
                 </div>
               `
@@ -1380,7 +1416,9 @@ function renderDashboardAgentScope(
                     <div class="card-sub">${group.enabledCount}/${group.tools.length} enabled</div>
                   </div>
                   ${
-                    group.pluginId ? html`<span class="pill mono">${group.pluginId}</span>` : nothing
+                    group.pluginId
+                      ? html`<span class="pill mono">${group.pluginId}</span>`
+                      : nothing
                   }
                 </div>
                 <div class="chip-row" style="margin-top: 12px;">
@@ -2538,31 +2576,32 @@ function renderTeamsPage(props: DashboardProps) {
         node: DashboardTeamSnapshot["nodes"][number];
       } => Boolean(entry.node),
     );
-  const inboundLinks = selected && selectedTeamId
-    ? snapshots
-        .filter((snapshot) => selectionKeyForTeam(snapshot) !== selectionKeyForTeam(selected))
-        .flatMap((snapshot) =>
-          snapshot.edges
-            .filter((edge) => edge.kind === "links")
-            .map((edge) => ({
-              edge,
-              node: snapshot.nodes.find((candidate) => candidate.id === edge.to),
-              snapshot,
-            }))
-            .filter(
-              (
-                entry,
-              ): entry is {
-                edge: DashboardTeamSnapshot["edges"][number];
-                node: DashboardTeamSnapshot["nodes"][number];
-                snapshot: DashboardTeamSnapshot;
-              } =>
-                Boolean(entry.node) &&
-                entry.node.kind === "linked_team" &&
-                nodeTargetsSelectedTeam(entry.node.id, selectedTeamId),
-            ),
-        )
-    : [];
+  const inboundLinks =
+    selected && selectedTeamId
+      ? snapshots
+          .filter((snapshot) => selectionKeyForTeam(snapshot) !== selectionKeyForTeam(selected))
+          .flatMap((snapshot) =>
+            snapshot.edges
+              .filter((edge) => edge.kind === "links")
+              .map((edge) => ({
+                edge,
+                node: snapshot.nodes.find((candidate) => candidate.id === edge.to),
+                snapshot,
+              }))
+              .filter(
+                (
+                  entry,
+                ): entry is {
+                  edge: DashboardTeamSnapshot["edges"][number];
+                  node: DashboardTeamSnapshot["nodes"][number];
+                  snapshot: DashboardTeamSnapshot;
+                } =>
+                  Boolean(entry.node) &&
+                  entry.node.kind === "linked_team" &&
+                  nodeTargetsSelectedTeam(entry.node.id, selectedTeamId),
+              ),
+          )
+      : [];
   const lifecycleStages = selected?.lifecycleStages ?? [];
   const delegateCount = members.length;
   const selectedRuns = selected
@@ -2975,48 +3014,64 @@ export function renderDashboard(props: DashboardProps) {
             ? renderTodayPage(props)
             : page === "wallet"
               ? renderWalletPage(props)
-            : page === "mau-office"
-              ? renderMauOffice({
-                  loading: props.mauOfficeLoading,
-                  error: props.mauOfficeError,
-                  state: props.mauOfficeState,
-                  basePath: props.basePath,
-                  chatWindow: {
-                    open: props.mauOfficeChatOpen,
-                    minimized: props.mauOfficeChatMinimized,
-                    actorId: props.mauOfficeChatActorId,
-                    actorLabel: props.mauOfficeChatActorLabel,
-                    sessionKey: props.mauOfficeChatSessionKey,
-                    loading: props.mauOfficeChatLoading,
-                    sending: props.mauOfficeChatSending,
-                    draft: props.mauOfficeChatMessage,
-                    messages: props.mauOfficeChatMessages,
-                    stream: props.mauOfficeChatStream,
-                    streamStartedAt: props.mauOfficeChatStreamStartedAt,
-                    error: props.mauOfficeChatError,
-                    position: props.mauOfficeChatPosition,
-                  },
-                  onRefresh: props.onRefreshMauOffice,
-                  onRoomFocus: props.onMauOfficeRoomFocus,
-                  onActorOpen: props.onMauOfficeActorOpen,
-                  onChatClose: props.onMauOfficeChatClose,
-                  onChatToggleMinimized: props.onMauOfficeChatToggleMinimized,
-                  onChatDraftChange: props.onMauOfficeChatDraftChange,
-                  onChatSend: props.onMauOfficeChatSend,
-                  onChatAbort: props.onMauOfficeChatAbort,
-                  onChatPositionChange: props.onMauOfficeChatPositionChange,
-                })
-              : page === "tasks"
-                ? renderTasksPage(props)
-                : page === "workshop"
-                  ? renderWorkshopPage(props)
-                  : page === "calendar"
-                    ? renderCalendarPage(props)
-                    : page === "routines"
-                      ? renderRoutinesPage(props)
-                      : page === "teams"
-                        ? renderTeamsPage(props)
-                        : renderMemoriesPage(props)
+              : page === "mau-office"
+                ? renderMauOffice({
+                    loading: props.mauOfficeLoading,
+                    error: props.mauOfficeError,
+                    state: props.mauOfficeState,
+                    basePath: props.basePath,
+                    chatWindow: {
+                      open: props.mauOfficeChatOpen,
+                      minimized: props.mauOfficeChatMinimized,
+                      actorId: props.mauOfficeChatActorId,
+                      actorLabel: props.mauOfficeChatActorLabel,
+                      sessionKey: props.mauOfficeChatSessionKey,
+                      loading: props.mauOfficeChatLoading,
+                      sending: props.mauOfficeChatSending,
+                      draft: props.mauOfficeChatMessage,
+                      messages: props.mauOfficeChatMessages,
+                      stream: props.mauOfficeChatStream,
+                      streamStartedAt: props.mauOfficeChatStreamStartedAt,
+                      error: props.mauOfficeChatError,
+                      position: props.mauOfficeChatPosition,
+                    },
+                    onRefresh: props.onRefreshMauOffice,
+                    onRoomFocus: props.onMauOfficeRoomFocus,
+                    onActorOpen: props.onMauOfficeActorOpen,
+                    onChatClose: props.onMauOfficeChatClose,
+                    onChatToggleMinimized: props.onMauOfficeChatToggleMinimized,
+                    onChatDraftChange: props.onMauOfficeChatDraftChange,
+                    onChatSend: props.onMauOfficeChatSend,
+                    onChatAbort: props.onMauOfficeChatAbort,
+                    onChatPositionChange: props.onMauOfficeChatPositionChange,
+                  })
+                : page === "tasks"
+                  ? renderTasksPage(props)
+                  : page === "workshop"
+                    ? renderWorkshopPage(props)
+                    : page === "calendar"
+                      ? renderCalendarPage(props)
+                      : page === "routines"
+                        ? renderRoutinesPage(props)
+                        : page === "user-channels"
+                          ? renderDashboardUserChannelsPage({
+                              result: props.userChannelsResult,
+                              selectedChannelId: props.userChannelId,
+                              selectedAccountId: props.userChannelAccountId,
+                              onSelectChannel: props.onSelectUserChannel,
+                              onSelectAccount: props.onSelectUserChannelAccount,
+                              onOpenUsersPage: props.onOpenUserManagement,
+                              onConnectChannel: props.onConnectUserChannel,
+                              onSaveAllowlist: props.onSaveUserChannelAllowlist,
+                              onSaveChats: props.onSaveUserChannelChats,
+                              whatsappMessage: props.whatsappMessage,
+                              whatsappQrDataUrl: props.whatsappQrDataUrl,
+                              whatsappBusy: props.whatsappBusy,
+                              onStartWhatsApp: props.onStartWhatsApp,
+                            })
+                          : page === "teams"
+                            ? renderTeamsPage(props)
+                            : renderMemoriesPage(props)
         }
       </main>
     </div>

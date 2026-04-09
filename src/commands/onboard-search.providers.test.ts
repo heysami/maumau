@@ -283,7 +283,12 @@ describe("onboard-search provider resolution", () => {
       createSearchEntry("tavily", "Tavily", "LLM search", "https://tavily.com/"),
       createBundledDuckDuckGoEntry(),
       createSearchEntry("brave", "Brave Search", "Search API", "https://brave.com/search/api/"),
-      createSearchEntry("moonshot", "Moonshot Search", "Kimi web search", "https://platform.moonshot.cn/"),
+      createSearchEntry(
+        "moonshot",
+        "Moonshot Search",
+        "Kimi web search",
+        "https://platform.moonshot.cn/",
+      ),
       createSearchEntry("exa", "Exa", "Semantic search", "https://exa.ai/"),
     ];
     mocks.resolvePluginWebSearchProviders.mockImplementation((params) =>
@@ -352,8 +357,18 @@ describe("onboard-search provider resolution", () => {
       embedded: true,
     });
 
-    expect(notes.some((note) => note.title === "Before you choose DuckDuckGo Search (experimental)")).toBe(true);
-    expect(notes.some((note) => note.message.includes("What you need: Nothing extra. No signup, no key."))).toBe(true);
-    expect(notes.some((note) => note.message.includes("Quality / caveat: Experimental key-free fallback."))).toBe(true);
+    expect(
+      notes.some((note) => note.title === "Before you choose DuckDuckGo Search (experimental)"),
+    ).toBe(true);
+    expect(
+      notes.some((note) =>
+        note.message.includes("What you need: Nothing extra. No signup, no key."),
+      ),
+    ).toBe(true);
+    expect(
+      notes.some((note) =>
+        note.message.includes("Quality / caveat: Experimental key-free fallback."),
+      ),
+    ).toBe(true);
   });
 });

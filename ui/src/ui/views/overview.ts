@@ -197,7 +197,8 @@ function renderConversationAutomationPresetCard(
             @change=${(event: Event) => {
               preset.onStateChange({
                 ...state,
-                sttProvider: (event.target as HTMLSelectElement).value as ConversationAutomationPresetState["sttProvider"],
+                sttProvider: (event.target as HTMLSelectElement)
+                  .value as ConversationAutomationPresetState["sttProvider"],
               });
             }}
           >

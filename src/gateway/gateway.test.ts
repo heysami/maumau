@@ -531,7 +531,9 @@ describe("gateway e2e", () => {
       process.env.MAUMAU_SKIP_BROWSER_CONTROL_SERVER = "1";
       delete process.env.MAUMAU_GATEWAY_TOKEN;
 
-      const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-wizard-warmup-blocked-home-"));
+      const tempHome = await fs.mkdtemp(
+        path.join(os.tmpdir(), "maumau-wizard-warmup-blocked-home-"),
+      );
       process.env.HOME = tempHome;
       delete process.env.MAUMAU_STATE_DIR;
       delete process.env.MAUMAU_CONFIG_PATH;

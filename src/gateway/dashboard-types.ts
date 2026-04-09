@@ -241,6 +241,124 @@ export type DashboardMemoriesResult = {
   entries: DashboardRecentMemoryEntry[];
 };
 
+export type DashboardUserChannelAccessPolicy = "allowlist" | "open" | "disabled";
+
+export type DashboardUserChannelCapabilityFlags = {
+  users: boolean;
+  dmSenders: boolean;
+  groupSenders: boolean;
+  chats: boolean;
+  overrides: boolean;
+};
+
+export type DashboardUserChannelNoteBlock = {
+  title: string;
+  lines: string[];
+};
+
+export type DashboardUserChannelConnectField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  secret?: boolean;
+  helpTitle?: string;
+  helpLines?: string[];
+  currentValue?: string;
+};
+
+export type DashboardUserChannelEditableList = {
+  label: string;
+  placeholder?: string;
+  helpTitle?: string;
+  helpLines?: string[];
+  entries: string[];
+  policy?: DashboardUserChannelAccessPolicy;
+};
+
+export type DashboardUserChannelOverride = {
+  label: string;
+  entries: string[];
+};
+
+export type DashboardUserChannelUserRow = {
+  userId: string;
+  userLabel: string;
+  identityLabel: string;
+  senderId: string;
+  senderName?: string;
+  senderUsername?: string;
+  accountId?: string;
+  groupLabels: string[];
+  active: boolean;
+};
+
+export type DashboardUserChannelQuickSetupKind =
+  | "whatsapp"
+  | "single-secret"
+  | "dual-secret"
+  | "single-text";
+
+export type DashboardUserChannelQuickSetupGuidance = {
+  identity: string;
+  requirements: string[];
+  setupSteps: string[];
+  artifacts: string[];
+};
+
+export type DashboardUserChannelQuickSetupCard = {
+  kind: DashboardUserChannelQuickSetupKind;
+  sectionTitle: string;
+  title: string;
+  headline: string;
+  message: string;
+  badge: string;
+  buttonTitle?: string;
+  existingCredentialNote?: string;
+  setupNote: string;
+};
+
+export type DashboardUserChannelConnectSpec = {
+  channelId: string;
+  label: string;
+  detailLabel: string;
+  systemImage?: string;
+  guidance: DashboardUserChannelQuickSetupGuidance;
+  quickSetup: DashboardUserChannelQuickSetupCard;
+  fields: DashboardUserChannelConnectField[];
+};
+
+export type DashboardUserChannelAccount = {
+  accountId: string;
+  name?: string | null;
+  defaultAccount: boolean;
+  configured: boolean;
+  linked: boolean;
+  enabled: boolean;
+  running: boolean;
+  connected: boolean;
+  users: DashboardUserChannelUserRow[];
+  capabilities: DashboardUserChannelCapabilityFlags;
+  dmSenders?: DashboardUserChannelEditableList;
+  groupSenders?: DashboardUserChannelEditableList;
+  chats?: DashboardUserChannelEditableList;
+  overrides: DashboardUserChannelOverride[];
+};
+
+export type DashboardUserChannel = {
+  channelId: string;
+  label: string;
+  detailLabel: string;
+  systemImage?: string;
+  accounts: DashboardUserChannelAccount[];
+};
+
+export type DashboardUserChannelsResult = {
+  generatedAtMs: number;
+  channels: DashboardUserChannel[];
+  availableChannels: DashboardUserChannelConnectSpec[];
+};
+
 export type DashboardTeamNodeKind = "manager" | "member" | "linked_team" | "linked_agent";
 
 export type DashboardTeamNodeStage =

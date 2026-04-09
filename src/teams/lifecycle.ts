@@ -1,7 +1,4 @@
-import type {
-  TeamWorkflowBaseConfig,
-  TeamWorkflowConfig,
-} from "../config/types.teams.js";
+import type { TeamWorkflowBaseConfig, TeamWorkflowConfig } from "../config/types.teams.js";
 
 export const TEAM_WORKFLOW_LIFECYCLE_STATUS_VALUES = [
   "blocked",
@@ -38,9 +35,7 @@ function normalizeLifecycleStageId(value: string, fallbackIndex: number): string
 }
 
 function normalizeLifecycleStageStatus(value: unknown): TeamWorkflowLifecycleStageStatus {
-  return TEAM_WORKFLOW_LIFECYCLE_STATUS_VALUES.includes(
-    value as TeamWorkflowLifecycleStageStatus,
-  )
+  return TEAM_WORKFLOW_LIFECYCLE_STATUS_VALUES.includes(value as TeamWorkflowLifecycleStageStatus)
     ? (value as TeamWorkflowLifecycleStageStatus)
     : "in_progress";
 }

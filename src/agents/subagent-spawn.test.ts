@@ -144,17 +144,17 @@ describe("spawnSubagentDirect seam flow", () => {
 
     hoisted.callGatewayMock.mockImplementation(
       async (request: { method?: string; params?: Record<string, unknown> }) => {
-      operations.push(`gateway:${request.method ?? "unknown"}`);
-      if (request.method === "sessions.patch" && !initialPatchRequest) {
-        initialPatchRequest = request;
-      }
-      if (request.method === "agent") {
-        return { runId: "run-1" };
-      }
-      if (request.method?.startsWith("sessions.")) {
-        return { ok: true };
-      }
-      return {};
+        operations.push(`gateway:${request.method ?? "unknown"}`);
+        if (request.method === "sessions.patch" && !initialPatchRequest) {
+          initialPatchRequest = request;
+        }
+        if (request.method === "agent") {
+          return { runId: "run-1" };
+        }
+        if (request.method?.startsWith("sessions.")) {
+          return { ok: true };
+        }
+        return {};
       },
     );
     hoisted.updateSessionStoreMock.mockImplementation(

@@ -54,7 +54,9 @@ export function resolveEmbeddedRunSkillEntries(params: {
 } {
   const shouldLoadSkillEntries = !params.skillsSnapshot || !params.skillsSnapshot.resolvedSkills;
   const config = resolveSkillRuntimeConfig(params.config);
-  const snapshotSkillEntries = createSkillEntriesFromSnapshot(params.skillsSnapshot?.resolvedSkills);
+  const snapshotSkillEntries = createSkillEntriesFromSnapshot(
+    params.skillsSnapshot?.resolvedSkills,
+  );
   const loadedSkillEntries = shouldLoadSkillEntries
     ? loadWorkspaceSkillEntries(params.workspaceDir, { config })
     : snapshotSkillEntries;

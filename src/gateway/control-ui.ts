@@ -11,12 +11,8 @@ import { isWithinDir } from "../infra/path-safety.js";
 import { openVerifiedFileSync } from "../infra/safe-open-sync.js";
 import { AVATAR_MAX_BYTES } from "../shared/avatar-policy.js";
 import { resolveRuntimeServiceVersion } from "../version.js";
-import {
-  isLocalDirectRequest,
-  resolveGatewayAuth,
-  type ResolvedGatewayAuth,
-} from "./auth.js";
 import { DEFAULT_ASSISTANT_IDENTITY, resolveAssistantIdentity } from "./assistant-identity.js";
+import { isLocalDirectRequest, resolveGatewayAuth, type ResolvedGatewayAuth } from "./auth.js";
 import {
   CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
   type ControlUiBootstrapConfig,
@@ -28,13 +24,13 @@ import {
   respondPlainText,
 } from "./control-ui-http-utils.js";
 import { classifyControlUiRequest } from "./control-ui-routing.js";
-import { resolveTailnetDnsHint } from "./server-discovery.js";
 import {
   buildControlUiAvatarUrl,
   CONTROL_UI_AVATAR_PREFIX,
   normalizeControlUiBasePath,
   resolveAssistantAvatarUrl,
 } from "./control-ui-shared.js";
+import { resolveTailnetDnsHint } from "./server-discovery.js";
 
 const ROOT_PREFIX = "/";
 const CONTROL_UI_ASSETS_MISSING_MESSAGE =
@@ -382,7 +378,8 @@ export function handleControlUiHttpRequest(
       ? resolveAssistantIdentity({ cfg: config, agentId: opts?.agentId })
       : DEFAULT_ASSISTANT_IDENTITY;
     const resolvedAuth =
-      opts?.resolvedAuth ?? (config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null);
+      opts?.resolvedAuth ??
+      (config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null);
     const loopbackGatewayToken =
       resolvedAuth &&
       resolvedAuth.mode === "token" &&

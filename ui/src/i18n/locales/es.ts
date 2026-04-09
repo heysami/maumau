@@ -63,8 +63,10 @@ export const es: TranslationMap = {
     dashboardTasks: "Kanban en vivo derivado de sesiones y ejecuciones delegadas.",
     dashboardWorkshop: "Vistas previas interactivas vinculadas a las tareas que las generaron.",
     dashboardCalendar: "Vistas de mes, semana y día para rutinas, cron y actividad.",
-    dashboardRoutines: "Rutinas orientadas a personas a partir de automatización y cron existentes.",
-    dashboardTeams: "Organigramas generados y flujo de delegación desde la configuración guardada del equipo.",
+    dashboardRoutines:
+      "Rutinas orientadas a personas a partir de automatización y cron existentes.",
+    dashboardTeams:
+      "Organigramas generados y flujo de delegación desde la configuración guardada del equipo.",
     dashboardMemories: "Agente seleccionado, archivos de memoria y alcance en tiempo de ejecución.",
     usage: "Monitorear uso de API y costes.",
     cron: "Programar despertares y ejecuciones recurrentes de agentes.",
@@ -178,7 +180,8 @@ export const es: TranslationMap = {
       prev: "Anterior",
       today: "Hoy",
       next: "Siguiente",
-      toolbarSubtitle: "Recordatorios, rutinas y aprobaciones orientados al usuario en la ventana seleccionada.",
+      toolbarSubtitle:
+        "Recordatorios, rutinas y aprobaciones orientados al usuario en la ventana seleccionada.",
       visibleItems: "{count} elementos visibles",
       selectedDay: "{day}",
       moreItems: "+{count} más",
@@ -205,8 +208,7 @@ export const es: TranslationMap = {
       liveRuns: "Ejecuciones activas del equipo",
       liveRunsSubtitle:
         "Progreso detallado del ciclo de vida, bloqueos y trabajo delegado por rol para este flujo.",
-      liveRunsEmpty:
-        "Todavía no hay ejecuciones activas o retenidas del equipo para este flujo.",
+      liveRunsEmpty: "Todavía no hay ejecuciones activas o retenidas del equipo para este flujo.",
       generatedSummary: "Resumen LLM",
       fallbackSummary: "Fallback determinista",
       noManager: "Sin manager",

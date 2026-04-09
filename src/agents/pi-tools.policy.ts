@@ -204,10 +204,7 @@ function resolveExplicitProfileAlsoAllow(tools?: MaumauConfig["tools"]): string[
   return Array.isArray(tools?.alsoAllow) ? tools.alsoAllow : undefined;
 }
 
-function mergeOptionalToolLists(
-  globalList?: string[],
-  agentList?: string[],
-): string[] | undefined {
+function mergeOptionalToolLists(globalList?: string[], agentList?: string[]): string[] | undefined {
   if (!Array.isArray(globalList) && !Array.isArray(agentList)) {
     return undefined;
   }

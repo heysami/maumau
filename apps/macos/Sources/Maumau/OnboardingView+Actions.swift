@@ -109,6 +109,9 @@ extension OnboardingView {
         self.onboardingFinishStatusIsError = false
 
         Task { @MainActor in
+            // A lingering setup wizard session can defer gateway restarts triggered by
+            // the final config apply, so end it before waiting for restart readiness.
+            await self.onboardingWizard.cancelIfRunning()
             let applied = await self.onboardingChannelsStore.applyDeferredConfigChanges()
             guard applied else {
                 self.onboardingFinishing = false

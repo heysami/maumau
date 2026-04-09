@@ -161,7 +161,10 @@ export function formatDateYmdUtc(ms: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-export function formatDateYmd(ms: number, interpretation: DateInterpretation = { mode: "utc" }): string {
+export function formatDateYmd(
+  ms: number,
+  interpretation: DateInterpretation = { mode: "utc" },
+): string {
   if (interpretation.mode === "gateway") {
     const d = new Date(ms);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

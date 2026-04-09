@@ -5,8 +5,8 @@ import { maybeAddTailnetOriginToControlUiAllowedOrigins } from "../../../gateway
 import { findTailscaleBinary } from "../../../infra/tailscale.js";
 import type { RuntimeEnv } from "../../../runtime.js";
 import { resolveDefaultSecretProviderAlias } from "../../../secrets/ref-contract.js";
-import { normalizeGatewayTokenInput, randomToken } from "../../onboard-helpers.js";
 import { applyOnboardingTailscaleGatewayAuth } from "../../onboard-gateway-tailscale-auth.js";
+import { normalizeGatewayTokenInput, randomToken } from "../../onboard-helpers.js";
 import type { OnboardOptions } from "../../onboard-types.js";
 
 export async function applyNonInteractiveGatewayConfig(params: {

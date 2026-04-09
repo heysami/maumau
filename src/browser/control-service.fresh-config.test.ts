@@ -36,12 +36,14 @@ const mocks = vi.hoisted(() => ({
   createConfigIO: vi.fn(),
   resolveBrowserConfig: vi.fn(() => resolvedConfig),
   ensureBrowserControlAuth: vi.fn(async () => ({ generatedToken: false })),
-  createBrowserRuntimeState: vi.fn(async ({ port, resolved }: { port: number; resolved: ResolvedBrowserConfig }) => ({
-    server: null,
-    port,
-    resolved,
-    profiles: new Map(),
-  })),
+  createBrowserRuntimeState: vi.fn(
+    async ({ port, resolved }: { port: number; resolved: ResolvedBrowserConfig }) => ({
+      server: null,
+      port,
+      resolved,
+      profiles: new Map(),
+    }),
+  ),
 }));
 
 vi.mock("../config/config.js", async (importOriginal) => {

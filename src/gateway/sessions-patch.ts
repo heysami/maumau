@@ -170,9 +170,7 @@ export async function applySessionsPatchToStore(params: {
       }
     } else if (raw !== undefined) {
       if (!supportsSpawnLineage(storeKey)) {
-        return invalid(
-          "requesterSenderIsOwner is only supported for subagent:* or acp:* sessions",
-        );
+        return invalid("requesterSenderIsOwner is only supported for subagent:* or acp:* sessions");
       }
       if (
         typeof existing?.requesterSenderIsOwner === "boolean" &&
@@ -200,10 +198,7 @@ export async function applySessionsPatchToStore(params: {
       if (!trimmed) {
         return invalid("invalid requesterTailscaleLogin: empty");
       }
-      if (
-        existing?.requesterTailscaleLogin &&
-        existing.requesterTailscaleLogin !== trimmed
-      ) {
+      if (existing?.requesterTailscaleLogin && existing.requesterTailscaleLogin !== trimmed) {
         return invalid("requesterTailscaleLogin cannot be changed once set");
       }
       next.requesterTailscaleLogin = trimmed;

@@ -3,19 +3,16 @@ import path from "node:path";
 import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { withTempHome as withTempHomeBase } from "../../test/helpers/temp-home.js";
-import * as configModule from "../config/config.js";
-import { clearSessionStoreCacheForTest } from "../config/sessions.js";
-import {
-  resetAgentEventsForTest,
-  resetAgentRunContextForTest,
-} from "../infra/agent-events.js";
-import type { RuntimeEnv } from "../runtime.js";
-import { agentCommand } from "./agent.js";
-import * as embeddedModule from "../agents/pi-embedded.js";
 import * as modelCatalogModule from "../agents/model-catalog.js";
 import * as modelSelectionModule from "../agents/model-selection.js";
+import * as embeddedModule from "../agents/pi-embedded.js";
 import { makeAgentAssistantMessage } from "../agents/test-helpers/agent-message-fixtures.js";
+import * as configModule from "../config/config.js";
 import type { MaumauConfig } from "../config/config.js";
+import { clearSessionStoreCacheForTest } from "../config/sessions.js";
+import { resetAgentEventsForTest, resetAgentRunContextForTest } from "../infra/agent-events.js";
+import type { RuntimeEnv } from "../runtime.js";
+import { agentCommand } from "./agent.js";
 
 vi.mock("../logging/subsystem.js", () => {
   const createMockLogger = () => ({
@@ -175,9 +172,11 @@ describe("agentCommand transcript hygiene", () => {
       const sessionFile = usedSessionFile;
       expect(sessionFile).toBeTruthy();
 
-      const latestUserEntry = SessionManager.open(sessionFile!).getBranch().findLast((entry) => {
-        return entry.type === "message" && entry.message.role === "user";
-      });
+      const latestUserEntry = SessionManager.open(sessionFile!)
+        .getBranch()
+        .findLast((entry) => {
+          return entry.type === "message" && entry.message.role === "user";
+        });
       expect(latestUserEntry?.type).toBe("message");
       if (latestUserEntry?.type !== "message") {
         return;

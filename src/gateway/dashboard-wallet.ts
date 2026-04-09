@@ -97,11 +97,8 @@ function overlapsRange(
 }
 
 function resolveVoiceCallStorePath(cfg: MaumauConfig): string {
-  const rawStore = (
-    cfg.plugins?.entries?.["voice-call"]?.config as
-      | { store?: unknown }
-      | undefined
-  )?.store;
+  const rawStore = (cfg.plugins?.entries?.["voice-call"]?.config as { store?: unknown } | undefined)
+    ?.store;
   if (typeof rawStore === "string" && rawStore.trim()) {
     return resolveUserPath(rawStore);
   }

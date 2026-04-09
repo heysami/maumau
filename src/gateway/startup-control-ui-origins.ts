@@ -44,9 +44,7 @@ function buildSeededOriginsInfoLog(origins: string[], bind: GatewayNonLoopbackBi
   );
 }
 
-async function maybeAddTailnetOriginForStartup(
-  config: MaumauConfig,
-): Promise<{
+async function maybeAddTailnetOriginForStartup(config: MaumauConfig): Promise<{
   config: MaumauConfig;
   addedOrigins: string[];
   tailscaleMode?: "serve" | "funnel";

@@ -17,7 +17,6 @@ import {
   browserStop,
   browserTabs,
 } from "../../browser/client.js";
-import type { MaumauConfig } from "../../config/config.js";
 import { resolveBrowserConfig, resolveProfile } from "../../browser/config.js";
 import { DEFAULT_UPLOAD_DIR, resolveExistingPathsWithinRoot } from "../../browser/paths.js";
 import { getBrowserProfileCapabilities } from "../../browser/profile-capabilities.js";
@@ -26,6 +25,7 @@ import {
   trackSessionBrowserTab,
   untrackSessionBrowserTab,
 } from "../../browser/session-tab-registry.js";
+import type { MaumauConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import {
@@ -423,9 +423,7 @@ export function createBrowserTool(opts?: {
 
       if (action === "receipt_digest") {
         if (profile) {
-          throw new Error(
-            "receipt_digest selects the browser lane automatically; omit profile.",
-          );
+          throw new Error("receipt_digest selects the browser lane automatically; omit profile.");
         }
         if (requestedNode || target === "node" || target === "sandbox") {
           throw new Error(

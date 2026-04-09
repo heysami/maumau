@@ -23,16 +23,7 @@ export type MauOfficeSemanticScaleSpec = {
 export type MauOfficeAssetScaleSpec = {
   asset: string;
   anchor: "bottom-center" | "top-left";
-  family:
-    | "board"
-    | "bubble"
-    | "chrome"
-    | "floor"
-    | "path"
-    | "prop"
-    | "sign"
-    | "tile"
-    | "worker";
+  family: "board" | "bubble" | "chrome" | "floor" | "path" | "prop" | "sign" | "tile" | "worker";
   slotTiles: {
     width: number;
     height: number;
@@ -159,54 +150,102 @@ const FIXED_ASSET_SPECS: MauOfficeAssetScaleSpec[] = [
   fullTile("mau-office/tiles/floor-room-d.png"),
   fullTile("mau-office/tiles/floor-hall-a.png"),
   fullTile("mau-office/tiles/floor-hall-b.png"),
-  shellTile("mau-office/tiles/wall-front-left.png", { width: 64, height: 192 }, {
-    width: px(64),
-    height: px(192),
-  }),
-  shellTile("mau-office/tiles/wall-front-mid.png", { width: 64, height: 192 }, {
-    width: px(64),
-    height: px(192),
-  }),
-  shellTile("mau-office/tiles/wall-front-right.png", { width: 64, height: 192 }, {
-    width: px(64),
-    height: px(192),
-  }),
-  shellTile("mau-office/tiles/wall-side-left.png", { width: 64, height: 64 }, {
-    width: px(8, 14),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/wall-side-right.png", { width: 64, height: 64 }, {
-    width: px(8, 14),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/wall-bottom.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/wall-corner-bl.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/wall-corner-br.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/door-top.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/door-bottom.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/hall-cap-left.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
-  shellTile("mau-office/tiles/hall-cap-right.png", { width: 64, height: 64 }, {
-    width: px(64),
-    height: px(64),
-  }),
+  shellTile(
+    "mau-office/tiles/wall-front-left.png",
+    { width: 64, height: 192 },
+    {
+      width: px(64),
+      height: px(192),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-front-mid.png",
+    { width: 64, height: 192 },
+    {
+      width: px(64),
+      height: px(192),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-front-right.png",
+    { width: 64, height: 192 },
+    {
+      width: px(64),
+      height: px(192),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-side-left.png",
+    { width: 64, height: 64 },
+    {
+      width: px(8, 14),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-side-right.png",
+    { width: 64, height: 64 },
+    {
+      width: px(8, 14),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-bottom.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-corner-bl.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/wall-corner-br.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/door-top.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/door-bottom.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/hall-cap-left.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
+  shellTile(
+    "mau-office/tiles/hall-cap-right.png",
+    { width: 64, height: 64 },
+    {
+      width: px(64),
+      height: px(64),
+    },
+  ),
   propSpec({
     asset: "mau-office/items/desk-wide-v1.png",
     canvas: { width: 192, height: 128 },

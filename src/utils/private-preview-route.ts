@@ -21,9 +21,7 @@ export function isTrustedOwnerDirectPreviewRoute(params: PrivatePreviewRouteCont
   return params.senderIsOwner === true && isDirectRoute(params);
 }
 
-export function isRequesterTrustedForPrivatePreview(
-  params: PrivatePreviewRouteContext,
-): boolean {
+export function isRequesterTrustedForPrivatePreview(params: PrivatePreviewRouteContext): boolean {
   return (
     Boolean(params.requesterTailscaleLogin?.trim()) || isTrustedOwnerDirectPreviewRoute(params)
   );

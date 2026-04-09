@@ -479,7 +479,7 @@ export async function spawnSubagentDirect(
     : undefined;
   const targetAgentId = requestedAgentId
     ? normalizeAgentId(requestedAgentId)
-    : implicitManagerSpecialistTarget?.agentId ?? defaultTargetAgentId;
+    : (implicitManagerSpecialistTarget?.agentId ?? defaultTargetAgentId);
   const executionRouteRequirement = resolveExecutionRouteRequirement({
     cfg,
     task: routingTask,
@@ -509,8 +509,7 @@ export async function spawnSubagentDirect(
     executionRouteRequirement.teamReady === true &&
     !requiredTeamId &&
     normalizeAgentId(routedTeamConfig.managerAgentId) === targetAgentId;
-  const requesterIsTeamManager =
-    requesterTeamContext?.teamRole?.trim().toLowerCase() === "manager";
+  const requesterIsTeamManager = requesterTeamContext?.teamRole?.trim().toLowerCase() === "manager";
   if (
     requesterIsTeamManager &&
     !requestedAgentId &&
@@ -624,7 +623,9 @@ export async function spawnSubagentDirect(
     maxSpawnDepth: childMaxSpawnDepth,
   });
   const targetAgentConfig =
-    targetAgentId === requesterAgentId ? requesterAgentConfig : resolveAgentConfig(cfg, targetAgentId);
+    targetAgentId === requesterAgentId
+      ? requesterAgentConfig
+      : resolveAgentConfig(cfg, targetAgentId);
   const resolvedModel = resolveSubagentSpawnModelSelection({
     cfg,
     agentId: targetAgentId,

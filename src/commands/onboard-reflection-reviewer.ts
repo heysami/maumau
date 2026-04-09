@@ -3,11 +3,11 @@ import path from "node:path";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import type { MaumauConfig } from "../config/config.js";
-import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
-import type { RuntimeEnv } from "../runtime.js";
 import { createJob } from "../cron/service/jobs.js";
 import { createCronServiceState } from "../cron/service/state.js";
 import { loadCronStore, resolveCronStorePath, saveCronStore } from "../cron/store.js";
+import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
+import type { RuntimeEnv } from "../runtime.js";
 import { ensureWorkspaceAndSessions } from "./onboard-helpers.js";
 
 export const REFLECTION_REVIEWER_AGENT_ID = "reviewer";
@@ -55,7 +55,8 @@ function shouldUseDedicatedReviewerAgent(config: MaumauConfig): boolean {
   const sandbox = config.agents?.defaults?.sandbox;
   const mode = sandbox?.mode ?? "off";
   const sandboxed =
-    mode === "all" || (mode === "non-main" && normalizeAgentId(defaultAgentId) !== DEFAULT_AGENT_ID);
+    mode === "all" ||
+    (mode === "non-main" && normalizeAgentId(defaultAgentId) !== DEFAULT_AGENT_ID);
   if (!sandboxed) {
     return false;
   }
@@ -116,10 +117,7 @@ export function applyLocalSetupReflectionReviewerDefaults(baseConfig: MaumauConf
     : withToolDefaults;
 }
 
-function hasReflectionJob(
-  jobs: Array<{ name?: string | null }>,
-  name: string,
-): boolean {
+function hasReflectionJob(jobs: Array<{ name?: string | null }>, name: string): boolean {
   return jobs.some((job) => job?.name === name);
 }
 
@@ -146,7 +144,11 @@ function resolveReflectionJobAgentId(config: MaumauConfig): string | undefined {
   return shouldUseDedicatedReviewerAgent(config) ? REFLECTION_REVIEWER_AGENT_ID : undefined;
 }
 
-async function ensureReflectionWorkspace(workspaceDir: string, runtime: RuntimeEnv, agentId?: string) {
+async function ensureReflectionWorkspace(
+  workspaceDir: string,
+  runtime: RuntimeEnv,
+  agentId?: string,
+) {
   const quietRuntime: RuntimeEnv = {
     ...runtime,
     log() {},

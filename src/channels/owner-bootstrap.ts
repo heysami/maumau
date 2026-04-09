@@ -1,7 +1,7 @@
-import { getChannelPlugin, normalizeChannelId } from "./plugins/index.js";
-import type { ChannelId } from "./plugins/types.js";
 import type { MaumauConfig } from "../config/config.js";
 import { normalizeStringEntries } from "../shared/string-normalization.js";
+import { getChannelPlugin, normalizeChannelId } from "./plugins/index.js";
+import type { ChannelId } from "./plugins/types.js";
 
 function hasConfiguredOwnerAllowFrom(cfg: MaumauConfig): boolean {
   return Boolean(

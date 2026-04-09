@@ -3,8 +3,8 @@ import type { MsgContext } from "../../auto-reply/templating.js";
 import { normalizeChatType } from "../../channels/chat-type.js";
 import { resolveConversationLabel } from "../../channels/conversation-label.js";
 import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
-import type { MaumauConfig } from "../config.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
+import type { MaumauConfig } from "../config.js";
 import { buildGroupDisplayName, resolveGroupSessionKey } from "./group.js";
 import type { GroupKeyResolution, SessionEntry, SessionOrigin } from "./types.js";
 
@@ -166,7 +166,12 @@ export function deriveSessionMetaPatch(params: {
     commandAuthorized: params.ctx.CommandAuthorized === true,
   });
   const requesterTailscaleLogin = params.ctx.RequesterTailscaleLogin?.trim() || undefined;
-  if (!groupPatch && !origin && auth.senderIsOwner === false && requesterTailscaleLogin === undefined) {
+  if (
+    !groupPatch &&
+    !origin &&
+    auth.senderIsOwner === false &&
+    requesterTailscaleLogin === undefined
+  ) {
     return null;
   }
 

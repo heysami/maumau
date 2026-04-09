@@ -16,9 +16,7 @@ export const ThinkingLevelSchema = z
   .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
   .optional();
 
-export const AgentExecutionStyleSchema = z
-  .enum(["direct", "hybrid", "orchestrator"])
-  .optional();
+export const AgentExecutionStyleSchema = z.enum(["direct", "hybrid", "orchestrator"]).optional();
 
 export const BackgroundAutomationSchema = z
   .object({

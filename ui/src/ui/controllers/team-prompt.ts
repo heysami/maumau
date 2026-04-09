@@ -12,12 +12,7 @@ import { loadDashboardTeamSnapshots } from "./dashboard.ts";
 
 type TeamPromptHost = Pick<
   ConfigState,
-  | "configForm"
-  | "configSnapshot"
-  | "configFormMode"
-  | "configRaw"
-  | "configFormDirty"
-  | "lastError"
+  "configForm" | "configSnapshot" | "configFormMode" | "configRaw" | "configFormDirty" | "lastError"
 > & {
   client: GatewayBrowserClient | null;
   connected: boolean;
@@ -82,7 +77,11 @@ function applyNullableStringPatch(
   }
 }
 
-function applyBooleanPatch(target: Record<string, unknown>, patch: Record<string, unknown>, key: string) {
+function applyBooleanPatch(
+  target: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  key: string,
+) {
   if (!hasOwn(patch, key)) {
     return;
   }
@@ -161,7 +160,8 @@ function applyAgentPatches(config: Record<string, unknown>, result: TeamPromptEd
   const list = Array.isArray(agentsRecord.list) ? cloneConfigObject(agentsRecord.list) : [];
   for (const patch of result.agentPatches) {
     const existingIndex = list.findIndex((entry) => entry.id === patch.agentId);
-    const baseEntry = existingIndex >= 0 ? cloneConfigObject(list[existingIndex]) : { id: patch.agentId };
+    const baseEntry =
+      existingIndex >= 0 ? cloneConfigObject(list[existingIndex]) : { id: patch.agentId };
     const nextEntry = baseEntry as Record<string, unknown>;
     if ("name" in patch) {
       if (typeof patch.name === "string") {
@@ -288,12 +288,16 @@ export async function submitTeamPromptDialog(host: TeamPromptHost) {
       workflowId: host.teamPromptWorkflowId,
       prompt,
     });
-    applyPromptEditResult(host, {
-      teamId: host.teamPromptTeamId,
-      teamLabel: host.teamPromptTeamLabel,
-      workflowId: host.teamPromptWorkflowId,
-      workflowLabel: host.teamPromptWorkflowLabel,
-    }, result);
+    applyPromptEditResult(
+      host,
+      {
+        teamId: host.teamPromptTeamId,
+        teamLabel: host.teamPromptTeamLabel,
+        workflowId: host.teamPromptWorkflowId,
+        workflowLabel: host.teamPromptWorkflowLabel,
+      },
+      result,
+    );
     await loadDashboardTeamSnapshots(host, { quiet: true });
     host.teamPromptSummary =
       result.summary ?? (result.noop ? "No draft changes were applied." : "Draft updated.");

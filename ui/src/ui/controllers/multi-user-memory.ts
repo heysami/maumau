@@ -159,7 +159,10 @@ function normalizeStringArray(value: unknown): string[] {
   return items;
 }
 
-function normalizeLanguageInput(value: unknown, fallback: LanguageId = DEFAULT_LANGUAGE_ID): LanguageId {
+function normalizeLanguageInput(
+  value: unknown,
+  fallback: LanguageId = DEFAULT_LANGUAGE_ID,
+): LanguageId {
   return normalizeLanguageId(normalizeOptionalString(value)) ?? fallback;
 }
 

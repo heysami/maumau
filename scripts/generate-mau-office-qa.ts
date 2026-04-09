@@ -1,12 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { MAU_OFFICE_WORKER_RIGS } from "../ui/src/ui/mau-office-contract.ts";
 import {
   MAU_OFFICE_ASSET_SCALE_SPECS,
   MAU_OFFICE_WORKER_FRAME_SPEC,
   resolveMauOfficeAssetScaleSpec,
 } from "../ui/src/ui/mau-office-scale-spec.ts";
-import { MAU_OFFICE_WORKER_RIGS } from "../ui/src/ui/mau-office-contract.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const uiRoot = path.join(repoRoot, "ui");
@@ -88,9 +88,7 @@ function specText(metrics: AssetMetrics): string[] {
     );
   }
   if (semantic?.workerHeightRatio) {
-    lines.push(
-      `worker ratio ${semantic.workerHeightRatio.min}-${semantic.workerHeightRatio.max}`,
-    );
+    lines.push(`worker ratio ${semantic.workerHeightRatio.min}-${semantic.workerHeightRatio.max}`);
   }
   return lines;
 }

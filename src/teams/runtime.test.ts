@@ -21,11 +21,7 @@ let resolvePreferredTeamRunTarget: typeof import("./runtime.js").resolvePreferre
 
 const TEST_CONFIG = {
   agents: {
-    list: [
-      { id: "main" },
-      { id: MAIN_WORKER_AGENT_ID },
-      { id: STARTER_TEAM_MANAGER_AGENT_ID },
-    ],
+    list: [{ id: "main" }, { id: MAIN_WORKER_AGENT_ID }, { id: STARTER_TEAM_MANAGER_AGENT_ID }],
   },
   teams: {
     list: [

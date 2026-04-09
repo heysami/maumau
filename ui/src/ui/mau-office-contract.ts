@@ -382,7 +382,9 @@ function isHallTile(tileX: number, tileY: number): boolean {
     tileY < MAU_OFFICE_HALL_HORIZONTAL_TILE_Y + MAU_OFFICE_HALL_HORIZONTAL_HEIGHT_TILES &&
     tileX >= MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X &&
     tileX <= MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X;
-  return inHorizontalSpine || isRoomThresholdTile(tileX, tileY) || isTopRoomPassageTile(tileX, tileY);
+  return (
+    inHorizontalSpine || isRoomThresholdTile(tileX, tileY) || isTopRoomPassageTile(tileX, tileY)
+  );
 }
 
 function classifyFloorTile(tileX: number, tileY: number): MauOfficeAreaId {
@@ -504,14 +506,7 @@ function addNineSlice(
     1,
     1,
   );
-  addPart(
-    "middle-left",
-    params.assets.middleLeft,
-    params.tileX,
-    params.tileY + 1,
-    1,
-    centerHeight,
-  );
+  addPart("middle-left", params.assets.middleLeft, params.tileX, params.tileY + 1, 1, centerHeight);
   addPart(
     "middle-center",
     params.assets.middleCenter,
@@ -625,8 +620,7 @@ function resolveTopWallPropTileX(
   if (doorTileX === undefined) {
     return preferredTileX;
   }
-  const overlapsDoorColumn =
-    preferredTileX <= doorTileX && preferredTileX + tileWidth > doorTileX;
+  const overlapsDoorColumn = preferredTileX <= doorTileX && preferredTileX + tileWidth > doorTileX;
   if (!overlapsDoorColumn) {
     return preferredTileX;
   }
@@ -683,7 +677,7 @@ function makeWallSprites(): MauOfficeSpritePlacement[] {
               ? "left"
               : openingOnRight
                 ? "right"
-            : "mid";
+                : "mid";
       sprites.push({
         id: `${room.id}:wall-front:${tileX}`,
         asset: joinAsset(`tiles/wall-front-${variant}.png`),
@@ -706,7 +700,7 @@ function makeWallSprites(): MauOfficeSpritePlacement[] {
             ? "tiles/wall-corner-br.png"
             : blockedHallCapOnLeft
               ? "tiles/wall-corner-bl.png"
-            : "tiles/wall-bottom.png";
+              : "tiles/wall-bottom.png";
         sprites.push({
           id: `${room.id}:wall-bottom:${tileX}`,
           asset: joinAsset(bottomAsset),
@@ -780,7 +774,6 @@ function makeWallSprites(): MauOfficeSpritePlacement[] {
         });
       }
     }
-
   };
 
   addRoomShell(MAU_OFFICE_ROOMS.desk, 8, false);
@@ -1250,9 +1243,13 @@ function makeLabels(): MauOfficeLabelPlacement[] {
 export const MAU_OFFICE_ROOM_IDS: MauOfficeRoomId[] = ["desk", "break", "meeting", "support"];
 
 const MAU_OFFICE_NODES = {
-  outside_mauHome: makeNode("outside_mauHome", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 20, "outside", [
-    "break_entry",
-  ]),
+  outside_mauHome: makeNode(
+    "outside_mauHome",
+    MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X,
+    20,
+    "outside",
+    ["break_entry"],
+  ),
   west_spine: makeNode("west_spine", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 10, "hall", [
     "east_spine",
     "desk_door",
@@ -1262,7 +1259,10 @@ const MAU_OFFICE_NODES = {
     "west_spine",
     "support_door",
   ]),
-  desk_door: makeNode("desk_door", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 9, "desk", ["west_spine", "desk_center"]),
+  desk_door: makeNode("desk_door", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 9, "desk", [
+    "west_spine",
+    "desk_center",
+  ]),
   break_door: makeNode("break_door", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 11, "break", [
     "west_spine",
     "break_center",
@@ -1283,8 +1283,15 @@ const MAU_OFFICE_NODES = {
     "top_passage_left",
     "meeting_center",
   ]),
-  desk_center: makeNode("desk_center", 8, 6, "desk", ["desk_door", "desk_board", "top_passage_left"]),
-  meeting_center: makeNode("meeting_center", 20, 6, "meeting", ["meeting_presenter", "top_passage_right"]),
+  desk_center: makeNode("desk_center", 8, 6, "desk", [
+    "desk_door",
+    "desk_board",
+    "top_passage_left",
+  ]),
+  meeting_center: makeNode("meeting_center", 20, 6, "meeting", [
+    "meeting_presenter",
+    "top_passage_right",
+  ]),
   break_center: makeNode("break_center", 8, 15, "break", ["break_door", "break_entry"]),
   support_center: makeNode("support_center", 20, 14, "support", ["support_door"]),
   support_customer_1: makeNode("support_customer_1", 18, 16, "support", ["support_entry"]),
@@ -2053,15 +2060,16 @@ export function resolveMauOfficeConfig(source?: unknown): MauOfficeUiConfig {
   const ui = asRecord(root?.ui);
   const maybeMauOffice = asRecord(ui?.mauOffice ?? root?.mauOffice);
   const idlePackages = asRecord(maybeMauOffice?.idlePackages);
-  const enabled =
-    typeof maybeMauOffice?.enabled === "boolean" ? maybeMauOffice.enabled : true;
+  const enabled = typeof maybeMauOffice?.enabled === "boolean" ? maybeMauOffice.enabled : true;
   const maxVisibleWorkersRaw = maybeMauOffice?.maxVisibleWorkers;
   const maxVisibleWorkers =
     typeof maxVisibleWorkersRaw === "number" && Number.isFinite(maxVisibleWorkersRaw)
       ? Math.max(1, Math.min(12, Math.trunc(maxVisibleWorkersRaw)))
       : 8;
   const enabledIdlePackages = Array.isArray(idlePackages?.enabled)
-    ? idlePackages.enabled.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    ? idlePackages.enabled.filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0,
+      )
     : DEFAULT_IDLE_PACKAGE_IDS;
 
   return {

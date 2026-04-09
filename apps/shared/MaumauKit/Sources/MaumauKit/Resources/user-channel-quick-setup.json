@@ -1,0 +1,349 @@
+{
+  "version": 1,
+  "channelOrder": [
+    "whatsapp",
+    "telegram",
+    "discord",
+    "imessage",
+    "slack",
+    "line"
+  ],
+  "settingsNote": "More channels and advanced channel settings live in Settings → Channels.",
+  "channels": {
+    "whatsapp": {
+      "guidance": {
+        "identity": "A WhatsApp number or linked device becomes the agent identity.",
+        "requirements": [
+          "A phone number or WhatsApp account that will belong to the agent.",
+          "WhatsApp or WhatsApp Business installed and fully signed in on that phone.",
+          "For a separate agent identity, use a dedicated number or dedicated linked device. Maumau cannot create or buy the number for you."
+        ],
+        "setupSteps": [
+          "On the phone the agent will use, finish WhatsApp setup first and wait until it can send and receive messages normally.",
+          "Open WhatsApp on that phone and go to Settings > Linked Devices > Link a device.",
+          "Back in Maumau, press Link WhatsApp to show the QR code, then scan it with that phone.",
+          "Wait for the link to finish. The number shown in Maumau becomes the number people message to reach the agent."
+        ],
+        "artifacts": [
+          "What gets linked here: the agent's WhatsApp number, for example +1 555 123 4567.",
+          "You do not paste a token for WhatsApp. You link the real WhatsApp account by scanning the QR."
+        ],
+        "usage": "People message that WhatsApp number from their normal WhatsApp accounts, and the agent replies in the same chat.",
+        "quickLinks": [
+          {
+            "title": "Download WhatsApp",
+            "url": "https://www.whatsapp.com/download/"
+          },
+          {
+            "title": "WhatsApp linked devices help",
+            "url": "https://faq.whatsapp.com/1317564962315842/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "whatsapp",
+        "sectionTitle": "Bot identity",
+        "title": "WhatsApp Agent",
+        "emptyHeadline": "No number linked yet",
+        "emptyMessage": "Link the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
+        "emptyBadge": "Not linked",
+        "setupNote": "Onboarding links the WhatsApp identity and opens direct chats so the linked number can reply right away. Advanced access or routing changes stay in full Settings → Channels.",
+        "successMessage": "WhatsApp linked. Direct messages are open so it replies right away.",
+        "waitingBadge": "Waiting for scan",
+        "waitingMessage": "Scan the QR with the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
+        "linkedBadge": "Ready to message",
+        "qrTitle": "Scan this QR with the WhatsApp number the bot will use",
+        "qrBody": "The WhatsApp number or linked device that scans this QR becomes the bot identity. When people message that number, they are talking to the agent.",
+        "pickerSummary": "Not linked"
+      },
+      "fields": []
+    },
+    "telegram": {
+      "guidance": {
+        "identity": "A Telegram bot becomes the agent identity.",
+        "requirements": [
+          "A normal Telegram account on the Telegram app, desktop app, or web app.",
+          "Access to @BotFather, which is Telegram's official bot for creating and managing bots."
+        ],
+        "setupSteps": [
+          "Open Telegram, search for @BotFather, and press Start.",
+          "Send /newbot, then follow BotFather's prompts for the bot name and the username.",
+          "Choose a username that ends in bot, then wait for BotFather to send back the bot token.",
+          "Copy the token from the BotFather chat and paste it into Maumau."
+        ],
+        "artifacts": [
+          "What you paste here: the Telegram bot token, for example 1234567890:AAExampleTelegramBotToken.",
+          "What people will message later: the bot handle, for example @youragentbot."
+        ],
+        "usage": "People message the bot handle or add it to Telegram chats, and replies come back from that bot.",
+        "quickLinks": [
+          {
+            "title": "Telegram apps",
+            "url": "https://telegram.org/apps"
+          },
+          {
+            "title": "Open BotFather",
+            "url": "https://t.me/BotFather"
+          },
+          {
+            "title": "Telegram bot docs",
+            "url": "https://core.telegram.org/bots#how-do-i-create-a-bot"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-secret",
+        "sectionTitle": "Bot identity",
+        "title": "Telegram Agent",
+        "emptyHeadline": "No bot token saved yet",
+        "emptyMessage": "Paste the bot token from BotFather. Maumau will open Telegram DMs so the bot can reply right away, while still requiring mentions in groups.",
+        "emptyBadge": "Needs token",
+        "buttonTitle": "Save Telegram bot",
+        "setupNote": "Onboarding opens Telegram DMs so you can message the bot immediately, and keeps group mention gating on. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist.",
+        "successMessage": "Telegram bot saved. Direct messages are open so it replies right away.",
+        "pickerSummary": "Not configured"
+      },
+      "fields": [
+        {
+          "key": "botToken",
+          "label": "Telegram bot token",
+          "placeholder": "1234567890:AAExampleTelegramBotToken",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "discord": {
+      "guidance": {
+        "identity": "A Discord bot application becomes the agent identity.",
+        "requirements": [
+          "A Discord account.",
+          "Access to the Discord Developer Portal and to the server where you want to install the bot."
+        ],
+        "setupSteps": [
+          "Go to discord.com/developers/applications and click New Application.",
+          "Open the Bot tab in the left sidebar, click Add Bot, and copy the bot token from that page.",
+          "Open the Installation page, keep the bot install enabled, then use the install link to add the bot to your server or user account.",
+          "Once the bot appears in Discord, paste the bot token into Maumau."
+        ],
+        "artifacts": [
+          "What you paste here: the Discord bot token copied from the Bot page in Developer Portal.",
+          "What people will see later: the bot's application name and bot username inside Discord."
+        ],
+        "usage": "People DM the bot or talk to it in allowed Discord servers and channels, and the agent replies there.",
+        "quickLinks": [
+          {
+            "title": "Discord Developer Portal",
+            "url": "https://discord.com/developers/applications"
+          },
+          {
+            "title": "Discord getting started",
+            "url": "https://docs.discord.com/developers/docs/getting-started"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-secret",
+        "sectionTitle": "Bot identity",
+        "title": "Discord Agent",
+        "emptyHeadline": "No bot token saved yet",
+        "emptyMessage": "Paste the Discord bot token from the Developer Portal. Maumau will open direct messages so the bot can reply right away after you install it.",
+        "emptyBadge": "Needs token",
+        "buttonTitle": "Save Discord bot",
+        "setupNote": "Onboarding opens Discord DMs so people can message the bot immediately after you invite or install it. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist.",
+        "successMessage": "Discord bot saved. Direct messages are open so it replies right away after install.",
+        "pickerSummary": "Not configured"
+      },
+      "fields": [
+        {
+          "key": "token",
+          "label": "Discord bot token",
+          "placeholder": "Paste the Discord bot token",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "imessage": {
+      "guidance": {
+        "identity": "The Messages account signed into this Mac becomes the agent identity.",
+        "requirements": [
+          "A Mac where Messages works normally.",
+          "The Apple Account, email address, or phone number that should become the agent identity.",
+          "For a separate identity, use a dedicated Apple Account or a separate macOS user signed into Messages."
+        ],
+        "setupSteps": [
+          "If you need a separate identity, create it first at account.apple.com.",
+          "On the Mac the agent will use, open Messages and sign in with that Apple Account.",
+          "In Messages > Settings > iMessage, choose the email address or phone number people should see for new conversations and wait for activation to complete.",
+          "Back in Maumau, point the channel at imsg on this Mac and grant any requested macOS permissions."
+        ],
+        "artifacts": [
+          "What gets linked here: the Messages identity on this Mac, for example agent@example.com or +1 555 123 4567.",
+          "There is no bot token for iMessage. Maumau uses the Messages account already signed into the Mac."
+        ],
+        "usage": "People message that Messages account as usual, and the agent replies inside those iMessage conversations.",
+        "quickLinks": [
+          {
+            "title": "Create Apple Account",
+            "url": "https://account.apple.com/"
+          },
+          {
+            "title": "Set up Messages on Mac",
+            "url": "https://support.apple.com/guide/messages/set-up-messages-on-mac-ichte16154fb/mac"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-text",
+        "sectionTitle": "Agent identity",
+        "title": "Messages Agent",
+        "emptyHeadline": "No Messages bridge saved yet",
+        "emptyMessage": "Use the Messages identity already signed into this Mac. If you installed imsg somewhere custom, change the CLI path before saving.",
+        "emptyBadge": "Needs bridge",
+        "buttonTitle": "Use Messages on this Mac",
+        "setupNote": "Onboarding points Maumau at imsg on this Mac and opens direct messages so it replies right away. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist.",
+        "successMessage": "Messages on this Mac saved. Direct messages are open so it replies right away.",
+        "pickerSummary": "Not configured"
+      },
+      "fields": [
+        {
+          "key": "cliPath",
+          "label": "imsg CLI path",
+          "placeholder": "imsg",
+          "required": true,
+          "helpLines": [
+            "Use the default path if imsg is installed on this Mac normally. Only change it if you installed imsg somewhere custom or through a wrapper script."
+          ]
+        }
+      ]
+    },
+    "slack": {
+      "guidance": {
+        "identity": "A Slack app inside a workspace becomes the agent identity.",
+        "requirements": [
+          "A Slack workspace where you can create and install apps.",
+          "Access to api.slack.com/apps so you can create the app and generate both tokens Maumau needs."
+        ],
+        "setupSteps": [
+          "Go to api.slack.com/apps and click Create New App, then choose the workspace for the agent.",
+          "In the app settings, open Socket Mode, turn it on, and generate an app-level token.",
+          "Under OAuth & Permissions, install the app to the workspace and copy the Bot User OAuth Token.",
+          "If you want direct messages and mentions to work cleanly, also enable the Messages tab in App Home and the events Maumau needs in Event Subscriptions.",
+          "Paste both the bot token and the app token into Maumau."
+        ],
+        "artifacts": [
+          "What you paste here: the bot token xoxb-... and the app token xapp-....",
+          "What people will message later: the Slack app in DMs or mentions inside the workspace."
+        ],
+        "usage": "People DM the Slack app or mention it in channels where it is installed, and the agent replies in Slack.",
+        "quickLinks": [
+          {
+            "title": "Create Slack app",
+            "url": "https://api.slack.com/apps"
+          },
+          {
+            "title": "Slack Socket Mode guide",
+            "url": "https://docs.slack.dev/apis/events-api/using-socket-mode/"
+          },
+          {
+            "title": "Slack token types",
+            "url": "https://docs.slack.dev/authentication/tokens/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "dual-secret",
+        "sectionTitle": "App identity",
+        "title": "Slack Agent",
+        "emptyHeadline": "No Slack app tokens saved yet",
+        "emptyMessage": "Paste the bot token and app token from your Slack app. Maumau uses Socket Mode and opens direct messages so the app can reply right away after install.",
+        "emptyBadge": "Needs tokens",
+        "buttonTitle": "Save Slack app",
+        "setupNote": "Onboarding opens Slack DMs so people can message the app immediately after install. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist.",
+        "successMessage": "Slack app saved. Direct messages are open so it replies right away after install.",
+        "pickerSummary": "Not configured"
+      },
+      "fields": [
+        {
+          "key": "botToken",
+          "label": "Slack bot token",
+          "placeholder": "xoxb-...",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "appToken",
+          "label": "Slack app token",
+          "placeholder": "xapp-...",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "line": {
+      "guidance": {
+        "identity": "A LINE Messaging API bot becomes the agent identity.",
+        "requirements": [
+          "A LINE Official Account and a Messaging API channel.",
+          "Access to the LINE Official Account Manager and the LINE Developers Console."
+        ],
+        "setupSteps": [
+          "Create the LINE Official Account first. If you do not have one yet, start from account.line.biz and finish the Business ID and entry form steps.",
+          "In LINE Official Account Manager, enable the Messaging API for that account.",
+          "Open developers.line.biz/console, select the provider, and open the new Messaging API channel.",
+          "Copy the Channel secret, then issue or copy the Channel access token.",
+          "Set the webhook URL for the channel to your Maumau gateway and use the Verify button in the LINE Developers Console to test it.",
+          "Paste the Channel access token and Channel secret into Maumau."
+        ],
+        "artifacts": [
+          "What you paste here: the LINE Channel access token and Channel secret from the Messaging API channel.",
+          "What people will message later: the LINE Official Account that owns that Messaging API channel."
+        ],
+        "usage": "People message that LINE bot, and the agent replies there.",
+        "quickLinks": [
+          {
+            "title": "LINE Messaging API getting started",
+            "url": "https://developers.line.biz/en/docs/messaging-api/getting-started/"
+          },
+          {
+            "title": "LINE Developers Console",
+            "url": "https://developers.line.biz/console/"
+          },
+          {
+            "title": "LINE webhook verification",
+            "url": "https://developers.line.biz/en/docs/messaging-api/verify-webhook-url/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "dual-secret",
+        "sectionTitle": "Bot identity",
+        "title": "LINE Agent",
+        "emptyHeadline": "No LINE channel linked yet",
+        "emptyMessage": "Paste the Channel access token and Channel secret from the LINE Developers Console. Maumau will open direct messages so the account can reply right away once the webhook is live.",
+        "emptyBadge": "Needs credentials",
+        "buttonTitle": "Save LINE bot",
+        "setupNote": "Onboarding opens LINE DMs so people can message the account immediately once the webhook is live. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist.",
+        "successMessage": "LINE bot saved. Direct messages are open so it replies right away once the webhook is live.",
+        "pickerSummary": "Not configured"
+      },
+      "fields": [
+        {
+          "key": "channelAccessToken",
+          "label": "LINE Channel access token",
+          "placeholder": "Paste the Channel access token",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "channelSecret",
+          "label": "LINE Channel secret",
+          "placeholder": "Paste the Channel secret",
+          "required": true,
+          "secret": true
+        }
+      ]
+    }
+  }
+}

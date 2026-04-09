@@ -7,13 +7,13 @@ import {
   DEFAULT_USER_FILENAME,
 } from "../agents/workspace.js";
 import type { MaumauConfig } from "../config/config.js";
+import type { AgentConfig } from "../config/types.agents.js";
 import { createJob } from "../cron/service/jobs.js";
 import { createCronServiceState } from "../cron/service/state.js";
 import { loadCronStore, resolveCronStorePath, saveCronStore } from "../cron/store.js";
 import { DEFAULT_LANGUAGE_ID, normalizeLanguageId, type LanguageId } from "../i18n/languages.js";
 import { DEFAULT_AGENT_ID } from "../routing/session-key.js";
 import type { RuntimeEnv } from "../runtime.js";
-import type { AgentConfig } from "../config/types.agents.js";
 import { ensureWorkspaceAndSessions } from "./onboard-helpers.js";
 
 export const MULTI_USER_MEMORY_PLUGIN_ID = "multi-user-memory";

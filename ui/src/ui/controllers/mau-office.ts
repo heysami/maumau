@@ -1,10 +1,10 @@
+import { stripEnvelopeFromMessage } from "../../../../src/gateway/chat-sanitize.js";
 import {
   buildAgentMainSessionKey,
   isSubagentSessionKey,
   parseAgentSessionKey,
   toAgentStoreSessionKey,
 } from "../../../../src/routing/session-key.js";
-import { stripEnvelopeFromMessage } from "../../../../src/gateway/chat-sanitize.js";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import {
   MAU_OFFICE_DESK_ANCHOR_IDS,
@@ -285,7 +285,9 @@ function sameActivityPlan(
   if (!left || !right) {
     return false;
   }
-  return left.kind === right.kind && left.roomId === right.roomId && left.anchorId === right.anchorId;
+  return (
+    left.kind === right.kind && left.roomId === right.roomId && left.anchorId === right.anchorId
+  );
 }
 
 function snapshotActivityWindowMs(
@@ -295,7 +297,10 @@ function snapshotActivityWindowMs(
 }
 
 function isSnapshotRowActive(
-  row: Pick<GatewaySessionRow, "kind" | "key" | "parentSessionKey" | "spawnedBy" | "updatedAt"> | null | undefined,
+  row:
+    | Pick<GatewaySessionRow, "kind" | "key" | "parentSessionKey" | "spawnedBy" | "updatedAt">
+    | null
+    | undefined,
   nowMs: number,
 ): boolean {
   const updatedAtMs = row?.updatedAt ?? 0;
@@ -305,10 +310,7 @@ function isSnapshotRowActive(
   return updatedAtMs > nowMs - snapshotActivityWindowMs(row);
 }
 
-function isSupportActivityStale(
-  actor: Pick<OfficeActor, "lastSeenAtMs">,
-  nowMs: number,
-): boolean {
+function isSupportActivityStale(actor: Pick<OfficeActor, "lastSeenAtMs">, nowMs: number): boolean {
   return nowMs - actor.lastSeenAtMs >= SUPPORT_ACTIVITY_WINDOW_MS;
 }
 
@@ -356,8 +358,7 @@ function isActiveEventActivity(
   nowMs: number,
 ): boolean {
   return (
-    actor.currentActivity.source === "event" &&
-    (actor.currentActivity.expiresAtMs ?? 0) > nowMs
+    actor.currentActivity.source === "event" && (actor.currentActivity.expiresAtMs ?? 0) > nowMs
   );
 }
 
@@ -390,7 +391,10 @@ function stableShuffleByKey<T>(
     .map((entry) => entry.value);
 }
 
-function normalizeDirection(from: { x: number; y: number }, to: { x: number; y: number }): MauOfficeDirection {
+function normalizeDirection(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): MauOfficeDirection {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   if (Math.abs(dx) > Math.abs(dy)) {
@@ -512,7 +516,10 @@ function isMeetingSessionKey(sessionKey: string): boolean {
 }
 
 function isUserSessionKey(sessionKey: string): boolean {
-  return !isMeetingSessionKey(sessionKey) && (sessionKey.includes(":direct:") || sessionKey.includes(":group:"));
+  return (
+    !isMeetingSessionKey(sessionKey) &&
+    (sessionKey.includes(":direct:") || sessionKey.includes(":group:"))
+  );
 }
 
 function roleHintForSessionKey(sessionKey: string): ActorRoleHint {
@@ -577,7 +584,10 @@ function resolveHeartbeatSessionKeys(
   return next;
 }
 
-function isConfiguredHeartbeatSession(state: Pick<MauOfficeState, "heartbeatSessionKeys">, sessionKey: string): boolean {
+function isConfiguredHeartbeatSession(
+  state: Pick<MauOfficeState, "heartbeatSessionKeys">,
+  sessionKey: string,
+): boolean {
   return Boolean(state.heartbeatSessionKeys[sessionKey]);
 }
 
@@ -684,7 +694,12 @@ function pixelPointForTile(tileX: number, tileY: number): { x: number; y: number
   };
 }
 
-function spriteOccupiedTiles(sprite: { tileX: number; tileY: number; tileWidth: number; tileHeight: number }) {
+function spriteOccupiedTiles(sprite: {
+  tileX: number;
+  tileY: number;
+  tileWidth: number;
+  tileHeight: number;
+}) {
   const occupied: string[] = [];
   const startTileX = Math.floor(sprite.tileX);
   const startTileY = Math.floor(sprite.tileY);
@@ -701,14 +716,12 @@ function spriteOccupiedTiles(sprite: { tileX: number; tileY: number; tileWidth: 
 const WALKABLE_TILE_KEYS = new Set(
   MAU_OFFICE_LAYOUT.map.floorTiles.map((tile) => tileKey(tile.tileX, tile.tileY)),
 );
-const STATIC_BLOCKED_TILE_KEYS = new Set(
-  [
-    ...MAU_OFFICE_LAYOUT.map.wallSprites.flatMap((sprite) => spriteOccupiedTiles(sprite)),
-    ...MAU_OFFICE_LAYOUT.map.propSprites
-      .filter((sprite) => BLOCKING_SPRITE_KINDS.has(sprite.kind))
-      .flatMap((sprite) => spriteOccupiedTiles(sprite)),
-  ],
-);
+const STATIC_BLOCKED_TILE_KEYS = new Set([
+  ...MAU_OFFICE_LAYOUT.map.wallSprites.flatMap((sprite) => spriteOccupiedTiles(sprite)),
+  ...MAU_OFFICE_LAYOUT.map.propSprites
+    .filter((sprite) => BLOCKING_SPRITE_KINDS.has(sprite.kind))
+    .flatMap((sprite) => spriteOccupiedTiles(sprite)),
+]);
 for (const anchor of Object.values(MAU_OFFICE_LAYOUT.anchors)) {
   WALKABLE_TILE_KEYS.add(tileKey(anchor.tileX, anchor.tileY));
 }
@@ -716,7 +729,10 @@ for (const node of Object.values(MAU_OFFICE_LAYOUT.nodes)) {
   WALKABLE_TILE_KEYS.add(tileKey(node.tileX, node.tileY));
 }
 
-function tileDistance(left: { tileX: number; tileY: number }, right: { tileX: number; tileY: number }): number {
+function tileDistance(
+  left: { tileX: number; tileY: number },
+  right: { tileX: number; tileY: number },
+): number {
   return Math.abs(left.tileX - right.tileX) + Math.abs(left.tileY - right.tileY);
 }
 
@@ -788,9 +804,7 @@ function resolveNearestWalkableTile(
   if (WALKABLE_TILE_KEYS.has(desiredKey) && !STATIC_BLOCKED_TILE_KEYS.has(desiredKey)) {
     return { tileX, tileY, wasAdjusted: false };
   }
-  const queue: Array<{ tileX: number; tileY: number }> = [
-    { tileX, tileY },
-  ];
+  const queue: Array<{ tileX: number; tileY: number }> = [{ tileX, tileY }];
   const seen = new Set<string>([desiredKey]);
   while (queue.length > 0) {
     const current = queue.shift()!;
@@ -817,9 +831,11 @@ function resolveNearestWalkableTile(
   return { tileX, tileY, wasAdjusted: true };
 }
 
-function resolveReachableTargetTile(
-  desiredAnchorId: string,
-): { tileX: number; tileY: number; requiresAnchorSnap: boolean } {
+function resolveReachableTargetTile(desiredAnchorId: string): {
+  tileX: number;
+  tileY: number;
+  requiresAnchorSnap: boolean;
+} {
   const desiredAnchor = MAU_OFFICE_LAYOUT.anchors[desiredAnchorId];
   if (!desiredAnchor) {
     return {
@@ -1023,7 +1039,15 @@ function extractMessageLabel(value: unknown, depth = 0): string | undefined {
     return undefined;
   }
   const record = value as Record<string, unknown>;
-  for (const key of ["displayName", "name", "senderName", "username", "author", "sender", "contact"]) {
+  for (const key of [
+    "displayName",
+    "name",
+    "senderName",
+    "username",
+    "author",
+    "sender",
+    "contact",
+  ]) {
     const label = extractMessageLabel(record[key], depth + 1);
     if (label) {
       return label;
@@ -1052,7 +1076,18 @@ function extractPreviewText(value: unknown, depth = 0): string | undefined {
     return undefined;
   }
   const record = value as Record<string, unknown>;
-  for (const key of ["text", "content", "message", "prompt", "query", "input", "summary", "title", "args", "arguments"]) {
+  for (const key of [
+    "text",
+    "content",
+    "message",
+    "prompt",
+    "query",
+    "input",
+    "summary",
+    "title",
+    "args",
+    "arguments",
+  ]) {
     const preview = extractPreviewText(record[key], depth + 1);
     if (preview) {
       return preview;
@@ -1094,7 +1129,16 @@ function extractVisitorPreviewText(value: unknown): string | undefined {
     return undefined;
   }
   const record = sanitized as Record<string, unknown>;
-  for (const key of ["text", "content", "message", "prompt", "query", "input", "summary", "title"]) {
+  for (const key of [
+    "text",
+    "content",
+    "message",
+    "prompt",
+    "query",
+    "input",
+    "summary",
+    "title",
+  ]) {
     const preview = extractPreviewText(record[key]);
     if (preview) {
       return preview;
@@ -1124,7 +1168,11 @@ function updateSupportDialogue(
   const current = actor.latestSupportDialogue;
   const nextSeq = options?.messageSeq;
   if (current?.role === role) {
-    if (typeof current.messageSeq === "number" && typeof nextSeq === "number" && nextSeq < current.messageSeq) {
+    if (
+      typeof current.messageSeq === "number" &&
+      typeof nextSeq === "number" &&
+      nextSeq < current.messageSeq
+    ) {
       return;
     }
     if (
@@ -1178,7 +1226,10 @@ function clearSupportPresentationStateIfLeavingSupport(
   if (activity?.kind === "customer_support") {
     return;
   }
-  if (!actor.latestSupportDialogue && !actor.bubbles.some((bubble) => bubble.kind === "customer_support")) {
+  if (
+    !actor.latestSupportDialogue &&
+    !actor.bubbles.some((bubble) => bubble.kind === "customer_support")
+  ) {
     return;
   }
   clearSupportPresentationState(actor);
@@ -1299,10 +1350,9 @@ function snapshotActivityForRow(
         ? extractVisitorPreviewText(row.lastUserMessagePreview ?? row.lastMessagePreview)
         : extractPreviewText(row.lastAssistantMessagePreview),
       roomId: "support",
-      anchorId:
-        isSupportVisitor
-          ? visitorSupportAnchor()
-          : supportAnchorForHome(actor.homeAnchorId),
+      anchorId: isSupportVisitor
+        ? visitorSupportAnchor()
+        : supportAnchorForHome(actor.homeAnchorId),
       source: "snapshot",
     });
   }
@@ -1373,11 +1423,13 @@ function buildPathWaypoints(
         return [];
       }
       const reachableTile = resolveNearestWalkableTile(node.tileX, node.tileY);
-      return [{
-        tileX: reachableTile.tileX,
-        tileY: reachableTile.tileY,
-        nodeId: reachableTile.wasAdjusted ? null : nodeId,
-      }];
+      return [
+        {
+          tileX: reachableTile.tileX,
+          tileY: reachableTile.tileY,
+          nodeId: reachableTile.wasAdjusted ? null : nodeId,
+        },
+      ];
     }),
     { tileX: targetTile.tileX, tileY: targetTile.tileY, nodeId: null },
   ];
@@ -1418,8 +1470,7 @@ function buildPathWaypoints(
       x: targetPoint.x,
       y: targetPoint.y,
       nodeId:
-        targetAnchor.tileX === targetTile.tileX &&
-        targetAnchor.tileY === targetTile.tileY
+        targetAnchor.tileX === targetTile.tileX && targetAnchor.tileY === targetTile.tileY
           ? targetAnchor.nodeId
           : null,
     });
@@ -1484,7 +1535,10 @@ function resolvePathSegmentDuration(
   return Math.max(MIN_PATH_SEGMENT_MS, Math.round(tiles * PATH_MS_PER_TILE));
 }
 
-function resolvePathDurationForIndex(path: Pick<OfficePath, "waypoints">, segmentIndex: number): number {
+function resolvePathDurationForIndex(
+  path: Pick<OfficePath, "waypoints">,
+  segmentIndex: number,
+): number {
   const from = path.waypoints[segmentIndex];
   const to = path.waypoints[segmentIndex + 1];
   if (!from || !to) {
@@ -1561,13 +1615,16 @@ function cloneActor(actor: OfficeActor): OfficeActor {
         }
       : null,
     bubbles: [...actor.bubbles],
-    latestSupportDialogue: actor.latestSupportDialogue
-      ? { ...actor.latestSupportDialogue }
-      : null,
+    latestSupportDialogue: actor.latestSupportDialogue ? { ...actor.latestSupportDialogue } : null,
   };
 }
 
-function pushBubble(actor: OfficeActor, text: string | undefined, kind: MauOfficeActivityKind, nowMs: number) {
+function pushBubble(
+  actor: OfficeActor,
+  text: string | undefined,
+  kind: MauOfficeActivityKind,
+  nowMs: number,
+) {
   const normalized = normalizePreviewText(text);
   if (!normalized) {
     return;
@@ -1576,8 +1633,10 @@ function pushBubble(actor: OfficeActor, text: string | undefined, kind: MauOffic
   if (last?.text === normalized && nowMs - last.atMs < 3_000) {
     return;
   }
-  actor.bubbles = [{ id: `${actor.id}:${nowMs}`, text: normalized, atMs: nowMs, kind }, ...actor.bubbles]
-    .slice(0, 6);
+  actor.bubbles = [
+    { id: `${actor.id}:${nowMs}`, text: normalized, atMs: nowMs, kind },
+    ...actor.bubbles,
+  ].slice(0, 6);
 }
 
 function setActorActivity(
@@ -1605,8 +1664,8 @@ function setActorActivity(
     return;
   }
   const startNodeId = actor.path
-    ? (actor.path.waypoints[Math.min(actor.path.segmentIndex + 1, actor.path.waypoints.length - 1)]?.nodeId ??
-      actor.nodeId)
+    ? (actor.path.waypoints[Math.min(actor.path.segmentIndex + 1, actor.path.waypoints.length - 1)]
+        ?.nodeId ?? actor.nodeId)
     : actor.nodeId;
   const targetNodeId = nodeForAnchor(resolvedActivity.anchorId).id;
   const nodeIds = pathBetween(startNodeId, targetNodeId);
@@ -1662,12 +1721,11 @@ function resolveActivityMode(
 
 function fallbackActivityForActor(actor: OfficeActor, nowMs: number): OfficeActivity {
   if (actor.kind === "visitor") {
-    const outsideAnchorId =
-      actor.homeAnchorId.startsWith("outside_")
-        ? actor.homeAnchorId
-        : isUserSessionKey(actor.sessionKey)
-          ? "outside_support"
-          : "outside_mauHome";
+    const outsideAnchorId = actor.homeAnchorId.startsWith("outside_")
+      ? actor.homeAnchorId
+      : isUserSessionKey(actor.sessionKey)
+        ? "outside_support"
+        : "outside_mauHome";
     return offsiteActivityForAnchor(outsideAnchorId);
   }
   return createActivity({
@@ -1716,7 +1774,10 @@ function settleActorToPrimaryActivity(
     actor.pendingActivity = null;
   }
   clearSupportPresentationStateIfLeavingSupport(actor, nextActivity);
-  if (sameActivityPlan(actor.currentActivity, nextActivity) && actor.anchorId === nextActivity.anchorId) {
+  if (
+    sameActivityPlan(actor.currentActivity, nextActivity) &&
+    actor.anchorId === nextActivity.anchorId
+  ) {
     actor.currentActivity = nextActivity;
     actor.currentRoomId =
       MAU_OFFICE_LAYOUT.anchors[nextActivity.anchorId]?.roomId === "outside"
@@ -1783,7 +1844,10 @@ function resolveIdleAnimationId(
   if (actor.path || actor.currentActivity.kind !== "idle_package" || !actor.idleAssignment) {
     return null;
   }
-  if (actor.idleAssignment.participantIds.length < requiredParticipantsForIdlePackage(actor.idleAssignment.packageId)) {
+  if (
+    actor.idleAssignment.participantIds.length <
+    requiredParticipantsForIdlePackage(actor.idleAssignment.packageId)
+  ) {
     return null;
   }
   switch (actor.idleAssignment.packageId) {
@@ -1911,7 +1975,8 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
     (value) => value,
   );
   for (const packageId of randomizedGroupIds) {
-    const requiredCount = packageById.get(packageId)?.activityDefinitions[0]?.slotLayout.length ?? 0;
+    const requiredCount =
+      packageById.get(packageId)?.activityDefinitions[0]?.slotLayout.length ?? 0;
     if (requiredCount > 0 && remaining.length >= requiredCount) {
       assignPackageById(packageId, requiredCount);
     }
@@ -1983,7 +2048,11 @@ function resolvePrimaryActivity(actor: OfficeActor, nowMs: number): OfficeActivi
   return fallbackActivityForActor(actor, nowMs);
 }
 
-function advanceActor(actor: OfficeActor, actors: Record<string, OfficeActor>, nowMs: number): boolean {
+function advanceActor(
+  actor: OfficeActor,
+  actors: Record<string, OfficeActor>,
+  nowMs: number,
+): boolean {
   if (isStaleSupportPlan(actor, actor.queuedActivity, nowMs)) {
     actor.queuedActivity = null;
   }
@@ -1991,7 +2060,10 @@ function advanceActor(actor: OfficeActor, actors: Record<string, OfficeActor>, n
     if (isActiveEventActivity(actor, nowMs)) {
       return false;
     }
-    if (actor.currentActivity.source === "event" && (actor.currentActivity.expiresAtMs ?? 0) <= nowMs) {
+    if (
+      actor.currentActivity.source === "event" &&
+      (actor.currentActivity.expiresAtMs ?? 0) <= nowMs
+    ) {
       return settleActorToPrimaryActivity(actor, actors, nowMs) || true;
     }
     if (actor.idleAssignment && actor.idleAssignment.endsAtMs <= nowMs) {
@@ -2018,7 +2090,10 @@ function advanceActor(actor: OfficeActor, actors: Record<string, OfficeActor>, n
     actor.x = currentWaypoint.x;
     actor.y = currentWaypoint.y;
     if (actor.path.segmentIndex < actor.path.waypoints.length - 1) {
-      actor.path.segmentDurationMs = resolvePathDurationForIndex(actor.path, actor.path.segmentIndex);
+      actor.path.segmentDurationMs = resolvePathDurationForIndex(
+        actor.path,
+        actor.path.segmentIndex,
+      );
     }
     changed = true;
   }
@@ -2091,17 +2166,14 @@ function buildSnapshotState(
       rowsByAgentId.get(agent.id) ?? [],
       nowMs,
     );
-    const isHeartbeatSnapshot = snapshotRow ? Boolean(heartbeatSessionKeys[snapshotRow.key]) : false;
+    const isHeartbeatSnapshot = snapshotRow
+      ? Boolean(heartbeatSessionKeys[snapshotRow.key])
+      : false;
     const snapshotActivity = preserveActiveSupportDialogue(
       prev,
       preferRecentBubbleText(
         prev,
-        snapshotActivityForRow(
-          { roleHint, homeAnchorId },
-          snapshotRow,
-          nowMs,
-          isHeartbeatSnapshot,
-        ),
+        snapshotActivityForRow({ roleHint, homeAnchorId }, snapshotRow, nowMs, isHeartbeatSnapshot),
         snapshotRow?.updatedAt,
       ),
       nowMs,
@@ -2113,7 +2185,9 @@ function buildSnapshotState(
           kind: "worker",
           label: labelForAgent(agent),
           agentId: agent.id,
-          sessionKey: snapshotRow?.key ?? buildAgentMainSessionKey({ agentId: agent.id, mainKey: params.agents.mainKey }),
+          sessionKey:
+            snapshotRow?.key ??
+            buildAgentMainSessionKey({ agentId: agent.id, mainKey: params.agents.mainKey }),
           roleHint,
           homeAnchorId,
           snapshotActivity,
@@ -2144,11 +2218,11 @@ function buildSnapshotState(
         : isSupportSessionRow(row)
           ? "support"
           : "desk";
-      const label = row.displayName?.trim() || row.derivedTitle?.trim() || parsed?.agentId || "Visitor";
-      const homeAnchorId =
-        isSupportSessionRow(row)
-          ? "outside_support"
-          : (prev?.homeAnchorId ?? "outside_mauHome");
+      const label =
+        row.displayName?.trim() || row.derivedTitle?.trim() || parsed?.agentId || "Visitor";
+      const homeAnchorId = isSupportSessionRow(row)
+        ? "outside_support"
+        : (prev?.homeAnchorId ?? "outside_mauHome");
       const supportVisitorAnchorId = visitorSupportAnchorForAgentId(
         nextActors,
         parsed?.agentId ?? null,
@@ -2182,7 +2256,9 @@ function buildSnapshotState(
           source: "snapshot",
         });
       const resolvedSnapshotActivity =
-        roleHint === "support" ? { ...snapshotActivity, anchorId: supportVisitorAnchorId } : snapshotActivity;
+        roleHint === "support"
+          ? { ...snapshotActivity, anchorId: supportVisitorAnchorId }
+          : snapshotActivity;
       const actor = prev
         ? cloneActor(prev)
         : createActor({
@@ -2232,7 +2308,10 @@ function buildSnapshotState(
     nowMs,
     config: params.config,
     heartbeatSessionKeys,
-    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(previous.activeHeartbeatSessionKeys, nowMs),
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
+      previous.activeHeartbeatSessionKeys,
+      nowMs,
+    ),
     presenceEntries: params.presenceEntries,
     actors: nextActors,
     actorOrder,
@@ -2243,10 +2322,12 @@ function buildSnapshotState(
 
   for (const actorId of actorOrder) {
     const actor = next.actors[actorId];
-    const busy = actor.path || isActiveEventActivity(actor, nowMs) || isActiveIdleAssignment(actor, nowMs);
+    const busy =
+      actor.path || isActiveEventActivity(actor, nowMs) || isActiveIdleAssignment(actor, nowMs);
     if (busy) {
       const activity = resolveDeferredActivity(actor, nowMs);
-      const plannedActivity = actor.pendingActivity ?? actor.queuedActivity ?? actor.currentActivity;
+      const plannedActivity =
+        actor.pendingActivity ?? actor.queuedActivity ?? actor.currentActivity;
       if (!sameActivityPlan(plannedActivity, activity)) {
         actor.pendingActivity = cloneActivity(activity);
       }
@@ -2281,7 +2362,10 @@ export function advanceMauOfficeState(state: MauOfficeState, nowMs: number): Mau
   const next: MauOfficeState = {
     ...state,
     nowMs,
-    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
+      state.activeHeartbeatSessionKeys,
+      nowMs,
+    ),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
@@ -2320,7 +2404,10 @@ function resolveActorForSessionKey(state: MauOfficeState, sessionKey: string): O
   return state.actors[`worker:${parsed.agentId}`] ?? null;
 }
 
-function resolveWorkerActorForSessionKey(state: MauOfficeState, sessionKey: string): OfficeActor | null {
+function resolveWorkerActorForSessionKey(
+  state: MauOfficeState,
+  sessionKey: string,
+): OfficeActor | null {
   const parsed = parseAgentSessionKey(sessionKey);
   if (!parsed) {
     return null;
@@ -2486,19 +2573,25 @@ export function applyMauOfficeAgentEvent(
   const next = {
     ...state,
     nowMs,
-    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
+      state.activeHeartbeatSessionKeys,
+      nowMs,
+    ),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
     version: state.version + 1,
   };
-  const isHeartbeatSession = isActiveHeartbeatSession(next, sessionKey, nowMs) || isActiveHeartbeatEvent(payload);
+  const isHeartbeatSession =
+    isActiveHeartbeatSession(next, sessionKey, nowMs) || isActiveHeartbeatEvent(payload);
   if (isHeartbeatSession) {
     touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
   }
-  const actor = sessionRoleHint === "support" || isHeartbeatSession
-    ? resolveWorkerActorForSessionKey(next, sessionKey)
-    : (resolveActorForSessionKey(next, sessionKey) ?? ensureVisitorActor(next, sessionKey, nowMs));
+  const actor =
+    sessionRoleHint === "support" || isHeartbeatSession
+      ? resolveWorkerActorForSessionKey(next, sessionKey)
+      : (resolveActorForSessionKey(next, sessionKey) ??
+        ensureVisitorActor(next, sessionKey, nowMs));
   if (!actor) {
     return next;
   }
@@ -2508,7 +2601,11 @@ export function applyMauOfficeAgentEvent(
       : typeof payload?.stream === "string"
         ? payload.stream.trim().toLowerCase()
         : "";
-  if (isHeartbeatSession && (phase === "end" || phase === "error") && actor.snapshotActivity?.id === "snapshot-heartbeat") {
+  if (
+    isHeartbeatSession &&
+    (phase === "end" || phase === "error") &&
+    actor.snapshotActivity?.id === "snapshot-heartbeat"
+  ) {
     actor.snapshotActivity = null;
   }
   const activity =
@@ -2539,10 +2636,18 @@ export function applyMauOfficeAgentEvent(
               kind: sessionRoleHint === "support" ? "customer_support" : "desk_work",
               label: sessionRoleHint === "support" ? "Handling support" : "Working through a task",
               bubbleText: extractAgentEventPreviewText(payload?.data),
-              roomId: sessionRoleHint === "support" ? "support" : roomFromAnchor(actor.homeAnchorId),
-              anchorId: sessionRoleHint === "support" ? supportAnchorForHome(actor.homeAnchorId) : actor.homeAnchorId,
+              roomId:
+                sessionRoleHint === "support" ? "support" : roomFromAnchor(actor.homeAnchorId),
+              anchorId:
+                sessionRoleHint === "support"
+                  ? supportAnchorForHome(actor.homeAnchorId)
+                  : actor.homeAnchorId,
               source: "event",
-              expiresAtMs: nowMs + activityLifetimeMs(sessionRoleHint === "support" ? "customer_support" : "desk_work"),
+              expiresAtMs:
+                nowMs +
+                activityLifetimeMs(
+                  sessionRoleHint === "support" ? "customer_support" : "desk_work",
+                ),
             });
   applyEventToActor(actor, next.actors, activity, nowMs);
   if (sessionRoleHint === "support" && !isHeartbeatSession) {
@@ -2589,7 +2694,10 @@ export function applyMauOfficeSessionToolEvent(
   const next = {
     ...state,
     nowMs,
-    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
+      state.activeHeartbeatSessionKeys,
+      nowMs,
+    ),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
@@ -2604,8 +2712,10 @@ export function applyMauOfficeSessionToolEvent(
     mapped.kind === "customer_support" && sessionRoleHint === "support" && !isHeartbeatSession
       ? resolveWorkerActorForSessionKey(next, sessionKey)
       : isHeartbeatSession
-        ? (resolveWorkerActorForSessionKey(next, sessionKey) ?? resolveActorForSessionKey(next, sessionKey))
-        : (resolveActorForSessionKey(next, sessionKey) ?? ensureVisitorActor(next, sessionKey, nowMs));
+        ? (resolveWorkerActorForSessionKey(next, sessionKey) ??
+          resolveActorForSessionKey(next, sessionKey))
+        : (resolveActorForSessionKey(next, sessionKey) ??
+          ensureVisitorActor(next, sessionKey, nowMs));
   if (!actor) {
     return next;
   }
@@ -2662,7 +2772,9 @@ export function applyMauOfficeSessionMessageEvent(
     return state;
   }
   const role =
-    typeof payload?.message?.role === "string" ? payload.message.role.trim().toLowerCase() : "assistant";
+    typeof payload?.message?.role === "string"
+      ? payload.message.role.trim().toLowerCase()
+      : "assistant";
   const messageSeq =
     typeof payload?.messageSeq === "number" && Number.isFinite(payload.messageSeq)
       ? payload.messageSeq
@@ -2676,13 +2788,16 @@ export function applyMauOfficeSessionMessageEvent(
   const bubbleText =
     isSupport && role === "user"
       ? extractVisitorPreviewText(payload?.message)
-      : extractPreviewText(payload?.message?.content) ??
+      : (extractPreviewText(payload?.message?.content) ??
         extractPreviewText(payload?.message?.text) ??
-        extractPreviewText(payload?.message);
+        extractPreviewText(payload?.message));
   const next = {
     ...state,
     nowMs,
-    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(state.activeHeartbeatSessionKeys, nowMs),
+    activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
+      state.activeHeartbeatSessionKeys,
+      nowMs,
+    ),
     actors: Object.fromEntries(
       Object.entries(state.actors).map(([id, actor]) => [id, cloneActor(actor)]),
     ),
@@ -2692,14 +2807,15 @@ export function applyMauOfficeSessionMessageEvent(
   if (isHeartbeatSession) {
     touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
   }
-  const actor =
-    isHeartbeatSession
-      ? (resolveWorkerActorForSessionKey(next, sessionKey) ?? resolveActorForSessionKey(next, sessionKey))
-      : isSupport && role === "user"
+  const actor = isHeartbeatSession
+    ? (resolveWorkerActorForSessionKey(next, sessionKey) ??
+      resolveActorForSessionKey(next, sessionKey))
+    : isSupport && role === "user"
       ? ensureVisitorActor(next, sessionKey, nowMs)
       : isSupport && role !== "user"
         ? resolveWorkerActorForSessionKey(next, sessionKey)
-        : (resolveActorForSessionKey(next, sessionKey) ?? ensureVisitorActor(next, sessionKey, nowMs));
+        : (resolveActorForSessionKey(next, sessionKey) ??
+          ensureVisitorActor(next, sessionKey, nowMs));
   if (!actor) {
     return next;
   }
@@ -2818,7 +2934,12 @@ async function loadVisibleAgentCatalogs(host: MauOfficeLoadHost) {
         includePlugins: true,
       });
       if (result) {
-        host.mauOfficeState = applyMauOfficeToolsCatalog(host.mauOfficeState, agentId, result, Date.now());
+        host.mauOfficeState = applyMauOfficeToolsCatalog(
+          host.mauOfficeState,
+          agentId,
+          result,
+          Date.now(),
+        );
       }
     }),
   );
@@ -2853,13 +2974,16 @@ export async function loadMauOffice(host: MauOfficeLoadHost) {
           maxChars: 200,
         });
         const previewByKey = new Map(
-          previews.previews.map((entry) => [
-            entry.key,
-            {
-              userPreview: resolveLastUserPreview(entry),
-              assistantPreview: resolveLastAssistantPreview(entry),
-            },
-          ] as const),
+          previews.previews.map(
+            (entry) =>
+              [
+                entry.key,
+                {
+                  userPreview: resolveLastUserPreview(entry),
+                  assistantPreview: resolveLastAssistantPreview(entry),
+                },
+              ] as const,
+          ),
         );
         sessionsWithVisitorPreview = {
           ...sessions,
@@ -2878,13 +3002,17 @@ export async function loadMauOffice(host: MauOfficeLoadHost) {
         sessionsWithVisitorPreview = sessions;
       }
     }
-    host.mauOfficeState = buildSnapshotState(host.mauOfficeState, {
-      config,
-      rawConfig: host.configSnapshot?.config,
-      agents,
-      sessions: sessionsWithVisitorPreview,
-      presenceEntries: Array.isArray(presence) ? presence : [],
-    }, Date.now());
+    host.mauOfficeState = buildSnapshotState(
+      host.mauOfficeState,
+      {
+        config,
+        rawConfig: host.configSnapshot?.config,
+        agents,
+        sessions: sessionsWithVisitorPreview,
+        presenceEntries: Array.isArray(presence) ? presence : [],
+      },
+      Date.now(),
+    );
     await loadVisibleAgentCatalogs(host);
   } catch (error) {
     host.mauOfficeError = isMissingOperatorReadScopeError(error)

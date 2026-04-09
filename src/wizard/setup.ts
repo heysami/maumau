@@ -804,7 +804,6 @@ export async function runSetupWizard(
         secretInputMode: opts.secretInputMode,
       });
     }
-
   }
 
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {

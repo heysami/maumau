@@ -70,8 +70,10 @@ export const pt_BR: TranslationMap = {
     dashboardTasks: "Kanban ao vivo derivado de sessões e execuções delegadas.",
     dashboardWorkshop: "Pré-visualizações interativas ligadas às tarefas que as geraram.",
     dashboardCalendar: "Visões de mês, semana e dia para rotinas, cron e atividade.",
-    dashboardRoutines: "Rotinas voltadas para pessoas projetadas da automação e dos cron jobs existentes.",
-    dashboardTeams: "Organogramas gerados e fluxo de delegação a partir da configuração de time salva.",
+    dashboardRoutines:
+      "Rotinas voltadas para pessoas projetadas da automação e dos cron jobs existentes.",
+    dashboardTeams:
+      "Organogramas gerados e fluxo de delegação a partir da configuração de time salva.",
     dashboardMemories: "Agente selecionado, arquivos de memória e escopo de runtime.",
     usage: "Uso e custos da API.",
     cron: "Despertares e execuções.",
@@ -190,7 +192,8 @@ export const pt_BR: TranslationMap = {
       prev: "Anterior",
       today: "Hoje",
       next: "Próximo",
-      toolbarSubtitle: "Lembretes, rotinas e aprovações voltados ao usuário dentro da janela selecionada.",
+      toolbarSubtitle:
+        "Lembretes, rotinas e aprovações voltados ao usuário dentro da janela selecionada.",
       visibleItems: "{count} itens visíveis",
       selectedDay: "{day}",
       moreItems: "+{count} mais",

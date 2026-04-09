@@ -18,6 +18,8 @@ describe("method scope resolution", () => {
     ["sessions.messages.subscribe", ["operator.read"]],
     ["sessions.messages.unsubscribe", ["operator.read"]],
     ["poll", ["operator.write"]],
+    ["dashboard.userChannels", ["operator.read"]],
+    ["dashboard.userChannels.connect", ["operator.admin"]],
     ["config.patch", ["operator.admin"]],
     ["wizard.start", ["operator.admin"]],
     ["update.run", ["operator.admin"]],

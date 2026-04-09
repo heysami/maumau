@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import { guard } from "lit/directives/guard.js";
-import { repeat } from "lit/directives/repeat.js";
 import { ref } from "lit/directives/ref.js";
+import { repeat } from "lit/directives/repeat.js";
 import { styleMap } from "lit/directives/style-map.js";
 import { t } from "../../i18n/index.ts";
 import { extractText } from "../chat/message-extract.ts";
@@ -122,15 +122,19 @@ export type MauOfficeChatWindowState = {
 };
 
 function isNarrowViewport(): boolean {
-  return typeof window !== "undefined" &&
+  return (
+    typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 900px)").matches;
+    window.matchMedia("(max-width: 900px)").matches
+  );
 }
 
 function isMobileOfficeChatViewport(): boolean {
-  return typeof window !== "undefined" &&
+  return (
+    typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 900px)").matches;
+    window.matchMedia("(max-width: 900px)").matches
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -147,7 +151,9 @@ function formatChatTimestamp(value: number | null | undefined): string {
   }).format(value);
 }
 
-function resolveOfficeChatDock(position: { x: number | null; y: number | null } | undefined): "left" | "right" {
+function resolveOfficeChatDock(
+  position: { x: number | null; y: number | null } | undefined,
+): "left" | "right" {
   const width = typeof window !== "undefined" ? window.innerWidth : 1280;
   const x = position?.x ?? width;
   return x > width / 2 ? "right" : "left";
@@ -254,7 +260,8 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
   }
   const mobile = isMobileOfficeChatViewport();
   const minimized = !mobile && chatWindow.minimized;
-  const title = (actor?.label ?? chatWindow.actorLabel) || t("dashboard.mauOffice.chat.sessionTitle");
+  const title =
+    (actor?.label ?? chatWindow.actorLabel) || t("dashboard.mauOffice.chat.sessionTitle");
   const subtitle = actor
     ? `${actor.currentActivity.label} · ${chatWindow.sessionKey}`
     : chatWindow.sessionKey;
@@ -277,20 +284,24 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
           <span class="mau-office-chat__subtitle">${subtitle}</span>
         </button>
         <div class="mau-office-chat__actions">
-          ${mobile
-            ? nothing
-            : html`
+          ${
+            mobile
+              ? nothing
+              : html`
                 <button
                   class="btn btn--ghost btn--icon"
                   type="button"
-                  aria-label=${minimized
-                    ? t("dashboard.mauOffice.chat.expand")
-                    : t("dashboard.mauOffice.chat.minimize")}
+                  aria-label=${
+                    minimized
+                      ? t("dashboard.mauOffice.chat.expand")
+                      : t("dashboard.mauOffice.chat.minimize")
+                  }
                   @click=${() => props.onChatToggleMinimized?.()}
                 >
                   ${minimized ? icons.maximize : icons.minimize}
                 </button>
-              `}
+              `
+          }
           <button
             class="btn btn--ghost btn--icon"
             type="button"
@@ -302,12 +313,15 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
         </div>
       </header>
 
-      ${minimized
-        ? nothing
-        : html`
-            ${chatWindow.error
-              ? html`<div class="callout danger mau-office-chat__error">${chatWindow.error}</div>`
-              : nothing}
+      ${
+        minimized
+          ? nothing
+          : html`
+            ${
+              chatWindow.error
+                ? html`<div class="callout danger mau-office-chat__error">${chatWindow.error}</div>`
+                : nothing
+            }
             <div
               class="mau-office-chat__thread"
               ${ref((element) => {
@@ -319,11 +333,13 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
                 });
               })}
             >
-              ${chatWindow.loading
-                ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.loading")}</div>`
-                : threadItems.length === 0 && !chatWindow.stream
-                  ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.empty")}</div>`
-                  : nothing}
+              ${
+                chatWindow.loading
+                  ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.loading")}</div>`
+                  : threadItems.length === 0 && !chatWindow.stream
+                    ? html`<div class="mau-office-chat__empty">${t("dashboard.mauOffice.chat.empty")}</div>`
+                    : nothing
+              }
               ${repeat(
                 threadItems,
                 (_message, index) => `${chatWindow.sessionKey}:${index}`,
@@ -351,8 +367,9 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
                   `;
                 },
               )}
-              ${chatWindow.stream
-                ? html`
+              ${
+                chatWindow.stream
+                  ? html`
                     <article class="mau-office-chat__message mau-office-chat__message--assistant">
                       <div class="mau-office-chat__message-role">${t("dashboard.mauOffice.chat.role.assistant")}</div>
                       <div class="mau-office-chat__message-body">${chatWindow.stream}</div>
@@ -361,7 +378,8 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
                       </div>
                     </article>
                   `
-                : nothing}
+                  : nothing
+              }
             </div>
             <div class="mau-office-chat__composer">
               <textarea
@@ -404,7 +422,8 @@ function renderOfficeChatWindow(props: MauOfficeProps, actor: OfficeActor | null
                 </button>
               </div>
             </div>
-          `}
+          `
+      }
     </section>
   `;
 }
@@ -430,7 +449,9 @@ function resolveViewportAvailableWidth(): number {
 }
 
 function labelForRoom(roomId: MauOfficeRoomId | "all"): string {
-  return roomId === "all" ? t("dashboard.mauOffice.allRooms") : MAU_OFFICE_LAYOUT.rooms[roomId].label;
+  return roomId === "all"
+    ? t("dashboard.mauOffice.allRooms")
+    : MAU_OFFICE_LAYOUT.rooms[roomId].label;
 }
 
 function resolveEffectiveRoomFocus(state: MauOfficeState): MauOfficeRoomId | "all" {

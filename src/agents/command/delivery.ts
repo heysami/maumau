@@ -6,6 +6,7 @@ import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
 import { createOutboundSendDeps, type CliDeps } from "../../cli/outbound-send-deps.js";
 import type { MaumauConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import { maybeBuildPreviewReceiptPayloads as maybeBuildSharedPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import {
   resolveAgentDeliveryPlan,
   resolveAgentOutboundTarget,
@@ -22,7 +23,6 @@ import {
 import type { OutboundSessionContext } from "../../infra/outbound/session-context.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { isInternalMessageChannel } from "../../utils/message-channel.js";
-import { maybeBuildPreviewReceiptPayloads as maybeBuildSharedPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import { AGENT_LANE_NESTED } from "../lanes.js";
 import type { AgentCommandOpts } from "./types.js";
 
@@ -92,7 +92,9 @@ async function maybeBuildPreviewReceiptPayloads(params: {
     payloads: params.payloads,
     workspaceDir: params.opts.workspaceDir ?? undefined,
     messageChannel:
-      params.opts.runContext?.messageChannel ?? params.opts.messageChannel ?? params.deliveryChannel,
+      params.opts.runContext?.messageChannel ??
+      params.opts.messageChannel ??
+      params.deliveryChannel,
     senderIsOwner: params.opts.senderIsOwner,
     senderName: params.opts.senderName ?? undefined,
     senderUsername: params.opts.senderUsername ?? undefined,

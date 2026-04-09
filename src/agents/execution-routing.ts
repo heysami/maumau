@@ -1,6 +1,6 @@
 import type { MaumauConfig } from "../config/config.js";
-import { resolveAgentConfig } from "./agent-scope.js";
 import { resolvePreferredTeamRunTarget, resolveSessionTeamContext } from "../teams/runtime.js";
+import { resolveAgentConfig } from "./agent-scope.js";
 
 const UI_EXECUTION_ACTION_RE =
   /\b(build|create|make|implement|ship|design|redesign|prototype|code|develop|fix|update|polish|improve|generate)\b/i;
@@ -92,7 +92,9 @@ export function taskRequiresDesignAssetTeam(task: string): boolean {
   return countDesignSupportingSurfaceMatches(normalized) >= 2;
 }
 
-function resolveExecutionRoutePreference(task: string): "ui_human_facing" | "design_assets" | undefined {
+function resolveExecutionRoutePreference(
+  task: string,
+): "ui_human_facing" | "design_assets" | undefined {
   const normalized = normalizeForRouting(task);
   if (taskRequiresUiImplementationOwner(normalized)) {
     return "ui_human_facing";

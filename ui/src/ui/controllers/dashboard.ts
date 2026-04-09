@@ -9,6 +9,7 @@ import type {
   DashboardSnapshot,
   DashboardTaskFilter,
   DashboardTasksResult,
+  DashboardUserChannelsResult,
   DashboardTeamRunsResult,
   DashboardTeamSnapshotsResult,
   DashboardTodaySnapshot,
@@ -34,6 +35,9 @@ type DashboardHost = {
   dashboardWalletEndDate: string;
   dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: DashboardCalendarResult | null;
+  dashboardUserChannelsResult: DashboardUserChannelsResult | null;
+  dashboardUserChannelId: string | null;
+  dashboardUserChannelAccountId: string | null;
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
@@ -55,9 +59,7 @@ type DashboardHost = {
   configRaw: string;
 };
 
-type DashboardDateInterpretationParams =
-  | { mode: "utc" }
-  | { mode: "specific"; utcOffset: string };
+type DashboardDateInterpretationParams = { mode: "utc" } | { mode: "specific"; utcOffset: string };
 
 function formatUtcOffset(timezoneOffsetMinutes: number): string {
   const offsetFromUtcMinutes = -timezoneOffsetMinutes;
@@ -173,6 +175,26 @@ function applyMemories(snapshot: DashboardSnapshot, result: DashboardMemoriesRes
   snapshot.generatedAtMs = Math.max(snapshot.generatedAtMs, result.generatedAtMs);
 }
 
+function synchronizeUserChannelSelection(host: DashboardHost) {
+  const channels = host.dashboardUserChannelsResult?.channels ?? [];
+  if (channels.length === 0) {
+    host.dashboardUserChannelId = null;
+    host.dashboardUserChannelAccountId = null;
+    return;
+  }
+  const selectedChannel =
+    channels.find((channel) => channel.channelId === host.dashboardUserChannelId) ?? channels[0];
+  host.dashboardUserChannelId = selectedChannel.channelId;
+  const selectedAccount =
+    selectedChannel.accounts.find(
+      (account) => account.accountId === host.dashboardUserChannelAccountId,
+    ) ??
+    selectedChannel.accounts.find((account) => account.defaultAccount) ??
+    selectedChannel.accounts[0] ??
+    null;
+  host.dashboardUserChannelAccountId = selectedAccount?.accountId ?? null;
+}
+
 function resolveDashboardDraftConfigRaw(host: DashboardHost): string | undefined {
   if (!host.configFormDirty) {
     return undefined;
@@ -240,6 +262,15 @@ async function loadDashboardPageData(host: DashboardHost): Promise<void> {
       const snapshot = ensureDashboardSnapshot(host);
       const routines = await host.client.request<DashboardRoutinesResult>("dashboard.routines", {});
       applyRoutines(snapshot, routines);
+      return;
+    }
+    case "user-channels": {
+      const result = await host.client.request<DashboardUserChannelsResult>(
+        "dashboard.userChannels",
+        {},
+      );
+      host.dashboardUserChannelsResult = result;
+      synchronizeUserChannelSelection(host);
       return;
     }
     case "memories": {
@@ -375,6 +406,130 @@ export async function saveDashboardWorkshopSelection(host: DashboardHost): Promi
     host.dashboardWorkshopSaveError = String(error);
   } finally {
     host.dashboardWorkshopSaving = false;
+  }
+}
+
+export async function connectDashboardUserChannel(
+  host: Pick<
+    DashboardHost,
+    | "client"
+    | "connected"
+    | "dashboardLoading"
+    | "dashboardError"
+    | "dashboardUserChannelsResult"
+    | "dashboardUserChannelId"
+    | "dashboardUserChannelAccountId"
+  >,
+  params: {
+    channelId: string;
+    fields: Record<string, string>;
+    dmPolicy?: string;
+    allowFrom?: string;
+    chatPolicy?: string;
+    chatEntries?: string;
+  },
+): Promise<void> {
+  if (!host.client || !host.connected) {
+    return;
+  }
+  host.dashboardLoading = true;
+  host.dashboardError = null;
+  try {
+    await host.client.request("dashboard.userChannels.connect", params);
+    const result = await host.client.request<DashboardUserChannelsResult>(
+      "dashboard.userChannels",
+      {},
+    );
+    host.dashboardUserChannelsResult = result;
+    host.dashboardUserChannelId = params.channelId;
+    synchronizeUserChannelSelection(host);
+    host.dashboardError = null;
+  } catch (error) {
+    host.dashboardError = String(error);
+  } finally {
+    host.dashboardLoading = false;
+  }
+}
+
+export async function setDashboardUserChannelAllowlist(
+  host: Pick<
+    DashboardHost,
+    | "client"
+    | "connected"
+    | "dashboardLoading"
+    | "dashboardError"
+    | "dashboardUserChannelsResult"
+    | "dashboardUserChannelId"
+    | "dashboardUserChannelAccountId"
+  >,
+  params: {
+    channelId: string;
+    accountId: string;
+    scope: "dm" | "group";
+    entries: string;
+  },
+): Promise<void> {
+  if (!host.client || !host.connected) {
+    return;
+  }
+  host.dashboardLoading = true;
+  host.dashboardError = null;
+  try {
+    await host.client.request("dashboard.userChannels.allowlist.set", params);
+    const result = await host.client.request<DashboardUserChannelsResult>(
+      "dashboard.userChannels",
+      {},
+    );
+    host.dashboardUserChannelsResult = result;
+    host.dashboardUserChannelId = params.channelId;
+    host.dashboardUserChannelAccountId = params.accountId;
+    synchronizeUserChannelSelection(host);
+    host.dashboardError = null;
+  } catch (error) {
+    host.dashboardError = String(error);
+  } finally {
+    host.dashboardLoading = false;
+  }
+}
+
+export async function setDashboardUserChannelChats(
+  host: Pick<
+    DashboardHost,
+    | "client"
+    | "connected"
+    | "dashboardLoading"
+    | "dashboardError"
+    | "dashboardUserChannelsResult"
+    | "dashboardUserChannelId"
+    | "dashboardUserChannelAccountId"
+  >,
+  params: {
+    channelId: string;
+    accountId: string;
+    policy: "allowlist" | "open" | "disabled";
+    entries: string;
+  },
+): Promise<void> {
+  if (!host.client || !host.connected) {
+    return;
+  }
+  host.dashboardLoading = true;
+  host.dashboardError = null;
+  try {
+    await host.client.request("dashboard.userChannels.chats.set", params);
+    const result = await host.client.request<DashboardUserChannelsResult>(
+      "dashboard.userChannels",
+      {},
+    );
+    host.dashboardUserChannelsResult = result;
+    host.dashboardUserChannelId = params.channelId;
+    host.dashboardUserChannelAccountId = params.accountId;
+    synchronizeUserChannelSelection(host);
+    host.dashboardError = null;
+  } catch (error) {
+    host.dashboardError = String(error);
+  } finally {
+    host.dashboardLoading = false;
   }
 }
 

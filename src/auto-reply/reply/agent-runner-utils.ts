@@ -1,7 +1,7 @@
 import { resolveRunModelFallbacksOverride } from "../../agents/agent-scope.js";
+import { normalizeChatType } from "../../channels/chat-type.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plugins/types.js";
-import { normalizeChatType } from "../../channels/chat-type.js";
 import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
 import type { MaumauConfig } from "../../config/config.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
@@ -153,8 +153,8 @@ export function buildEmbeddedContextFromTemplate(params: {
       ? normalizedChatType !== "direct"
       : Boolean(
           params.sessionCtx.GroupChannel ??
-            params.sessionCtx.GroupSubject ??
-            params.sessionCtx.GroupSpace,
+          params.sessionCtx.GroupSubject ??
+          params.sessionCtx.GroupSpace,
         ) || undefined;
   return {
     sessionId: params.run.sessionId,

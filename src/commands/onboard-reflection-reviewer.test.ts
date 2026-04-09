@@ -116,12 +116,12 @@ describe("onboard reflection reviewer", () => {
     } satisfies MaumauConfig);
     let reviewerWorkspace = "";
 
-    expect(seeded.agents?.list?.find((agent) => agent.id === REFLECTION_REVIEWER_AGENT_ID)).toMatchObject(
-      {
-        id: REFLECTION_REVIEWER_AGENT_ID,
-        sandbox: { mode: "off" },
-      },
-    );
+    expect(
+      seeded.agents?.list?.find((agent) => agent.id === REFLECTION_REVIEWER_AGENT_ID),
+    ).toMatchObject({
+      id: REFLECTION_REVIEWER_AGENT_ID,
+      sandbox: { mode: "off" },
+    });
     expect(resolveDefaultAgentId(seeded)).toBe(DEFAULT_AGENT_ID);
 
     await withEnvAsync({ MAUMAU_STATE_DIR: stateDir }, async () => {

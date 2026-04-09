@@ -25,7 +25,10 @@ function normalizeOptionalText(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-function resolveSessionAgentId(params: { cfg: MaumauConfig; sessionKey: string }): string | undefined {
+function resolveSessionAgentId(params: {
+  cfg: MaumauConfig;
+  sessionKey: string;
+}): string | undefined {
   const parsedAgentId = parseAgentSessionKey(params.sessionKey)?.agentId;
   if (parsedAgentId) {
     return normalizeAgentId(parsedAgentId);
@@ -167,7 +170,10 @@ function compareTeamRoutingCandidates(
   if (readinessDelta !== 0) {
     return readinessDelta;
   }
-  return scoreTeamForRoutingPreference(right, preference) - scoreTeamForRoutingPreference(left, preference);
+  return (
+    scoreTeamForRoutingPreference(right, preference) -
+    scoreTeamForRoutingPreference(left, preference)
+  );
 }
 
 function listCandidateTeamIdsForPreference(params: {

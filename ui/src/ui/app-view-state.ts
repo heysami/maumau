@@ -27,6 +27,7 @@ import type {
   DashboardWalletResult,
   DashboardTaskFilter,
   DashboardSnapshot,
+  DashboardUserChannelsResult,
   DashboardTeamSnapshotsResult,
   HealthSummary,
   LogEntry,
@@ -237,6 +238,9 @@ export type AppViewState = {
   dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
+  dashboardUserChannelsResult: DashboardUserChannelsResult | null;
+  dashboardUserChannelId: string | null;
+  dashboardUserChannelAccountId: string | null;
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;

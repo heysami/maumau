@@ -1,10 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-  readConfigFileSnapshot,
-  type MaumauConfig,
-} from "../../config/config.js";
 import { bootstrapOwnerAllowFromIfUnset } from "../../channels/owner-bootstrap.js";
+import { readConfigFileSnapshot, type MaumauConfig } from "../../config/config.js";
 import { resolveGatewayAuth } from "../../gateway/auth.js";
 import { normalizeControlUiBasePath } from "../../gateway/control-ui-shared.js";
 import { resolveTailnetDnsHint } from "../../gateway/server-discovery.js";

@@ -54,9 +54,7 @@ function resolveHookConversationId(params: EmbeddedHookContextInput): string | u
 
 // Keep sender-aware plugin hook context assembly in one place so every hook
 // phase sees the same inbound identity and conversation metadata.
-export function buildEmbeddedHookContext(
-  params: EmbeddedHookContextInput,
-): PluginHookAgentContext {
+export function buildEmbeddedHookContext(params: EmbeddedHookContextInput): PluginHookAgentContext {
   return {
     agentId: params.agentId,
     sessionKey: params.sessionKey,

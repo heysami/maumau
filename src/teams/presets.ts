@@ -16,8 +16,7 @@ export const STARTER_TEAM_MANAGER_AGENT_ID = "vibe-coder-manager";
 export const STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID = "vibe-coder-system-architect";
 export const STARTER_TEAM_DEVELOPER_AGENT_ID = "vibe-coder-developer";
 export const STARTER_TEAM_UI_UX_DESIGNER_AGENT_ID = "vibe-coder-ui-ux-designer";
-export const STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID =
-  "vibe-coder-content-visual-designer";
+export const STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID = "vibe-coder-content-visual-designer";
 export const STARTER_TEAM_TECHNICAL_QA_AGENT_ID = "vibe-coder-technical-qa";
 export const STARTER_TEAM_VISUAL_UX_QA_AGENT_ID = "vibe-coder-visual-ux-qa";
 export const DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID = "design-studio-manager";
@@ -149,8 +148,7 @@ function mergeRequiredCrossTeamLinks(
   for (const link of required) {
     const targetId = link.targetId.trim().toLowerCase();
     const hasMatch = merged.some(
-      (entry) =>
-        entry.type === link.type && entry.targetId.trim().toLowerCase() === targetId,
+      (entry) => entry.type === link.type && entry.targetId.trim().toLowerCase() === targetId,
     );
     if (!hasMatch) {
       merged.push(link);

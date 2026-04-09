@@ -27,6 +27,9 @@ function createHost() {
     dashboardWalletEndDate: "2026-03-30",
     dashboardWalletTimeZone: "local" as const,
     dashboardCalendarResult: null,
+    dashboardUserChannelsResult: null,
+    dashboardUserChannelId: null,
+    dashboardUserChannelAccountId: null,
     dashboardTeamsLoading: false,
     dashboardTeamsError: null,
     dashboardTeamSnapshots: null,
@@ -179,6 +182,48 @@ describe("dashboard workshop controller state", () => {
       endDate: "2026-03-30",
       mode: "utc",
     });
+  });
+
+  it("loads user channel data and chooses the first configured account", async () => {
+    const host = createHost();
+    host.tab = "dashboardUserChannels";
+    host.client.request = vi.fn().mockResolvedValue({
+      generatedAtMs: 123,
+      channels: [
+        {
+          channelId: "discord",
+          label: "Discord",
+          detailLabel: "Discord",
+          accounts: [
+            {
+              accountId: "default",
+              defaultAccount: true,
+              configured: true,
+              linked: false,
+              enabled: true,
+              running: false,
+              connected: false,
+              users: [],
+              capabilities: {
+                users: true,
+                dmSenders: true,
+                groupSenders: false,
+                chats: true,
+                overrides: false,
+              },
+              overrides: [],
+            },
+          ],
+        },
+      ],
+      availableChannels: [],
+    });
+
+    await loadDashboardData(host);
+
+    expect(host.client.request).toHaveBeenCalledWith("dashboard.userChannels", {});
+    expect(host.dashboardUserChannelId).toBe("discord");
+    expect(host.dashboardUserChannelAccountId).toBe("default");
   });
 
   it("defaults workshop to saved when saved items are available", async () => {

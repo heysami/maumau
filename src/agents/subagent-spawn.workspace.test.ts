@@ -371,8 +371,7 @@ describe("spawnSubagentDirect workspace inheritance", () => {
 
     const result = await spawnSubagentDirect(
       {
-        task:
-          '[Team Runtime] Team: Vibe Coder (vibe-coder)\n[Team Runtime] Execute the generated OpenProse workflow.\nManager guidance: If the work needs deeper design exploration, hand an asset-only brief to the linked design team before QA.\nChoose the best linked design team from: design-studio.\nRun input:\ntask = Create a simple attractive webpage about the Mistborn series main characters in /Users/samiaji/.maumau/workspace. Use a clean responsive layout and tasteful styling.',
+        task: "[Team Runtime] Team: Vibe Coder (vibe-coder)\n[Team Runtime] Execute the generated OpenProse workflow.\nManager guidance: If the work needs deeper design exploration, hand an asset-only brief to the linked design team before QA.\nChoose the best linked design team from: design-studio.\nRun input:\ntask = Create a simple attractive webpage about the Mistborn series main characters in /Users/samiaji/.maumau/workspace. Use a clean responsive layout and tasteful styling.",
         routingTask:
           "Create a simple attractive webpage about the Mistborn series main characters in /Users/samiaji/.maumau/workspace. Use a clean responsive layout and tasteful styling.",
         agentId: STARTER_TEAM_MANAGER_AGENT_ID,

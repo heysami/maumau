@@ -1,5 +1,5 @@
-import { isToolAllowedByPolicies } from "../agents/tool-policy-match.js";
 import { resolveEffectiveToolPolicy } from "../agents/pi-tools.policy.js";
+import { isToolAllowedByPolicies } from "../agents/tool-policy-match.js";
 import { resolveToolProfilePolicy } from "../agents/tool-policy-shared.js";
 import { mergeAlsoAllowPolicy } from "../agents/tool-policy.js";
 import type { MaumauConfig } from "../config/config.js";

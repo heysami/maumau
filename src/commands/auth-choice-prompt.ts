@@ -2,8 +2,8 @@ import type { AuthProfileStore } from "../agents/auth-profiles.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { buildAuthChoiceGroups } from "./auth-choice-options.js";
-import { buildEmbeddedAuthChoiceNote } from "./onboarding-choice-guides.js";
 import type { AuthChoice } from "./onboard-types.js";
+import { buildEmbeddedAuthChoiceNote } from "./onboarding-choice-guides.js";
 
 const BACK_VALUE = "__back";
 

@@ -197,9 +197,6 @@ describe("resolveEmbeddedRunSkillEntries", () => {
       },
     });
 
-    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual([
-      "coding-agent",
-      "diffs",
-    ]);
+    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual(["coding-agent", "diffs"]);
   });
 });

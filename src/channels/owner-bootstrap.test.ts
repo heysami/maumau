@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { MaumauConfig } from "../config/config.js";
 import { installDiscordRegistryHooks } from "../auto-reply/test-helpers/command-auth-registry-fixture.js";
+import type { MaumauConfig } from "../config/config.js";
 import { bootstrapOwnerAllowFromIfUnset } from "./owner-bootstrap.js";
 
 installDiscordRegistryHooks();

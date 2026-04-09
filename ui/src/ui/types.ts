@@ -9,6 +9,14 @@ import type {
   DashboardMemoriesResult as SharedDashboardMemoriesResult,
   DashboardRoutine as SharedDashboardRoutine,
   DashboardRoutinesResult as SharedDashboardRoutinesResult,
+  DashboardUserChannel as SharedDashboardUserChannel,
+  DashboardUserChannelAccount as SharedDashboardUserChannelAccount,
+  DashboardUserChannelCapabilityFlags as SharedDashboardUserChannelCapabilityFlags,
+  DashboardUserChannelConnectSpec as SharedDashboardUserChannelConnectSpec,
+  DashboardUserChannelsResult as SharedDashboardUserChannelsResult,
+  DashboardUserChannelEditableList as SharedDashboardUserChannelEditableList,
+  DashboardUserChannelOverride as SharedDashboardUserChannelOverride,
+  DashboardUserChannelUserRow as SharedDashboardUserChannelUserRow,
   DashboardSavedWorkshopItem as SharedDashboardSavedWorkshopItem,
   DashboardSnapshot as SharedDashboardSnapshot,
   DashboardTask as SharedDashboardTask,
@@ -57,6 +65,14 @@ export type DashboardRoutine = SharedDashboardRoutine;
 export type DashboardRoutinesResult = SharedDashboardRoutinesResult;
 export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
 export type DashboardMemoriesResult = SharedDashboardMemoriesResult;
+export type DashboardUserChannel = SharedDashboardUserChannel;
+export type DashboardUserChannelAccount = SharedDashboardUserChannelAccount;
+export type DashboardUserChannelCapabilityFlags = SharedDashboardUserChannelCapabilityFlags;
+export type DashboardUserChannelConnectSpec = SharedDashboardUserChannelConnectSpec;
+export type DashboardUserChannelsResult = SharedDashboardUserChannelsResult;
+export type DashboardUserChannelEditableList = SharedDashboardUserChannelEditableList;
+export type DashboardUserChannelOverride = SharedDashboardUserChannelOverride;
+export type DashboardUserChannelUserRow = SharedDashboardUserChannelUserRow;
 export type DashboardTeamSnapshot = SharedDashboardTeamSnapshot;
 export type DashboardTeamSnapshotsResult = SharedDashboardTeamSnapshotsResult;
 export type TeamPromptEditResult = SharedTeamPromptEditResult;

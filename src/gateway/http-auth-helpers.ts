@@ -58,7 +58,10 @@ export async function authorizeGatewayBearerRequestOrReply(params: {
 
   if (token) {
     if (params.rateLimiter) {
-      const deviceRateCheck = params.rateLimiter.check(clientIp, AUTH_RATE_LIMIT_SCOPE_DEVICE_TOKEN);
+      const deviceRateCheck = params.rateLimiter.check(
+        clientIp,
+        AUTH_RATE_LIMIT_SCOPE_DEVICE_TOKEN,
+      );
       if (!deviceRateCheck.allowed) {
         sendGatewayAuthFailure(params.res, {
           ok: false,

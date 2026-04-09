@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { MaumauConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
+import { evaluateTeamWorkflowContractReadiness } from "../../teams/contracts.js";
 import {
   listAccessibleTeams,
   listTeamWorkflows,
@@ -8,7 +9,6 @@ import {
   resolveDefaultTeamWorkflowId,
   resolveAgentDisplayName,
 } from "../../teams/model.js";
-import { evaluateTeamWorkflowContractReadiness } from "../../teams/contracts.js";
 import { resolveSessionTeamContext } from "../../teams/runtime.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult } from "./common.js";
@@ -57,8 +57,7 @@ export function createTeamsListTool(opts?: {
               requiredQaRoles: readiness.requiredQaRoles,
             };
           });
-          const defaultWorkflow =
-            workflows.find((workflow) => workflow.default) ?? workflows[0];
+          const defaultWorkflow = workflows.find((workflow) => workflow.default) ?? workflows[0];
           return {
             id: team.id,
             name: team.name,

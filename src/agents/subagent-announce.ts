@@ -774,8 +774,7 @@ function buildChildResultPresentation(params: {
   }
 
   return {
-    resultForDefaultDelivery:
-      visibleParagraphs.join("\n\n").trim() || "Completed successfully.",
+    resultForDefaultDelivery: visibleParagraphs.join("\n\n").trim() || "Completed successfully.",
     followupDetails: hiddenParagraphs.join("\n\n"),
     hidesGitDetailsByDefault: true,
   };

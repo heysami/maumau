@@ -397,7 +397,8 @@ export class GatewayBrowserClient {
     const role = CONTROL_UI_OPERATOR_ROLE;
     const scopes = [...CONTROL_UI_OPERATOR_SCOPES];
     const client = this.buildConnectClient();
-    const explicitGatewayToken = this.opts.getToken?.()?.trim() || this.opts.token?.trim() || undefined;
+    const explicitGatewayToken =
+      this.opts.getToken?.()?.trim() || this.opts.token?.trim() || undefined;
     const explicitPassword = this.opts.password?.trim() || undefined;
 
     // crypto.subtle is only available in secure contexts (HTTPS, localhost).

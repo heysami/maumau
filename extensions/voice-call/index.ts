@@ -690,7 +690,12 @@ export default definePluginEntry({
       },
       stop: async () => {
         const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
-        if (!runtimePromise && !runtime && !sharedRuntime.runtime && !sharedRuntime.runtimePromise) {
+        if (
+          !runtimePromise &&
+          !runtime &&
+          !sharedRuntime.runtime &&
+          !sharedRuntime.runtimePromise
+        ) {
           return;
         }
         await stopSharedRuntime();

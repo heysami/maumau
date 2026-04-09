@@ -118,7 +118,9 @@ describe("configureGatewayForSetup", () => {
   });
 
   it("warns when serve is disabled on the tailnet during setup", async () => {
-    mocks.findTailscaleBinary.mockResolvedValue("/Applications/Tailscale.app/Contents/MacOS/Tailscale");
+    mocks.findTailscaleBinary.mockResolvedValue(
+      "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    );
     mocks.probeTailscaleExposure.mockResolvedValueOnce({
       mode: "serve",
       featureEnabled: false,

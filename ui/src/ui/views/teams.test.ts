@@ -25,7 +25,9 @@ function buildConfigValue() {
               id: "default",
               name: "Default Workflow",
               lifecycle: {
-                stages: [{ id: "planning", name: "Planning", status: "in_progress", roles: ["manager"] }],
+                stages: [
+                  { id: "planning", name: "Planning", status: "in_progress", roles: ["manager"] },
+                ],
               },
             },
           ],

@@ -53,7 +53,8 @@ export function createAgentsListTool(opts?: {
       });
 
       const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
-      const allowAny = !requesterTeamContext?.team && allowAgents.some((value) => value.trim() === "*");
+      const allowAny =
+        !requesterTeamContext?.team && allowAgents.some((value) => value.trim() === "*");
       const allowSet = requesterTeamContext?.team
         ? new Set([
             ...listTeamMemberAgentIds(requesterTeamContext.team),

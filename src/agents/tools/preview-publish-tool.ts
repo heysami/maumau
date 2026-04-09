@@ -1,9 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { loadConfig, type MaumauConfig } from "../../config/config.js";
-import {
-  publishPreviewArtifact,
-  type PreviewVisibility,
-} from "../../gateway/previews.js";
+import { publishPreviewArtifact, type PreviewVisibility } from "../../gateway/previews.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
@@ -16,7 +13,8 @@ const PreviewPublishToolSchema = Type.Object({
   visibility: Type.Optional(
     Type.String({
       enum: ["private", "public-share"],
-      description: "private for tailnet-only preview, or public-share for explicit temporary public links.",
+      description:
+        "private for tailnet-only preview, or public-share for explicit temporary public links.",
     }),
   ),
   confirmPublicShare: Type.Optional(

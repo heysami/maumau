@@ -178,6 +178,76 @@ struct OnboardingViewSmokeTests {
         #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .unconfigured) == nil)
     }
 
+    @Test func `finish waits for deferred onboarding restart before completing`() async throws {
+        let previousSeen = AppStateStore.shared.onboardingSeen
+        let previousSeenDefault = UserDefaults.standard.object(forKey: "maumau.onboardingSeen")
+        let previousVersionDefault = UserDefaults.standard.object(forKey: onboardingVersionKey)
+        defer {
+            AppStateStore.shared.onboardingSeen = previousSeen
+            if let previousSeenDefault {
+                UserDefaults.standard.set(previousSeenDefault, forKey: "maumau.onboardingSeen")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "maumau.onboardingSeen")
+            }
+            if let previousVersionDefault {
+                UserDefaults.standard.set(previousVersionDefault, forKey: onboardingVersionKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: onboardingVersionKey)
+            }
+        }
+        AppStateStore.shared.onboardingSeen = false
+        UserDefaults.standard.removeObject(forKey: "maumau.onboardingSeen")
+        UserDefaults.standard.removeObject(forKey: onboardingVersionKey)
+
+        var waitedForReload: ConfigStore.GatewaySaveReload?
+        var restartWaitCompleted = false
+        await ConfigStore._withTestOverrides(.init(
+            isRemoteMode: { false },
+            saveGateway: { _ in
+                ConfigStore.GatewaySaveResult(
+                    hash: "post-save-hash",
+                    reload: .init(restartExpected: true, debounceMs: 25, deferralTimeoutMs: 250))
+            },
+            waitForLocalGatewayRestart: { reload in
+                waitedForReload = reload
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                restartWaitCompleted = true
+            }))
+        {
+            let state = AppState(preview: true)
+            state.connectionMode = .unconfigured
+            let view = OnboardingView(
+                state: state,
+                permissionMonitor: PermissionMonitor.shared,
+                discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+            view.onboardingChannelsStore.replaceConfigDraft([
+                "channels": [
+                    "telegram": [
+                        "enabled": true,
+                        "botToken": "secret-token",
+                    ],
+                ],
+            ], dirty: true)
+
+            view.finish()
+            for _ in 0..<50 where waitedForReload == nil {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+
+            #expect(waitedForReload == .init(restartExpected: true, debounceMs: 25, deferralTimeoutMs: 250))
+            #expect(!restartWaitCompleted)
+            #expect(!AppStateStore.shared.onboardingSeen)
+
+            for _ in 0..<50 where !restartWaitCompleted {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+
+            #expect(restartWaitCompleted)
+            #expect(AppStateStore.shared.onboardingSeen)
+            #expect(view.onboardingChannelsStore.configDirty == false)
+        }
+    }
+
     @Test func `local onboarding uses a deferred config draft store`() {
         let state = AppState(preview: true)
         state.connectionMode = .local

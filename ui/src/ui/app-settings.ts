@@ -78,6 +78,9 @@ type SettingsHost = {
   dashboardWalletStartDate?: string;
   dashboardWalletEndDate?: string;
   dashboardWalletTimeZone?: "local" | "utc";
+  dashboardUserChannelsResult?: import("./types.ts").DashboardUserChannelsResult | null;
+  dashboardUserChannelId?: string | null;
+  dashboardUserChannelAccountId?: string | null;
   dashboardTeamsLoading?: boolean;
   dashboardTeamsError?: string | null;
   dashboardTeamSnapshots?: import("./types.ts").DashboardTeamSnapshotsResult | null;

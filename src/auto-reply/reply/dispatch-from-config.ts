@@ -11,6 +11,7 @@ import { parseSessionThreadInfo } from "../../config/sessions/delivery-info.js";
 import { resolveStorePath } from "../../config/sessions/paths.js";
 import { loadSessionStore, resolveSessionStoreEntry } from "../../config/sessions/store.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
+import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import { logVerbose } from "../../globals.js";
 import { fireAndForgetHook } from "../../hooks/fire-and-forget.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
@@ -45,10 +46,9 @@ import {
   isRequesterRemoteMessagingChannel,
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
-import { maybeBuildPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
+import { resolveCommandAuthorization } from "../command-auth.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { BlockReplyContext, GetReplyOptions, ReplyPayload } from "../types.js";
-import { resolveCommandAuthorization } from "../command-auth.js";
 import { shouldSkipDuplicateInbound } from "./inbound-dedupe.js";
 import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
 import { resolveRunTypingPolicy } from "./typing-policy.js";
@@ -690,8 +690,8 @@ export async function dispatchReplyFromConfig(params: {
     const replies = replyResult ? (Array.isArray(replyResult) ? replyResult : [replyResult]) : [];
     const handoffCompletionDeliveryStartedThisTurn = Boolean(
       sessionKey &&
-        isRequesterRemoteMessagingChannel(requesterDeliveryChannel) &&
-        hasRequesterCompletionDeliveryRunStartedSince(sessionKey, turnStartedAt),
+      isRequesterRemoteMessagingChannel(requesterDeliveryChannel) &&
+      hasRequesterCompletionDeliveryRunStartedSince(sessionKey, turnStartedAt),
     );
     if (handoffCompletionDeliveryStartedThisTurn) {
       logVerbose(

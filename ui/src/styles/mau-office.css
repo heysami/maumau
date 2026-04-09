@@ -1,7 +1,6 @@
 @font-face {
   font-family: "Silkscreen";
-  src:
-    url("/fonts/Silkscreen-Regular.ttf") format("truetype");
+  src: url("/fonts/Silkscreen-Regular.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -9,8 +8,7 @@
 
 @font-face {
   font-family: "Silkscreen";
-  src:
-    url("/fonts/Silkscreen-Bold.ttf") format("truetype");
+  src: url("/fonts/Silkscreen-Bold.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -63,8 +61,7 @@
   width: var(--stage-width-px);
   height: var(--stage-height-px);
   transform-origin: top left;
-  transform:
-    translate(
+  transform: translate(
       calc(-1 * var(--crop-x-px) * var(--mau-camera-scale)),
       calc(-1 * var(--crop-y-px) * var(--mau-camera-scale))
     )
@@ -413,8 +410,14 @@
   visibility: visible;
 }
 
-.mau-office__worker:hover + .mau-office__worker-overlay .mau-office__history .mau-office__bubble-tail,
-.mau-office__worker:focus-visible + .mau-office__worker-overlay .mau-office__history .mau-office__bubble-tail {
+.mau-office__worker:hover
+  + .mau-office__worker-overlay
+  .mau-office__history
+  .mau-office__bubble-tail,
+.mau-office__worker:focus-visible
+  + .mau-office__worker-overlay
+  .mau-office__history
+  .mau-office__bubble-tail {
   bottom: -20px;
 }
 
@@ -432,7 +435,11 @@
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   border-radius: calc(var(--radius-xl) + 2px);
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent), transparent 46%),
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 46%
+    ),
     color-mix(in srgb, var(--bg-elevated) 94%, black 8%);
   box-shadow:
     0 24px 80px color-mix(in srgb, black 42%, transparent),

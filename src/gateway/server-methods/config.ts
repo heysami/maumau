@@ -47,10 +47,7 @@ import {
   resolveControlPlaneActor,
   summarizeChangedPaths,
 } from "../control-plane-audit.js";
-import {
-  haveTeamsConfigChanged,
-  refreshStoredDashboardTeamSnapshots,
-} from "../dashboard.js";
+import { haveTeamsConfigChanged, refreshStoredDashboardTeamSnapshots } from "../dashboard.js";
 import {
   ErrorCodes,
   errorShape,
@@ -348,7 +345,9 @@ async function refreshDashboardTeamSnapshotsIfNeeded(params: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    params.logger?.warn?.(`[dashboard] failed to refresh team snapshots after config write: ${message}`);
+    params.logger?.warn?.(
+      `[dashboard] failed to refresh team snapshots after config write: ${message}`,
+    );
   }
 }
 

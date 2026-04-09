@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { normalizeChannelId } from "../channels/plugins/index.js";
 import { bootstrapOwnerAllowFromIfUnset } from "../channels/owner-bootstrap.js";
+import { normalizeChannelId } from "../channels/plugins/index.js";
 import { listPairingChannels, notifyPairingApproved } from "../channels/plugins/pairing.js";
 import { loadConfig, writeConfigFile } from "../config/config.js";
 import { resolvePairingIdLabel } from "../pairing/pairing-labels.js";

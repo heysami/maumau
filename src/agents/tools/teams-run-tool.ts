@@ -5,6 +5,22 @@ import { loadConfig } from "../../config/config.js";
 import { callGateway } from "../../gateway/call.js";
 import { loadSessionEntry } from "../../gateway/session-utils.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
+import { resolveTeamWorkflowContract } from "../../teams/contracts.js";
+import {
+  formatLifecycleProgressLabel,
+  resolveTeamWorkflowLifecycleStages,
+} from "../../teams/lifecycle.js";
+import { canTeamUseTeam, findTeamConfig } from "../../teams/model.js";
+import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
+import {
+  materializeGeneratedTeamProgram,
+  resolveSessionTeamContext,
+  resolveTeamRunTarget,
+} from "../../teams/runtime.js";
+import type { GatewayMessageChannel } from "../../utils/message-channel.js";
+import { isRequesterRemoteMessagingChannel } from "../../utils/message-channel.js";
+import { buildDeliveryRouteContractNotes } from "../role-contract.js";
+import type { SpawnedToolContext } from "../spawned-context.js";
 import {
   countPendingDescendantRuns,
   getLatestSubagentRunByChildSessionKey,
@@ -12,24 +28,6 @@ import {
   listDescendantRunsForRequester,
 } from "../subagent-registry.js";
 import type { SubagentRunRecord } from "../subagent-registry.js";
-import { buildDeliveryRouteContractNotes } from "../role-contract.js";
-import {
-  resolveTeamWorkflowContract,
-} from "../../teams/contracts.js";
-import { canTeamUseTeam, findTeamConfig } from "../../teams/model.js";
-import {
-  formatLifecycleProgressLabel,
-  resolveTeamWorkflowLifecycleStages,
-} from "../../teams/lifecycle.js";
-import {
-  materializeGeneratedTeamProgram,
-  resolveSessionTeamContext,
-  resolveTeamRunTarget,
-} from "../../teams/runtime.js";
-import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
-import type { GatewayMessageChannel } from "../../utils/message-channel.js";
-import { isRequesterRemoteMessagingChannel } from "../../utils/message-channel.js";
-import type { SpawnedToolContext } from "../spawned-context.js";
 import { spawnSubagentDirect } from "../subagent-spawn.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
@@ -128,9 +126,9 @@ function buildTeamRunTask(params: {
   ].join("\n");
 }
 
-function dedupeLatestRunsByChildSession<T extends Pick<SubagentRunRecord, "childSessionKey" | "createdAt">>(
-  runs: T[],
-) {
+function dedupeLatestRunsByChildSession<
+  T extends Pick<SubagentRunRecord, "childSessionKey" | "createdAt">,
+>(runs: T[]) {
   const latest = new Map<string, T>();
   for (const run of runs) {
     const existing = latest.get(run.childSessionKey);
@@ -181,16 +179,12 @@ function extractLatestDeliverableAssistantText(messages: unknown[]): string | un
 async function waitForTeamManagerSession(params: {
   gatewayCall: GatewayCaller;
   countPendingDescendantRuns: (rootSessionKey: string) => number;
-  getLatestSubagentRunByChildSessionKey: (
-    childSessionKey: string,
-  ) =>
-    | {
-        runId: string;
-        endedAt?: number;
-        cleanupCompletedAt?: number;
-        wakeOnDescendantSettle?: boolean;
-      }
-    | null;
+  getLatestSubagentRunByChildSessionKey: (childSessionKey: string) => {
+    runId: string;
+    endedAt?: number;
+    cleanupCompletedAt?: number;
+    wakeOnDescendantSettle?: boolean;
+  } | null;
   initialRunId: string;
   managerSessionKey: string;
   timeoutMs: number;
@@ -245,9 +239,7 @@ async function waitForTeamManagerSession(params: {
       );
       lastSnapshot = {
         currentRunId,
-        managerRunEnded: Boolean(
-          latestAfterWait && typeof latestAfterWait.endedAt === "number",
-        ),
+        managerRunEnded: Boolean(latestAfterWait && typeof latestAfterWait.endedAt === "number"),
         managerCleanupCompleted: Boolean(
           latestAfterWait && typeof latestAfterWait.cleanupCompletedAt === "number",
         ),
@@ -272,8 +264,7 @@ async function waitForTeamManagerSession(params: {
         };
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : typeof err === "string" ? err : "error";
+      const message = err instanceof Error ? err.message : typeof err === "string" ? err : "error";
       return {
         status: message.includes("gateway timeout") ? "waiting_timed_out" : "error",
         error: message,
@@ -515,7 +506,9 @@ export function createTeamsRunTool(
         const handoffRunIds = [
           wait.snapshot.currentRunId?.trim(),
           spawnResult.runId?.trim(),
-        ].filter((runId, index, arr): runId is string => Boolean(runId) && arr.indexOf(runId) === index);
+        ].filter(
+          (runId, index, arr): runId is string => Boolean(runId) && arr.indexOf(runId) === index,
+        );
         const lateCompletionDeliveryEnabled = handoffRunIds.some((runId) =>
           subagentRegistry.handoffSubagentCompletionToRequester(runId),
         );
@@ -589,7 +582,9 @@ export function createTeamsRunTool(
         }
         let approval: "approved" | "blocked" | undefined;
         if (contract.requiredQaRoles.includes(teamRole)) {
-          approval = parseQaApproval(run.frozenResultText ?? run.fallbackFrozenResultText ?? undefined);
+          approval = parseQaApproval(
+            run.frozenResultText ?? run.fallbackFrozenResultText ?? undefined,
+          );
           if (!approval) {
             const childHistory = await gatewayCall<{ messages: Array<unknown> }>({
               method: "chat.history",

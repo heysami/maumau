@@ -22,7 +22,7 @@ If you want the lowest-friction start, pick one of these first:
 3. **Gemini API key** if you already use Google AI Studio
 4. **Ollama** if you want local models and no cloud API key
 5. **OpenRouter API key** if you want one key for many model brands
-</Info>
+   </Info>
 
 ## Brain providers
 

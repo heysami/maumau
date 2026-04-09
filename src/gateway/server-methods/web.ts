@@ -1,4 +1,5 @@
 import { listChannelPlugins } from "../../channels/plugins/index.js";
+import { bundledChannelPlugins, bundledChannelSetupPlugins } from "../../channels/plugins/bundled.js";
 import { listChannelSetupPlugins } from "../../channels/plugins/setup-registry.js";
 import type { ChannelPlugin } from "../../channels/plugins/types.js";
 import {
@@ -16,7 +17,12 @@ const WEB_LOGIN_METHODS = new Set(["web.login.start", "web.login.wait"]);
 function resolveWebLoginProvider(): ChannelPlugin | null {
   const seen = new Set<string>();
   return (
-    [...listChannelPlugins(), ...listChannelSetupPlugins()].find((plugin) => {
+    [
+      ...listChannelPlugins(),
+      ...listChannelSetupPlugins(),
+      ...bundledChannelPlugins,
+      ...bundledChannelSetupPlugins,
+    ].find((plugin) => {
       const id = String(plugin.id).trim();
       if (!id || seen.has(id)) {
         return false;

@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { loadConfig, type MaumauConfig } from "../../config/config.js";
-import { listSessionCapabilities } from "../capabilities.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
+import { listSessionCapabilities } from "../capabilities.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult } from "./common.js";
 
@@ -22,7 +22,8 @@ export function createCapabilitiesListTool(opts?: {
   return {
     label: "Capabilities",
     name: "capabilities_list",
-    description: "List truthful readiness for tools, teams, browser lanes, desktop fallback, and preview delivery.",
+    description:
+      "List truthful readiness for tools, teams, browser lanes, desktop fallback, and preview delivery.",
     parameters: CapabilitiesListToolSchema,
     execute: async () => {
       const cfg = opts?.config ?? loadConfig();

@@ -9,6 +9,7 @@ import {
   buildAgentMainSessionKey,
   parseAgentSessionKey,
 } from "../../../src/routing/session-key.js";
+import { getUserChannelQuickSetupEntry } from "../../../src/shared/user-channel-quick-setup.js";
 import { resolveDefaultTeamWorkflowId } from "../../../src/teams/model.js";
 import {
   createBlankTeamConfig,
@@ -74,9 +75,12 @@ import {
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
 import {
+  connectDashboardUserChannel,
   loadDashboardData,
   loadDashboardTeamSnapshots,
   saveDashboardWorkshopSelection,
+  setDashboardUserChannelAllowlist,
+  setDashboardUserChannelChats,
 } from "./controllers/dashboard.ts";
 import { loadDebug, callDebugMethod } from "./controllers/debug.ts";
 import {
@@ -617,6 +621,9 @@ export function renderApp(state: AppViewState) {
       walletTimeZone: state.dashboardWalletTimeZone,
       calendarResult: state.dashboardCalendarResult,
       calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
+      userChannelsResult: state.dashboardUserChannelsResult,
+      userChannelId: state.dashboardUserChannelId,
+      userChannelAccountId: state.dashboardUserChannelAccountId,
       teamsLoading: state.dashboardTeamsLoading,
       teamsError: state.dashboardTeamsError,
       teamSnapshots: state.dashboardTeamSnapshots,
@@ -651,6 +658,9 @@ export function renderApp(state: AppViewState) {
       toolsCatalogLoading: state.toolsCatalogLoading,
       toolsCatalogError: state.toolsCatalogError,
       toolsCatalogResult: state.toolsCatalogResult,
+      whatsappMessage: state.whatsappLoginMessage,
+      whatsappQrDataUrl: state.whatsappLoginQrDataUrl,
+      whatsappBusy: state.whatsappBusy,
       mauOfficeLoading: state.mauOfficeLoading,
       mauOfficeError: state.mauOfficeError,
       mauOfficeState: state.mauOfficeState,
@@ -787,6 +797,54 @@ export function renderApp(state: AppViewState) {
         if (!withinVisibleWindow || Boolean(view)) {
           void loadDashboardData(state);
         }
+      },
+      onSelectUserChannel: (channelId) => {
+        state.dashboardUserChannelId = channelId;
+        state.dashboardUserChannelAccountId = null;
+      },
+      onSelectUserChannelAccount: (channelId, accountId) => {
+        state.dashboardUserChannelId = channelId;
+        state.dashboardUserChannelAccountId = accountId;
+      },
+      onOpenUserManagement: () => {
+        state.multiUserMemoryActiveTab = "users";
+        state.setTab("users");
+      },
+      onConnectUserChannel: (params) => {
+        void (async () => {
+          await connectDashboardUserChannel(state, params);
+          await loadChannels(state, true);
+        })();
+      },
+      onSaveUserChannelAllowlist: (params) => {
+        void (async () => {
+          await setDashboardUserChannelAllowlist(state, params);
+          await loadChannels(state, true);
+        })();
+      },
+      onSaveUserChannelChats: (params) => {
+        void (async () => {
+          await setDashboardUserChannelChats(state, params);
+          await loadChannels(state, true);
+        })();
+      },
+      onStartWhatsApp: (force) => {
+        void (async () => {
+          await state.handleWhatsAppStart(force);
+          if (state.whatsappLoginQrDataUrl) {
+            await state.handleWhatsAppWait();
+            if (state.whatsappLoginConnected) {
+              await connectDashboardUserChannel(state, {
+                channelId: "whatsapp",
+                fields: {},
+              });
+              state.whatsappLoginMessage =
+                getUserChannelQuickSetupEntry("whatsapp").quickSetup.successMessage ??
+                state.whatsappLoginMessage;
+            }
+          }
+          await loadDashboardData(state);
+        })();
       },
       onSelectTeam: (selection) => {
         state.dashboardTeamSelection = selection;
