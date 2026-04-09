@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
 import { sleep } from "../api.js";
+import type { VoiceCallBackend } from "./backend.js";
 import type { VoiceCallConfig } from "./config.js";
-import type { VoiceCallRuntime } from "./runtime.js";
 import { resolveUserPath } from "./utils.js";
 import {
   cleanupTailscaleExposureRoute,
@@ -86,12 +86,12 @@ function resolveCallMode(mode?: string): "notify" | "conversation" | undefined {
 }
 
 async function initiateCallAndPrintId(params: {
-  runtime: VoiceCallRuntime;
+  runtime: VoiceCallBackend;
   to: string;
   message?: string;
   mode?: string;
 }) {
-  const result = await params.runtime.manager.initiateCall(params.to, undefined, {
+  const result = await params.runtime.actions.initiateCall(params.to, undefined, {
     message: params.message,
     mode: resolveCallMode(params.mode),
   });
@@ -105,7 +105,7 @@ async function initiateCallAndPrintId(params: {
 export function registerVoiceCallCli(params: {
   program: Command;
   config: VoiceCallConfig;
-  ensureRuntime: () => Promise<VoiceCallRuntime>;
+  ensureRuntime: () => Promise<VoiceCallBackend>;
   logger: Logger;
 }) {
   const { program, config, ensureRuntime, logger } = params;
@@ -168,7 +168,7 @@ export function registerVoiceCallCli(params: {
     .requiredOption("--message <text>", "Message to speak")
     .action(async (options: { callId: string; message: string }) => {
       const rt = await ensureRuntime();
-      const result = await rt.manager.continueCall(options.callId, options.message);
+      const result = await rt.actions.continueCall(options.callId, options.message);
       if (!result.success) {
         throw new Error(result.error || "continue failed");
       }
@@ -183,7 +183,7 @@ export function registerVoiceCallCli(params: {
     .requiredOption("--message <text>", "Message to speak")
     .action(async (options: { callId: string; message: string }) => {
       const rt = await ensureRuntime();
-      const result = await rt.manager.speak(options.callId, options.message);
+      const result = await rt.actions.speak(options.callId, options.message);
       if (!result.success) {
         throw new Error(result.error || "speak failed");
       }
@@ -197,7 +197,7 @@ export function registerVoiceCallCli(params: {
     .requiredOption("--call-id <id>", "Call ID")
     .action(async (options: { callId: string }) => {
       const rt = await ensureRuntime();
-      const result = await rt.manager.endCall(options.callId);
+      const result = await rt.actions.endCall(options.callId);
       if (!result.success) {
         throw new Error(result.error || "end failed");
       }
@@ -211,7 +211,7 @@ export function registerVoiceCallCli(params: {
     .requiredOption("--call-id <id>", "Call ID")
     .action(async (options: { callId: string }) => {
       const rt = await ensureRuntime();
-      const call = rt.manager.getCall(options.callId);
+      const call = await rt.actions.getCall(options.callId);
       // eslint-disable-next-line no-console
       console.log(JSON.stringify(call ?? { found: false }, null, 2));
     });

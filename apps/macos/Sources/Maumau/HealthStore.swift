@@ -74,13 +74,57 @@ final class HealthStore {
 
     private static let logger = Logger(subsystem: "ai.maumau", category: "health")
 
+    #if DEBUG
+    struct RefreshOverrides {
+        var loadHealth: (@MainActor @Sendable (Bool) async throws -> Data)?
+    }
+
+    private actor OverrideStore {
+        var overrides = RefreshOverrides()
+
+        func setOverrides(_ overrides: RefreshOverrides) {
+            self.overrides = overrides
+        }
+    }
+
+    private actor TestOverrideLeaseCoordinator {
+        private var held = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func acquire() async {
+            if !self.held {
+                self.held = true
+                return
+            }
+            await withCheckedContinuation { continuation in
+                self.waiters.append(continuation)
+            }
+        }
+
+        func release() {
+            guard !self.waiters.isEmpty else {
+                self.held = false
+                return
+            }
+            let continuation = self.waiters.removeFirst()
+            continuation.resume()
+        }
+    }
+    #endif
+
     private(set) var snapshot: HealthSnapshot?
     private(set) var lastSuccess: Date?
     private(set) var lastError: String?
     private(set) var isRefreshing = false
 
     private var loopTask: Task<Void, Never>?
+    private var activeRefreshTask: Task<Void, Never>?
+    private var activeRefreshProbesGateway = false
     private let refreshInterval: TimeInterval = 60
+    #if DEBUG
+    private static let overrideStore = OverrideStore()
+    private static let testOverrideLeaseCoordinator = TestOverrideLeaseCoordinator()
+    #endif
 
     private init() {
         // Avoid background health polling in SwiftUI previews and tests.
@@ -113,35 +157,64 @@ final class HealthStore {
     }
 
     func refresh(onDemand: Bool = false) async {
-        guard !self.isRefreshing else { return }
-        self.isRefreshing = true
-        defer { self.isRefreshing = false }
-        let previousError = self.lastError
-
-        do {
-            let data = try await ControlChannel.shared.health(timeout: 15, probe: onDemand)
-            if let decoded = decodeHealthSnapshot(from: data) {
-                self.snapshot = decoded
-                self.lastSuccess = Date()
-                self.lastError = nil
-                if previousError != nil {
-                    Self.logger.info("health refresh recovered")
-                }
-            } else {
-                self.lastError = "health output not JSON"
-                if onDemand { self.snapshot = nil }
-                if previousError != self.lastError {
-                    Self.logger.warning("health refresh failed: output not JSON")
-                }
+        if let activeRefreshTask {
+            let shouldRunFollowUpProbe = onDemand && !self.activeRefreshProbesGateway
+            await activeRefreshTask.value
+            if shouldRunFollowUpProbe {
+                await self.refresh(onDemand: true)
             }
-        } catch {
-            let desc = error.localizedDescription
-            self.lastError = desc
-            if onDemand { self.snapshot = nil }
-            if previousError != desc {
-                Self.logger.error("health refresh failed \(desc, privacy: .public)")
+            return
+        }
+
+        self.isRefreshing = true
+        self.activeRefreshProbesGateway = onDemand
+        let refreshTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isRefreshing = false
+                self.activeRefreshTask = nil
+                self.activeRefreshProbesGateway = false
+            }
+
+            let previousError = self.lastError
+
+            do {
+                let data = try await self.loadHealthData(onDemand: onDemand)
+                if let decoded = decodeHealthSnapshot(from: data) {
+                    self.snapshot = decoded
+                    self.lastSuccess = Date()
+                    self.lastError = nil
+                    if previousError != nil {
+                        Self.logger.info("health refresh recovered")
+                    }
+                } else {
+                    self.lastError = "health output not JSON"
+                    if onDemand { self.snapshot = nil }
+                    if previousError != self.lastError {
+                        Self.logger.warning("health refresh failed: output not JSON")
+                    }
+                }
+            } catch {
+                let desc = error.localizedDescription
+                self.lastError = desc
+                if onDemand { self.snapshot = nil }
+                if previousError != desc {
+                    Self.logger.error("health refresh failed \(desc, privacy: .public)")
+                }
             }
         }
+        self.activeRefreshTask = refreshTask
+        await refreshTask.value
+    }
+
+    private func loadHealthData(onDemand: Bool) async throws -> Data {
+        #if DEBUG
+        let overrides = await Self.overrideStore.overrides
+        if let loadHealth = overrides.loadHealth {
+            return try await loadHealth(onDemand)
+        }
+        #endif
+        return try await ControlChannel.shared.health(timeout: 15, probe: onDemand)
     }
 
     private static func isChannelHealthy(_ summary: HealthSnapshot.ChannelSummary) -> Bool {
@@ -319,6 +392,35 @@ final class HealthStore {
         }
         return reason
     }
+
+    #if DEBUG
+    static func _testSetOverrides(_ overrides: RefreshOverrides) async {
+        await self.overrideStore.setOverrides(overrides)
+    }
+
+    static func _testClearOverrides() async {
+        await self.overrideStore.setOverrides(.init())
+    }
+
+    @MainActor
+    static func _withTestOverrides<T>(
+        _ overrides: RefreshOverrides,
+        operation: @MainActor () async throws -> T
+    ) async rethrows -> T {
+        await self.testOverrideLeaseCoordinator.acquire()
+        await self.overrideStore.setOverrides(overrides)
+        do {
+            let result = try await operation()
+            await self.overrideStore.setOverrides(.init())
+            await self.testOverrideLeaseCoordinator.release()
+            return result
+        } catch {
+            await self.overrideStore.setOverrides(.init())
+            await self.testOverrideLeaseCoordinator.release()
+            throw error
+        }
+    }
+    #endif
 }
 
 func msToAge(_ ms: Double) -> String {

@@ -44,6 +44,63 @@ enum ConversationAutomationTelephonyProvider: String, CaseIterable, Sendable {
     }
 }
 
+enum ConversationAutomationVoiceMode: String, CaseIterable, Sendable {
+    case simpleVapi = "vapi"
+    case advancedSelfHosted = "self-hosted"
+
+    static func loadSelection(from rawValue: String?) -> Self? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return nil }
+        return Self(rawValue: trimmed)
+    }
+}
+
+enum ConversationAutomationVapiBridgeMode: String, CaseIterable, Sendable {
+    case autoBridge = "auto"
+    case manualPublicURL = "manual-public-url"
+
+    static func loadSelection(from rawValue: String?) -> Self? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return nil }
+        return Self(rawValue: trimmed)
+    }
+
+    static func resolveSelection(
+        configuredMode: Self?,
+        configuredBridgeURL: String,
+        autoBridgeURL: String?)
+        -> Self
+    {
+        if let configuredMode {
+            return configuredMode
+        }
+
+        let trimmedBridgeURL = configuredBridgeURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBridgeURL.isEmpty else {
+            return .autoBridge
+        }
+        if let autoBridgeURL,
+           trimmedBridgeURL.caseInsensitiveCompare(autoBridgeURL) == .orderedSame
+        {
+            return .autoBridge
+        }
+        if let url = URL(string: trimmedBridgeURL),
+           let host = url.host?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        {
+            let port = url.port ?? 443
+            if host.hasSuffix(".ts.net"),
+               [443, OnboardingView.conversationAutomationVapiAutoBridgeHTTPSPort].contains(port),
+               url.path == OnboardingView.conversationAutomationVapiBridgePath
+            {
+                return .autoBridge
+            }
+        }
+        return .manualPublicURL
+    }
+}
+
 enum ConversationAutomationWebhookMode: String, CaseIterable, Sendable {
     case tailscaleFunnel = "tailscale-funnel"
     case publicUrl = "public-url"
@@ -252,6 +309,7 @@ struct OnboardingView: View {
     @State var managedBrowserSignInLaunching = false
     @State var conversationAutomationPresetEnabled = false
     @State var conversationAutomationTelephonyEnabled = false
+    @State var conversationAutomationVoiceMode: ConversationAutomationVoiceMode = .simpleVapi
     @State var conversationAutomationPhoneProvider: ConversationAutomationTelephonyProvider = .twilio
     @State var conversationAutomationSttProvider: ConversationAutomationSttProvider = .deepgramRealtime
     @State var conversationAutomationWebhookMode: ConversationAutomationWebhookMode = .tailscaleFunnel
@@ -268,6 +326,18 @@ struct OnboardingView: View {
     @State var conversationAutomationElevenLabsAPIKey = ""
     @State var conversationAutomationElevenLabsVoiceID = ""
     @State var conversationAutomationPublicWebhookURL = ""
+    @State var conversationAutomationVapiAPIKey = ""
+    @State var conversationAutomationVapiAssistantID = ""
+    @State var conversationAutomationVapiPhoneNumberID = ""
+    @State var conversationAutomationVapiPreferredLanguage: OnboardingLanguage = .fallback
+    @State var conversationAutomationVapiBridgeMode: ConversationAutomationVapiBridgeMode = .autoBridge
+    @State var conversationAutomationVapiManualBridgeURL = ""
+    @State var conversationAutomationVapiBridgeAuthToken = ""
+    @State var conversationAutomationVapiAssistants: [ConversationAutomationVapiAssistant] = []
+    @State var conversationAutomationVapiPhoneNumbers: [ConversationAutomationVapiPhoneNumber] = []
+    @State var conversationAutomationVapiRefreshing = false
+    @State var conversationAutomationVapiStatus: String?
+    @State var conversationAutomationVapiStatusIsError = false
     @State var conversationAutomationAllowFrom = ""
     @State var didSeedConversationAutomationPreset = false
     @State var onboardingFinishing = false
@@ -288,7 +358,9 @@ struct OnboardingView: View {
     static let minimumContentHeight: CGFloat = 300
     static let minimumWindowHeight: CGFloat =
         Self.headerHeight + Self.navigationHeight + Self.minimumContentHeight
-    static let conversationAutomationVoiceWebhookPath = "/voice/webhook"
+    nonisolated static let conversationAutomationVoiceWebhookPath = "/voice/webhook"
+    nonisolated static let conversationAutomationVapiBridgePath = "/plugins/voice-call/vapi"
+    nonisolated static let conversationAutomationVapiAutoBridgeHTTPSPort = 8443
 
     @State var pageWidth: CGFloat = Self.windowWidth
     let languagePageIndex = -1
@@ -660,9 +732,9 @@ struct OnboardingView: View {
         case self.conversationAutomationPageIndex:
             switch self.state.effectiveOnboardingLanguage {
             case .en:
-                return "Needs phone-provider, speech, and voice credentials plus a public callback URL."
+                return "Needs either Vapi plus an imported Twilio number, or the full self-hosted phone, speech, and callback setup."
             case .id:
-                return "Perlu kredensial provider telepon, speech, dan voice plus URL callback publik."
+                return "Perlu Vapi plus nomor Twilio yang diimpor, atau setup self-hosted lengkap untuk telepon, speech, dan callback."
             }
         default:
             return nil
@@ -683,6 +755,20 @@ struct OnboardingView: View {
 
     private var conversationAutomationAllowFromValues: [String] {
         self.conversationAutomationAllowFromValues(for: self.conversationAutomationAllowFrom)
+    }
+
+    static func resolveConversationAutomationVoiceMode(
+        configuredMode: ConversationAutomationVoiceMode?,
+        hasSavedSelfHostedVoiceConfig: Bool) -> ConversationAutomationVoiceMode
+    {
+        configuredMode ?? (hasSavedSelfHostedVoiceConfig ? .advancedSelfHosted : .simpleVapi)
+    }
+
+    static func resolveConversationAutomationVapiPreferredLanguage(
+        configuredLanguage: OnboardingLanguage?,
+        onboardingLanguage: OnboardingLanguage) -> OnboardingLanguage
+    {
+        configuredLanguage ?? onboardingLanguage
     }
 
     private func configRootValue(at path: ConfigPath) -> Any? {
@@ -716,15 +802,69 @@ struct OnboardingView: View {
         self.state.effectiveOnboardingLanguage.replyLanguageID
     }
 
+    private var conversationAutomationSelectedVapiAssistant: ConversationAutomationVapiAssistant? {
+        self.conversationAutomationVapiAssistants.first {
+            $0.id.caseInsensitiveCompare(self.conversationAutomationVapiAssistantID) == .orderedSame
+        }
+    }
+
+    private var conversationAutomationSelectedVapiPhoneNumber: ConversationAutomationVapiPhoneNumber? {
+        self.conversationAutomationVapiPhoneNumbers.first {
+            $0.id.caseInsensitiveCompare(self.conversationAutomationVapiPhoneNumberID) == .orderedSame
+        }
+    }
+
+    nonisolated static func conversationAutomationVapiAutoBridgeURL(hostname: String) -> String {
+        "https://\(hostname):\(Self.conversationAutomationVapiAutoBridgeHTTPSPort)\(Self.conversationAutomationVapiBridgePath)"
+    }
+
+    var conversationAutomationExpectedVapiAutoBridgeURL: String? {
+        guard let hostname = self.tailscaleService.tailscaleHostname else { return nil }
+        return Self.conversationAutomationVapiAutoBridgeURL(hostname: hostname)
+    }
+
+    var conversationAutomationResolvedVapiBridgeURL: String? {
+        switch self.conversationAutomationVapiBridgeMode {
+        case .autoBridge:
+            return self.conversationAutomationExpectedVapiAutoBridgeURL
+        case .manualPublicURL:
+            let trimmed = self.conversationAutomationVapiManualBridgeURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+
+    private func resolvedConversationAutomationVapiBridgeAuthToken() -> String {
+        let trimmed = self.conversationAutomationVapiBridgeAuthToken
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        let generated = UUID().uuidString.lowercased()
+        self.conversationAutomationVapiBridgeAuthToken = generated
+        return generated
+    }
+
     private func restoreConversationAutomationVoiceConfig() {
         self.restoreConversationAutomationVoiceToolExposure()
         let voicePaths: [ConfigPath] = [
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("enabled")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("fromNumber")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("inboundPolicy")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("allowFrom")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("apiKey")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("assistantId")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("phoneNumberId")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("telephonyProvider")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("preferredLanguage")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeMode")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeUrl")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgePath")],
+            [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeAuthToken")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("authToken")],
             [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("apiKey")],
@@ -815,6 +955,7 @@ struct OnboardingView: View {
     func prepareConversationAutomationPage() async {
         await self.tailscaleService.checkTailscaleStatus()
         await self.seedConversationAutomationPresetFromConfigIfNeeded()
+        await self.refreshConversationAutomationVapiSelectionsIfNeeded()
     }
 
     func seedConversationAutomationPresetFromConfigIfNeeded() async {
@@ -841,6 +982,9 @@ struct OnboardingView: View {
             (self.onboardingChannelsStore.configValue(
                 at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("enabled")]) as? Bool)
                 ?? voiceCallEnabled
+        let configuredVoiceMode = ConversationAutomationVoiceMode.loadSelection(
+            from: self.configRootValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")]) as? String)
         let voiceCallProvider =
             (self.onboardingChannelsStore.configValue(
                 at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String)?
@@ -867,16 +1011,49 @@ struct OnboardingView: View {
                 at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String)
         let configuredPhoneProvider = ConversationAutomationTelephonyProvider.loadSelection(from: voiceCallProvider)
         let seededSttProvider = configuredSttProvider ?? .deepgramRealtime
-        let telephonyDefaultsPrepared =
+        let configuredVapiEnabled =
+            (self.onboardingChannelsStore.configValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")]) as? Bool)
+                ?? true
+        let configuredVapiBridgeMode = ConversationAutomationVapiBridgeMode.loadSelection(
+            from: self.configRootValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeMode")]) as? String)
+        let configuredVapiBridgeURL = self.stringValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeUrl")])
+        let advancedDefaultsPrepared =
             voiceCallEnabled &&
             voiceCallConfigEnabled &&
             configuredPhoneProvider != nil &&
             voiceCallTtsProvider == "elevenlabs" &&
             elevenLabsModelId == "eleven_multilingual_v2" &&
             configuredSttProvider != nil
+        let vapiDefaultsPrepared =
+            voiceCallEnabled &&
+            voiceCallConfigEnabled &&
+            configuredVoiceMode == .simpleVapi &&
+            configuredVapiEnabled
+        let telephonyDefaultsPrepared = vapiDefaultsPrepared || advancedDefaultsPrepared
+        let hasSavedSelfHostedVoiceConfig =
+            configuredPhoneProvider != nil ||
+            !self.rootStringValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")]).isEmpty ||
+            !self.rootStringValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("authToken")]).isEmpty ||
+            !self.rootStringValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("apiKey")]).isEmpty ||
+            !self.rootStringValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("plivo"), .key("authId")]).isEmpty ||
+            self.configRootValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming")]) != nil ||
+            self.configRootValue(
+                at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts")]) != nil
+        let seededVoiceMode = Self.resolveConversationAutomationVoiceMode(
+            configuredMode: configuredVoiceMode,
+            hasSavedSelfHostedVoiceConfig: hasSavedSelfHostedVoiceConfig)
 
         self.conversationAutomationPresetEnabled = automationEnabled && automationConfigEnabled
         self.conversationAutomationTelephonyEnabled = telephonyDefaultsPrepared
+        self.conversationAutomationVoiceMode = seededVoiceMode
         self.conversationAutomationPhoneProvider = configuredPhoneProvider ?? .twilio
         self.conversationAutomationSttProvider = seededSttProvider
         self.conversationAutomationWebhookMode = ConversationAutomationWebhookMode.loadSelection(
@@ -908,6 +1085,27 @@ struct OnboardingView: View {
         self.conversationAutomationElevenLabsVoiceID = self.stringValue(
             at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("voiceId")])
         self.conversationAutomationPublicWebhookURL = configuredPublicWebhookURL
+        self.conversationAutomationVapiAPIKey = self.stringValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("apiKey")])
+        self.conversationAutomationVapiAssistantID = self.stringValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("assistantId")])
+        self.conversationAutomationVapiPhoneNumberID = self.stringValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("phoneNumberId")])
+        self.conversationAutomationVapiPreferredLanguage = Self.resolveConversationAutomationVapiPreferredLanguage(
+            configuredLanguage: OnboardingLanguage.loadSelection(
+                from: self.configRootValue(
+                    at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("preferredLanguage")]) as? String),
+            onboardingLanguage: self.state.effectiveOnboardingLanguage)
+        self.conversationAutomationVapiBridgeMode = ConversationAutomationVapiBridgeMode.resolveSelection(
+            configuredMode: configuredVapiBridgeMode,
+            configuredBridgeURL: configuredVapiBridgeURL,
+            autoBridgeURL: self.conversationAutomationExpectedVapiAutoBridgeURL)
+        self.conversationAutomationVapiManualBridgeURL =
+            self.conversationAutomationVapiBridgeMode == .manualPublicURL
+            ? configuredVapiBridgeURL
+            : ""
+        self.conversationAutomationVapiBridgeAuthToken = self.stringValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeAuthToken")])
         self.conversationAutomationAllowFrom = allowFrom.joined(separator: ", ")
         self.didSeedConversationAutomationPreset = true
     }
@@ -982,11 +1180,13 @@ struct OnboardingView: View {
             existing: self.stringArrayValue(at: [.key("tools"), .key("alsoAllow")]),
             additions: ["voice-call"],
             enabled: true)
+        let vapiBridgeAuthToken = self.resolvedConversationAutomationVapiBridgeAuthToken()
 
         self.onboardingChannelsStore.updateConfigValue(
             path: [.key("tools"), .key("alsoAllow")],
             value: toolsAllow)
         for update in Self.conversationAutomationVoiceDraftUpdates(
+            mode: self.conversationAutomationVoiceMode,
             phoneAllowFrom: phoneAllowFrom,
             phoneProvider: self.conversationAutomationPhoneProvider,
             selectedSttProvider: selectedSttProvider,
@@ -1004,7 +1204,15 @@ struct OnboardingView: View {
             openAIAPIKey: self.conversationAutomationOpenAIAPIKey,
             elevenLabsAPIKey: self.conversationAutomationElevenLabsAPIKey,
             elevenLabsVoiceID: self.conversationAutomationElevenLabsVoiceID,
-            publicWebhookURL: self.conversationAutomationPublicWebhookURL)
+            publicWebhookURL: self.conversationAutomationPublicWebhookURL,
+            vapiAPIKey: self.conversationAutomationVapiAPIKey,
+            vapiAssistantID: self.conversationAutomationVapiAssistantID,
+            vapiPhoneNumberID: self.conversationAutomationVapiPhoneNumberID,
+            vapiFromNumber: self.conversationAutomationSelectedVapiPhoneNumber?.number ?? "",
+            vapiPreferredLanguageCode: self.conversationAutomationVapiPreferredLanguage.replyLanguageID,
+            vapiBridgeMode: self.conversationAutomationVapiBridgeMode,
+            vapiManualBridgeURL: self.conversationAutomationVapiManualBridgeURL,
+            vapiBridgeAuthToken: vapiBridgeAuthToken)
         {
             self.onboardingChannelsStore.updateConfigValue(path: update.path, value: update.value)
         }
@@ -1025,6 +1233,7 @@ struct OnboardingView: View {
     var conversationAutomationVoiceValidationMessages: [String] {
         Self.conversationAutomationVoiceValidationMessages(
             telephonyEnabled: self.conversationAutomationTelephonyEnabled,
+            mode: self.conversationAutomationVoiceMode,
             phoneProvider: self.conversationAutomationPhoneProvider,
             sttProvider: self.conversationAutomationSttProvider,
             webhookMode: self.conversationAutomationWebhookMode,
@@ -1040,6 +1249,12 @@ struct OnboardingView: View {
             openAIAPIKey: self.conversationAutomationOpenAIAPIKey,
             elevenLabsAPIKey: self.conversationAutomationElevenLabsAPIKey,
             publicWebhookURL: self.conversationAutomationPublicWebhookURL,
+            vapiAPIKey: self.conversationAutomationVapiAPIKey,
+            vapiAssistantID: self.conversationAutomationVapiAssistantID,
+            vapiPhoneNumberID: self.conversationAutomationVapiPhoneNumberID,
+            vapiBridgeMode: self.conversationAutomationVapiBridgeMode,
+            vapiManualBridgeURL: self.conversationAutomationVapiManualBridgeURL,
+            vapiAutoBridgeURL: self.conversationAutomationExpectedVapiAutoBridgeURL,
             tailscaleInstalled: self.tailscaleService.isInstalled,
             tailscaleRunning: self.tailscaleService.isRunning,
             tailscaleFunnelChecked: self.tailscaleService.funnelExposure.checked,
@@ -1067,6 +1282,7 @@ struct OnboardingView: View {
 
     static func conversationAutomationVoiceValidationMessages(
         telephonyEnabled: Bool,
+        mode: ConversationAutomationVoiceMode,
         phoneProvider: ConversationAutomationTelephonyProvider,
         sttProvider: ConversationAutomationSttProvider,
         webhookMode: ConversationAutomationWebhookMode,
@@ -1082,6 +1298,12 @@ struct OnboardingView: View {
         openAIAPIKey: String,
         elevenLabsAPIKey: String,
         publicWebhookURL: String,
+        vapiAPIKey: String,
+        vapiAssistantID: String,
+        vapiPhoneNumberID: String,
+        vapiBridgeMode: ConversationAutomationVapiBridgeMode,
+        vapiManualBridgeURL: String,
+        vapiAutoBridgeURL: String?,
         tailscaleInstalled: Bool,
         tailscaleRunning: Bool,
         tailscaleFunnelChecked: Bool,
@@ -1094,6 +1316,39 @@ struct OnboardingView: View {
 
         guard telephonyEnabled else { return [] }
         var messages: [String] = []
+
+        if mode == .simpleVapi {
+            if trimmed(vapiAPIKey).isEmpty {
+                messages.append(strings.conversationAutomationValidationVapiAPIKeyMissing)
+            }
+            if trimmed(vapiAssistantID).isEmpty {
+                messages.append(strings.conversationAutomationValidationVapiAssistantMissing)
+            }
+            if trimmed(vapiPhoneNumberID).isEmpty {
+                messages.append(strings.conversationAutomationValidationVapiPhoneNumberMissing)
+            }
+            switch vapiBridgeMode {
+            case .autoBridge:
+                if !tailscaleInstalled {
+                    messages.append(strings.conversationAutomationValidationTailscaleInstallMissingForVapi)
+                } else if !tailscaleRunning {
+                    messages.append(strings.conversationAutomationValidationTailscaleRunningMissingForVapi)
+                } else if tailscaleFunnelChecked && !tailscaleFunnelEnabled {
+                    messages.append(strings.conversationAutomationValidationTailscaleFunnelMissingForVapi)
+                }
+                if (vapiAutoBridgeURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+                    messages.append(strings.conversationAutomationValidationVapiBridgeMissing)
+                }
+            case .manualPublicURL:
+                let normalizedBridgeURL = trimmed(vapiManualBridgeURL)
+                if normalizedBridgeURL.isEmpty {
+                    messages.append(strings.conversationAutomationValidationVapiManualBridgeMissing)
+                } else if !Self.isValidConversationAutomationHTTPSURL(normalizedBridgeURL) {
+                    messages.append(strings.conversationAutomationValidationVapiManualBridgeInvalid)
+                }
+            }
+            return messages
+        }
 
         let normalizedFromNumber = trimmed(fromNumber)
         if normalizedFromNumber.isEmpty {
@@ -1166,6 +1421,7 @@ struct OnboardingView: View {
     }
 
     static func conversationAutomationVoiceDraftUpdates(
+        mode: ConversationAutomationVoiceMode,
         phoneAllowFrom: [String],
         phoneProvider: ConversationAutomationTelephonyProvider,
         selectedSttProvider: ConversationAutomationSttProvider,
@@ -1183,7 +1439,15 @@ struct OnboardingView: View {
         openAIAPIKey: String,
         elevenLabsAPIKey: String,
         elevenLabsVoiceID: String,
-        publicWebhookURL: String) -> [ConversationAutomationVoiceDraftUpdate]
+        publicWebhookURL: String,
+        vapiAPIKey: String,
+        vapiAssistantID: String,
+        vapiPhoneNumberID: String,
+        vapiFromNumber: String,
+        vapiPreferredLanguageCode: String,
+        vapiBridgeMode: ConversationAutomationVapiBridgeMode,
+        vapiManualBridgeURL: String,
+        vapiBridgeAuthToken: String) -> [ConversationAutomationVoiceDraftUpdate]
     {
         func optionalValue(_ value: String) -> String? {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1192,6 +1456,129 @@ struct OnboardingView: View {
 
         let inboundPolicy = phoneAllowFrom.isEmpty ? "disabled" : "allowlist"
         let voiceWebhookPath = Self.conversationAutomationVoiceWebhookPath
+        let vapiBridgePath = Self.conversationAutomationVapiBridgePath
+
+        if mode == .simpleVapi {
+            return [
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")],
+                    value: true),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("enabled")],
+                    value: true),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")],
+                    value: ConversationAutomationVoiceMode.simpleVapi.rawValue),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("fromNumber")],
+                    value: optionalValue(vapiFromNumber)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("inboundPolicy")],
+                    value: "disabled"),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("allowFrom")],
+                    value: [String]()),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")],
+                    value: true),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("apiKey")],
+                    value: optionalValue(vapiAPIKey)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("assistantId")],
+                    value: optionalValue(vapiAssistantID)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("phoneNumberId")],
+                    value: optionalValue(vapiPhoneNumberID)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("telephonyProvider")],
+                    value: "twilio"),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("preferredLanguage")],
+                    value: optionalValue(vapiPreferredLanguageCode)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeMode")],
+                    value: vapiBridgeMode.rawValue),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeUrl")],
+                    value: vapiBridgeMode == .manualPublicURL ? optionalValue(vapiManualBridgeURL) : nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgePath")],
+                    value: vapiBridgePath),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeAuthToken")],
+                    value: optionalValue(vapiBridgeAuthToken)),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("authToken")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("apiKey")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("connectionId")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("publicKey")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("plivo"), .key("authId")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("plivo"), .key("authToken")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tailscale"), .key("mode")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tailscale"), .key("path")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tunnel"), .key("provider")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("publicUrl")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("enabled")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("languageCode")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("openai"), .key("apiKey")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("apiKey")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("provider")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("modelId")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("apiKey")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("voiceId")],
+                    value: nil),
+                ConversationAutomationVoiceDraftUpdate(
+                    path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")],
+                    value: nil),
+            ]
+        }
 
         return [
             ConversationAutomationVoiceDraftUpdate(
@@ -1200,6 +1587,9 @@ struct OnboardingView: View {
             ConversationAutomationVoiceDraftUpdate(
                 path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("enabled")],
                 value: true),
+            ConversationAutomationVoiceDraftUpdate(
+                path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")],
+                value: ConversationAutomationVoiceMode.advancedSelfHosted.rawValue),
             ConversationAutomationVoiceDraftUpdate(
                 path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")],
                 value: phoneProvider.rawValue),
@@ -1212,6 +1602,15 @@ struct OnboardingView: View {
             ConversationAutomationVoiceDraftUpdate(
                 path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("allowFrom")],
                 value: phoneAllowFrom),
+            ConversationAutomationVoiceDraftUpdate(
+                path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")],
+                value: false),
+            ConversationAutomationVoiceDraftUpdate(
+                path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeMode")],
+                value: nil),
+            ConversationAutomationVoiceDraftUpdate(
+                path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeUrl")],
+                value: nil),
             ConversationAutomationVoiceDraftUpdate(
                 path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")],
                 value: phoneProvider == .twilio ? optionalValue(twilioAccountSID) : nil),
@@ -1279,6 +1678,72 @@ struct OnboardingView: View {
                 path: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")],
                 value: replyLanguageCode),
         ]
+    }
+
+    func refreshConversationAutomationVapiSelectionsIfNeeded() async {
+        guard self.conversationAutomationVoiceMode == .simpleVapi else { return }
+        let trimmedAPIKey = self.conversationAutomationVapiAPIKey
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAPIKey.isEmpty else { return }
+        guard self.conversationAutomationVapiAssistants.isEmpty || self.conversationAutomationVapiPhoneNumbers.isEmpty else {
+            return
+        }
+        await self.refreshConversationAutomationVapiSelections()
+    }
+
+    func refreshConversationAutomationVapiSelections() async {
+        guard !self.conversationAutomationVapiRefreshing else { return }
+        let trimmedAPIKey = self.conversationAutomationVapiAPIKey
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAPIKey.isEmpty else {
+            self.conversationAutomationVapiStatus = self.strings.conversationAutomationValidationVapiAPIKeyMissing
+            self.conversationAutomationVapiStatusIsError = true
+            self.conversationAutomationVapiAssistants = []
+            self.conversationAutomationVapiPhoneNumbers = []
+            return
+        }
+
+        self.conversationAutomationVapiRefreshing = true
+        defer { self.conversationAutomationVapiRefreshing = false }
+
+        do {
+            let client = ConversationAutomationVapiClient(apiKey: trimmedAPIKey)
+            async let assistantsTask = client.listAssistants()
+            async let phoneNumbersTask = client.listPhoneNumbers()
+            let assistants = try await assistantsTask
+            let phoneNumbers = try await phoneNumbersTask
+            let sortedAssistants = assistants.sorted {
+                $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
+            }
+            let sortedPhoneNumbers = phoneNumbers.sorted {
+                $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
+            }
+            self.conversationAutomationVapiAssistants = sortedAssistants
+            self.conversationAutomationVapiPhoneNumbers = sortedPhoneNumbers
+
+            if !sortedAssistants.contains(where: {
+                $0.id.caseInsensitiveCompare(self.conversationAutomationVapiAssistantID) == .orderedSame
+            }) {
+                self.conversationAutomationVapiAssistantID =
+                    sortedAssistants.count == 1 ? sortedAssistants[0].id : ""
+            }
+            if !sortedPhoneNumbers.contains(where: {
+                $0.id.caseInsensitiveCompare(self.conversationAutomationVapiPhoneNumberID) == .orderedSame
+            }) {
+                self.conversationAutomationVapiPhoneNumberID =
+                    sortedPhoneNumbers.count == 1 ? sortedPhoneNumbers[0].id : ""
+            }
+
+            self.conversationAutomationVapiStatus = self.strings.conversationAutomationVapiRefreshReady(
+                assistantCount: sortedAssistants.count,
+                phoneNumberCount: sortedPhoneNumbers.count)
+            self.conversationAutomationVapiStatusIsError = false
+            self.applyConversationAutomationVoiceDraft()
+        } catch {
+            self.conversationAutomationVapiStatus = self.strings.conversationAutomationVapiRefreshFailed(
+                detail: error.localizedDescription)
+            self.conversationAutomationVapiStatusIsError = true
+        }
     }
 
     private func headerMetaText(for badges: [OnboardingStepBadge]) -> String? {

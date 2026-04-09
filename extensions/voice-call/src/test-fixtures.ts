@@ -6,7 +6,16 @@ export function createVoiceCallBaseConfig(params?: {
 }): VoiceCallConfig {
   return {
     enabled: true,
+    mode: "self-hosted",
     provider: params?.provider ?? "mock",
+    vapi: {
+      enabled: true,
+      telephonyProvider: "twilio",
+      preferredLanguage: "en",
+      bridgeMode: "auto",
+      bridgePath: "/plugins/voice-call/vapi",
+      baseUrl: "https://api.vapi.ai",
+    },
     fromNumber: "+15550001234",
     inboundPolicy: "disabled",
     allowFrom: [],

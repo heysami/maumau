@@ -614,9 +614,9 @@ struct OnboardingStrings: Sendable {
     var conversationAutomationIntro: String {
         switch self.language {
         case .en:
-            "This optional step finishes a real phone-call setup with a supported phone provider, realtime speech recognition, spoken replies, and the callback URL Maumau needs to receive live events."
+            "Choose the simple Vapi path or keep the advanced self-hosted path for real phone calls. Both options stay inside the built-in voice-call plugin."
         case .id:
-            "Langkah opsional ini menyelesaikan setup panggilan telepon sungguhan dengan provider telepon yang didukung, speech recognition realtime, balasan suara, dan URL callback yang dibutuhkan Maumau untuk menerima event panggilan langsung."
+            "Pilih jalur Vapi yang sederhana atau tetap gunakan jalur self-hosted lanjutan untuk panggilan telepon sungguhan. Keduanya tetap memakai plugin voice-call bawaan."
         }
     }
 
@@ -650,9 +650,378 @@ struct OnboardingStrings: Sendable {
     var conversationAutomationChecklistSubtitle: String {
         switch self.language {
         case .en:
-            "1. A Twilio, Telnyx, or Plivo phone number plus provider credentials. 2. A public callback URL for webhooks. 3. Deepgram or OpenAI realtime speech-to-text. 4. ElevenLabs for spoken replies."
+            "Simple with Vapi: Vapi API key, one assistant, one imported Twilio number, and Private Access ready. Advanced self-hosted: phone provider credentials, a public callback URL, realtime speech-to-text, and ElevenLabs."
         case .id:
-            "1. Nomor telepon Twilio, Telnyx, atau Plivo plus kredensial providernya. 2. URL callback publik untuk webhook. 3. Deepgram atau OpenAI untuk speech-to-text realtime. 4. ElevenLabs untuk balasan suara."
+            "Simple dengan Vapi: API key Vapi, satu assistant, satu nomor Twilio yang diimpor, dan Private Access yang siap. Self-hosted lanjutan: kredensial provider telepon, URL callback publik, speech-to-text realtime, dan ElevenLabs."
+        }
+    }
+
+    var conversationAutomationModeTitle: String {
+        switch self.language {
+        case .en:
+            "Setup mode"
+        case .id:
+            "Mode setup"
+        }
+    }
+
+    var conversationAutomationModeSubtitle: String {
+        switch self.language {
+        case .en:
+            "Simple with Vapi is the quick outbound calling path. Advanced self-hosted keeps the current direct-provider flow."
+        case .id:
+            "Simple dengan Vapi adalah jalur panggilan outbound yang paling cepat. Self-hosted lanjutan mempertahankan alur provider langsung yang sekarang."
+        }
+    }
+
+    var conversationAutomationModeSimpleLabel: String {
+        switch self.language {
+        case .en:
+            "Simple with Vapi"
+        case .id:
+            "Simple dengan Vapi"
+        }
+    }
+
+    var conversationAutomationModeAdvancedLabel: String {
+        switch self.language {
+        case .en:
+            "Advanced self-hosted"
+        case .id:
+            "Self-hosted lanjutan"
+        }
+    }
+
+    var conversationAutomationVapiTitle: String {
+        switch self.language {
+        case .en:
+            "Vapi setup"
+        case .id:
+            "Setup Vapi"
+        }
+    }
+
+    var conversationAutomationVapiSubtitle: String {
+        switch self.language {
+        case .en:
+            "Use Vapi for the live voice pipeline, import a Twilio number there, and let Maumau handle the conversation brain and memory."
+        case .id:
+            "Gunakan Vapi untuk pipeline voice langsung, impor nomor Twilio di sana, lalu biarkan Maumau menangani brain percakapan dan memori."
+        }
+    }
+
+    var conversationAutomationVapiAPIKeyTitle: String {
+        switch self.language {
+        case .en:
+            "Vapi API key"
+        case .id:
+            "API key Vapi"
+        }
+    }
+
+    var conversationAutomationVapiAPIKeySubtitle: String {
+        switch self.language {
+        case .en:
+            "Paste your Vapi private API key, then connect to load assistants and phone numbers from your Vapi account."
+        case .id:
+            "Tempel private API key Vapi Anda, lalu sambungkan untuk memuat assistant dan nomor telepon dari akun Vapi Anda."
+        }
+    }
+
+    var conversationAutomationVapiAPIKeyPlaceholder: String {
+        switch self.language {
+        case .en:
+            "vapi_..."
+        case .id:
+            "vapi_..."
+        }
+    }
+
+    var conversationAutomationVapiRefreshButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Connect / Refresh"
+        case .id:
+            "Hubungkan / Segarkan"
+        }
+    }
+
+    var conversationAutomationVapiRefreshingButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Refreshing…"
+        case .id:
+            "Menyegarkan…"
+        }
+    }
+
+    var conversationAutomationOpenTwilioNumberGuideButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Buy or port in Twilio"
+        case .id:
+            "Beli atau port di Twilio"
+        }
+    }
+
+    var conversationAutomationOpenVapiImportButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Import into Vapi"
+        case .id:
+            "Impor ke Vapi"
+        }
+    }
+
+    var conversationAutomationOpenVapiAssistantsButtonTitle: String {
+        switch self.language {
+        case .en:
+            "Open Vapi assistants"
+        case .id:
+            "Buka assistant Vapi"
+        }
+    }
+
+    var conversationAutomationVapiAssistantTitle: String {
+        switch self.language {
+        case .en:
+            "Assistant"
+        case .id:
+            "Assistant"
+        }
+    }
+
+    var conversationAutomationVapiAssistantSubtitle: String {
+        switch self.language {
+        case .en:
+            "Choose the Vapi assistant Maumau should use as the base for outbound calls."
+        case .id:
+            "Pilih assistant Vapi yang harus dipakai Maumau sebagai dasar untuk panggilan outbound."
+        }
+    }
+
+    var conversationAutomationVapiAssistantEmptySubtitle: String {
+        switch self.language {
+        case .en:
+            "Connect to Vapi first, then choose one assistant here."
+        case .id:
+            "Hubungkan ke Vapi dulu, lalu pilih satu assistant di sini."
+        }
+    }
+
+    var conversationAutomationVapiPhoneNumberTitle: String {
+        switch self.language {
+        case .en:
+            "Phone number"
+        case .id:
+            "Nomor telepon"
+        }
+    }
+
+    var conversationAutomationVapiPhoneNumberSubtitle: String {
+        switch self.language {
+        case .en:
+            "Choose the imported Twilio number Vapi should call from."
+        case .id:
+            "Pilih nomor Twilio yang diimpor dan harus dipakai Vapi untuk menelepon."
+        }
+    }
+
+    var conversationAutomationVapiPhoneNumberEmptySubtitle: String {
+        switch self.language {
+        case .en:
+            "Connect to Vapi after importing a Twilio number, then choose that number here."
+        case .id:
+            "Hubungkan ke Vapi setelah mengimpor nomor Twilio, lalu pilih nomor itu di sini."
+        }
+    }
+
+    var conversationAutomationVapiPreferredLanguageTitle: String {
+        switch self.language {
+        case .en:
+            "Preferred call language"
+        case .id:
+            "Bahasa panggilan pilihan"
+        }
+    }
+
+    var conversationAutomationVapiPreferredLanguageSubtitle: String {
+        switch self.language {
+        case .en:
+            "Default spoken replies to the language you want callers to hear first."
+        case .id:
+            "Jadikan bahasa ini sebagai default untuk balasan suara yang pertama kali didengar penelepon."
+        }
+    }
+
+    var conversationAutomationVapiBridgeModeTitle: String {
+        switch self.language {
+        case .en:
+            "Bridge mode"
+        case .id:
+            "Mode bridge"
+        }
+    }
+
+    var conversationAutomationVapiBridgeModeSubtitle: String {
+        switch self.language {
+        case .en:
+            "Auto bridge publishes a public callback for Vapi on a separate Tailscale Funnel port. Manual public URL lets you point Vapi at another public bridge."
+        case .id:
+            "Auto bridge memublikasikan callback publik untuk Vapi di port Tailscale Funnel terpisah. URL publik manual memungkinkan Anda mengarahkan Vapi ke bridge publik lain."
+        }
+    }
+
+    var conversationAutomationVapiBridgeModeAutoLabel: String {
+        switch self.language {
+        case .en:
+            "Auto bridge"
+        case .id:
+            "Auto bridge"
+        }
+    }
+
+    var conversationAutomationVapiBridgeModeManualLabel: String {
+        switch self.language {
+        case .en:
+            "Manual public URL"
+        case .id:
+            "URL publik manual"
+        }
+    }
+
+    var conversationAutomationVapiBridgeTitle: String {
+        switch self.language {
+        case .en:
+            "Maumau bridge URL"
+        case .id:
+            "URL bridge Maumau"
+        }
+    }
+
+    func conversationAutomationVapiAutoBridgeSubtitle(bridgeURL: String) -> String {
+        switch self.language {
+        case .en:
+            "Maumau will publish \(bridgeURL) through Tailscale Funnel so Vapi can reach the live tool-calls bridge without changing your normal private-access path."
+        case .id:
+            "Maumau akan memublikasikan \(bridgeURL) lewat Tailscale Funnel agar Vapi bisa mencapai bridge tool-calls langsung tanpa mengubah jalur private access normal Anda."
+        }
+    }
+
+    var conversationAutomationVapiAutoBridgeWaitingSubtitle: String {
+        switch self.language {
+        case .en:
+            "Auto bridge uses Tailscale Funnel on public port 8443. Finish Private Access first so Maumau can publish that bridge URL."
+        case .id:
+            "Auto bridge memakai Tailscale Funnel di port publik 8443. Selesaikan Private Access dulu agar Maumau bisa memublikasikan URL bridge itu."
+        }
+    }
+
+    func conversationAutomationVapiBridgeSubtitle(bridgeURL: String) -> String {
+        switch self.language {
+        case .en:
+            "Vapi will call \(bridgeURL) so Maumau can generate each spoken reply with tools and memory."
+        case .id:
+            "Vapi akan memanggil \(bridgeURL) agar Maumau bisa menghasilkan setiap balasan suara dengan tools dan memori."
+        }
+    }
+
+    var conversationAutomationVapiBridgeWaitingSubtitle: String {
+        switch self.language {
+        case .en:
+            "Finish Private Access first so Maumau has a public bridge URL for Vapi."
+        case .id:
+            "Selesaikan Private Access dulu agar Maumau punya URL bridge publik untuk Vapi."
+        }
+    }
+
+    var conversationAutomationVapiManualBridgeTitle: String {
+        switch self.language {
+        case .en:
+            "Manual bridge URL"
+        case .id:
+            "URL bridge manual"
+        }
+    }
+
+    var conversationAutomationVapiManualBridgeSubtitle: String {
+        switch self.language {
+        case .en:
+            "Paste a public HTTPS URL if you want Vapi to call Maumau through another bridge instead of the auto-managed Tailscale path."
+        case .id:
+            "Tempel URL HTTPS publik jika Anda ingin Vapi memanggil Maumau lewat bridge lain, bukan lewat jalur Tailscale yang dikelola otomatis."
+        }
+    }
+
+    var conversationAutomationVapiManualBridgePlaceholder: String {
+        switch self.language {
+        case .en:
+            "https://your.domain/plugins/voice-call/vapi"
+        case .id:
+            "https://domain-anda/plugins/voice-call/vapi"
+        }
+    }
+
+    var conversationAutomationVapiOutboundOnlyTitle: String {
+        switch self.language {
+        case .en:
+            "Outbound-first in this version"
+        case .id:
+            "Versi ini fokus outbound"
+        }
+    }
+
+    var conversationAutomationVapiOutboundOnlySubtitle: String {
+        switch self.language {
+        case .en:
+            "This simple path is for outbound calls first. Inbound routing and manual live call controls stay in Advanced self-hosted."
+        case .id:
+            "Jalur sederhana ini fokus untuk panggilan outbound dulu. Routing inbound dan kontrol live call manual tetap ada di Self-hosted lanjutan."
+        }
+    }
+
+    var conversationAutomationVapiIndonesiaNoticeTitle: String {
+        switch self.language {
+        case .en:
+            "Indonesia number availability"
+        case .id:
+            "Ketersediaan nomor Indonesia"
+        }
+    }
+
+    var conversationAutomationVapiIndonesiaNoticeSubtitle: String {
+        switch self.language {
+        case .en:
+            "Indonesia numbers depend on Twilio inventory and regulation. If +62 is not available right now, buy or port in Twilio first, then import that number into Vapi."
+        case .id:
+            "Nomor Indonesia bergantung pada inventaris dan regulasi Twilio. Jika +62 belum tersedia sekarang, beli atau port dulu di Twilio, lalu impor nomor itu ke Vapi."
+        }
+    }
+
+    func conversationAutomationVapiSavedSelectionLabel(id: String) -> String {
+        switch self.language {
+        case .en:
+            "Saved selection (\(id))"
+        case .id:
+            "Pilihan tersimpan (\(id))"
+        }
+    }
+
+    func conversationAutomationVapiRefreshReady(assistantCount: Int, phoneNumberCount: Int) -> String {
+        switch self.language {
+        case .en:
+            "Connected to Vapi. Found \(assistantCount) assistant(s) and \(phoneNumberCount) phone number(s)."
+        case .id:
+            "Berhasil terhubung ke Vapi. Ditemukan \(assistantCount) assistant dan \(phoneNumberCount) nomor telepon."
+        }
+    }
+
+    func conversationAutomationVapiRefreshFailed(detail: String) -> String {
+        switch self.language {
+        case .en:
+            "Could not load your Vapi assistants or phone numbers. \(detail)"
+        case .id:
+            "Tidak bisa memuat assistant atau nomor telepon Vapi Anda. \(detail)"
         }
     }
 
@@ -1313,9 +1682,9 @@ struct OnboardingStrings: Sendable {
     var conversationAutomationReadySubtitle: String {
         switch self.language {
         case .en:
-            "This voice-call setup now has the required phone provider, speech, voice, and callback URL configuration."
+            "This voice-call setup now has the required configuration for the mode you chose."
         case .id:
-            "Setup voice call ini sekarang sudah memiliki konfigurasi provider telepon, speech, voice, dan URL callback yang dibutuhkan."
+            "Setup voice call ini sekarang sudah memiliki konfigurasi yang dibutuhkan untuk mode yang Anda pilih."
         }
     }
 
@@ -1361,6 +1730,42 @@ struct OnboardingStrings: Sendable {
             "Add the Twilio Auth Token."
         case .id:
             "Tambahkan Twilio Auth Token."
+        }
+    }
+
+    var conversationAutomationValidationVapiAPIKeyMissing: String {
+        switch self.language {
+        case .en:
+            "Add the Vapi API key, then connect to load assistants and phone numbers."
+        case .id:
+            "Tambahkan API key Vapi, lalu hubungkan untuk memuat assistant dan nomor telepon."
+        }
+    }
+
+    var conversationAutomationValidationVapiAssistantMissing: String {
+        switch self.language {
+        case .en:
+            "Choose one Vapi assistant."
+        case .id:
+            "Pilih satu assistant Vapi."
+        }
+    }
+
+    var conversationAutomationValidationVapiPhoneNumberMissing: String {
+        switch self.language {
+        case .en:
+            "Choose one imported Twilio phone number from Vapi."
+        case .id:
+            "Pilih satu nomor telepon Twilio yang diimpor dari Vapi."
+        }
+    }
+
+    var conversationAutomationValidationVapiBridgeMissing: String {
+        switch self.language {
+        case .en:
+            "Finish Private Access first so Maumau has a public bridge URL for Vapi."
+        case .id:
+            "Selesaikan Private Access dulu agar Maumau punya URL bridge publik untuk Vapi."
         }
     }
 
@@ -1418,6 +1823,15 @@ struct OnboardingStrings: Sendable {
         }
     }
 
+    var conversationAutomationValidationTailscaleInstallMissingForVapi: String {
+        switch self.language {
+        case .en:
+            "Install Tailscale on this Mac for Auto bridge, or switch the Vapi bridge to Manual public URL."
+        case .id:
+            "Pasang Tailscale di Mac ini untuk Auto bridge, atau ganti bridge Vapi ke URL publik manual."
+        }
+    }
+
     var conversationAutomationValidationTailscaleRunningMissing: String {
         switch self.language {
         case .en:
@@ -1427,12 +1841,48 @@ struct OnboardingStrings: Sendable {
         }
     }
 
+    var conversationAutomationValidationTailscaleRunningMissingForVapi: String {
+        switch self.language {
+        case .en:
+            "Sign in to Tailscale on this Mac for Auto bridge, or switch the Vapi bridge to Manual public URL."
+        case .id:
+            "Masuk ke Tailscale di Mac ini untuk Auto bridge, atau ganti bridge Vapi ke URL publik manual."
+        }
+    }
+
     var conversationAutomationValidationTailscaleFunnelMissing: String {
         switch self.language {
         case .en:
             "Enable Tailscale Funnel for this tailnet or switch to a manual public webhook URL."
         case .id:
             "Aktifkan Tailscale Funnel untuk tailnet ini atau ganti ke URL webhook publik manual."
+        }
+    }
+
+    var conversationAutomationValidationTailscaleFunnelMissingForVapi: String {
+        switch self.language {
+        case .en:
+            "Enable Tailscale Funnel for this tailnet for Auto bridge, or switch the Vapi bridge to Manual public URL."
+        case .id:
+            "Aktifkan Tailscale Funnel untuk tailnet ini untuk Auto bridge, atau ganti bridge Vapi ke URL publik manual."
+        }
+    }
+
+    var conversationAutomationValidationVapiManualBridgeMissing: String {
+        switch self.language {
+        case .en:
+            "Add the public HTTPS URL that Vapi should use for the Maumau bridge."
+        case .id:
+            "Tambahkan URL HTTPS publik yang harus dipakai Vapi untuk bridge Maumau."
+        }
+    }
+
+    var conversationAutomationValidationVapiManualBridgeInvalid: String {
+        switch self.language {
+        case .en:
+            "Use a valid HTTPS bridge URL, for example https://your.domain/plugins/voice-call/vapi."
+        case .id:
+            "Gunakan URL bridge HTTPS yang valid, misalnya https://domain-anda/plugins/voice-call/vapi."
         }
     }
 

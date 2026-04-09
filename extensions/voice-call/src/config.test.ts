@@ -22,6 +22,7 @@ function requireElevenLabsTtsConfig(config: Pick<VoiceCallConfig, "tts">) {
 describe("validateProviderConfig", () => {
   const originalEnv = { ...process.env };
   const clearProviderEnv = () => {
+    delete process.env.VAPI_API_KEY;
     delete process.env.TWILIO_ACCOUNT_SID;
     delete process.env.TWILIO_AUTH_TOKEN;
     delete process.env.TELNYX_API_KEY;
@@ -180,6 +181,111 @@ describe("validateProviderConfig", () => {
       expect(result.errors).toEqual([]);
     });
   });
+
+  describe("vapi mode", () => {
+    it("defaults absent mode to self-hosted for backward compatibility", () => {
+      const resolved = resolveVoiceCallConfig({
+        enabled: true,
+        provider: "twilio",
+      });
+
+      expect(resolved.mode).toBe("self-hosted");
+    });
+
+    it("resolves the VAPI_API_KEY environment variable and validates the simple path", () => {
+      process.env.VAPI_API_KEY = "vapi-env-key";
+
+      const resolved = resolveVoiceCallConfig({
+        enabled: true,
+        mode: "vapi",
+        vapi: {
+          assistantId: "assistant-1",
+          phoneNumberId: "phone-1",
+          bridgeMode: "auto",
+          bridgeAuthToken: "bridge-secret",
+        },
+      });
+
+      expect(resolved.vapi.apiKey).toBe("vapi-env-key");
+      expect(validateProviderConfig(resolved)).toMatchObject({ valid: true, errors: [] });
+    });
+
+    it("infers auto bridge mode from the legacy private ts.net bridge url", () => {
+      const resolved = resolveVoiceCallConfig({
+        enabled: true,
+        mode: "vapi",
+        vapi: {
+          apiKey: "vapi-key",
+          assistantId: "assistant-1",
+          phoneNumberId: "phone-1",
+          bridgeUrl: "https://demo.ts.net/plugins/voice-call/vapi",
+          bridgeAuthToken: "bridge-secret",
+        },
+      });
+
+      expect(resolved.vapi.bridgeMode).toBe("auto");
+      expect(validateProviderConfig(resolved)).toMatchObject({ valid: true, errors: [] });
+    });
+
+    it("requires a bridge url only when manual bridge mode is selected", () => {
+      const autoResult = validateProviderConfig(
+        resolveVoiceCallConfig({
+          enabled: true,
+          mode: "vapi",
+          vapi: {
+            apiKey: "vapi-key",
+            assistantId: "assistant-1",
+            phoneNumberId: "phone-1",
+            bridgeMode: "auto",
+            bridgeAuthToken: "bridge-secret",
+          },
+        }),
+      );
+      expect(autoResult).toMatchObject({ valid: true, errors: [] });
+
+      const manualResult = validateProviderConfig(
+        resolveVoiceCallConfig({
+          enabled: true,
+          mode: "vapi",
+          vapi: {
+            apiKey: "vapi-key",
+            assistantId: "assistant-1",
+            phoneNumberId: "phone-1",
+            bridgeMode: "manual-public-url",
+            bridgeAuthToken: "bridge-secret",
+          },
+        }),
+      );
+      expect(manualResult.valid).toBe(false);
+      expect(manualResult.errors).toContain(
+        "plugins.entries.voice-call.config.vapi.bridgeUrl is required",
+      );
+    });
+
+    it("requires the Vapi-specific fields when vapi mode is selected", () => {
+      const result = validateProviderConfig(
+        resolveVoiceCallConfig({
+          enabled: true,
+          mode: "vapi",
+          vapi: {},
+        }),
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        "plugins.entries.voice-call.config.vapi.apiKey is required (or set VAPI_API_KEY env)",
+      );
+      expect(result.errors).toContain(
+        "plugins.entries.voice-call.config.vapi.assistantId is required",
+      );
+      expect(result.errors).toContain(
+        "plugins.entries.voice-call.config.vapi.phoneNumberId is required",
+      );
+      expect(result.errors).toContain(
+        "plugins.entries.voice-call.config.vapi.bridgeAuthToken is required",
+      );
+    });
+  });
 });
 
 describe("normalizeVoiceCallConfig", () => {
@@ -270,5 +376,20 @@ describe("normalizeVoiceCallConfig", () => {
       id: "ELEVENLABS_API_KEY",
     });
     expect(elevenlabs.voiceSettings).toEqual({ speed: 1.1 });
+  });
+
+  it("normalizes the Vapi subtree with mode-aware defaults", () => {
+    const normalized = normalizeVoiceCallConfig({
+      mode: "vapi",
+      vapi: {
+        assistantId: "assistant-1",
+      },
+    });
+
+    expect(normalized.mode).toBe("vapi");
+    expect(normalized.vapi.telephonyProvider).toBe("twilio");
+    expect(normalized.vapi.bridgePath).toBe("/plugins/voice-call/vapi");
+    expect(normalized.vapi.baseUrl).toBe("https://api.vapi.ai");
+    expect(normalized.vapi.assistantId).toBe("assistant-1");
   });
 });

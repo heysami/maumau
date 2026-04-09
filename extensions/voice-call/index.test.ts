@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../test/helpers/extensions/plugin-api.js";
 import type { MaumauPluginApi, MaumauPluginServiceDefinition } from "./api.js";
 
-const createVoiceCallRuntimeMock = vi.hoisted(() => vi.fn());
+const createVoiceCallBackendMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./src/runtime.js", () => ({
-  createVoiceCallRuntime: createVoiceCallRuntimeMock,
+vi.mock("./src/backend.js", () => ({
+  createVoiceCallBackend: createVoiceCallBackendMock,
 }));
 
 const { default: voiceCallPlugin } = await import("./index.js");
@@ -52,16 +52,18 @@ function registerVoiceCallPlugin(): RegisteredPlugin {
 describe("voice-call shared runtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createVoiceCallRuntimeMock.mockResolvedValue({
+    createVoiceCallBackendMock.mockResolvedValue({
+      kind: "self-hosted",
       config: {},
-      provider: { name: "mock" },
-      manager: {
-        getCall: vi.fn(() => null),
-        getCallByProviderCallId: vi.fn(() => null),
+      actions: {
+        initiateCall: vi.fn(),
+        continueCall: vi.fn(),
+        speak: vi.fn(),
+        endCall: vi.fn(),
+        getCall: vi.fn(async () => null),
+        getCallByProviderCallId: vi.fn(async () => null),
       },
-      webhookServer: {},
-      webhookUrl: "http://127.0.0.1:3334/voice/webhook",
-      publicUrl: null,
+      httpHandlers: [],
       stop: vi.fn(async () => {}),
     });
     delete (globalThis as Record<PropertyKey, unknown>)[SHARED_VOICE_CALL_RUNTIME_STATE];
@@ -87,7 +89,7 @@ describe("voice-call shared runtime", () => {
       callId: "call-1",
     });
 
-    expect(createVoiceCallRuntimeMock).toHaveBeenCalledTimes(1);
+    expect(createVoiceCallBackendMock).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       details: {
         found: false,

@@ -18,10 +18,13 @@ struct OnboardingToolHighlight: Identifiable, Equatable {
 private enum VoiceSetupExternalURL {
     static let twilioConsole = "https://console.twilio.com"
     static let twilioGuide = "https://www.twilio.com/docs/voice/quickstart/server"
+    static let twilioPhoneNumbers = "https://www.twilio.com/docs/phone-numbers"
     static let telnyxPortal = "https://portal.telnyx.com"
     static let telnyxGuide = "https://developers.telnyx.com/docs/voice/programmable-voice/quickstart-call-control"
     static let plivoConsole = "https://console.plivo.com"
     static let plivoGuide = "https://docs.plivo.com/docs/voice/api/call/make-a-call"
+    static let vapiAssistants = "https://docs.vapi.ai/assistants"
+    static let vapiImportTwilio = "https://docs.vapi.ai/phone-numbers/import-twilio/"
     static let deepgramConsole = "https://console.deepgram.com/project"
     static let deepgramGuide = "https://developers.deepgram.com/guides/fundamentals/authenticating"
     static let openAIAPIKeys = "https://platform.openai.com/api-keys"
@@ -1275,256 +1278,520 @@ extension OnboardingView {
 
                     self.onboardingCard(spacing: 14, padding: 18) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(self.strings.conversationAutomationPhoneProviderTitle)
+                            Text(self.strings.conversationAutomationModeTitle)
                                 .font(.headline)
-                            Text(self.strings.conversationAutomationPhoneProviderSubtitle)
+                            Text(self.strings.conversationAutomationModeSubtitle)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Picker(
-                                self.strings.conversationAutomationPhoneProviderTitle,
+                                self.strings.conversationAutomationModeTitle,
                                 selection: Binding(
-                                    get: { self.conversationAutomationPhoneProvider },
+                                    get: { self.conversationAutomationVoiceMode },
                                     set: { newValue in
-                                        self.conversationAutomationPhoneProvider = newValue
+                                        self.conversationAutomationVoiceMode = newValue
                                         self.applyConversationAutomationVoiceDraft()
                                     }))
                             {
-                                Text(self.strings.conversationAutomationPhoneProviderTwilioLabel)
-                                    .tag(ConversationAutomationTelephonyProvider.twilio)
-                                Text(self.strings.conversationAutomationPhoneProviderTelnyxLabel)
-                                    .tag(ConversationAutomationTelephonyProvider.telnyx)
-                                Text(self.strings.conversationAutomationPhoneProviderPlivoLabel)
-                                    .tag(ConversationAutomationTelephonyProvider.plivo)
+                                Text(self.strings.conversationAutomationModeSimpleLabel)
+                                    .tag(ConversationAutomationVoiceMode.simpleVapi)
+                                Text(self.strings.conversationAutomationModeAdvancedLabel)
+                                    .tag(ConversationAutomationVoiceMode.advancedSelfHosted)
                             }
                             .pickerStyle(.segmented)
-
-                            self.conversationAutomationTextField(
-                                title: self.strings.conversationAutomationPhoneNumberTitle,
-                                subtitle: self.strings.conversationAutomationPhoneNumberSubtitle,
-                                placeholder: self.strings.conversationAutomationPhoneNumberPlaceholder,
-                                text: self.$conversationAutomationFromNumber)
-
-                            switch self.conversationAutomationPhoneProvider {
-                            case .twilio:
-                                Divider()
-                                Text(self.strings.conversationAutomationTwilioSectionTitle)
-                                    .font(.headline)
-                                Text(self.strings.conversationAutomationTwilioSectionSubtitle)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                self.conversationAutomationExternalLinks([
-                                    (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.twilioConsole),
-                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.twilioGuide),
-                                ])
-                                self.conversationAutomationTextField(
-                                    title: self.strings.conversationAutomationTwilioAccountSIDTitle,
-                                    subtitle: self.strings.conversationAutomationTwilioAccountSIDSubtitle,
-                                    placeholder: self.strings.conversationAutomationTwilioAccountSIDPlaceholder,
-                                    text: self.$conversationAutomationTwilioAccountSID)
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationTwilioAuthTokenTitle,
-                                    subtitle: self.strings.conversationAutomationTwilioAuthTokenSubtitle,
-                                    placeholder: self.strings.conversationAutomationTwilioAuthTokenPlaceholder,
-                                    text: self.$conversationAutomationTwilioAuthToken)
-                            case .telnyx:
-                                Divider()
-                                Text(self.strings.conversationAutomationTelnyxSectionTitle)
-                                    .font(.headline)
-                                Text(self.strings.conversationAutomationTelnyxSectionSubtitle)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                self.conversationAutomationExternalLinks([
-                                    (self.strings.conversationAutomationOpenPortalButtonTitle, VoiceSetupExternalURL.telnyxPortal),
-                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.telnyxGuide),
-                                ])
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationTelnyxAPIKeyTitle,
-                                    subtitle: self.strings.conversationAutomationTelnyxAPIKeySubtitle,
-                                    placeholder: self.strings.conversationAutomationTelnyxAPIKeyPlaceholder,
-                                    text: self.$conversationAutomationTelnyxAPIKey)
-                                self.conversationAutomationTextField(
-                                    title: self.strings.conversationAutomationTelnyxConnectionIDTitle,
-                                    subtitle: self.strings.conversationAutomationTelnyxConnectionIDSubtitle,
-                                    placeholder: self.strings.conversationAutomationTelnyxConnectionIDPlaceholder,
-                                    text: self.$conversationAutomationTelnyxConnectionID)
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationTelnyxPublicKeyTitle,
-                                    subtitle: self.strings.conversationAutomationTelnyxPublicKeySubtitle,
-                                    placeholder: self.strings.conversationAutomationTelnyxPublicKeyPlaceholder,
-                                    text: self.$conversationAutomationTelnyxPublicKey)
-                            case .plivo:
-                                Divider()
-                                Text(self.strings.conversationAutomationPlivoSectionTitle)
-                                    .font(.headline)
-                                Text(self.strings.conversationAutomationPlivoSectionSubtitle)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                self.conversationAutomationExternalLinks([
-                                    (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.plivoConsole),
-                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.plivoGuide),
-                                ])
-                                self.conversationAutomationTextField(
-                                    title: self.strings.conversationAutomationPlivoAuthIDTitle,
-                                    subtitle: self.strings.conversationAutomationPlivoAuthIDSubtitle,
-                                    placeholder: self.strings.conversationAutomationPlivoAuthIDPlaceholder,
-                                    text: self.$conversationAutomationPlivoAuthID)
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationPlivoAuthTokenTitle,
-                                    subtitle: self.strings.conversationAutomationPlivoAuthTokenSubtitle,
-                                    placeholder: self.strings.conversationAutomationPlivoAuthTokenPlaceholder,
-                                    text: self.$conversationAutomationPlivoAuthToken)
-                            }
                         }
                     }
 
-                    self.onboardingCard(spacing: 14, padding: 18) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(self.strings.conversationAutomationWebhookTitle)
-                                .font(.headline)
-                            Text(self.strings.conversationAutomationWebhookSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Picker(
-                                self.strings.conversationAutomationWebhookTitle,
-                                selection: Binding(
-                                    get: { self.conversationAutomationWebhookMode },
-                                    set: { newValue in
-                                        self.conversationAutomationWebhookMode = newValue
-                                        self.applyConversationAutomationVoiceDraft()
-                                    }))
-                            {
-                                Text(self.strings.conversationAutomationWebhookTailscaleLabel)
-                                    .tag(ConversationAutomationWebhookMode.tailscaleFunnel)
-                                Text(self.strings.conversationAutomationWebhookManualLabel)
-                                    .tag(ConversationAutomationWebhookMode.publicUrl)
-                            }
-                            .pickerStyle(.segmented)
+                    if self.conversationAutomationVoiceMode == .simpleVapi {
+                        self.onboardingCard(spacing: 14, padding: 18) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(self.strings.conversationAutomationVapiTitle)
+                                    .font(.headline)
+                                Text(self.strings.conversationAutomationVapiSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                self.conversationAutomationExternalLinks([
+                                    (self.strings.conversationAutomationOpenTwilioNumberGuideButtonTitle, VoiceSetupExternalURL.twilioPhoneNumbers),
+                                    (self.strings.conversationAutomationOpenVapiImportButtonTitle, VoiceSetupExternalURL.vapiImportTwilio),
+                                    (self.strings.conversationAutomationOpenVapiAssistantsButtonTitle, VoiceSetupExternalURL.vapiAssistants),
+                                ])
+                                self.conversationAutomationSecureField(
+                                    title: self.strings.conversationAutomationVapiAPIKeyTitle,
+                                    subtitle: self.strings.conversationAutomationVapiAPIKeySubtitle,
+                                    placeholder: self.strings.conversationAutomationVapiAPIKeyPlaceholder,
+                                    text: self.$conversationAutomationVapiAPIKey)
+                                HStack(spacing: 10) {
+                                    Button(
+                                        self.conversationAutomationVapiRefreshing
+                                            ? self.strings.conversationAutomationVapiRefreshingButtonTitle
+                                            : self.strings.conversationAutomationVapiRefreshButtonTitle)
+                                    {
+                                        Task {
+                                            await self.refreshConversationAutomationVapiSelections()
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(self.conversationAutomationVapiRefreshing)
 
-                            switch self.conversationAutomationWebhookMode {
-                            case .tailscaleFunnel:
-                                if let callbackURL = self.conversationAutomationExpectedWebhookURL {
-                                    self.conversationAutomationReadOnlyValue(
-                                        title: self.strings.conversationAutomationTailscaleReadyTitle,
-                                        subtitle: self.strings.conversationAutomationWebhookTailscaleSubtitle(expectedURL: callbackURL),
-                                        value: callbackURL)
-                                } else {
-                                    self.featureRow(
-                                        title: self.strings.conversationAutomationTailscaleReadyTitle,
-                                        subtitle: self.strings.conversationAutomationWebhookTailscaleSubtitle(expectedURL: nil),
-                                        systemImage: "point.3.connected.trianglepath.dotted")
+                                    if self.conversationAutomationVapiRefreshing {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
                                 }
 
-                                if !self.tailscaleService.isInstalled || !self.tailscaleService.isRunning {
-                                    Divider()
-                                    self.featureActionRow(
-                                        title: self.strings.conversationAutomationTailscaleUnavailableTitle,
-                                        subtitle: self.strings.conversationAutomationWebhookPrivateAccessSubtitle,
-                                        systemImage: "exclamationmark.triangle",
-                                        buttonTitle: self.strings.conversationAutomationGoToPrivateAccessButtonTitle)
-                                    {
-                                        self.goToOnboardingPage(self.privateAccessPageIndex)
-                                    }
-                                } else if self.tailscaleService.funnelExposure.checked,
-                                          !self.tailscaleService.funnelExposure.featureEnabled,
-                                          let enableURL = self.tailscaleService.funnelExposure.enableURL,
-                                          let url = URL(string: enableURL)
+                                if let status = self.conversationAutomationVapiStatus,
+                                   !status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                 {
-                                    Divider()
-                                    self.featureActionRow(
-                                        title: self.strings.conversationAutomationTailscaleUnavailableTitle,
-                                        subtitle: self.strings.conversationAutomationWebhookAdminSubtitle,
-                                        systemImage: "arrow.up.forward.app",
-                                        buttonTitle: self.strings.conversationAutomationOpenAdminButtonTitle)
-                                    {
-                                        NSWorkspace.shared.open(url)
+                                    Text(status)
+                                        .font(.footnote)
+                                        .foregroundStyle(self.conversationAutomationVapiStatusIsError ? .red : .secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Divider()
+
+                                if self.conversationAutomationVapiAssistants.isEmpty {
+                                    self.featureRow(
+                                        title: self.strings.conversationAutomationVapiAssistantTitle,
+                                        subtitle: self.strings.conversationAutomationVapiAssistantEmptySubtitle,
+                                        systemImage: "person.wave.2")
+                                } else {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(self.strings.conversationAutomationVapiAssistantTitle)
+                                            .font(.headline)
+                                        Text(self.strings.conversationAutomationVapiAssistantSubtitle)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Picker(
+                                            self.strings.conversationAutomationVapiAssistantTitle,
+                                            selection: Binding(
+                                                get: { self.conversationAutomationVapiAssistantID },
+                                                set: { newValue in
+                                                    self.conversationAutomationVapiAssistantID = newValue
+                                                    self.applyConversationAutomationVoiceDraft()
+                                                }))
+                                        {
+                                            if !self.conversationAutomationVapiAssistantID.isEmpty,
+                                               !self.conversationAutomationVapiAssistants.contains(where: {
+                                                   $0.id.caseInsensitiveCompare(self.conversationAutomationVapiAssistantID) == .orderedSame
+                                               })
+                                            {
+                                                Text(
+                                                    self.strings.conversationAutomationVapiSavedSelectionLabel(
+                                                        id: self.conversationAutomationVapiAssistantID))
+                                                    .tag(self.conversationAutomationVapiAssistantID)
+                                            }
+                                            ForEach(self.conversationAutomationVapiAssistants) { assistant in
+                                                Text(assistant.displayLabel)
+                                                    .tag(assistant.id)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
                                     }
                                 }
-                            case .publicUrl:
+
+                                if self.conversationAutomationVapiPhoneNumbers.isEmpty {
+                                    self.featureRow(
+                                        title: self.strings.conversationAutomationVapiPhoneNumberTitle,
+                                        subtitle: self.strings.conversationAutomationVapiPhoneNumberEmptySubtitle,
+                                        systemImage: "phone.arrow.up.right")
+                                } else {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(self.strings.conversationAutomationVapiPhoneNumberTitle)
+                                            .font(.headline)
+                                        Text(self.strings.conversationAutomationVapiPhoneNumberSubtitle)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Picker(
+                                            self.strings.conversationAutomationVapiPhoneNumberTitle,
+                                            selection: Binding(
+                                                get: { self.conversationAutomationVapiPhoneNumberID },
+                                                set: { newValue in
+                                                    self.conversationAutomationVapiPhoneNumberID = newValue
+                                                    self.applyConversationAutomationVoiceDraft()
+                                                }))
+                                        {
+                                            if !self.conversationAutomationVapiPhoneNumberID.isEmpty,
+                                               !self.conversationAutomationVapiPhoneNumbers.contains(where: {
+                                                   $0.id.caseInsensitiveCompare(self.conversationAutomationVapiPhoneNumberID) == .orderedSame
+                                               })
+                                            {
+                                                Text(
+                                                    self.strings.conversationAutomationVapiSavedSelectionLabel(
+                                                        id: self.conversationAutomationVapiPhoneNumberID))
+                                                    .tag(self.conversationAutomationVapiPhoneNumberID)
+                                            }
+                                            ForEach(self.conversationAutomationVapiPhoneNumbers) { phoneNumber in
+                                                Text(phoneNumber.displayLabel)
+                                                    .tag(phoneNumber.id)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(self.strings.conversationAutomationVapiPreferredLanguageTitle)
+                                        .font(.headline)
+                                    Text(self.strings.conversationAutomationVapiPreferredLanguageSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Picker(
+                                        self.strings.conversationAutomationVapiPreferredLanguageTitle,
+                                        selection: Binding(
+                                            get: { self.conversationAutomationVapiPreferredLanguage },
+                                            set: { newValue in
+                                                self.conversationAutomationVapiPreferredLanguage = newValue
+                                                self.applyConversationAutomationVoiceDraft()
+                                            }))
+                                    {
+                                        ForEach(OnboardingLanguage.allCases, id: \.rawValue) { language in
+                                            Text(language.displayName)
+                                                .tag(language)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(self.strings.conversationAutomationVapiBridgeModeTitle)
+                                        .font(.headline)
+                                    Text(self.strings.conversationAutomationVapiBridgeModeSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Picker(
+                                        self.strings.conversationAutomationVapiBridgeModeTitle,
+                                        selection: Binding(
+                                            get: { self.conversationAutomationVapiBridgeMode },
+                                            set: { newValue in
+                                                self.conversationAutomationVapiBridgeMode = newValue
+                                                self.applyConversationAutomationVoiceDraft()
+                                            }))
+                                    {
+                                        Text(self.strings.conversationAutomationVapiBridgeModeAutoLabel)
+                                            .tag(ConversationAutomationVapiBridgeMode.autoBridge)
+                                        Text(self.strings.conversationAutomationVapiBridgeModeManualLabel)
+                                            .tag(ConversationAutomationVapiBridgeMode.manualPublicURL)
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
+
+                                switch self.conversationAutomationVapiBridgeMode {
+                                case .autoBridge:
+                                    if let bridgeURL = self.conversationAutomationExpectedVapiAutoBridgeURL {
+                                        self.conversationAutomationReadOnlyValue(
+                                            title: self.strings.conversationAutomationVapiBridgeTitle,
+                                            subtitle: self.strings.conversationAutomationVapiAutoBridgeSubtitle(bridgeURL: bridgeURL),
+                                            value: bridgeURL)
+                                    } else {
+                                        self.featureRow(
+                                            title: self.strings.conversationAutomationVapiBridgeTitle,
+                                            subtitle: self.strings.conversationAutomationVapiAutoBridgeWaitingSubtitle,
+                                            systemImage: "point.3.connected.trianglepath.dotted")
+                                    }
+
+                                    if !self.tailscaleService.isInstalled || !self.tailscaleService.isRunning {
+                                        self.featureActionRow(
+                                            title: self.strings.conversationAutomationTailscaleUnavailableTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookPrivateAccessSubtitle,
+                                            systemImage: "exclamationmark.triangle",
+                                            buttonTitle: self.strings.conversationAutomationGoToPrivateAccessButtonTitle)
+                                        {
+                                            self.goToOnboardingPage(self.privateAccessPageIndex)
+                                        }
+                                    } else if self.tailscaleService.funnelExposure.checked,
+                                              !self.tailscaleService.funnelExposure.featureEnabled,
+                                              let enableURL = self.tailscaleService.funnelExposure.enableURL,
+                                              let url = URL(string: enableURL)
+                                    {
+                                        self.featureActionRow(
+                                            title: self.strings.conversationAutomationTailscaleUnavailableTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookAdminSubtitle,
+                                            systemImage: "arrow.up.forward.app",
+                                            buttonTitle: self.strings.conversationAutomationOpenAdminButtonTitle)
+                                        {
+                                            NSWorkspace.shared.open(url)
+                                        }
+                                    }
+                                case .manualPublicURL:
+                                    self.conversationAutomationTextField(
+                                        title: self.strings.conversationAutomationVapiManualBridgeTitle,
+                                        subtitle: self.strings.conversationAutomationVapiManualBridgeSubtitle,
+                                        placeholder: self.strings.conversationAutomationVapiManualBridgePlaceholder,
+                                        text: self.$conversationAutomationVapiManualBridgeURL)
+                                }
+
+                                self.featureRow(
+                                    title: self.strings.conversationAutomationVapiOutboundOnlyTitle,
+                                    subtitle: self.strings.conversationAutomationVapiOutboundOnlySubtitle,
+                                    systemImage: "phone.badge.waveform")
+                                self.featureRow(
+                                    title: self.strings.conversationAutomationVapiIndonesiaNoticeTitle,
+                                    subtitle: self.strings.conversationAutomationVapiIndonesiaNoticeSubtitle,
+                                    systemImage: "globe")
+                            }
+                        }
+                    } else {
+                        self.onboardingCard(spacing: 14, padding: 18) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(self.strings.conversationAutomationPhoneProviderTitle)
+                                    .font(.headline)
+                                Text(self.strings.conversationAutomationPhoneProviderSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Picker(
+                                    self.strings.conversationAutomationPhoneProviderTitle,
+                                    selection: Binding(
+                                        get: { self.conversationAutomationPhoneProvider },
+                                        set: { newValue in
+                                            self.conversationAutomationPhoneProvider = newValue
+                                            self.applyConversationAutomationVoiceDraft()
+                                        }))
+                                {
+                                    Text(self.strings.conversationAutomationPhoneProviderTwilioLabel)
+                                        .tag(ConversationAutomationTelephonyProvider.twilio)
+                                    Text(self.strings.conversationAutomationPhoneProviderTelnyxLabel)
+                                        .tag(ConversationAutomationTelephonyProvider.telnyx)
+                                    Text(self.strings.conversationAutomationPhoneProviderPlivoLabel)
+                                        .tag(ConversationAutomationTelephonyProvider.plivo)
+                                }
+                                .pickerStyle(.segmented)
+
                                 self.conversationAutomationTextField(
-                                    title: self.strings.conversationAutomationWebhookPublicURLTitle,
-                                    subtitle: self.strings.conversationAutomationWebhookPublicURLSubtitle,
-                                    placeholder: self.strings.conversationAutomationWebhookPublicURLPlaceholder,
-                                    text: self.$conversationAutomationPublicWebhookURL)
+                                    title: self.strings.conversationAutomationPhoneNumberTitle,
+                                    subtitle: self.strings.conversationAutomationPhoneNumberSubtitle,
+                                    placeholder: self.strings.conversationAutomationPhoneNumberPlaceholder,
+                                    text: self.$conversationAutomationFromNumber)
+
+                                switch self.conversationAutomationPhoneProvider {
+                                case .twilio:
+                                    Divider()
+                                    Text(self.strings.conversationAutomationTwilioSectionTitle)
+                                        .font(.headline)
+                                    Text(self.strings.conversationAutomationTwilioSectionSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    self.conversationAutomationExternalLinks([
+                                        (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.twilioConsole),
+                                        (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.twilioGuide),
+                                    ])
+                                    self.conversationAutomationTextField(
+                                        title: self.strings.conversationAutomationTwilioAccountSIDTitle,
+                                        subtitle: self.strings.conversationAutomationTwilioAccountSIDSubtitle,
+                                        placeholder: self.strings.conversationAutomationTwilioAccountSIDPlaceholder,
+                                        text: self.$conversationAutomationTwilioAccountSID)
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationTwilioAuthTokenTitle,
+                                        subtitle: self.strings.conversationAutomationTwilioAuthTokenSubtitle,
+                                        placeholder: self.strings.conversationAutomationTwilioAuthTokenPlaceholder,
+                                        text: self.$conversationAutomationTwilioAuthToken)
+                                case .telnyx:
+                                    Divider()
+                                    Text(self.strings.conversationAutomationTelnyxSectionTitle)
+                                        .font(.headline)
+                                    Text(self.strings.conversationAutomationTelnyxSectionSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    self.conversationAutomationExternalLinks([
+                                        (self.strings.conversationAutomationOpenPortalButtonTitle, VoiceSetupExternalURL.telnyxPortal),
+                                        (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.telnyxGuide),
+                                    ])
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationTelnyxAPIKeyTitle,
+                                        subtitle: self.strings.conversationAutomationTelnyxAPIKeySubtitle,
+                                        placeholder: self.strings.conversationAutomationTelnyxAPIKeyPlaceholder,
+                                        text: self.$conversationAutomationTelnyxAPIKey)
+                                    self.conversationAutomationTextField(
+                                        title: self.strings.conversationAutomationTelnyxConnectionIDTitle,
+                                        subtitle: self.strings.conversationAutomationTelnyxConnectionIDSubtitle,
+                                        placeholder: self.strings.conversationAutomationTelnyxConnectionIDPlaceholder,
+                                        text: self.$conversationAutomationTelnyxConnectionID)
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationTelnyxPublicKeyTitle,
+                                        subtitle: self.strings.conversationAutomationTelnyxPublicKeySubtitle,
+                                        placeholder: self.strings.conversationAutomationTelnyxPublicKeyPlaceholder,
+                                        text: self.$conversationAutomationTelnyxPublicKey)
+                                case .plivo:
+                                    Divider()
+                                    Text(self.strings.conversationAutomationPlivoSectionTitle)
+                                        .font(.headline)
+                                    Text(self.strings.conversationAutomationPlivoSectionSubtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    self.conversationAutomationExternalLinks([
+                                        (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.plivoConsole),
+                                        (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.plivoGuide),
+                                    ])
+                                    self.conversationAutomationTextField(
+                                        title: self.strings.conversationAutomationPlivoAuthIDTitle,
+                                        subtitle: self.strings.conversationAutomationPlivoAuthIDSubtitle,
+                                        placeholder: self.strings.conversationAutomationPlivoAuthIDPlaceholder,
+                                        text: self.$conversationAutomationPlivoAuthID)
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationPlivoAuthTokenTitle,
+                                        subtitle: self.strings.conversationAutomationPlivoAuthTokenSubtitle,
+                                        placeholder: self.strings.conversationAutomationPlivoAuthTokenPlaceholder,
+                                        text: self.$conversationAutomationPlivoAuthToken)
+                                }
                             }
                         }
-                    }
 
-                    self.onboardingCard(spacing: 14, padding: 18) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(self.strings.conversationAutomationSttTitle)
-                                .font(.headline)
-                            Text(self.strings.conversationAutomationSttSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Picker(
-                                self.strings.conversationAutomationSttTitle,
-                                selection: Binding(
-                                    get: { self.conversationAutomationSttProvider },
-                                    set: { newValue in
-                                        self.conversationAutomationSttProvider = newValue
-                                        self.applyConversationAutomationVoiceDraft()
-                                    }))
-                            {
-                                Text(self.strings.conversationAutomationSttDeepgramLabel)
-                                    .tag(ConversationAutomationSttProvider.deepgramRealtime)
-                                Text(self.strings.conversationAutomationSttOpenAILabel)
-                                    .tag(ConversationAutomationSttProvider.openaiRealtime)
-                            }
-                            .pickerStyle(.segmented)
+                        self.onboardingCard(spacing: 14, padding: 18) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(self.strings.conversationAutomationWebhookTitle)
+                                    .font(.headline)
+                                Text(self.strings.conversationAutomationWebhookSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Picker(
+                                    self.strings.conversationAutomationWebhookTitle,
+                                    selection: Binding(
+                                        get: { self.conversationAutomationWebhookMode },
+                                        set: { newValue in
+                                            self.conversationAutomationWebhookMode = newValue
+                                            self.applyConversationAutomationVoiceDraft()
+                                        }))
+                                {
+                                    Text(self.strings.conversationAutomationWebhookTailscaleLabel)
+                                        .tag(ConversationAutomationWebhookMode.tailscaleFunnel)
+                                    Text(self.strings.conversationAutomationWebhookManualLabel)
+                                        .tag(ConversationAutomationWebhookMode.publicUrl)
+                                }
+                                .pickerStyle(.segmented)
 
-                            switch self.conversationAutomationSttProvider {
-                            case .deepgramRealtime:
-                                self.conversationAutomationExternalLinks([
-                                    (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.deepgramConsole),
-                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.deepgramGuide),
-                                ])
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationDeepgramAPIKeyTitle,
-                                    subtitle: self.strings.conversationAutomationDeepgramAPIKeySubtitle,
-                                    placeholder: self.strings.conversationAutomationDeepgramAPIKeyPlaceholder,
-                                    text: self.$conversationAutomationDeepgramAPIKey)
-                            case .openaiRealtime:
-                                self.conversationAutomationExternalLinks([
-                                    (self.strings.conversationAutomationOpenAPIKeysButtonTitle, VoiceSetupExternalURL.openAIAPIKeys),
-                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.openAIRealtimeGuide),
-                                ])
-                                self.conversationAutomationSecureField(
-                                    title: self.strings.conversationAutomationOpenAIAPIKeyTitle,
-                                    subtitle: self.strings.conversationAutomationOpenAIAPIKeySubtitle,
-                                    placeholder: self.strings.conversationAutomationOpenAIAPIKeyPlaceholder,
-                                    text: self.$conversationAutomationOpenAIAPIKey)
+                                switch self.conversationAutomationWebhookMode {
+                                case .tailscaleFunnel:
+                                    if let callbackURL = self.conversationAutomationExpectedWebhookURL {
+                                        self.conversationAutomationReadOnlyValue(
+                                            title: self.strings.conversationAutomationTailscaleReadyTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookTailscaleSubtitle(expectedURL: callbackURL),
+                                            value: callbackURL)
+                                    } else {
+                                        self.featureRow(
+                                            title: self.strings.conversationAutomationTailscaleReadyTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookTailscaleSubtitle(expectedURL: nil),
+                                            systemImage: "point.3.connected.trianglepath.dotted")
+                                    }
+
+                                    if !self.tailscaleService.isInstalled || !self.tailscaleService.isRunning {
+                                        Divider()
+                                        self.featureActionRow(
+                                            title: self.strings.conversationAutomationTailscaleUnavailableTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookPrivateAccessSubtitle,
+                                            systemImage: "exclamationmark.triangle",
+                                            buttonTitle: self.strings.conversationAutomationGoToPrivateAccessButtonTitle)
+                                        {
+                                            self.goToOnboardingPage(self.privateAccessPageIndex)
+                                        }
+                                    } else if self.tailscaleService.funnelExposure.checked,
+                                              !self.tailscaleService.funnelExposure.featureEnabled,
+                                              let enableURL = self.tailscaleService.funnelExposure.enableURL,
+                                              let url = URL(string: enableURL)
+                                    {
+                                        Divider()
+                                        self.featureActionRow(
+                                            title: self.strings.conversationAutomationTailscaleUnavailableTitle,
+                                            subtitle: self.strings.conversationAutomationWebhookAdminSubtitle,
+                                            systemImage: "arrow.up.forward.app",
+                                            buttonTitle: self.strings.conversationAutomationOpenAdminButtonTitle)
+                                        {
+                                            NSWorkspace.shared.open(url)
+                                        }
+                                    }
+                                case .publicUrl:
+                                    self.conversationAutomationTextField(
+                                        title: self.strings.conversationAutomationWebhookPublicURLTitle,
+                                        subtitle: self.strings.conversationAutomationWebhookPublicURLSubtitle,
+                                        placeholder: self.strings.conversationAutomationWebhookPublicURLPlaceholder,
+                                        text: self.$conversationAutomationPublicWebhookURL)
+                                }
                             }
                         }
-                    }
 
-                    self.onboardingCard(spacing: 14, padding: 18) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(self.strings.conversationAutomationTtsTitle)
-                                .font(.headline)
-                            Text(self.strings.conversationAutomationTtsSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            self.conversationAutomationExternalLinks([
-                                (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.elevenLabsAuthGuide),
-                                (self.strings.conversationAutomationOpenVoiceLibraryButtonTitle, VoiceSetupExternalURL.elevenLabsVoiceLibrary),
-                            ])
-                            self.conversationAutomationSecureField(
-                                title: self.strings.conversationAutomationElevenLabsAPIKeyTitle,
-                                subtitle: self.strings.conversationAutomationElevenLabsAPIKeySubtitle,
-                                placeholder: self.strings.conversationAutomationElevenLabsAPIKeyPlaceholder,
-                                text: self.$conversationAutomationElevenLabsAPIKey)
-                            self.conversationAutomationTextField(
-                                title: self.strings.conversationAutomationElevenLabsVoiceIDTitle,
-                                subtitle: self.strings.conversationAutomationElevenLabsVoiceIDSubtitle,
-                                placeholder: self.strings.conversationAutomationElevenLabsVoiceIDPlaceholder,
-                                text: self.$conversationAutomationElevenLabsVoiceID)
+                        self.onboardingCard(spacing: 14, padding: 18) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(self.strings.conversationAutomationSttTitle)
+                                    .font(.headline)
+                                Text(self.strings.conversationAutomationSttSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Picker(
+                                    self.strings.conversationAutomationSttTitle,
+                                    selection: Binding(
+                                        get: { self.conversationAutomationSttProvider },
+                                        set: { newValue in
+                                            self.conversationAutomationSttProvider = newValue
+                                            self.applyConversationAutomationVoiceDraft()
+                                        }))
+                                {
+                                    Text(self.strings.conversationAutomationSttDeepgramLabel)
+                                        .tag(ConversationAutomationSttProvider.deepgramRealtime)
+                                    Text(self.strings.conversationAutomationSttOpenAILabel)
+                                        .tag(ConversationAutomationSttProvider.openaiRealtime)
+                                }
+                                .pickerStyle(.segmented)
+
+                                switch self.conversationAutomationSttProvider {
+                                case .deepgramRealtime:
+                                    self.conversationAutomationExternalLinks([
+                                        (self.strings.conversationAutomationOpenConsoleButtonTitle, VoiceSetupExternalURL.deepgramConsole),
+                                        (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.deepgramGuide),
+                                    ])
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationDeepgramAPIKeyTitle,
+                                        subtitle: self.strings.conversationAutomationDeepgramAPIKeySubtitle,
+                                        placeholder: self.strings.conversationAutomationDeepgramAPIKeyPlaceholder,
+                                        text: self.$conversationAutomationDeepgramAPIKey)
+                                case .openaiRealtime:
+                                    self.conversationAutomationExternalLinks([
+                                        (self.strings.conversationAutomationOpenAPIKeysButtonTitle, VoiceSetupExternalURL.openAIAPIKeys),
+                                        (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.openAIRealtimeGuide),
+                                    ])
+                                    self.conversationAutomationSecureField(
+                                        title: self.strings.conversationAutomationOpenAIAPIKeyTitle,
+                                        subtitle: self.strings.conversationAutomationOpenAIAPIKeySubtitle,
+                                        placeholder: self.strings.conversationAutomationOpenAIAPIKeyPlaceholder,
+                                        text: self.$conversationAutomationOpenAIAPIKey)
+                                }
+                            }
+                        }
+
+                        self.onboardingCard(spacing: 14, padding: 18) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(self.strings.conversationAutomationTtsTitle)
+                                    .font(.headline)
+                                Text(self.strings.conversationAutomationTtsSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                self.conversationAutomationExternalLinks([
+                                    (self.strings.conversationAutomationOpenGuideButtonTitle, VoiceSetupExternalURL.elevenLabsAuthGuide),
+                                    (self.strings.conversationAutomationOpenVoiceLibraryButtonTitle, VoiceSetupExternalURL.elevenLabsVoiceLibrary),
+                                ])
+                                self.conversationAutomationSecureField(
+                                    title: self.strings.conversationAutomationElevenLabsAPIKeyTitle,
+                                    subtitle: self.strings.conversationAutomationElevenLabsAPIKeySubtitle,
+                                    placeholder: self.strings.conversationAutomationElevenLabsAPIKeyPlaceholder,
+                                    text: self.$conversationAutomationElevenLabsAPIKey)
+                                self.conversationAutomationTextField(
+                                    title: self.strings.conversationAutomationElevenLabsVoiceIDTitle,
+                                    subtitle: self.strings.conversationAutomationElevenLabsVoiceIDSubtitle,
+                                    placeholder: self.strings.conversationAutomationElevenLabsVoiceIDPlaceholder,
+                                    text: self.$conversationAutomationElevenLabsVoiceID)
+                            }
                         }
                     }
 
@@ -1826,6 +2093,20 @@ extension OnboardingView {
                             language: self.state.effectiveOnboardingLanguage))
                     {
                         self.openSettings(tab: .permissions)
+                    }
+                    Divider()
+                        .padding(.vertical, 6)
+                    self.featureActionRow(
+                        title: macLocalized("Manage phone calls later", language: self.state.effectiveOnboardingLanguage),
+                        subtitle: macLocalized(
+                            "Open Settings → Phone Calls any time to change Vapi, switch modes, update provider credentials, or run another test call.",
+                            language: self.state.effectiveOnboardingLanguage),
+                        systemImage: "phone.badge.waveform",
+                        buttonTitle: macLocalized(
+                            "Open Settings → Phone Calls",
+                            language: self.state.effectiveOnboardingLanguage))
+                    {
+                        self.openSettings(tab: .phoneCalls)
                     }
                     Divider()
                         .padding(.vertical, 6)

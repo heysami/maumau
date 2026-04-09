@@ -5,6 +5,7 @@ import {
   type MaumauPluginApi,
 } from "./api.js";
 import { registerVoiceCallCli } from "./src/cli.js";
+import { createVoiceCallBackend, type VoiceCallBackend } from "./src/backend.js";
 import {
   VoiceCallConfigSchema,
   normalizeVoiceCallConfig,
@@ -15,13 +16,12 @@ import {
   type VoiceCallConfig,
 } from "./src/config.js";
 import type { CoreConfig } from "./src/core-bridge.js";
-import { createVoiceCallRuntime, type VoiceCallRuntime } from "./src/runtime.js";
 
 const SHARED_VOICE_CALL_RUNTIME_STATE = Symbol.for("maumau.voiceCall.sharedRuntimeState");
 
 type SharedVoiceCallRuntimeEntry = {
-  runtime: VoiceCallRuntime | null;
-  runtimePromise: Promise<VoiceCallRuntime> | null;
+  runtime: VoiceCallBackend | null;
+  runtimePromise: Promise<VoiceCallBackend> | null;
 };
 
 type SharedVoiceCallRuntimeState = {
@@ -75,6 +75,11 @@ const voiceCallConfigSchema = {
     const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true;
     const providerRaw = raw.provider === "log" ? "mock" : raw.provider;
     const provider = providerRaw ?? (enabled ? "mock" : undefined);
+    const modeRaw =
+      typeof raw.mode === "string" && raw.mode.trim()
+        ? raw.mode.trim().toLowerCase()
+        : undefined;
+    const mode = modeRaw === "vapi" ? "vapi" : "self-hosted";
     const streamingRaw =
       raw.streaming && typeof raw.streaming === "object" && !Array.isArray(raw.streaming)
         ? (raw.streaming as Record<string, unknown>)
@@ -96,6 +101,7 @@ const voiceCallConfigSchema = {
       VoiceCallConfigSchema.parse({
         ...raw,
         enabled,
+        mode,
         provider,
         fromNumber: raw.fromNumber ?? legacyFrom,
         streaming: streamingRaw
@@ -133,6 +139,33 @@ const voiceCallConfigSchema = {
     );
   },
   uiHints: {
+    mode: {
+      label: "Voice Mode",
+      help: "Use vapi for the simple guided setup or self-hosted for direct provider webhooks.",
+    },
+    "vapi.apiKey": {
+      label: "Vapi API Key",
+      sensitive: true,
+    },
+    "vapi.assistantId": { label: "Vapi Assistant ID" },
+    "vapi.phoneNumberId": { label: "Vapi Phone Number ID" },
+    "vapi.telephonyProvider": {
+      label: "Vapi Telephony Provider",
+      help: 'Use "twilio" for imported international numbers.',
+    },
+    "vapi.preferredLanguage": { label: "Preferred Language" },
+    "vapi.bridgeMode": {
+      label: "Vapi Bridge Mode",
+      help: 'Use "auto" for the managed Tailscale Funnel bridge or "manual-public-url" to keep a fixed public callback URL.',
+    },
+    "vapi.bridgeUrl": { label: "Maumau Bridge URL", advanced: true },
+    "vapi.bridgePath": { label: "Maumau Bridge Path", advanced: true },
+    "vapi.bridgeAuthToken": {
+      label: "Maumau Bridge Auth Token",
+      sensitive: true,
+      advanced: true,
+    },
+    "vapi.baseUrl": { label: "Vapi API Base URL", advanced: true },
     provider: {
       label: "Provider",
       help: "Use twilio, telnyx, or mock for dev/no-network.",
@@ -252,7 +285,7 @@ const VoiceCallToolSchema = Type.Union([
 export default definePluginEntry({
   id: "voice-call",
   name: "Voice Call",
-  description: "Voice-call plugin with Telnyx/Twilio/Plivo providers",
+  description: "Voice-call plugin with simple Vapi and advanced self-hosted providers",
   configSchema: voiceCallConfigSchema,
   register(api: MaumauPluginApi) {
     const config = resolveVoiceCallConfig(voiceCallConfigSchema.parse(api.pluginConfig));
@@ -270,8 +303,8 @@ export default definePluginEntry({
       }
     }
 
-    let runtimePromise: Promise<VoiceCallRuntime> | null = null;
-    let runtime: VoiceCallRuntime | null = null;
+    let runtimePromise: Promise<VoiceCallBackend> | null = null;
+    let runtime: VoiceCallBackend | null = null;
 
     const ensureRuntime = async () => {
       if (!config.enabled) {
@@ -291,7 +324,7 @@ export default definePluginEntry({
         runtime = await sharedRuntime.runtimePromise;
         return runtime;
       }
-      const nextRuntimePromise = createVoiceCallRuntime({
+      const nextRuntimePromise = createVoiceCallBackend({
         config,
         coreConfig: api.config as CoreConfig,
         agentRuntime: api.runtime.agent,
@@ -353,13 +386,13 @@ export default definePluginEntry({
       return { rt, callId, message } as const;
     };
     const initiateCallAndRespond = async (params: {
-      rt: VoiceCallRuntime;
+      rt: VoiceCallBackend;
       respond: GatewayRequestHandlerOptions["respond"];
       to: string;
       message?: string;
       mode?: "notify" | "conversation";
     }) => {
-      const result = await params.rt.manager.initiateCall(params.to, undefined, {
+      const result = await params.rt.actions.initiateCall(params.to, undefined, {
         message: params.message,
         mode: params.mode,
       });
@@ -374,12 +407,12 @@ export default definePluginEntry({
       requestParams: GatewayRequestHandlerOptions["params"];
       respond: GatewayRequestHandlerOptions["respond"];
       action: (
-        request: Exclude<Awaited<ReturnType<typeof resolveCallMessageRequest>>, { error: string }>,
-      ) => Promise<{
-        success: boolean;
-        error?: string;
-        transcript?: string;
-      }>;
+            request: Exclude<Awaited<ReturnType<typeof resolveCallMessageRequest>>, { error: string }>,
+          ) => Promise<{
+            success: boolean;
+            error?: string;
+            transcript?: string;
+          }>;
       failure: string;
       includeTranscript?: boolean;
     }) => {
@@ -441,7 +474,7 @@ export default definePluginEntry({
           await respondToCallMessageAction({
             requestParams: params,
             respond,
-            action: (request) => request.rt.manager.continueCall(request.callId, request.message),
+            action: (request) => request.rt.actions.continueCall(request.callId, request.message),
             failure: "continue failed",
             includeTranscript: true,
           });
@@ -458,7 +491,7 @@ export default definePluginEntry({
           await respondToCallMessageAction({
             requestParams: params,
             respond,
-            action: (request) => request.rt.manager.speak(request.callId, request.message),
+            action: (request) => request.rt.actions.speak(request.callId, request.message),
             failure: "speak failed",
           });
         } catch (err) {
@@ -477,7 +510,7 @@ export default definePluginEntry({
             return;
           }
           const rt = await ensureRuntime();
-          const result = await rt.manager.endCall(callId);
+          const result = await rt.actions.endCall(callId);
           if (!result.success) {
             respond(false, { error: result.error || "end failed" });
             return;
@@ -504,7 +537,8 @@ export default definePluginEntry({
             return;
           }
           const rt = await ensureRuntime();
-          const call = rt.manager.getCall(raw) || rt.manager.getCallByProviderCallId(raw);
+          const call =
+            (await rt.actions.getCall(raw)) || (await rt.actions.getCallByProviderCallId(raw));
           if (!call) {
             respond(true, { found: false });
             return;
@@ -567,7 +601,7 @@ export default definePluginEntry({
                 if (!to) {
                   throw new Error("to required");
                 }
-                const result = await rt.manager.initiateCall(to, undefined, {
+                const result = await rt.actions.initiateCall(to, undefined, {
                   message,
                   mode:
                     params.mode === "notify" || params.mode === "conversation"
@@ -585,7 +619,7 @@ export default definePluginEntry({
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
-                const result = await rt.manager.continueCall(callId, message);
+                const result = await rt.actions.continueCall(callId, message);
                 if (!result.success) {
                   throw new Error(result.error || "continue failed");
                 }
@@ -597,7 +631,7 @@ export default definePluginEntry({
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
-                const result = await rt.manager.speak(callId, message);
+                const result = await rt.actions.speak(callId, message);
                 if (!result.success) {
                   throw new Error(result.error || "speak failed");
                 }
@@ -608,7 +642,7 @@ export default definePluginEntry({
                 if (!callId) {
                   throw new Error("callId required");
                 }
-                const result = await rt.manager.endCall(callId);
+                const result = await rt.actions.endCall(callId);
                 if (!result.success) {
                   throw new Error(result.error || "end failed");
                 }
@@ -620,7 +654,8 @@ export default definePluginEntry({
                   throw new Error("callId required");
                 }
                 const call =
-                  rt.manager.getCall(callId) || rt.manager.getCallByProviderCallId(callId);
+                  (await rt.actions.getCall(callId)) ||
+                  (await rt.actions.getCallByProviderCallId(callId));
                 return json(call ? { found: true, call } : { found: false });
               }
             }
@@ -632,7 +667,8 @@ export default definePluginEntry({
             if (!sid) {
               throw new Error("sid required for status");
             }
-            const call = rt.manager.getCall(sid) || rt.manager.getCallByProviderCallId(sid);
+            const call =
+              (await rt.actions.getCall(sid)) || (await rt.actions.getCallByProviderCallId(sid));
             return json(call ? { found: true, call } : { found: false });
           }
 
@@ -643,7 +679,7 @@ export default definePluginEntry({
           if (!to) {
             throw new Error("to required for call");
           }
-          const result = await rt.manager.initiateCall(to, undefined, {
+          const result = await rt.actions.initiateCall(to, undefined, {
             message:
               typeof params.message === "string" && params.message.trim()
                 ? params.message.trim()
@@ -672,6 +708,32 @@ export default definePluginEntry({
       { commands: ["voicecall"] },
     );
 
+    if (config.mode === "vapi" && config.vapi.bridgePath) {
+      api.registerHttpRoute({
+        path: config.vapi.bridgePath,
+        auth: "plugin",
+        match: "exact",
+        handler: async (req, res) => {
+          try {
+            const rt = await ensureRuntime();
+            const handler = rt.httpHandlers.find((entry) => entry.path === config.vapi.bridgePath);
+            if (!handler) {
+              return false;
+            }
+            return await handler.handler({ req, res, logger: api.logger });
+          } catch (err) {
+            api.logger.warn?.(`[voice-call] Vapi bridge failed: ${String(err)}`);
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.end("Internal Server Error");
+            }
+            return true;
+          }
+        },
+      });
+    }
+
     api.registerService({
       id: "voicecall",
       start: async () => {
@@ -682,7 +744,7 @@ export default definePluginEntry({
           await ensureRuntime();
         } catch (err) {
           api.logger.error(
-            `[voice-call] Failed to start runtime: ${
+            `[voice-call] Failed to start backend: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );

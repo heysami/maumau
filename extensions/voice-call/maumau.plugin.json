@@ -1,6 +1,48 @@
 {
   "id": "voice-call",
   "uiHints": {
+    "mode": {
+      "label": "Voice Mode",
+      "help": "Use vapi for the simple guided setup or self-hosted for direct provider webhooks."
+    },
+    "vapi.apiKey": {
+      "label": "Vapi API Key",
+      "sensitive": true
+    },
+    "vapi.assistantId": {
+      "label": "Vapi Assistant ID"
+    },
+    "vapi.phoneNumberId": {
+      "label": "Vapi Phone Number ID"
+    },
+    "vapi.telephonyProvider": {
+      "label": "Vapi Telephony Provider",
+      "help": "Use \"twilio\" for imported international numbers."
+    },
+    "vapi.preferredLanguage": {
+      "label": "Preferred Language"
+    },
+    "vapi.bridgeMode": {
+      "label": "Vapi Bridge Mode",
+      "help": "Use \"auto\" for the managed Tailscale Funnel bridge or \"manual-public-url\" to keep a fixed public callback URL."
+    },
+    "vapi.bridgeUrl": {
+      "label": "Maumau Bridge URL",
+      "advanced": true
+    },
+    "vapi.bridgePath": {
+      "label": "Maumau Bridge Path",
+      "advanced": true
+    },
+    "vapi.bridgeAuthToken": {
+      "label": "Maumau Bridge Auth Token",
+      "sensitive": true,
+      "advanced": true
+    },
+    "vapi.baseUrl": {
+      "label": "Vapi API Base URL",
+      "advanced": true
+    },
     "provider": {
       "label": "Provider",
       "help": "Use twilio, telnyx, or mock for dev/no-network."
@@ -183,9 +225,54 @@
       "enabled": {
         "type": "boolean"
       },
+      "mode": {
+        "type": "string",
+        "enum": ["self-hosted", "vapi"]
+      },
       "provider": {
         "type": "string",
         "enum": ["telnyx", "twilio", "plivo", "mock"]
+      },
+      "vapi": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "assistantId": {
+            "type": "string"
+          },
+          "phoneNumberId": {
+            "type": "string"
+          },
+          "telephonyProvider": {
+            "type": "string",
+            "enum": ["twilio"]
+          },
+          "preferredLanguage": {
+            "type": "string"
+          },
+          "bridgeMode": {
+            "type": "string",
+            "enum": ["auto", "manual-public-url"]
+          },
+          "bridgeUrl": {
+            "type": "string"
+          },
+          "bridgePath": {
+            "type": "string"
+          },
+          "bridgeAuthToken": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          }
+        }
       },
       "telnyx": {
         "type": "object",

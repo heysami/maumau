@@ -5,6 +5,7 @@ private let indonesianMacStrings: [String: String] = [
     "General": "Umum",
     "Models": "Model",
     "Channels": "Channel",
+    "Phone Calls": "Panggilan Telepon",
     "Voice Wake": "Voice Wake",
     "Config": "Konfigurasi",
     "State": "State",
@@ -955,10 +956,75 @@ private let indonesianMacStrings: [String: String] = [
     "Permissions and the full Skills list stay available in Settings whenever you want to fine-tune things.":
         "Izin dan daftar Skill lengkap tetap tersedia di Pengaturan kapan pun Anda ingin menyesuaikan lebih rinci.",
     "Open Settings → Permissions": "Buka Pengaturan → Izin",
+    "Manage phone calls later": "Kelola panggilan telepon nanti",
+    "Open Settings → Phone Calls any time to change Vapi, switch modes, update provider credentials, or run another test call.":
+        "Buka Pengaturan → Panggilan Telepon kapan saja untuk mengubah Vapi, mengganti mode, memperbarui kredensial provider, atau menjalankan test call lagi.",
+    "Open Settings → Phone Calls": "Buka Pengaturan → Panggilan Telepon",
     "Manage private access later": "Kelola akses privat nanti",
     "Open Settings → General any time to install Tailscale on this Mac, sign this Mac in, turn private access on, or revisit the steps for adding your phone later.":
         "Buka Pengaturan → Umum kapan saja untuk memasang Tailscale di Mac ini, masuk di Mac ini, menyalakan akses privat, atau meninjau lagi langkah untuk menambahkan ponsel Anda nanti.",
     "Open Settings → General": "Buka Pengaturan → Umum",
+    "Change how Maumau makes real phone calls. Use the same guided Vapi flow as onboarding, or switch back to the advanced self-hosted path.":
+        "Ubah bagaimana Maumau melakukan panggilan telepon sungguhan. Gunakan alur Vapi terpandu yang sama seperti onboarding, atau kembali ke jalur self-hosted lanjutan.",
+    "This screen is for the local Mac gateway.":
+        "Layar ini untuk gateway lokal di Mac ini.",
+    "If Maumau runs on another host right now, keep using Settings → Config on that host for phone-call changes. Switch Maumau runs back to Local on this Mac when you want the guided phone-call flow here.":
+        "Jika Maumau sedang berjalan di host lain, tetap gunakan Pengaturan → Konfigurasi di host itu untuk perubahan panggilan telepon. Ubah Maumau kembali ke mode Lokal di Mac ini saat Anda ingin memakai alur panggilan telepon terpandu di sini.",
+    "Open Settings → Config": "Buka Pengaturan → Konfigurasi",
+    "Reload saved setup": "Muat ulang setup tersimpan",
+    "Save phone-call settings": "Simpan pengaturan panggilan telepon",
+    "Phone calls are off. You can finish configuring the flow now and turn it on later.":
+        "Panggilan telepon sedang mati. Anda bisa menyelesaikan konfigurasinya sekarang dan menyalakannya nanti.",
+    "Use a Vapi assistant voice that already supports your call language.":
+        "Gunakan suara asisten Vapi yang sudah mendukung bahasa panggilan Anda.",
+    "Maumau keeps the selected Vapi assistant voice. If you want Bahasa Indonesia or another language to sound right, configure a multilingual voice inside Vapi before running live calls.":
+        "Maumau mempertahankan suara asisten Vapi yang dipilih. Jika Anda ingin Bahasa Indonesia atau bahasa lain terdengar benar, atur suara multibahasa di Vapi sebelum menjalankan panggilan sungguhan.",
+    "Twilio import recommended": "Impor Twilio disarankan",
+    "This selected Vapi number shows %@. The simple path is designed around importing a Twilio voice number into Vapi.":
+        "Nomor Vapi yang dipilih ini menunjukkan %@. Jalur sederhana dirancang untuk mengimpor nomor suara Twilio ke Vapi.",
+    "Setup saved for later": "Setup disimpan untuk nanti",
+    "Keep editing here, then turn phone calls on when you want Maumau to place live calls.":
+        "Lanjutkan mengedit di sini, lalu nyalakan panggilan telepon saat Anda ingin Maumau mulai melakukan panggilan sungguhan.",
+    "Test call": "Test call",
+    "Start a real outbound call with the current settings so you can hear the voice pipeline end to end.":
+        "Mulai panggilan keluar sungguhan dengan pengaturan saat ini agar Anda bisa mendengar alur voice dari awal sampai akhir.",
+    "To number": "Ke nomor",
+    "Use a real E.164 number like +628123456789.":
+        "Gunakan nomor E.164 sungguhan seperti +628123456789.",
+    "What Maumau should say first": "Apa yang harus Maumau ucapkan terlebih dahulu",
+    "This becomes the opening message for the test call.":
+        "Ini menjadi pesan pembuka untuk test call.",
+    "Hi, this is a Maumau test call.":
+        "Halo, ini adalah test call Maumau.",
+    "Start test call": "Mulai test call",
+    "Latest test call ID": "ID test call terbaru",
+    "Use this to check status again or end the same test call.":
+        "Gunakan ini untuk memeriksa status lagi atau mengakhiri test call yang sama.",
+    "Phone-call settings saved.": "Pengaturan panggilan telepon tersimpan.",
+    "Could not save phone-call settings.": "Tidak bisa menyimpan pengaturan panggilan telepon.",
+    "Gateway returned an unexpected response.":
+        "Gateway mengembalikan respons yang tidak terduga.",
+    "Switch Maumau runs back to Local before starting a test call here.":
+        "Ubah Maumau kembali ke mode Lokal sebelum memulai test call di sini.",
+    "Enable phone calls and save first.": "Aktifkan panggilan telepon lalu simpan terlebih dahulu.",
+    "Enter a valid E.164 phone number for the test call.":
+        "Masukkan nomor telepon E.164 yang valid untuk test call.",
+    "Enter the first message Maumau should say on the test call.":
+        "Masukkan pesan pertama yang harus Maumau ucapkan di test call.",
+    "Started test call.": "Test call dimulai.",
+    "No matching call was found.": "Tidak ada panggilan yang cocok ditemukan.",
+    "Latest call status": "Status panggilan terbaru",
+    "Ended test call.": "Test call diakhiri.",
+    "Applying setup changes...": "Menerapkan perubahan setup...",
+    "Refreshing gateway...": "Menyegarkan gateway...",
+    "Checking gateway health...": "Memeriksa kesehatan gateway...",
+    "Refreshing Maumau status...": "Menyegarkan status Maumau...",
+    "Refreshing Maumau status timed out. Wait a moment, then press Finish again.":
+        "Penyegaran status Maumau kehabisan waktu. Tunggu sebentar, lalu tekan Selesai lagi.",
+    "Gateway health check timed out. Fix the gateway, then press Finish again.":
+        "Pemeriksaan kesehatan gateway kehabisan waktu. Perbaiki gateway, lalu tekan Selesai lagi.",
+    "Setup is saved, but Maumau could not refresh the gateway yet. Keep this window open, fix the gateway, and press Finish again.":
+        "Setup sudah tersimpan, tetapi Maumau belum bisa menyegarkan gateway. Biarkan jendela ini tetap terbuka, perbaiki gateway, lalu tekan Selesai lagi.",
     "Install the CLI": "Pasang CLI",
     "This is the small helper app Maumau uses behind the scenes when it lives on this Mac.":
         "Ini adalah aplikasi bantu kecil yang dipakai Maumau di belakang layar saat ia tinggal di Mac ini.",

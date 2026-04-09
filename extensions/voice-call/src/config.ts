@@ -288,6 +288,55 @@ export const VoiceCallStreamingConfigSchema = z
 export type VoiceCallStreamingConfig = z.infer<typeof VoiceCallStreamingConfigSchema>;
 
 // -----------------------------------------------------------------------------
+// Vapi Configuration
+// -----------------------------------------------------------------------------
+
+export const VoiceCallModeSchema = z.enum(["self-hosted", "vapi"]).default("self-hosted");
+export type VoiceCallMode = z.infer<typeof VoiceCallModeSchema>;
+
+export const VapiTelephonyProviderSchema = z.literal("twilio").default("twilio");
+export type VapiTelephonyProvider = z.infer<typeof VapiTelephonyProviderSchema>;
+
+export const VapiBridgeModeSchema = z.enum(["auto", "manual-public-url"]).default("auto");
+export type VapiBridgeMode = z.infer<typeof VapiBridgeModeSchema>;
+
+export const VoiceCallVapiConfigSchema = z
+  .object({
+    /** Enable the Vapi-backed call path when mode=vapi */
+    enabled: z.boolean().default(true),
+    /** Vapi private API key */
+    apiKey: z.string().min(1).optional(),
+    /** Saved Vapi assistant to use as the base assistant */
+    assistantId: z.string().min(1).optional(),
+    /** Imported Vapi phone number ID */
+    phoneNumberId: z.string().min(1).optional(),
+    /** Imported telephony provider backing the Vapi number */
+    telephonyProvider: VapiTelephonyProviderSchema,
+    /** Preferred reply language passed into the transient assistant */
+    preferredLanguage: z.string().min(1).default("en"),
+    /** Whether Maumau should auto-publish the Vapi bridge or use a fixed public URL */
+    bridgeMode: VapiBridgeModeSchema,
+    /** Public HTTPS URL Vapi should call for Maumau tool turns */
+    bridgeUrl: z.string().url().optional(),
+    /** Gateway route path that serves the Vapi bridge */
+    bridgePath: z.string().min(1).default("/plugins/voice-call/vapi"),
+    /** Shared secret used to authenticate Vapi callbacks to the bridge */
+    bridgeAuthToken: z.string().min(1).optional(),
+    /** Optional Vapi API base URL override */
+    baseUrl: z.string().url().default("https://api.vapi.ai"),
+  })
+  .strict()
+  .default({
+    enabled: true,
+    telephonyProvider: "twilio",
+    preferredLanguage: "en",
+    bridgeMode: "auto",
+    bridgePath: "/plugins/voice-call/vapi",
+    baseUrl: "https://api.vapi.ai",
+  });
+export type VoiceCallVapiConfig = z.infer<typeof VoiceCallVapiConfigSchema>;
+
+// -----------------------------------------------------------------------------
 // Main Voice Call Configuration
 // -----------------------------------------------------------------------------
 
@@ -296,8 +345,14 @@ export const VoiceCallConfigSchema = z
     /** Enable voice call functionality */
     enabled: z.boolean().default(false),
 
+    /** Runtime mode: direct self-hosted telephony vs Vapi-managed calls */
+    mode: VoiceCallModeSchema,
+
     /** Active provider (telnyx, twilio, plivo, or mock) */
     provider: z.enum(["telnyx", "twilio", "plivo", "mock"]).optional(),
+
+    /** Vapi-backed configuration */
+    vapi: VoiceCallVapiConfigSchema,
 
     /** Telnyx-specific configuration */
     telnyx: TelnyxConfigSchema.optional(),
@@ -468,6 +523,32 @@ function normalizeStreamingConfigInput(
   };
 }
 
+function inferLegacyVapiBridgeMode(params: {
+  configuredMode: VoiceCallConfigInput["vapi"] extends infer T
+    ? T extends { bridgeMode?: infer M }
+      ? M
+      : never
+    : never;
+  bridgeUrl: string | undefined;
+}): VapiBridgeMode {
+  if (typeof params.configuredMode === "string" && params.configuredMode.trim()) {
+    return params.configuredMode === "manual-public-url" ? "manual-public-url" : "auto";
+  }
+  const bridgeUrl = params.bridgeUrl?.trim();
+  if (!bridgeUrl) {
+    return "auto";
+  }
+  try {
+    const parsed = new URL(bridgeUrl);
+    const host = parsed.hostname.trim().toLowerCase();
+    const port = parsed.port ? Number(parsed.port) : undefined;
+    if (host.endsWith(".ts.net") && (port == null || port === 443 || port === 8443)) {
+      return "auto";
+    }
+  } catch {}
+  return "manual-public-url";
+}
+
 export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallConfig {
   const defaults = cloneDefaultVoiceCallConfig();
   const normalizedStreamingInput = normalizeStreamingConfigInput(config.streaming);
@@ -476,6 +557,10 @@ export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCal
     ...config,
     allowFrom: config.allowFrom ?? defaults.allowFrom,
     outbound: { ...defaults.outbound, ...config.outbound },
+    vapi: {
+      ...defaults.vapi,
+      ...config.vapi,
+    },
     serve: { ...defaults.serve, ...config.serve },
     tailscale: { ...defaults.tailscale, ...config.tailscale },
     tunnel: { ...defaults.tunnel, ...config.tunnel },
@@ -510,8 +595,22 @@ export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCal
 export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallConfig {
   const resolved = normalizeVoiceCallConfig(config);
 
+  resolved.vapi = resolved.vapi ?? {
+    enabled: true,
+    telephonyProvider: "twilio",
+    preferredLanguage: "en",
+    bridgeMode: "auto",
+    bridgePath: "/plugins/voice-call/vapi",
+    baseUrl: "https://api.vapi.ai",
+  };
+  resolved.vapi.apiKey = resolved.vapi.apiKey ?? process.env.VAPI_API_KEY;
+  resolved.vapi.bridgeMode = inferLegacyVapiBridgeMode({
+    configuredMode: config.vapi?.bridgeMode,
+    bridgeUrl: resolved.vapi.bridgeUrl,
+  });
+
   // Telnyx
-  if (resolved.provider === "telnyx") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "telnyx") {
     resolved.telnyx = resolved.telnyx ?? {};
     resolved.telnyx.apiKey = resolved.telnyx.apiKey ?? process.env.TELNYX_API_KEY;
     resolved.telnyx.connectionId = resolved.telnyx.connectionId ?? process.env.TELNYX_CONNECTION_ID;
@@ -519,14 +618,14 @@ export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallC
   }
 
   // Twilio
-  if (resolved.provider === "twilio") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "twilio") {
     resolved.twilio = resolved.twilio ?? {};
     resolved.twilio.accountSid = resolved.twilio.accountSid ?? process.env.TWILIO_ACCOUNT_SID;
     resolved.twilio.authToken = resolved.twilio.authToken ?? process.env.TWILIO_AUTH_TOKEN;
   }
 
   // Plivo
-  if (resolved.provider === "plivo") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "plivo") {
     resolved.plivo = resolved.plivo ?? {};
     resolved.plivo.authId = resolved.plivo.authId ?? process.env.PLIVO_AUTH_ID;
     resolved.plivo.authToken = resolved.plivo.authToken ?? process.env.PLIVO_AUTH_TOKEN;
@@ -581,6 +680,37 @@ export function validateProviderConfig(config: VoiceCallConfig): {
 
   if (!config.enabled) {
     return { valid: true, errors: [] };
+  }
+
+  if (config.mode === "vapi") {
+    if (!config.vapi?.enabled) {
+      return { valid: true, errors: [] };
+    }
+
+    if (!config.vapi?.apiKey) {
+      errors.push(
+        "plugins.entries.voice-call.config.vapi.apiKey is required (or set VAPI_API_KEY env)",
+      );
+    }
+    if (!config.vapi?.assistantId) {
+      errors.push("plugins.entries.voice-call.config.vapi.assistantId is required");
+    }
+    if (!config.vapi?.phoneNumberId) {
+      errors.push("plugins.entries.voice-call.config.vapi.phoneNumberId is required");
+    }
+    if (config.vapi?.telephonyProvider !== "twilio") {
+      errors.push(
+        'plugins.entries.voice-call.config.vapi.telephonyProvider must be "twilio" for the simple Vapi path',
+      );
+    }
+    if (config.vapi?.bridgeMode === "manual-public-url" && !config.vapi?.bridgeUrl) {
+      errors.push("plugins.entries.voice-call.config.vapi.bridgeUrl is required");
+    }
+    if (!config.vapi?.bridgeAuthToken) {
+      errors.push("plugins.entries.voice-call.config.vapi.bridgeAuthToken is required");
+    }
+
+    return { valid: errors.length === 0, errors };
   }
 
   if (!config.provider) {
