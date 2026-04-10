@@ -98,6 +98,29 @@ type DashboardProps = {
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;
   mauOfficeState: import("../controllers/mau-office.ts").MauOfficeState;
+  mauOfficeEditor?: {
+    open: boolean;
+    draft: import("../mau-office-scene.ts").MauOfficeSceneConfig;
+    compiled: import("../mau-office-scene.ts").CompiledMauOfficeScene;
+    tool: import("../controllers/mau-office-editor.ts").MauOfficeEditorTool;
+    toolPanelOpen?: boolean;
+    brushMode: import("../controllers/mau-office-editor.ts").MauOfficeEditorBrushMode;
+    zoneBrush: import("../mau-office-scene.ts").MauOfficeZoneId;
+    propItemId: string;
+    autotileItemId: string;
+    markerRole: import("../mau-office-scene.ts").MauOfficeMarkerRole;
+    selection: import("../controllers/mau-office-editor.ts").MauOfficeEditorSelection;
+    dragSelection?: import("../controllers/mau-office-editor.ts").MauOfficeEditorSelection;
+    hoverTileX?: number | null;
+    hoverTileY?: number | null;
+    validationErrors: string[];
+    saveError?: string | null;
+    saving?: boolean;
+    canUndo?: boolean;
+    canRedo?: boolean;
+    undoShortcutLabel?: string;
+    redoShortcutLabel?: string;
+  };
   mauOfficeChatOpen: boolean;
   mauOfficeChatMinimized: boolean;
   mauOfficeChatActorId: string | null;
@@ -166,6 +189,44 @@ type DashboardProps = {
   onMauOfficeRoomFocus: (
     roomId: import("../mau-office-contract.ts").MauOfficeRoomId | "all",
   ) => void;
+  onMauOfficeEditorToggle?: () => void;
+  onMauOfficeEditorCancel?: () => void;
+  onMauOfficeEditorApply?: () => void;
+  onMauOfficeEditorSave?: () => void;
+  onMauOfficeEditorToolChange?: (
+    tool: import("../controllers/mau-office-editor.ts").MauOfficeEditorTool,
+  ) => void;
+  onMauOfficeEditorBrushModeChange?: (
+    mode: import("../controllers/mau-office-editor.ts").MauOfficeEditorBrushMode,
+  ) => void;
+  onMauOfficeEditorZoneBrushChange?: (
+    zone: import("../mau-office-scene.ts").MauOfficeZoneId,
+  ) => void;
+  onMauOfficeEditorPropItemChange?: (itemId: string) => void;
+  onMauOfficeEditorAutotileItemChange?: (itemId: string) => void;
+  onMauOfficeEditorMarkerRoleChange?: (
+    role: import("../mau-office-scene.ts").MauOfficeMarkerRole,
+  ) => void;
+  onMauOfficeEditorCellInteract?: (
+    tileX: number,
+    tileY: number,
+    kind: "down" | "enter" | "click",
+    buttons: number,
+  ) => void;
+  onMauOfficeEditorSelectionChange?: (
+    selection: import("../controllers/mau-office-editor.ts").MauOfficeEditorSelection,
+  ) => void;
+  onMauOfficeEditorSelectionDragStart?: (
+    selection: import("../controllers/mau-office-editor.ts").MauOfficeEditorSelection,
+  ) => void;
+  onMauOfficeEditorSelectionDragEnd?: (tileX: number | null, tileY: number | null) => void;
+  onMauOfficeEditorCanvasResize?: (width: number, height: number) => void;
+  onMauOfficeEditorClearSelection?: () => void;
+  onMauOfficeEditorHoverTileChange?: (tileX: number | null, tileY: number | null) => void;
+  onMauOfficeEditorSelectionPatch?: (patch: Record<string, unknown>) => void;
+  onMauOfficeEditorUndo?: () => void;
+  onMauOfficeEditorRedo?: () => void;
+  onMauOfficeEditorDeleteSelection?: () => void;
   onMauOfficeActorOpen: (actorId: string) => void;
   onMauOfficeChatClose: () => void;
   onMauOfficeChatToggleMinimized: () => void;
@@ -3020,6 +3081,43 @@ export function renderDashboard(props: DashboardProps) {
                     error: props.mauOfficeError,
                     state: props.mauOfficeState,
                     basePath: props.basePath,
+                    editor: props.mauOfficeEditor
+                      ? {
+                          ...props.mauOfficeEditor,
+                          onToggle: props.onMauOfficeEditorToggle ?? (() => {}),
+                          onCancel: props.onMauOfficeEditorCancel ?? (() => {}),
+                          onApply: props.onMauOfficeEditorApply ?? (() => {}),
+                          onSave: props.onMauOfficeEditorSave ?? (() => {}),
+                          onToolChange: props.onMauOfficeEditorToolChange ?? (() => {}),
+                          onBrushModeChange:
+                            props.onMauOfficeEditorBrushModeChange ?? (() => {}),
+                          onZoneBrushChange: props.onMauOfficeEditorZoneBrushChange ?? (() => {}),
+                          onPropItemChange: props.onMauOfficeEditorPropItemChange ?? (() => {}),
+                          onAutotileItemChange:
+                            props.onMauOfficeEditorAutotileItemChange ?? (() => {}),
+                          onMarkerRoleChange:
+                            props.onMauOfficeEditorMarkerRoleChange ?? (() => {}),
+                          onCellInteract: props.onMauOfficeEditorCellInteract ?? (() => {}),
+                          onHoverTileChange:
+                            props.onMauOfficeEditorHoverTileChange ?? (() => {}),
+                          onSelectionChange:
+                            props.onMauOfficeEditorSelectionChange ?? (() => {}),
+                          onSelectionDragStart:
+                            props.onMauOfficeEditorSelectionDragStart ?? (() => {}),
+                          onSelectionDragEnd:
+                            props.onMauOfficeEditorSelectionDragEnd ?? (() => {}),
+                          onCanvasResize:
+                            props.onMauOfficeEditorCanvasResize ?? (() => {}),
+                          onClearSelection:
+                            props.onMauOfficeEditorClearSelection ?? (() => {}),
+                          onSelectionPatch:
+                            props.onMauOfficeEditorSelectionPatch ?? (() => {}),
+                          onUndo: props.onMauOfficeEditorUndo ?? (() => {}),
+                          onRedo: props.onMauOfficeEditorRedo ?? (() => {}),
+                          onDeleteSelection:
+                            props.onMauOfficeEditorDeleteSelection ?? (() => {}),
+                        }
+                      : undefined,
                     chatWindow: {
                       open: props.mauOfficeChatOpen,
                       minimized: props.mauOfficeChatMinimized,

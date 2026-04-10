@@ -341,6 +341,16 @@ function buildVoiceConfigForBridge(config: VoiceCallConfig): VoiceCallConfig {
   };
 }
 
+function isGatewayDrainingVoiceError(error: string | undefined): boolean {
+  if (!error) {
+    return false;
+  }
+  const normalized = error.toLowerCase();
+  return (
+    normalized.includes("gatewaydrainingerror") || normalized.includes("draining for restart")
+  );
+}
+
 export class VapiCallController {
   readonly config: VoiceCallConfig;
   private client: VapiClient;
@@ -621,6 +631,16 @@ export class VapiCallController {
           transcript,
           userMessage,
         });
+        if (isGatewayDrainingVoiceError(response.error)) {
+          logger?.warn?.(
+            "[voice-call] Vapi bridge hit a transient gateway restart window; returning 503 for retry",
+          );
+          res.statusCode = 503;
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.setHeader("Retry-After", "2");
+          res.end("Gateway restarting; retry this tool call shortly.");
+          return true;
+        }
         results.push({
           name: toolCall.name,
           toolCallId: toolCall.id,

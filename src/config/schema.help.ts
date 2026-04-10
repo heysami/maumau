@@ -1036,6 +1036,20 @@ export const FIELD_HELP: Record<string, string> = {
     "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
   "ui.mauOffice.idlePackages.enabled":
     "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+  "ui.mauOffice.scene":
+    "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+  "ui.mauOffice.scene.version":
+    "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+  "ui.mauOffice.scene.zoneRows":
+    "Two-dimensional fixed-size 26x20 floor-zone grid describing which room or hall each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+  "ui.mauOffice.scene.wallRows":
+    "Two-dimensional fixed-size 26x20 wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+  "ui.mauOffice.scene.props":
+    "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+  "ui.mauOffice.scene.autotiles":
+    "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+  "ui.mauOffice.scene.markers":
+    "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
   plugins:
     "Plugin system controls for enabling extensions, constraining load scope, configuring entries, and tracking installs. Keep plugin policy explicit and least-privilege in production environments.",
   "plugins.enabled":

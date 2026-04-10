@@ -48,6 +48,7 @@ export type MauOfficeAnchorPose = "stand" | "sit";
 export type MauOfficeAreaId = MauOfficeRoomId | "hall" | "outside";
 export type MauOfficeSpriteLayer = "floor" | "wall" | "prop" | "path" | "ui";
 export type MauOfficeLabelTone = "blue" | "gold" | "green" | "purple";
+export type MauOfficeSpriteMount = "floor" | "wall" | "underlay";
 
 export type MauOfficeFootprintTiles = {
   width: number;
@@ -136,6 +137,15 @@ export type MauOfficeSpritePlacement = {
   anchor?: "top-left" | "bottom-center";
   mirrored?: boolean;
   zOffset?: number;
+  mount?: MauOfficeSpriteMount;
+  blocksWalkway?: boolean;
+  collisionFootprintTiles?: MauOfficeFootprintTiles;
+  sourceId?: string;
+  animation?: {
+    loopId: string;
+    fps: number;
+    frames: string[];
+  };
   kind:
     | "accessory"
     | "arcade"

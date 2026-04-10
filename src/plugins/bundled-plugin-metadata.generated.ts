@@ -4388,6 +4388,7 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         },
         responseModel: {
           label: "Response Model",
+          help: "Leave blank to inherit the main Maumau agent model.",
           advanced: true,
         },
         responseSystemPrompt: {

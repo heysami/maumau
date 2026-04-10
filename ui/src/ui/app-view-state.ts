@@ -4,6 +4,11 @@ import type { CronModelSuggestionsState, CronState } from "./controllers/cron.ts
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type {
+  MauOfficeEditorBrushMode,
+  MauOfficeEditorSelection,
+  MauOfficeEditorTool,
+} from "./controllers/mau-office-editor.ts";
 import type { MauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
@@ -47,6 +52,11 @@ import type {
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { SessionLogEntry } from "./views/usage.ts";
+import type {
+  MauOfficeMarkerRole,
+  MauOfficeSceneConfig,
+  MauOfficeZoneId,
+} from "./mau-office-scene.ts";
 
 export type AppViewState = {
   settings: UiSettings;
@@ -264,6 +274,21 @@ export type AppViewState = {
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;
   mauOfficeState: MauOfficeState;
+  mauOfficeEditorOpen?: boolean;
+  mauOfficeEditorDraft?: MauOfficeSceneConfig | null;
+  mauOfficeEditorUndoStack?: MauOfficeSceneConfig[];
+  mauOfficeEditorRedoStack?: MauOfficeSceneConfig[];
+  mauOfficeEditorTool?: MauOfficeEditorTool;
+  mauOfficeEditorToolPanelOpen?: boolean;
+  mauOfficeEditorBrushMode?: MauOfficeEditorBrushMode;
+  mauOfficeEditorZoneBrush?: MauOfficeZoneId;
+  mauOfficeEditorPropItemId?: string;
+  mauOfficeEditorAutotileItemId?: string;
+  mauOfficeEditorMarkerRole?: MauOfficeMarkerRole;
+  mauOfficeEditorSelection?: MauOfficeEditorSelection;
+  mauOfficeEditorDragSelection?: MauOfficeEditorSelection;
+  mauOfficeEditorHoverTileX?: number | null;
+  mauOfficeEditorHoverTileY?: number | null;
   mauOfficeChatOpen: boolean;
   mauOfficeChatMinimized: boolean;
   mauOfficeChatActorId: string | null;

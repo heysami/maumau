@@ -183,6 +183,22 @@ describe("validateProviderConfig", () => {
   });
 
   describe("vapi mode", () => {
+    it("does not inject a direct OpenAI response model override by default", () => {
+      const resolved = resolveVoiceCallConfig({
+        enabled: true,
+        mode: "vapi",
+        vapi: {
+          apiKey: "vapi-key",
+          assistantId: "assistant-1",
+          phoneNumberId: "phone-1",
+          bridgeMode: "auto",
+          bridgeAuthToken: "bridge-secret",
+        },
+      });
+
+      expect(resolved.responseModel).toBeUndefined();
+    });
+
     it("defaults absent mode to self-hosted for backward compatibility", () => {
       const resolved = resolveVoiceCallConfig({
         enabled: true,

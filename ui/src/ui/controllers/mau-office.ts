@@ -7,13 +7,8 @@ import {
 } from "../../../../src/routing/session-key.js";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import {
-  MAU_OFFICE_DESK_ANCHOR_IDS,
   MAU_OFFICE_FOOT_OFFSET_Y,
   MAU_OFFICE_IDLE_PACKAGES,
-  MAU_OFFICE_LAYOUT,
-  MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS,
-  MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS,
-  MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS,
   MAU_OFFICE_WORKER_RIG_IDS,
   resolveMauOfficeConfig,
   type IdlePackageDefinition,
@@ -25,6 +20,19 @@ import {
   type MauOfficeWorkerRigId,
   type OfficeActorKind,
 } from "../mau-office-contract.ts";
+import {
+  compileMauOfficeScene,
+  defaultIdleHomeAnchorIds,
+  getActiveMauOfficeScene,
+  resolveMauOfficeSceneConfigFromRoot,
+  sceneBreakAnchorIds,
+  sceneIdlePackageSlotAnchorIds,
+  sceneMarkerIdAt,
+  sceneMarkerIdsForRole,
+  sceneMarkerRoleForId,
+  setActiveMauOfficeScene,
+  type CompiledMauOfficeScene,
+} from "../mau-office-scene.ts";
 import type {
   AgentsListResult,
   ConfigSnapshot,
@@ -48,25 +56,6 @@ const IDLE_ACTIVITY_WINDOW_MS = 18_000;
 const PATH_MS_PER_TILE = 320;
 const MIN_PATH_SEGMENT_MS = 180;
 const MAX_VISITOR_WORKERS = 4;
-const BREAK_ROOM_ANCHOR_IDS = [
-  "break_arcade",
-  "break_snack",
-  "break_volley_1",
-  "break_volley_2",
-  "break_table_1",
-  "break_table_2",
-  "break_volley_3",
-  "break_volley_4",
-  "break_chase_1",
-  "break_chase_2",
-  "break_chase_3",
-  "break_game_1",
-  "break_game_2",
-  "break_game_3",
-  "break_game_4",
-  "break_jukebox",
-  "break_reading",
-] as const;
 const SOLO_IDLE_PACKAGE_IDS = [
   "arcade_corner",
   "foosball_side_1",
@@ -79,28 +68,6 @@ const SOLO_IDLE_PACKAGE_IDS = [
 const RANDOM_GROUP_IDLE_PACKAGE_IDS = ["chess_table", "chasing_loop"] as const;
 const PASSING_BALL_BEAT_MS = 900;
 const CHASING_LOOP_CYCLE_MS = 2_800;
-const BLOCKING_SPRITE_KINDS = new Set([
-  "arcade",
-  "bench",
-  "chair",
-  "counter",
-  "desk",
-  "foosball",
-  "plant",
-  "shelf",
-  "table",
-  "wall",
-]);
-const STABLE_IDLE_HOME_ANCHOR_IDS = [
-  "break_arcade",
-  "break_table_1",
-  "break_table_2",
-  "break_game_1",
-  "break_game_2",
-  "break_snack",
-  "break_jukebox",
-  "break_reading",
-] as const;
 
 type ActorRoleHint = "desk" | "meeting" | "support";
 type ActivitySource = "snapshot" | "event" | "idle" | "system";
@@ -188,6 +155,7 @@ export type MauOfficeState = {
   loaded: boolean;
   nowMs: number;
   config: MauOfficeUiConfig;
+  scene: CompiledMauOfficeScene;
   presenceEntries: PresenceEntry[];
   toolsCatalogByAgentId: Record<string, ToolsCatalogResult>;
   heartbeatSessionKeys: Record<string, true>;
@@ -238,6 +206,46 @@ type AgentEventPayload = {
   stream?: unknown;
   data?: Record<string, unknown>;
 };
+
+function activeScene(): CompiledMauOfficeScene {
+  return getActiveMauOfficeScene();
+}
+
+function deskAnchorIds(): string[] {
+  return sceneMarkerIdsForRole(activeScene(), "desk.workerSeat");
+}
+
+function meetingSeatAnchorIds(): string[] {
+  return sceneMarkerIdsForRole(activeScene(), "meeting.seat");
+}
+
+function supportStaffAnchorIds(): string[] {
+  return sceneMarkerIdsForRole(activeScene(), "support.staff");
+}
+
+function supportCustomerAnchorIds(): string[] {
+  return sceneMarkerIdsForRole(activeScene(), "support.customer");
+}
+
+function breakAnchorIds(): string[] {
+  return sceneBreakAnchorIds(activeScene());
+}
+
+function fallbackNode() {
+  const scene = activeScene();
+  return (
+    scene.nodes.outside_mauHome ??
+    Object.values(scene.nodes)[0] ?? {
+      id: "fallback",
+      tileX: 0,
+      tileY: 0,
+      x: 0,
+      y: MAU_OFFICE_FOOT_OFFSET_Y,
+      roomId: "outside",
+      neighbors: [],
+    }
+  );
+}
 
 const DEFAULT_OFFSITE_ACTIVITY: OfficeActivity = {
   id: "offsite",
@@ -426,11 +434,13 @@ function actorPriority(kind: MauOfficeActivityKind): number {
 }
 
 function deskHomeAnchorForIndex(index: number): string {
-  return MAU_OFFICE_DESK_ANCHOR_IDS[index % MAU_OFFICE_DESK_ANCHOR_IDS.length]!;
+  const ids = deskAnchorIds();
+  return ids[index % ids.length] ?? "desk_worker_1";
 }
 
 function lastDeskAnchor(): string {
-  return MAU_OFFICE_DESK_ANCHOR_IDS[MAU_OFFICE_DESK_ANCHOR_IDS.length - 1]!;
+  const ids = deskAnchorIds();
+  return ids[ids.length - 1] ?? "desk_worker_1";
 }
 
 function anchorOrdinal(anchorId: string): number {
@@ -442,30 +452,25 @@ function anchorOrdinal(anchorId: string): number {
 }
 
 function supportAnchorForHome(homeAnchorId: string): string {
-  return MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS[
-    Math.abs(anchorOrdinal(homeAnchorId)) % MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS.length
-  ]!;
+  const ids = supportStaffAnchorIds();
+  return ids[Math.abs(anchorOrdinal(homeAnchorId)) % ids.length] ?? "support_staff_1";
 }
 
 function idleAnchorForHome(homeAnchorId: string): string {
-  return STABLE_IDLE_HOME_ANCHOR_IDS[
-    Math.abs(anchorOrdinal(homeAnchorId)) % STABLE_IDLE_HOME_ANCHOR_IDS.length
-  ]!;
+  const ids = defaultIdleHomeAnchorIds(activeScene());
+  return ids[Math.abs(anchorOrdinal(homeAnchorId)) % ids.length] ?? "break_arcade";
 }
 
 function visitorSupportAnchor(homeAnchorId?: string | null): string {
+  const ids = supportCustomerAnchorIds();
   if (!homeAnchorId) {
-    return MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS[
-      Math.floor(MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS.length / 2)
-    ]!;
+    return ids[Math.floor(ids.length / 2)] ?? "support_customer_2";
   }
-  return MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS[
-    Math.abs(anchorOrdinal(homeAnchorId)) % MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS.length
-  ]!;
+  return ids[Math.abs(anchorOrdinal(homeAnchorId)) % ids.length] ?? "support_customer_2";
 }
 
 function primarySupportAnchor(): string {
-  return MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS[0]!;
+  return supportStaffAnchorIds()[0] ?? "support_staff_1";
 }
 
 function visitorSupportAnchorForAgentId(
@@ -477,21 +482,22 @@ function visitorSupportAnchorForAgentId(
 }
 
 function visitorMeetingAnchor(): string {
-  return MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS[MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS.length - 1]!;
+  const ids = meetingSeatAnchorIds();
+  return ids[ids.length - 1] ?? "meeting_seat_6";
 }
 
 function midMeetingAnchor(): string {
-  return MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS[
-    Math.floor(MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS.length / 2)
-  ]!;
+  const ids = meetingSeatAnchorIds();
+  return ids[Math.floor(ids.length / 2)] ?? "meeting_seat_4";
 }
 
 function meetingAnchorForHome(homeAnchorId: string, preferPresenter = false): string {
+  const ids = meetingSeatAnchorIds();
   const index = Math.abs(anchorOrdinal(homeAnchorId));
   if (preferPresenter && index % 4 === 0) {
-    return "meeting_presenter";
+    return sceneMarkerIdAt(activeScene(), "meeting.presenter") ?? "meeting_presenter";
   }
-  return MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS[index % MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS.length]!;
+  return ids[index % ids.length] ?? "meeting_seat_1";
 }
 
 function shortLabelForName(label: string, fallback: string): string {
@@ -664,16 +670,17 @@ function roleHintFromCatalog(catalog: ToolsCatalogResult | undefined): ActorRole
 }
 
 function roomFromAnchor(anchorId: string): MauOfficeRoomId {
-  const roomId = MAU_OFFICE_LAYOUT.anchors[anchorId]?.roomId;
+  const roomId = activeScene().anchors[anchorId]?.roomId;
   return roomId === "outside" || !roomId ? "support" : (roomId as MauOfficeRoomId);
 }
 
 function nodeForAnchor(anchorId: string) {
-  const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId];
+  const scene = activeScene();
+  const anchor = scene.anchors[anchorId];
   if (!anchor) {
-    return MAU_OFFICE_LAYOUT.nodes.west_spine;
+    return fallbackNode();
   }
-  return MAU_OFFICE_LAYOUT.nodes[anchor.nodeId] ?? MAU_OFFICE_LAYOUT.nodes.west_spine;
+  return scene.nodes[anchor.nodeId] ?? fallbackNode();
 }
 
 function tileKey(tileX: number, tileY: number): string {
@@ -681,16 +688,18 @@ function tileKey(tileX: number, tileY: number): string {
 }
 
 function tilePointFromPixelPosition(x: number, y: number): { tileX: number; tileY: number } {
+  const tileSize = activeScene().tileSize;
   return {
-    tileX: Math.round((x - MAU_OFFICE_LAYOUT.tileSize / 2) / MAU_OFFICE_LAYOUT.tileSize),
-    tileY: Math.round((y - MAU_OFFICE_FOOT_OFFSET_Y) / MAU_OFFICE_LAYOUT.tileSize),
+    tileX: Math.round((x - tileSize / 2) / tileSize),
+    tileY: Math.round((y - MAU_OFFICE_FOOT_OFFSET_Y) / tileSize),
   };
 }
 
 function pixelPointForTile(tileX: number, tileY: number): { x: number; y: number } {
+  const tileSize = activeScene().tileSize;
   return {
-    x: tileX * MAU_OFFICE_LAYOUT.tileSize + MAU_OFFICE_LAYOUT.tileSize / 2,
-    y: tileY * MAU_OFFICE_LAYOUT.tileSize + MAU_OFFICE_FOOT_OFFSET_Y,
+    x: tileX * tileSize + tileSize / 2,
+    y: tileY * tileSize + MAU_OFFICE_FOOT_OFFSET_Y,
   };
 }
 
@@ -713,22 +722,6 @@ function spriteOccupiedTiles(sprite: {
   return occupied;
 }
 
-const WALKABLE_TILE_KEYS = new Set(
-  MAU_OFFICE_LAYOUT.map.floorTiles.map((tile) => tileKey(tile.tileX, tile.tileY)),
-);
-const STATIC_BLOCKED_TILE_KEYS = new Set([
-  ...MAU_OFFICE_LAYOUT.map.wallSprites.flatMap((sprite) => spriteOccupiedTiles(sprite)),
-  ...MAU_OFFICE_LAYOUT.map.propSprites
-    .filter((sprite) => BLOCKING_SPRITE_KINDS.has(sprite.kind))
-    .flatMap((sprite) => spriteOccupiedTiles(sprite)),
-]);
-for (const anchor of Object.values(MAU_OFFICE_LAYOUT.anchors)) {
-  WALKABLE_TILE_KEYS.add(tileKey(anchor.tileX, anchor.tileY));
-}
-for (const node of Object.values(MAU_OFFICE_LAYOUT.nodes)) {
-  WALKABLE_TILE_KEYS.add(tileKey(node.tileX, node.tileY));
-}
-
 function tileDistance(
   left: { tileX: number; tileY: number },
   right: { tileX: number; tileY: number },
@@ -737,31 +730,31 @@ function tileDistance(
 }
 
 function candidateAnchorIds(anchorId: string): string[] {
-  const roomId = MAU_OFFICE_LAYOUT.anchors[anchorId]?.roomId;
-  const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId];
+  const scene = activeScene();
+  const anchor = scene.anchors[anchorId];
   if (!anchor) {
     return [anchorId];
   }
   const sortByDistance = (ids: readonly string[]) =>
     [...ids].sort(
       (leftId, rightId) =>
-        tileDistance(MAU_OFFICE_LAYOUT.anchors[leftId]!, anchor) -
-        tileDistance(MAU_OFFICE_LAYOUT.anchors[rightId]!, anchor),
+        tileDistance(scene.anchors[leftId]!, anchor) - tileDistance(scene.anchors[rightId]!, anchor),
     );
-  if ((MAU_OFFICE_DESK_ANCHOR_IDS as readonly string[]).includes(anchorId)) {
-    return sortByDistance(MAU_OFFICE_DESK_ANCHOR_IDS);
+  const role = sceneMarkerRoleForId(scene, anchorId);
+  if (role === "desk.workerSeat") {
+    return sortByDistance(deskAnchorIds());
   }
-  if ((MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS as readonly string[]).includes(anchorId)) {
-    return sortByDistance(MAU_OFFICE_MEETING_SEAT_ANCHOR_IDS);
+  if (role === "meeting.seat") {
+    return sortByDistance(meetingSeatAnchorIds());
   }
-  if ((MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS as readonly string[]).includes(anchorId)) {
-    return sortByDistance(MAU_OFFICE_SUPPORT_STAFF_ANCHOR_IDS);
+  if (role === "support.staff") {
+    return sortByDistance(supportStaffAnchorIds());
   }
-  if ((MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS as readonly string[]).includes(anchorId)) {
-    return sortByDistance(MAU_OFFICE_SUPPORT_CUSTOMER_ANCHOR_IDS);
+  if (role === "support.customer") {
+    return sortByDistance(supportCustomerAnchorIds());
   }
-  if (roomId === "break" && (BREAK_ROOM_ANCHOR_IDS as readonly string[]).includes(anchorId)) {
-    return sortByDistance(BREAK_ROOM_ANCHOR_IDS);
+  if (role?.startsWith("break.")) {
+    return sortByDistance(breakAnchorIds());
   }
   return [anchorId];
 }
@@ -800,8 +793,9 @@ function resolveNearestWalkableTile(
   tileX: number,
   tileY: number,
 ): { tileX: number; tileY: number; wasAdjusted: boolean } {
+  const scene = activeScene();
   const desiredKey = tileKey(tileX, tileY);
-  if (WALKABLE_TILE_KEYS.has(desiredKey) && !STATIC_BLOCKED_TILE_KEYS.has(desiredKey)) {
+  if (scene.walkableTileKeys.has(desiredKey) && !scene.blockedTileKeys.has(desiredKey)) {
     return { tileX, tileY, wasAdjusted: false };
   }
   const queue: Array<{ tileX: number; tileY: number }> = [{ tileX, tileY }];
@@ -817,11 +811,11 @@ function resolveNearestWalkableTile(
       const nextTileX = current.tileX + dx;
       const nextTileY = current.tileY + dy;
       const nextKey = tileKey(nextTileX, nextTileY);
-      if (seen.has(nextKey) || !WALKABLE_TILE_KEYS.has(nextKey)) {
+      if (seen.has(nextKey) || !scene.walkableTileKeys.has(nextKey)) {
         continue;
       }
       seen.add(nextKey);
-      if (!STATIC_BLOCKED_TILE_KEYS.has(nextKey)) {
+      if (!scene.blockedTileKeys.has(nextKey)) {
         return { tileX: nextTileX, tileY: nextTileY, wasAdjusted: true };
       }
       queue.push({ tileX: nextTileX, tileY: nextTileY });
@@ -836,7 +830,7 @@ function resolveReachableTargetTile(desiredAnchorId: string): {
   tileY: number;
   requiresAnchorSnap: boolean;
 } {
-  const desiredAnchor = MAU_OFFICE_LAYOUT.anchors[desiredAnchorId];
+  const desiredAnchor = activeScene().anchors[desiredAnchorId];
   if (!desiredAnchor) {
     return {
       ...tilePointFromPixelPosition(
@@ -858,6 +852,7 @@ function tilePathBetween(
   start: { tileX: number; tileY: number },
   goal: { tileX: number; tileY: number },
 ): Array<{ tileX: number; tileY: number }> | null {
+  const scene = activeScene();
   const startKey = tileKey(start.tileX, start.tileY);
   const goalKey = tileKey(goal.tileX, goal.tileY);
   const queue: Array<{ tileX: number; tileY: number }> = [start];
@@ -880,10 +875,10 @@ function tilePathBetween(
       if (cameFrom.has(nextKey)) {
         continue;
       }
-      if (!WALKABLE_TILE_KEYS.has(nextKey)) {
+      if (!scene.walkableTileKeys.has(nextKey)) {
         continue;
       }
-      if (STATIC_BLOCKED_TILE_KEYS.has(nextKey) && nextKey !== goalKey) {
+      if (scene.blockedTileKeys.has(nextKey) && nextKey !== goalKey) {
         continue;
       }
       cameFrom.set(nextKey, currentKey);
@@ -904,7 +899,7 @@ function tilePathBetween(
 }
 
 function syncActorToAnchor(actor: OfficeActor, anchorId: string) {
-  const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId];
+  const anchor = activeScene().anchors[anchorId];
   if (!anchor) {
     const node = nodeForAnchor(anchorId);
     actor.nodeId = node.id;
@@ -913,8 +908,15 @@ function syncActorToAnchor(actor: OfficeActor, anchorId: string) {
     return;
   }
   actor.nodeId = anchor.nodeId;
-  actor.x = anchor.x;
-  actor.y = anchor.y;
+  const reachableTile = resolveNearestWalkableTile(Math.round(anchor.tileX), Math.round(anchor.tileY));
+  if (reachableTile.wasAdjusted) {
+    const reachablePoint = pixelPointForTile(reachableTile.tileX, reachableTile.tileY);
+    actor.x = reachablePoint.x;
+    actor.y = reachablePoint.y;
+  } else {
+    actor.x = anchor.x;
+    actor.y = anchor.y;
+  }
   if (anchor.facingOverride) {
     actor.facing = anchor.facingOverride;
   }
@@ -1360,6 +1362,7 @@ function snapshotActivityForRow(
 }
 
 function pathBetween(startNodeId: string, targetNodeId: string): string[] {
+  const scene = activeScene();
   if (startNodeId === targetNodeId) {
     return [startNodeId];
   }
@@ -1371,8 +1374,8 @@ function pathBetween(startNodeId: string, targetNodeId: string): string[] {
     if (!path || !currentId) {
       continue;
     }
-    const node = MAU_OFFICE_LAYOUT.nodes[currentId];
-    for (const nextId of node.neighbors) {
+    const node = scene.nodes[currentId];
+    for (const nextId of node?.neighbors ?? []) {
       if (seen.has(nextId)) {
         continue;
       }
@@ -1418,7 +1421,7 @@ function buildPathWaypoints(
   let currentTile = tilePointFromPixelPosition(actor.x, actor.y);
   const routeStops = [
     ...nodeIds.flatMap((nodeId) => {
-      const node = MAU_OFFICE_LAYOUT.nodes[nodeId];
+      const node = activeScene().nodes[nodeId];
       if (!node) {
         return [];
       }
@@ -1463,7 +1466,7 @@ function buildPathWaypoints(
     currentTile = { tileX: stop.tileX, tileY: stop.tileY };
   }
 
-  const targetAnchor = MAU_OFFICE_LAYOUT.anchors[targetAnchorId];
+  const targetAnchor = activeScene().anchors[targetAnchorId];
   if (targetAnchor && !targetTile.requiresAnchorSnap) {
     const targetPoint = pixelPointForTile(targetTile.tileX, targetTile.tileY);
     pushPathWaypoint(waypoints, {
@@ -1531,7 +1534,7 @@ function resolvePathSegmentDuration(
   from: { x: number; y: number },
   to: { x: number; y: number },
 ): number {
-  const tiles = Math.hypot(to.x - from.x, to.y - from.y) / MAU_OFFICE_LAYOUT.tileSize;
+  const tiles = Math.hypot(to.x - from.x, to.y - from.y) / activeScene().tileSize;
   return Math.max(MIN_PATH_SEGMENT_MS, Math.round(tiles * PATH_MS_PER_TILE));
 }
 
@@ -1558,7 +1561,7 @@ function createActor(params: {
   snapshotActivity: OfficeActivity | null;
   nowMs: number;
 }): OfficeActor {
-  const homeAnchor = MAU_OFFICE_LAYOUT.anchors[params.homeAnchorId];
+  const homeAnchor = activeScene().anchors[params.homeAnchorId];
   const homeNode = nodeForAnchor(params.homeAnchorId);
   const hash = hashString(params.id);
   const rigId =
@@ -1711,11 +1714,11 @@ function resolveActivityMode(
   actor: Pick<OfficeActor, "currentRoomId" | "anchorId">,
   activity: Pick<OfficeActivity, "anchorId">,
 ): "enter" | "move" | "exit" {
-  const targetRoomId = MAU_OFFICE_LAYOUT.anchors[activity.anchorId]?.roomId;
+  const targetRoomId = activeScene().anchors[activity.anchorId]?.roomId;
   if (targetRoomId === "outside") {
     return "exit";
   }
-  const currentRoomId = MAU_OFFICE_LAYOUT.anchors[actor.anchorId]?.roomId ?? actor.currentRoomId;
+  const currentRoomId = activeScene().anchors[actor.anchorId]?.roomId ?? actor.currentRoomId;
   return currentRoomId === "outside" ? "enter" : "move";
 }
 
@@ -1780,7 +1783,7 @@ function settleActorToPrimaryActivity(
   ) {
     actor.currentActivity = nextActivity;
     actor.currentRoomId =
-      MAU_OFFICE_LAYOUT.anchors[nextActivity.anchorId]?.roomId === "outside"
+      activeScene().anchors[nextActivity.anchorId]?.roomId === "outside"
         ? "outside"
         : roomFromAnchor(nextActivity.anchorId);
     syncActorToAnchor(actor, nextActivity.anchorId);
@@ -2025,7 +2028,7 @@ function pruneInvalidIdleAssignments(state: MauOfficeState, nowMs: number) {
     if (actor.currentActivity.kind === "idle_package") {
       actor.currentActivity = fallbackActivityForActor(actor, nowMs);
       actor.currentRoomId =
-        MAU_OFFICE_LAYOUT.anchors[actor.currentActivity.anchorId]?.roomId === "outside"
+        activeScene().anchors[actor.currentActivity.anchorId]?.roomId === "outside"
           ? "outside"
           : roomFromAnchor(actor.currentActivity.anchorId);
       syncActorToAnchor(actor, actor.currentActivity.anchorId);
@@ -2113,9 +2116,9 @@ function advanceActor(
     actor.anchorId = actor.path.targetAnchorId;
     syncActorToAnchor(actor, actor.anchorId);
     actor.currentRoomId =
-      MAU_OFFICE_LAYOUT.anchors[actor.anchorId]?.roomId === "outside"
+      activeScene().anchors[actor.anchorId]?.roomId === "outside"
         ? "outside"
-        : (MAU_OFFICE_LAYOUT.anchors[actor.anchorId]?.roomId as MauOfficeRoomId);
+        : (activeScene().anchors[actor.anchorId]?.roomId as MauOfficeRoomId);
     actor.currentActivity = actor.queuedActivity ?? resolvePrimaryActivity(actor, nowMs);
     if (
       actor.currentActivity.bubbleText &&
@@ -2136,6 +2139,8 @@ function buildSnapshotState(
   params: SnapshotParams,
   nowMs: number,
 ): MauOfficeState {
+  const scene = compileMauOfficeScene(resolveMauOfficeSceneConfigFromRoot(params.rawConfig));
+  setActiveMauOfficeScene(scene);
   const heartbeatSessionKeys = resolveHeartbeatSessionKeys(params.rawConfig, params.agents);
   const nextActors: Record<string, OfficeActor> = {};
   const actorOrder: string[] = [];
@@ -2307,6 +2312,7 @@ function buildSnapshotState(
     loaded: true,
     nowMs,
     config: params.config,
+    scene,
     heartbeatSessionKeys,
     activeHeartbeatSessionKeys: retainActiveHeartbeatSessionKeys(
       previous.activeHeartbeatSessionKeys,
@@ -2340,10 +2346,13 @@ function buildSnapshotState(
 }
 
 export function createEmptyMauOfficeState(source?: unknown): MauOfficeState {
+  const scene = compileMauOfficeScene(resolveMauOfficeSceneConfigFromRoot(source));
+  setActiveMauOfficeScene(scene);
   return {
     loaded: false,
     nowMs: Date.now(),
     config: resolveMauOfficeConfig(source),
+    scene,
     presenceEntries: [],
     toolsCatalogByAgentId: {},
     heartbeatSessionKeys: {},
@@ -2359,6 +2368,7 @@ export function createEmptyMauOfficeState(source?: unknown): MauOfficeState {
 }
 
 export function advanceMauOfficeState(state: MauOfficeState, nowMs: number): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   const next: MauOfficeState = {
     ...state,
     nowMs,
@@ -2514,9 +2524,22 @@ export function setMauOfficeRoomFocus(
   state: MauOfficeState,
   roomFocus: MauOfficeRoomId | "all",
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   return {
     ...state,
     roomFocus,
+    version: state.version + 1,
+  };
+}
+
+export function setMauOfficeCompiledScene(
+  state: MauOfficeState,
+  scene: CompiledMauOfficeScene,
+): MauOfficeState {
+  setActiveMauOfficeScene(scene);
+  return {
+    ...state,
+    scene,
     version: state.version + 1,
   };
 }
@@ -2526,6 +2549,7 @@ export function applyMauOfficePresence(
   presenceEntries: PresenceEntry[],
   nowMs: number,
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   return {
     ...state,
     nowMs,
@@ -2540,6 +2564,7 @@ export function applyMauOfficeToolsCatalog(
   catalog: ToolsCatalogResult,
   nowMs: number,
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   const next = {
     ...state,
     nowMs,
@@ -2565,6 +2590,7 @@ export function applyMauOfficeAgentEvent(
   payload: AgentEventPayload | undefined,
   nowMs: number,
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   const sessionKey = typeof payload?.sessionKey === "string" ? payload.sessionKey.trim() : "";
   if (!sessionKey) {
     return state;
@@ -2661,6 +2687,7 @@ export function applyMauOfficeSessionToolEvent(
   payload: SessionToolPayload | undefined,
   nowMs: number,
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   const sessionKey = typeof payload?.sessionKey === "string" ? payload.sessionKey.trim() : "";
   if (!sessionKey) {
     return state;
@@ -2767,6 +2794,7 @@ export function applyMauOfficeSessionMessageEvent(
   payload: SessionMessagePayload | undefined,
   nowMs: number,
 ): MauOfficeState {
+  setActiveMauOfficeScene(state.scene);
   const sessionKey = typeof payload?.sessionKey === "string" ? payload.sessionKey.trim() : "";
   if (!sessionKey) {
     return state;

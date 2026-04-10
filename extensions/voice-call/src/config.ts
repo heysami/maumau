@@ -434,8 +434,11 @@ export const VoiceCallConfigSchema = z
     /** Store path for call logs */
     store: z.string().optional(),
 
-    /** Model for generating voice responses (e.g., "anthropic/claude-sonnet-4", "openai/gpt-4o") */
-    responseModel: z.string().default("openai/gpt-4o-mini"),
+    /**
+     * Optional model override for generating voice responses.
+     * When omitted, calls inherit the main Maumau agent default model.
+     */
+    responseModel: z.string().optional(),
 
     /** System prompt for voice responses */
     responseSystemPrompt: z.string().optional(),

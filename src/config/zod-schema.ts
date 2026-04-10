@@ -229,6 +229,107 @@ const McpConfigSchema = z
   .strict()
   .optional();
 
+const MauOfficeZoneIdSchema = z.union([
+  z.literal("desk"),
+  z.literal("meeting"),
+  z.literal("break"),
+  z.literal("support"),
+  z.literal("hall"),
+  z.literal("outside"),
+]);
+
+const MauOfficeMarkerRoleSchema = z.union([
+  z.literal("spawn.office"),
+  z.literal("spawn.support"),
+  z.literal("desk.board"),
+  z.literal("desk.workerSeat"),
+  z.literal("meeting.presenter"),
+  z.literal("meeting.seat"),
+  z.literal("support.staff"),
+  z.literal("support.customer"),
+  z.literal("break.arcade"),
+  z.literal("break.snack"),
+  z.literal("break.volley"),
+  z.literal("break.tableSeat"),
+  z.literal("break.chase"),
+  z.literal("break.game"),
+  z.literal("break.jukebox"),
+  z.literal("break.reading"),
+]);
+
+const MauOfficeMountSchema = z.union([
+  z.literal("floor"),
+  z.literal("wall"),
+  z.literal("underlay"),
+]);
+
+const MauOfficeScenePropSchema = z
+  .object({
+    id: z.string().min(1),
+    itemId: z.string().min(1),
+    tileX: z.number(),
+    tileY: z.number(),
+    mirrored: z.boolean().optional(),
+    mountOverride: MauOfficeMountSchema.optional(),
+    zOffsetOverride: z.number().optional(),
+    collisionOverride: z.boolean().optional(),
+    loopId: z.string().optional(),
+  })
+  .strict();
+
+const MauOfficeSceneAutotileSchema = z
+  .object({
+    id: z.string().min(1),
+    itemId: z.string().min(1),
+    cells: z
+      .array(
+        z
+          .object({
+            tileX: z.number(),
+            tileY: z.number(),
+          })
+          .strict(),
+      )
+      .optional(),
+    mountOverride: MauOfficeMountSchema.optional(),
+    zOffsetOverride: z.number().optional(),
+    collisionOverride: z.boolean().optional(),
+    loopId: z.string().optional(),
+  })
+  .strict();
+
+const MauOfficeSceneMarkerSchema = z
+  .object({
+    id: z.string().min(1),
+    role: MauOfficeMarkerRoleSchema,
+    tileX: z.number(),
+    tileY: z.number(),
+    pose: z.union([z.literal("stand"), z.literal("sit")]),
+    layer: z.number().int(),
+    facingOverride: z
+      .union([z.literal("north"), z.literal("east"), z.literal("south"), z.literal("west")])
+      .optional(),
+    footprintTiles: z
+      .object({
+        width: z.number(),
+        height: z.number(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const MauOfficeSceneSchema = z
+  .object({
+    version: z.literal(1).optional(),
+    zoneRows: z.array(z.array(MauOfficeZoneIdSchema)).optional(),
+    wallRows: z.array(z.array(z.boolean())).optional(),
+    props: z.array(MauOfficeScenePropSchema).optional(),
+    autotiles: z.array(MauOfficeSceneAutotileSchema).optional(),
+    markers: z.array(MauOfficeSceneMarkerSchema).optional(),
+  })
+  .strict();
+
 export const MaumauSchema = z
   .object({
     $schema: z.string().optional(),
@@ -428,6 +529,7 @@ export const MaumauSchema = z
               })
               .strict()
               .optional(),
+            scene: MauOfficeSceneSchema.optional(),
           })
           .strict()
           .optional(),

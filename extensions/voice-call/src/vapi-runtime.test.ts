@@ -385,4 +385,53 @@ describe("VapiCallController", () => {
 
     fs.rmSync(tempStorePath, { recursive: true, force: true });
   });
+
+  it("returns a retryable 503 when the gateway is draining for restart", async () => {
+    const { config, tempStorePath } = createVapiConfig();
+    vi.mocked(generateVoiceResponse).mockResolvedValue({
+      text: null,
+      error: "GatewayDrainingError: Gateway is draining for restart; new tasks are not accepted",
+    });
+    const controller = new VapiCallController({
+      config,
+      coreConfig: {},
+      agentRuntime: {} as never,
+    });
+    const handler = controller.createBridgeHandler();
+    const response = createMockResponse();
+
+    await handler({
+      req: createMockRequest({
+        headers: { "x-vapi-secret": "bridge-secret" },
+        body: JSON.stringify({
+          message: {
+            type: "tool-calls",
+            call: {
+              id: "call-1",
+              customer: { number: "+628123456789" },
+            },
+            artifact: {
+              messages: [{ role: "user", message: "Halo?" }],
+            },
+            toolCallList: [
+              {
+                id: "tool-1",
+                name: "maumau_turn",
+                parameters: {
+                  userMessage: "Halo?",
+                },
+              },
+            ],
+          },
+        }),
+      }),
+      res: response.res,
+    });
+
+    expect(response.res.statusCode).toBe(503);
+    expect(response.headers["retry-after"]).toBe("2");
+    expect(response.body()).toContain("Gateway restarting");
+
+    fs.rmSync(tempStorePath, { recursive: true, force: true });
+  });
 });

@@ -105,7 +105,29 @@ import {
   setMauOfficeChatDraft,
   toggleMauOfficeChatMinimized,
 } from "./controllers/mau-office-chat.ts";
-import { loadMauOffice, setMauOfficeRoomFocus } from "./controllers/mau-office.ts";
+import {
+  commitSceneHistory,
+  hitTestSceneSelection,
+  moveSceneSelection,
+  normalizeSceneSelection,
+  paintSceneAutotileCell,
+  paintSceneWall,
+  paintSceneZone,
+  placeSceneMarker,
+  placeSceneProp,
+  redoSceneHistory,
+  resizeSceneCanvas,
+  removeSceneSelection,
+  undoSceneHistory,
+  updateSceneAutotilePlacement,
+  updateSceneMarker,
+  updateScenePropPlacement,
+} from "./controllers/mau-office-editor.ts";
+import {
+  loadMauOffice,
+  setMauOfficeCompiledScene,
+  setMauOfficeRoomFocus,
+} from "./controllers/mau-office.ts";
 import {
   addMultiUserMemoryDraftIdentity,
   addMultiUserMemoryIdentity,
@@ -151,6 +173,13 @@ import "./components/dashboard-header.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
 import {
+  cloneMauOfficeSceneConfig,
+  compileMauOfficeScene,
+  resolveMauOfficeSceneConfigFromRoot,
+  sanitizeMauOfficeSceneConfig,
+  validateMauOfficeScene,
+} from "./mau-office-scene.ts";
+import {
   isDashboardTab,
   normalizeBasePath,
   TAB_GROUPS,
@@ -179,6 +208,39 @@ import { renderOverview } from "./views/overview.ts";
 type LazyState<T> = { mod: T | null; promise: Promise<T> | null };
 
 let _pendingUpdate: (() => void) | undefined;
+const mauOfficeSceneCompileCache = new WeakMap<object, ReturnType<typeof compileMauOfficeScene>>();
+const mauOfficeSceneValidationCache = new WeakMap<
+  object,
+  ReturnType<typeof validateMauOfficeScene>
+>();
+const MAU_OFFICE_EDITOR_HISTORY_SHORTCUT_LABEL = "Cmd/Ctrl+Z";
+const MAU_OFFICE_EDITOR_REDO_SHORTCUT_LABEL = "Shift+Cmd/Ctrl+Z";
+
+function getCachedCompiledMauOfficeScene(scene: Parameters<typeof compileMauOfficeScene>[0]) {
+  const cached = mauOfficeSceneCompileCache.get(scene);
+  if (cached) {
+    return cached;
+  }
+  const compiled = compileMauOfficeScene(scene);
+  mauOfficeSceneCompileCache.set(scene, compiled);
+  return compiled;
+}
+
+function getCachedMauOfficeSceneValidation(scene: Parameters<typeof validateMauOfficeScene>[0]) {
+  const cached = mauOfficeSceneValidationCache.get(scene);
+  if (cached) {
+    return cached;
+  }
+  const validation = validateMauOfficeScene(scene);
+  mauOfficeSceneValidationCache.set(scene, validation);
+  return validation;
+}
+
+export function normalizeMauOfficeEditorDraft(
+  draft: Parameters<typeof sanitizeMauOfficeSceneConfig>[0],
+) {
+  return sanitizeMauOfficeSceneConfig(draft);
+}
 
 function createLazy<T>(loader: () => Promise<T>): () => T | null {
   const s: LazyState<T> = { mod: null, promise: null };
@@ -412,13 +474,260 @@ export function renderApp(state: AppViewState) {
         }
       | undefined
   )?.sessionDefaults;
+  const getCurrentConfigValue = () =>
+    state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
+  const resolveMauOfficeEditorBaseScene = () =>
+    cloneMauOfficeSceneConfig(resolveMauOfficeSceneConfigFromRoot(getCurrentConfigValue()));
+  const mauOfficeEditorDraft = state.mauOfficeEditorDraft ?? state.mauOfficeState.scene.authored;
+  const mauOfficeEditorCompiledScene = getCachedCompiledMauOfficeScene(mauOfficeEditorDraft);
+  const mauOfficeEditorValidation = getCachedMauOfficeSceneValidation(mauOfficeEditorDraft);
+  const setMauOfficeEditorDraft = (
+    nextDraft: typeof mauOfficeEditorDraft,
+    options?: { trackHistory?: boolean; selection?: typeof state.mauOfficeEditorSelection },
+  ) => {
+    // Strip stale client-only keys so the editor draft always stays persistable.
+    const normalizedNextDraft = normalizeMauOfficeEditorDraft(nextDraft);
+    if (options?.trackHistory !== false) {
+      const history = commitSceneHistory({
+        current: mauOfficeEditorDraft,
+        next: normalizedNextDraft,
+        undo: state.mauOfficeEditorUndoStack ?? [],
+        redo: state.mauOfficeEditorRedoStack ?? [],
+      });
+      if (history.changed) {
+        state.mauOfficeEditorUndoStack = history.undo;
+        state.mauOfficeEditorRedoStack = history.redo;
+      }
+    }
+    state.mauOfficeEditorDraft = normalizedNextDraft;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorSelection = normalizeSceneSelection(
+      normalizedNextDraft,
+      options && "selection" in options
+        ? (options.selection ?? null)
+        : (state.mauOfficeEditorSelection ?? null),
+    );
+  };
+  const openMauOfficeEditor = () => {
+    state.mauOfficeEditorDraft = resolveMauOfficeEditorBaseScene();
+    state.mauOfficeEditorUndoStack = [];
+    state.mauOfficeEditorRedoStack = [];
+    state.mauOfficeEditorSelection = null;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorToolPanelOpen = true;
+    state.mauOfficeEditorHoverTileX = null;
+    state.mauOfficeEditorHoverTileY = null;
+    state.mauOfficeEditorOpen = true;
+  };
+  const closeMauOfficeEditor = () => {
+    state.mauOfficeEditorOpen = false;
+    state.mauOfficeEditorDraft = null;
+    state.mauOfficeEditorUndoStack = [];
+    state.mauOfficeEditorRedoStack = [];
+    state.mauOfficeEditorSelection = null;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorToolPanelOpen = true;
+    state.mauOfficeEditorHoverTileX = null;
+    state.mauOfficeEditorHoverTileY = null;
+  };
+  const applyMauOfficeEditorDraft = () => {
+    if (mauOfficeEditorValidation.errors.length > 0) {
+      return;
+    }
+    const nextScene = normalizeMauOfficeEditorDraft(mauOfficeEditorDraft);
+    updateConfigFormValue(state, ["ui", "mauOffice", "scene"], nextScene);
+    state.mauOfficeState = setMauOfficeCompiledScene(
+      state.mauOfficeState,
+      getCachedCompiledMauOfficeScene(nextScene),
+    );
+  };
+  const saveMauOfficeEditorDraft = async () => {
+    if (mauOfficeEditorValidation.errors.length > 0) {
+      return;
+    }
+    applyMauOfficeEditorDraft();
+    await saveConfig(state);
+    if (state.lastError) {
+      return;
+    }
+    closeMauOfficeEditor();
+    await loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]);
+  };
+  const undoMauOfficeEditorDraft = () => {
+    const result = undoSceneHistory({
+      draft: mauOfficeEditorDraft,
+      undo: state.mauOfficeEditorUndoStack ?? [],
+      redo: state.mauOfficeEditorRedoStack ?? [],
+    });
+    if (!result) {
+      return;
+    }
+    const nextDraft = normalizeMauOfficeEditorDraft(result.draft);
+    state.mauOfficeEditorDraft = nextDraft;
+    state.mauOfficeEditorUndoStack = result.undo;
+    state.mauOfficeEditorRedoStack = result.redo;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorSelection = normalizeSceneSelection(
+      nextDraft,
+      state.mauOfficeEditorSelection ?? null,
+    );
+    state.mauOfficeEditorHoverTileX = null;
+    state.mauOfficeEditorHoverTileY = null;
+  };
+  const redoMauOfficeEditorDraft = () => {
+    const result = redoSceneHistory({
+      draft: mauOfficeEditorDraft,
+      undo: state.mauOfficeEditorUndoStack ?? [],
+      redo: state.mauOfficeEditorRedoStack ?? [],
+    });
+    if (!result) {
+      return;
+    }
+    const nextDraft = normalizeMauOfficeEditorDraft(result.draft);
+    state.mauOfficeEditorDraft = nextDraft;
+    state.mauOfficeEditorUndoStack = result.undo;
+    state.mauOfficeEditorRedoStack = result.redo;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorSelection = normalizeSceneSelection(
+      nextDraft,
+      state.mauOfficeEditorSelection ?? null,
+    );
+    state.mauOfficeEditorHoverTileX = null;
+    state.mauOfficeEditorHoverTileY = null;
+  };
+  const patchMauOfficeEditorSelection = (patch: Record<string, unknown>) => {
+    const selection = state.mauOfficeEditorSelection;
+    if (!selection) {
+      return;
+    }
+    const nextDraft =
+      selection.kind === "prop"
+        ? updateScenePropPlacement(mauOfficeEditorDraft, selection.id, patch)
+        : selection.kind === "autotile"
+          ? updateSceneAutotilePlacement(mauOfficeEditorDraft, selection.id, patch)
+          : updateSceneMarker(mauOfficeEditorDraft, selection.id, patch);
+    setMauOfficeEditorDraft(nextDraft);
+  };
+  const finishMauOfficeEditorSelectionDrag = (tileX: number | null, tileY: number | null) => {
+    const draggingSelection = state.mauOfficeEditorDragSelection ?? null;
+    state.mauOfficeEditorDragSelection = null;
+    state.mauOfficeEditorHoverTileX = null;
+    state.mauOfficeEditorHoverTileY = null;
+    if (!draggingSelection || tileX == null || tileY == null) {
+      return;
+    }
+    setMauOfficeEditorDraft(
+      moveSceneSelection(mauOfficeEditorDraft, draggingSelection, tileX, tileY),
+      {
+        selection: draggingSelection,
+      },
+    );
+  };
+  const handleMauOfficeEditorCell = (
+    tileX: number,
+    tileY: number,
+    kind: "down" | "enter" | "click",
+  ) => {
+    const tool = state.mauOfficeEditorTool ?? "select";
+    const brushMode = state.mauOfficeEditorBrushMode ?? "paint";
+    if ((tool === "zone" || tool === "wall" || tool === "autotile") && kind === "click") {
+      return;
+    }
+    if (tool === "select") {
+      if (kind !== "click") {
+        return;
+      }
+      const hit = hitTestSceneSelection(mauOfficeEditorDraft, tileX, tileY);
+      if (hit) {
+        const isSameSelection =
+          state.mauOfficeEditorSelection?.kind === hit.kind &&
+          state.mauOfficeEditorSelection.id === hit.id;
+        state.mauOfficeEditorSelection = isSameSelection ? null : hit;
+        state.mauOfficeEditorDragSelection = null;
+        return;
+      }
+      state.mauOfficeEditorSelection = null;
+      state.mauOfficeEditorDragSelection = null;
+      return;
+    }
+    if (tool === "zone") {
+      setMauOfficeEditorDraft(
+        paintSceneZone(
+          mauOfficeEditorDraft,
+          tileX,
+          tileY,
+          brushMode === "paint" ? (state.mauOfficeEditorZoneBrush ?? "desk") : "outside",
+        ),
+      );
+      return;
+    }
+    if (tool === "wall") {
+      setMauOfficeEditorDraft(
+        paintSceneWall(mauOfficeEditorDraft, tileX, tileY, brushMode === "paint"),
+      );
+      return;
+    }
+    if (tool === "autotile") {
+      const result = paintSceneAutotileCell(
+        mauOfficeEditorDraft,
+        state.mauOfficeEditorAutotileItemId ?? "meeting-table",
+        tileX,
+        tileY,
+        brushMode,
+      );
+      setMauOfficeEditorDraft(result.scene, {
+        selection: result.id ? { kind: "autotile", id: result.id } : null,
+      });
+      return;
+    }
+    if (kind !== "click") {
+      return;
+    }
+    if (tool === "prop") {
+      if (brushMode === "erase") {
+        const selection = hitTestSceneSelection(mauOfficeEditorDraft, tileX, tileY);
+        if (selection?.kind === "prop") {
+          setMauOfficeEditorDraft(removeSceneSelection(mauOfficeEditorDraft, selection));
+          state.mauOfficeEditorSelection = null;
+        }
+        return;
+      }
+      const result = placeSceneProp(
+        mauOfficeEditorDraft,
+        state.mauOfficeEditorPropItemId ?? "desk-wide",
+        tileX,
+        tileY,
+      );
+      setMauOfficeEditorDraft(result.scene, {
+        selection: result.id ? { kind: "prop", id: result.id } : null,
+      });
+      return;
+    }
+    if (tool === "marker") {
+      if (brushMode === "erase") {
+        const selection = hitTestSceneSelection(mauOfficeEditorDraft, tileX, tileY);
+        if (selection?.kind === "marker") {
+          setMauOfficeEditorDraft(removeSceneSelection(mauOfficeEditorDraft, selection));
+          state.mauOfficeEditorSelection = null;
+        }
+        return;
+      }
+      const result = placeSceneMarker(
+        mauOfficeEditorDraft,
+        state.mauOfficeEditorMarkerRole ?? "desk.workerSeat",
+        tileX,
+        tileY,
+      );
+      setMauOfficeEditorDraft(result.scene, {
+        selection: { kind: "marker", id: result.id },
+      });
+    }
+  };
   const resolvedAgentId =
     state.agentsSelectedId ??
     state.agentsList?.defaultId ??
     state.agentsList?.agents?.[0]?.id ??
     null;
-  const getCurrentConfigValue = () =>
-    state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
   const conversationAutomationPresetState = readConversationAutomationPresetState(
     (configValue ?? {}) as MaumauConfig,
   );
@@ -664,6 +973,29 @@ export function renderApp(state: AppViewState) {
       mauOfficeLoading: state.mauOfficeLoading,
       mauOfficeError: state.mauOfficeError,
       mauOfficeState: state.mauOfficeState,
+      mauOfficeEditor: {
+        open: state.mauOfficeEditorOpen ?? false,
+        draft: mauOfficeEditorDraft,
+        compiled: mauOfficeEditorCompiledScene,
+        tool: state.mauOfficeEditorTool ?? "select",
+        toolPanelOpen: state.mauOfficeEditorToolPanelOpen ?? true,
+        brushMode: state.mauOfficeEditorBrushMode ?? "paint",
+        zoneBrush: state.mauOfficeEditorZoneBrush ?? "desk",
+        propItemId: state.mauOfficeEditorPropItemId ?? "desk-wide",
+        autotileItemId: state.mauOfficeEditorAutotileItemId ?? "meeting-table",
+        markerRole: state.mauOfficeEditorMarkerRole ?? "desk.workerSeat",
+        selection: state.mauOfficeEditorSelection ?? null,
+        dragSelection: state.mauOfficeEditorDragSelection ?? null,
+        hoverTileX: state.mauOfficeEditorHoverTileX,
+        hoverTileY: state.mauOfficeEditorHoverTileY,
+        validationErrors: mauOfficeEditorValidation.errors,
+        saveError: state.lastError,
+        saving: state.configSaving,
+        canUndo: (state.mauOfficeEditorUndoStack?.length ?? 0) > 0,
+        canRedo: (state.mauOfficeEditorRedoStack?.length ?? 0) > 0,
+        undoShortcutLabel: MAU_OFFICE_EDITOR_HISTORY_SHORTCUT_LABEL,
+        redoShortcutLabel: MAU_OFFICE_EDITOR_REDO_SHORTCUT_LABEL,
+      },
       mauOfficeChatOpen: state.mauOfficeChatOpen,
       mauOfficeChatMinimized: state.mauOfficeChatMinimized,
       mauOfficeChatActorId: state.mauOfficeChatActorId,
@@ -890,6 +1222,101 @@ export function renderApp(state: AppViewState) {
         void loadMauOffice(state as unknown as Parameters<typeof loadMauOffice>[0]),
       onMauOfficeRoomFocus: (roomId) => {
         state.mauOfficeState = setMauOfficeRoomFocus(state.mauOfficeState, roomId);
+      },
+      onMauOfficeEditorToggle: () => {
+        if (state.mauOfficeEditorOpen) {
+          closeMauOfficeEditor();
+        } else {
+          openMauOfficeEditor();
+        }
+      },
+      onMauOfficeEditorCancel: () => {
+        closeMauOfficeEditor();
+      },
+      onMauOfficeEditorApply: () => {
+        applyMauOfficeEditorDraft();
+      },
+      onMauOfficeEditorSave: () => {
+        void saveMauOfficeEditorDraft();
+      },
+      onMauOfficeEditorToolChange: (tool) => {
+        if ((state.mauOfficeEditorTool ?? "select") === tool) {
+          state.mauOfficeEditorToolPanelOpen = !(state.mauOfficeEditorToolPanelOpen ?? true);
+        } else {
+          state.mauOfficeEditorTool = tool;
+          state.mauOfficeEditorToolPanelOpen = true;
+        }
+        state.mauOfficeEditorDragSelection = null;
+        state.mauOfficeEditorHoverTileX = null;
+        state.mauOfficeEditorHoverTileY = null;
+      },
+      onMauOfficeEditorBrushModeChange: (mode) => {
+        state.mauOfficeEditorBrushMode = mode;
+        state.mauOfficeEditorDragSelection = null;
+        state.mauOfficeEditorHoverTileX = null;
+        state.mauOfficeEditorHoverTileY = null;
+      },
+      onMauOfficeEditorZoneBrushChange: (zone) => {
+        state.mauOfficeEditorZoneBrush = zone;
+      },
+      onMauOfficeEditorPropItemChange: (itemId) => {
+        state.mauOfficeEditorPropItemId = itemId;
+      },
+      onMauOfficeEditorAutotileItemChange: (itemId) => {
+        state.mauOfficeEditorAutotileItemId = itemId;
+      },
+      onMauOfficeEditorMarkerRoleChange: (role) => {
+        state.mauOfficeEditorMarkerRole = role;
+      },
+      onMauOfficeEditorCellInteract: (tileX, tileY, kind) => {
+        handleMauOfficeEditorCell(tileX, tileY, kind);
+      },
+      onMauOfficeEditorHoverTileChange: (tileX, tileY) => {
+        state.mauOfficeEditorHoverTileX = tileX;
+        state.mauOfficeEditorHoverTileY = tileY;
+      },
+      onMauOfficeEditorSelectionChange: (selection) => {
+        state.mauOfficeEditorSelection = selection;
+        state.mauOfficeEditorDragSelection = null;
+      },
+      onMauOfficeEditorSelectionDragStart: (selection) => {
+        state.mauOfficeEditorDragSelection = selection;
+        state.mauOfficeEditorHoverTileX = null;
+        state.mauOfficeEditorHoverTileY = null;
+      },
+      onMauOfficeEditorSelectionDragEnd: (tileX, tileY) => {
+        finishMauOfficeEditorSelectionDrag(tileX, tileY);
+      },
+      onMauOfficeEditorCanvasResize: (width, height) => {
+        setMauOfficeEditorDraft(resizeSceneCanvas(mauOfficeEditorDraft, width, height));
+        state.mauOfficeEditorHoverTileX = null;
+        state.mauOfficeEditorHoverTileY = null;
+      },
+      onMauOfficeEditorClearSelection: () => {
+        state.mauOfficeEditorSelection = null;
+        state.mauOfficeEditorDragSelection = null;
+        state.mauOfficeEditorHoverTileX = null;
+        state.mauOfficeEditorHoverTileY = null;
+      },
+      onMauOfficeEditorSelectionPatch: (patch) => {
+        patchMauOfficeEditorSelection(patch);
+      },
+      onMauOfficeEditorUndo: () => {
+        undoMauOfficeEditorDraft();
+      },
+      onMauOfficeEditorRedo: () => {
+        redoMauOfficeEditorDraft();
+      },
+      onMauOfficeEditorDeleteSelection: () => {
+        setMauOfficeEditorDraft(
+          removeSceneSelection(
+            mauOfficeEditorDraft,
+            state.mauOfficeEditorSelection ?? null,
+          ),
+          {
+            selection: null,
+          },
+        );
       },
       onMauOfficeActorOpen: (actorId) => {
         void openMauOfficeChat(state, actorId, sessionDefaults);

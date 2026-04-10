@@ -31,7 +31,28 @@ import {
   type MauOfficeAssetScaleSpec,
   type MauOfficePxRange,
 } from "../mau-office-scale-spec.ts";
+import {
+  MAU_OFFICE_CATALOG,
+  compileMauOfficeScene,
+  createDefaultMauOfficeSceneConfig,
+  sanitizeMauOfficeSceneConfig,
+  validateMauOfficeScene,
+} from "../mau-office-scene.ts";
 import { renderMauOffice } from "../views/mau-office.ts";
+import {
+  commitSceneHistory,
+  hitTestSceneSelection,
+  moveSceneSelection,
+  normalizeSceneSelection,
+  paintSceneAutotileCell,
+  paintSceneWall,
+  paintSceneZone,
+  placeSceneMarker,
+  placeSceneProp,
+  redoSceneHistory,
+  resizeSceneCanvas,
+  undoSceneHistory,
+} from "./mau-office-editor.ts";
 import {
   advanceMauOfficeState,
   applyMauOfficeAgentEvent,
@@ -237,6 +258,370 @@ describe("createEmptyMauOfficeState", () => {
     expect(state.config.enabled).toBe(false);
     expect(state.config.maxVisibleWorkers).toBe(4);
     expect(state.config.idlePackages.enabled).toEqual(["snack_table"]);
+  });
+
+  it("seeds the default authored scene when ui.mauOffice.scene is missing", () => {
+    const state = createEmptyMauOfficeState({
+      ui: {
+        mauOffice: {
+          enabled: true,
+        },
+      },
+    });
+
+    expect(state.scene.authored.zoneRows).toHaveLength(20);
+    expect(state.scene.authored.wallRows).toHaveLength(20);
+    expect(state.scene.markerIdsByRole["desk.workerSeat"]).toHaveLength(6);
+    expect(state.scene.anchors.desk_board?.roomId).toBe("desk");
+  });
+});
+
+describe("mau-office scene authoring", () => {
+  it("recomputes room bounds and walkable tiles from painted zones", () => {
+    const draft = paintSceneZone(createDefaultMauOfficeSceneConfig(), 0, 0, "desk");
+    const compiled = compileMauOfficeScene(draft);
+
+    expect(compiled.rooms.desk.tileX).toBe(0);
+    expect(compiled.rooms.desk.tileY).toBe(0);
+    expect(compiled.walkableTileKeys.has("0,0")).toBe(true);
+  });
+
+  it("keeps wall authoring separate from floor zones", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const before = base.wallRows[0]?.[0];
+    const paintedZone = paintSceneZone(base, 0, 0, "desk");
+
+    expect(paintedZone.wallRows[0]?.[0]).toBe(before);
+
+    const withWall = paintSceneWall(paintedZone, 0, 0, true);
+    const compiled = compileMauOfficeScene(withWall);
+
+    expect(withWall.wallRows[0]?.[0]).toBe(true);
+    expect(
+      compiled.map.wallSprites.some((sprite) => sprite.tileX === 0 && sprite.tileY === 0),
+    ).toBe(true);
+  });
+
+  it("allows authored walls on arbitrary interior tiles and keeps collision to one tile", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    base.props = [];
+    base.autotiles = [];
+
+    const withWall = paintSceneWall(base, 5, 5, true);
+    const compiled = compileMauOfficeScene(withWall);
+
+    expect(withWall.wallRows[5]?.[5]).toBe(true);
+    expect(
+      compiled.map.wallSprites.some((sprite) => sprite.tileX === 5 && sprite.tileY === 5),
+    ).toBe(true);
+    expect(compiled.blockedTileKeys.has("5,5")).toBe(true);
+    expect(compiled.blockedTileKeys.has("5,6")).toBe(false);
+    expect(compiled.blockedTileKeys.has("5,7")).toBe(false);
+  });
+
+  it("defaults props dropped on authored wall tiles to wall mounting", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    base.props = [];
+    base.autotiles = [];
+
+    const withWall = paintSceneWall(base, 5, 5, true);
+    const placed = placeSceneProp(withWall, "plant", 5, 5);
+    const authoredProp = placed.scene.props.find((entry) => entry.id === placed.id);
+    const compiled = compileMauOfficeScene(placed.scene);
+    const sprite = compiled.map.propSprites.find((entry) => entry.id === placed.id);
+
+    expect(authoredProp?.mountOverride).toBe("wall");
+    expect(sprite?.mount).toBe("wall");
+    expect(sprite?.layer).toBe("wall");
+    expect(sprite?.blocksWalkway).toBe(false);
+  });
+
+  it("snaps placed and moved markers away from authored wall tiles", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const withWall = paintSceneWall(base, 5, 5, true);
+    const placed = placeSceneMarker(withWall, "desk.workerSeat", 5, 5);
+    const moved = moveSceneSelection(
+      placed.scene,
+      { kind: "marker", id: placed.id },
+      5,
+      5,
+    );
+
+    expect(placed.scene.markers.find((entry) => entry.id === placed.id)).toMatchObject({
+      tileX: 5,
+      tileY: 4,
+    });
+    expect(moved.markers.find((entry) => entry.id === placed.id)).toMatchObject({
+      tileX: 5,
+      tileY: 4,
+    });
+  });
+
+  it("heals wall-blocked markers during scene sanitization and flags unsanitized ones", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const withWall = paintSceneWall(base, 5, 5, true);
+    const invalid = {
+      ...withWall,
+      markers: withWall.markers.map((entry) =>
+        entry.id === "desk_board" ? { ...entry, tileX: 5, tileY: 5 } : entry,
+      ),
+    };
+
+    expect(validateMauOfficeScene(invalid).errors).toContain(
+      "desk_board should not be placed on a wall tile.",
+    );
+
+    const sanitized = sanitizeMauOfficeSceneConfig(invalid);
+    expect(sanitized.markers.find((entry) => entry.id === "desk_board")).toMatchObject({
+      tileX: 5,
+      tileY: 4,
+    });
+    expect(validateMauOfficeScene(sanitized).errors).not.toContain(
+      "desk_board should not be placed on a wall tile.",
+    );
+  });
+
+  it("moves selected props, brush regions, and markers within the authored board", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const movedProp = moveSceneSelection(base, { kind: "prop", id: "desk-a" }, 20, 12);
+    const movedAutotile = moveSceneSelection(
+      base,
+      { kind: "autotile", id: "break-rug" },
+      8,
+      12,
+    );
+    const movedMarker = moveSceneSelection(base, { kind: "marker", id: "desk_board" }, 24, 18);
+
+    expect(movedProp.props.find((entry) => entry.id === "desk-a")).toMatchObject({
+      tileX: 20,
+      tileY: 12,
+    });
+    const movedRug = movedAutotile.autotiles.find((entry) => entry.id === "break-rug");
+    expect(Math.min(...(movedRug?.cells.map((cell) => cell.tileX) ?? []))).toBe(8);
+    expect(Math.min(...(movedRug?.cells.map((cell) => cell.tileY) ?? []))).toBe(12);
+    expect(movedMarker.markers.find((entry) => entry.id === "desk_board")).toMatchObject({
+      tileX: 23,
+      tileY: 18,
+    });
+  });
+
+  it("records undo and redo snapshots for scene edits", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const edited = paintSceneWall(base, 5, 5, true);
+    const committed = commitSceneHistory({
+      current: base,
+      next: edited,
+      undo: [],
+      redo: [],
+    });
+
+    expect(committed.changed).toBe(true);
+    expect(committed.undo).toHaveLength(1);
+    expect(committed.redo).toHaveLength(0);
+
+    const undone = undoSceneHistory({
+      draft: edited,
+      undo: committed.undo,
+      redo: committed.redo,
+    });
+    expect(undone).not.toBeNull();
+    expect(undone?.draft.wallRows[5]?.[5]).toBe(false);
+
+    const redone = redoSceneHistory({
+      draft: undone!.draft,
+      undo: undone!.undo,
+      redo: undone!.redo,
+    });
+    expect(redone).not.toBeNull();
+    expect(redone?.draft.wallRows[5]?.[5]).toBe(true);
+  });
+
+  it("drops stale selections after history restores a scene without that object", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    const withoutDesk = {
+      ...base,
+      props: base.props.filter((entry) => entry.id !== "desk-a"),
+    };
+
+    expect(normalizeSceneSelection(withoutDesk, { kind: "prop", id: "desk-a" })).toBeNull();
+    expect(normalizeSceneSelection(base, { kind: "prop", id: "desk-a" })).toEqual({
+      kind: "prop",
+      id: "desk-a",
+    });
+  });
+
+  it("migrates missing wall rows by seeding a separate authored wall layer", () => {
+    const sanitized = createEmptyMauOfficeState({
+      ui: {
+        mauOffice: {
+          scene: {
+            version: 1,
+            zoneRows: createDefaultMauOfficeSceneConfig().zoneRows,
+            props: [],
+            autotiles: [],
+            markers: createDefaultMauOfficeSceneConfig().markers,
+          },
+        },
+      },
+    }).scene.authored;
+
+    expect(sanitized.wallRows.length).toBe(MAU_OFFICE_SCENE_TILES_H);
+    expect(sanitized.wallRows.some((row) => row.some(Boolean))).toBe(true);
+  });
+
+  it("preserves variable canvas dimensions during scene sanitization", () => {
+    const sanitized = sanitizeMauOfficeSceneConfig({
+      version: 1,
+      zoneRows: Array.from({ length: 12 }, () =>
+        Array.from({ length: 18 }, () => "outside"),
+      ),
+      wallRows: Array.from({ length: 12 }, () =>
+        Array.from({ length: 18 }, () => false),
+      ),
+      props: [],
+      autotiles: [],
+      markers: [],
+    });
+
+    expect(sanitized.zoneRows).toHaveLength(12);
+    expect(sanitized.zoneRows[0]).toHaveLength(18);
+    expect(sanitized.wallRows).toHaveLength(12);
+    expect(sanitized.wallRows[0]).toHaveLength(18);
+
+    const compiled = compileMauOfficeScene(sanitized);
+    expect(compiled.width).toBe(18 * MAU_OFFICE_TILE_SIZE);
+    expect(compiled.height).toBe(12 * MAU_OFFICE_TILE_SIZE);
+  });
+
+  it("keeps outside spawn markers outside when sanitizing or resizing the scene", () => {
+    const sanitizedDefault = sanitizeMauOfficeSceneConfig(createDefaultMauOfficeSceneConfig());
+    expect(sanitizedDefault.markers.find((marker) => marker.id === "outside_mauHome")?.tileY).toBe(
+      sanitizedDefault.zoneRows.length,
+    );
+    expect(validateMauOfficeScene(sanitizedDefault).errors).toEqual([]);
+
+    const healed = sanitizeMauOfficeSceneConfig({
+      ...createDefaultMauOfficeSceneConfig(),
+      markers: createDefaultMauOfficeSceneConfig().markers.map((marker) =>
+        marker.id === "outside_mauHome" ? { ...marker, tileY: 19 } : marker,
+      ),
+    });
+    expect(healed.markers.find((marker) => marker.id === "outside_mauHome")?.tileY).toBe(
+      healed.zoneRows.length,
+    );
+
+    const resized = resizeSceneCanvas(createDefaultMauOfficeSceneConfig(), 8, 8);
+    expect(resized.markers.find((marker) => marker.id === "outside_mauHome")?.tileY).toBe(8);
+    expect(
+      validateMauOfficeScene(resized).errors.some((error) => error.includes("outside_mauHome")),
+    ).toBe(false);
+  });
+
+  it("resizes the scene canvas and clamps authored content to the new bounds", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+
+    const resized = resizeSceneCanvas(base, 8, 8);
+
+    expect(resized.zoneRows).toHaveLength(8);
+    expect(resized.zoneRows[0]).toHaveLength(8);
+    expect(resized.wallRows).toHaveLength(8);
+    expect(resized.wallRows[0]).toHaveLength(8);
+
+    const compiled = compileMauOfficeScene(resized);
+    expect(compiled.width).toBe(8 * MAU_OFFICE_TILE_SIZE);
+    expect(compiled.height).toBe(8 * MAU_OFFICE_TILE_SIZE);
+    expect(
+      compiled.map.propSprites.every(
+        (sprite) => sprite.tileX + sprite.tileWidth <= 8 && sprite.tileY + sprite.tileHeight <= 8,
+      ),
+    ).toBe(true);
+    expect(
+      resized.markers.every((marker) =>
+        marker.id.startsWith("outside_")
+          ? marker.tileX >= 0 && marker.tileX < 8 && marker.tileY === 8
+          : marker.tileX >= 0 && marker.tileX < 8 && marker.tileY >= 0 && marker.tileY < 8,
+      ),
+    ).toBe(true);
+    expect(
+      resized.autotiles.every((entry) =>
+        entry.cells.every(
+          (cell) => cell.tileX >= 0 && cell.tileX < 8 && cell.tileY >= 0 && cell.tileY < 8,
+        ),
+      ),
+    ).toBe(true);
+    expect(resized.props.some((entry) => {
+      const item = MAU_OFFICE_CATALOG[entry.itemId];
+      return Boolean(item && entry.tileX + item.tileWidth === 8);
+    })).toBe(true);
+  });
+
+  it("auto-selects nine-slice and three-slice assets from painted autotile cells", () => {
+    const base = createDefaultMauOfficeSceneConfig();
+    base.props = [];
+    base.autotiles = [];
+
+    const withTable = paintSceneAutotileCell(base, "meeting-table", 2, 2, "paint");
+    const withTable2 = paintSceneAutotileCell(withTable.scene, "meeting-table", 3, 2, "paint");
+    const withTable3 = paintSceneAutotileCell(withTable2.scene, "meeting-table", 2, 3, "paint");
+    const withTable4 = paintSceneAutotileCell(withTable3.scene, "meeting-table", 3, 3, "paint");
+    const withCounter = paintSceneAutotileCell(
+      withTable4.scene,
+      "support-counter",
+      10,
+      10,
+      "paint",
+    );
+    const withCounter2 = paintSceneAutotileCell(
+      withCounter.scene,
+      "support-counter",
+      11,
+      10,
+      "paint",
+    );
+    const withCounter3 = paintSceneAutotileCell(
+      withCounter2.scene,
+      "support-counter",
+      12,
+      10,
+      "paint",
+    );
+
+    const compiled = compileMauOfficeScene(withCounter3.scene);
+    const assetAt = (sourceId: string, tileX: number, tileY: number) =>
+      compiled.map.propSprites.find(
+        (sprite) =>
+          sprite.sourceId === sourceId && sprite.tileX === tileX && sprite.tileY === tileY,
+      )?.asset;
+
+    expect(assetAt(withTable.id!, 2, 2)).toContain("meeting-table-r1c1");
+    expect(assetAt(withTable.id!, 3, 2)).toContain("meeting-table-r1c3");
+    expect(assetAt(withTable.id!, 2, 3)).toContain("meeting-table-r3c1");
+    expect(assetAt(withTable.id!, 3, 3)).toContain("meeting-table-r3c3");
+    expect(assetAt(withCounter.id!, 10, 10)).toContain("counter-left");
+    expect(assetAt(withCounter.id!, 11, 10)).toContain("counter-mid");
+    expect(assetAt(withCounter.id!, 12, 10)).toContain("counter-right");
+  });
+
+  it("moves singleton markers instead of duplicating them and supports prop hit-testing", () => {
+    const movedPresenter = placeSceneMarker(
+      createDefaultMauOfficeSceneConfig(),
+      "meeting.presenter",
+      24,
+      4,
+    ).scene;
+    const presenterMarkers = movedPresenter.markers.filter(
+      (marker) => marker.role === "meeting.presenter",
+    );
+
+    expect(presenterMarkers).toHaveLength(1);
+    expect(presenterMarkers[0]?.tileX).toBe(24);
+
+    const placed = placeSceneProp(movedPresenter, "desk-wide", 0, 0);
+    expect(placed.id).toBeTruthy();
+    expect(hitTestSceneSelection(placed.scene, 1, 1)).toEqual({
+      kind: "prop",
+      id: placed.id,
+    });
   });
 });
 
@@ -1142,12 +1527,23 @@ Need help recovering the shared workspace password.`,
       nowMs,
     );
     const actor = advanced.actors["worker:support"]!;
-    const blockedCounterTiles = new Set<string>();
-    for (let tileX = 17; tileX <= 22; tileX += 1) {
-      for (let tileY = 14; tileY <= 15; tileY += 1) {
-        blockedCounterTiles.add(`${tileX},${tileY}`);
-      }
-    }
+    const blockedCounterTiles = new Set(
+      createEmptyMauOfficeState().scene.map.propSprites
+        .filter((sprite) => sprite.sourceId === "support-counter" && sprite.blocksWalkway)
+        .flatMap((sprite) => {
+          const tiles: string[] = [];
+          for (let tileX = Math.floor(sprite.tileX); tileX < sprite.tileX + sprite.tileWidth; tileX += 1) {
+            for (
+              let tileY = Math.floor(sprite.tileY);
+              tileY < sprite.tileY + sprite.tileHeight;
+              tileY += 1
+            ) {
+              tiles.push(`${tileX},${tileY}`);
+            }
+          }
+          return tiles;
+        }),
+    );
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("support_staff_2");
@@ -3940,7 +4336,7 @@ describe("mau-office view", () => {
 
     expect(container.querySelector(".mau-office__scene-backdrop")).toBeNull();
     expect(container.querySelectorAll(".mau-office__tile").length).toBe(
-      MAU_OFFICE_LAYOUT.map.floorTiles.length,
+      state.scene.map.floorTiles.length,
     );
     expect(container.querySelector(".mau-office__sign-image")).toBeNull();
     expect(container.querySelectorAll(".mau-office__bubble-slice").length).toBeGreaterThanOrEqual(
@@ -4414,6 +4810,73 @@ describe("mau-office view", () => {
     );
     expect(midStyle).not.toBe(initialStyle);
     expect(parseStyleNumber(midStyle, "top")).toBeLessThan(parseStyleNumber(initialStyle, "top"));
+  });
+
+  it("renders volleyball workers on their assigned volley anchors even when actor coordinates drift", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const baseState = createEmptyMauOfficeState();
+    const rallyAssignment = {
+      packageId: "passing_ball_court" as const,
+      activityId: "break-passing-ball",
+      participantIds: ["worker:1", "worker:2", "worker:3", "worker:4"],
+      slotAnchorIds: ["break_volley_1", "break_volley_2", "break_volley_3", "break_volley_4"],
+      startedAtMs: 0,
+      endsAtMs: 10_000,
+    };
+    const driftAnchor = baseState.scene.anchors.break_arcade!;
+    const expectedAnchors = rallyAssignment.slotAnchorIds.map(
+      (anchorId) => baseState.scene.anchors[anchorId]!,
+    );
+    const actorIds = rallyAssignment.participantIds;
+    const actors = Object.fromEntries(
+      actorIds.map((actorId, index) => [
+        actorId,
+        makeActor({
+          id: actorId,
+          label: `Ball ${index + 1}`,
+          anchorId: "break_arcade",
+          nodeId: "break_center",
+          x: driftAnchor.x,
+          y: driftAnchor.y,
+          currentActivity: {
+            ...makeActivity("idle-ball", "idle_package", "break", "break_arcade", "Passing the ball"),
+            source: "idle",
+          },
+          idleAssignment: { ...rallyAssignment },
+        }),
+      ]),
+    );
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: {
+          ...baseState,
+          loaded: true,
+          nowMs: 0,
+          actorOrder: actorIds,
+          actors,
+        },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expectedAnchors.forEach((anchor, index) => {
+      const workerStyle = normalizeStyle(
+        container
+          .querySelector<HTMLElement>(`button[aria-label^="Ball ${index + 1}."]`)
+          ?.getAttribute("style"),
+      );
+      expect(parseStyleNumber(workerStyle, "left")).toBe(anchor.x);
+      expect(parseStyleNumber(workerStyle, "top")).toBe(anchor.y);
+    });
   });
 
   it("moves chasing workers in a visible loop instead of leaving them static on one anchor", () => {
@@ -5096,5 +5559,1163 @@ describe("mau-office view", () => {
     expect(container.querySelector(".mau-office__sign")).toBeNull();
     expect(container.querySelector(".mau-office__worker-badge")).toBeNull();
     expect(container.querySelector(".mau-office__history")).not.toBeNull();
+  });
+
+  it("selects props from direct editor hit targets instead of only floor cells", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onSelectionChange = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const propTarget = container.querySelector<HTMLElement>(
+      '.mau-office__editor-hit-target[data-selection-kind="prop"][data-selection-id="desk-a"]',
+    );
+    expect(propTarget).not.toBeNull();
+    propTarget?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelectionChange).toHaveBeenCalledWith({ kind: "prop", id: "desk-a" });
+  });
+
+  it("clears selection when clicking the already-selected editor target again", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onSelectionChange = vi.fn();
+    const onClearSelection = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          toolPanelOpen: true,
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: { kind: "prop", id: "desk-a" },
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange,
+          onClearSelection,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const propTarget = container.querySelector<HTMLElement>(
+      '.mau-office__editor-hit-target[data-selection-kind="prop"][data-selection-id="desk-a"]',
+    );
+    expect(propTarget).not.toBeNull();
+    propTarget?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(onClearSelection).toHaveBeenCalled();
+  });
+
+  it("erases props from direct editor hit targets in erase mode", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const onSelectionChange = vi.fn();
+    const onDeleteSelection = vi.fn();
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "prop",
+          brushMode: "erase",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const propTarget = container.querySelector<HTMLElement>(
+      '.mau-office__editor-hit-target[data-selection-kind="prop"][data-selection-id="desk-a"]',
+    );
+    expect(propTarget).not.toBeNull();
+    propTarget?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSelectionChange).toHaveBeenCalledWith({ kind: "prop", id: "desk-a" });
+    expect(onDeleteSelection).toHaveBeenCalled();
+  });
+
+  it("shows a clear-selection control without reserving a right-side selection gutter", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onClearSelection = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          toolPanelOpen: true,
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: { kind: "prop", id: "desk-a" },
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onClearSelection,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear selection"]',
+    );
+    expect(clearButton).not.toBeNull();
+    clearButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onClearSelection).toHaveBeenCalled();
+
+    const viewport = container.querySelector<HTMLElement>(".mau-office__viewport");
+    expect(viewport?.style.getPropertyValue("--mau-editor-left-gutter-px")).toBe("84px");
+    expect(viewport?.style.getPropertyValue("--mau-editor-right-gutter-px")).toBe("0px");
+    expect(
+      container.querySelector(".mau-office__viewport .mau-office__editor-panel--selection"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".mau-office__editor-footer .mau-office__editor-panel--selection-docked"),
+    ).toBeNull();
+  });
+
+  it("uses translucent wall art preview in edit mode instead of the opaque runtime wall layer", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "wall",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(
+      container.querySelector(".mau-office__sprite--editor-wall-preview"),
+    ).not.toBeNull();
+  });
+
+  it("shows a live hover preview for floor paint, wall paint, and active selection drags", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const floorContainer = document.createElement("div");
+    const wallContainer = document.createElement("div");
+    const idleMoveContainer = document.createElement("div");
+    const moveContainer = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "zone",
+          brushMode: "paint",
+          zoneBrush: "meeting",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          hoverTileX: 6,
+          hoverTileY: 7,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onHoverTileChange: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      floorContainer,
+    );
+
+    const floorPreview = floorContainer.querySelector<HTMLElement>(
+      ".mau-office__editor-preview-cell--meeting",
+    );
+    expect(floorPreview).not.toBeNull();
+    expect(floorPreview?.style.left).toBe(`${6 * MAU_OFFICE_TILE_SIZE}px`);
+    expect(floorPreview?.style.top).toBe(`${7 * MAU_OFFICE_TILE_SIZE}px`);
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "wall",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          hoverTileX: 5,
+          hoverTileY: 5,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onHoverTileChange: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      wallContainer,
+    );
+
+    expect(
+      wallContainer.querySelector(".mau-office__sprite--wall.mau-office__sprite--editor-hover-preview"),
+    ).not.toBeNull();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: { kind: "prop", id: "desk-a" },
+          hoverTileX: 18,
+          hoverTileY: 12,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onHoverTileChange: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      idleMoveContainer,
+    );
+
+    expect(
+      idleMoveContainer.querySelector(".mau-office__sprite--desk.mau-office__sprite--editor-hover-preview"),
+    ).toBeNull();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: { kind: "prop", id: "desk-a" },
+          dragSelection: { kind: "prop", id: "desk-a" },
+          hoverTileX: 18,
+          hoverTileY: 12,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onHoverTileChange: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      moveContainer,
+    );
+
+    const movePreview = moveContainer.querySelector<HTMLElement>(
+      ".mau-office__sprite--desk.mau-office__sprite--editor-hover-preview",
+    );
+    expect(movePreview).not.toBeNull();
+    expect(movePreview?.style.left).toBe(`${18 * MAU_OFFICE_TILE_SIZE}px`);
+    expect(movePreview?.style.top).toBe(`${12 * MAU_OFFICE_TILE_SIZE}px`);
+  });
+
+  it("starts a select-tool drag from the currently selected prop and drops it on release", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onHoverTileChange = vi.fn();
+    const onSelectionDragStart = vi.fn();
+    const onSelectionDragEnd = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: { kind: "prop", id: "desk-a" },
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onHoverTileChange,
+          onSelectionChange: () => undefined,
+          onSelectionDragStart,
+          onSelectionDragEnd,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const propTarget = container.querySelector<HTMLElement>(
+      '.mau-office__editor-hit-target[data-selection-kind="prop"][data-selection-id="desk-a"]',
+    );
+    const dropCell = container.querySelector<HTMLElement>(
+      '.mau-office__editor-cell[data-selection-id="18,12"]',
+    );
+    expect(propTarget).not.toBeNull();
+    expect(dropCell).not.toBeNull();
+
+    const originalElementsFromPoint = document.elementsFromPoint;
+    Object.defineProperty(document, "elementsFromPoint", {
+      configurable: true,
+      value: () => (dropCell ? [dropCell] : []),
+    });
+
+    try {
+      propTarget?.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          button: 0,
+          clientX: 24,
+          clientY: 24,
+        }),
+      );
+      window.dispatchEvent(
+        new PointerEvent("pointermove", {
+          clientX: 240,
+          clientY: 240,
+        }),
+      );
+      window.dispatchEvent(
+        new PointerEvent("pointerup", {
+          clientX: 240,
+          clientY: 240,
+        }),
+      );
+    } finally {
+      Object.defineProperty(document, "elementsFromPoint", {
+        configurable: true,
+        value: originalElementsFromPoint,
+      });
+    }
+
+    expect(onSelectionDragStart).toHaveBeenCalledWith({ kind: "prop", id: "desk-a" });
+    expect(onHoverTileChange).toHaveBeenCalledWith(18, 12);
+    expect(onSelectionDragEnd).toHaveBeenCalledWith(18, 12);
+  });
+
+  it("routes autotile erase back through the grid instead of intercepting it with hit targets", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const onCellInteract = vi.fn();
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "autotile",
+          brushMode: "erase",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "rug",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(container.querySelector(".mau-office__editor-hit-target--autotile")).toBeNull();
+
+    const rugCell = container.querySelector<HTMLElement>(
+      '.mau-office__editor-cell[data-selection-id="3,15"]',
+    );
+    expect(rugCell).not.toBeNull();
+    rugCell?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onCellInteract).toHaveBeenCalledWith(3, 15, "click", 0);
+  });
+
+  it("renders wall-mounted props above the translucent wall preview", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    draft.props = [];
+    draft.autotiles = [];
+    draft.wallRows = draft.wallRows.map((row) => row.map(() => false));
+
+    const withWall = paintSceneWall(draft, 5, 5, true);
+    const placed = placeSceneProp(withWall, "plant", 5, 5);
+    const compiled = compileMauOfficeScene(placed.scene);
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft: placed.scene,
+          compiled,
+          tool: "prop",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "plant",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const prop = container.querySelector<HTMLElement>('.mau-office__sprite--plant');
+    const wall = container.querySelector<HTMLElement>('.mau-office__sprite--editor-wall-preview');
+    expect(prop).not.toBeNull();
+    expect(wall).not.toBeNull();
+    expect(Number.parseInt(prop?.style.zIndex ?? "0", 10)).toBeGreaterThan(
+      Number.parseInt(wall?.style.zIndex ?? "0", 10),
+    );
+  });
+
+  it("shows save blocking and save errors inside the editor footer", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: ["Missing required marker."],
+          saveError: "Config hash missing; reload and retry.",
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(container.textContent).toContain(
+      "Fix validation errors above to enable Apply and Save & Close.",
+    );
+    const normalizedText = container.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    expect(normalizedText).toContain(
+      "Apply updates the live Control UI preview without writing the config file. Save & Close writes the layout to config and exits edit mode.",
+    );
+    expect(container.textContent).toContain("Config hash missing; reload and retry.");
+    const editorFooter = container.querySelector<HTMLElement>(".mau-office__editor-footer");
+    expect(editorFooter).not.toBeNull();
+    expect(
+      container.querySelector(".mau-office__viewport .mau-office__editor-footer"),
+    ).toBeNull();
+    const saveButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Save & Close",
+    );
+    expect(saveButton).toBeDefined();
+    expect(saveButton?.getAttribute("title")).toBe("Fix validation errors above to enable save.");
+    expect((saveButton as HTMLButtonElement | undefined)?.disabled).toBe(true);
+  });
+
+  it("uses explicit close and save labels in the editor footer", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    expect(container.textContent).toContain("Close");
+    expect(container.textContent).toContain("Apply");
+    expect(container.textContent).toContain("Save & Close");
+    const applyButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Apply",
+    );
+    expect(applyButton?.getAttribute("title")).toBe(
+      "Update the live Control UI preview without saving the config file.",
+    );
+  });
+
+  it("shows canvas width and height controls in the editor footer", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onCanvasResize = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "select",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onCanvasResize,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const canvasPanel = container.querySelector<HTMLElement>(".mau-office__editor-dock-status--canvas");
+    expect(canvasPanel?.textContent).toContain("Canvas");
+    const widthInput = canvasPanel?.querySelectorAll<HTMLInputElement>('input[type="number"]')[0];
+    const heightInput = canvasPanel?.querySelectorAll<HTMLInputElement>('input[type="number"]')[1];
+    expect(widthInput?.value).toBe(String(createDefaultMauOfficeSceneConfig().zoneRows[0]?.length ?? 0));
+    expect(heightInput?.value).toBe(String(createDefaultMauOfficeSceneConfig().zoneRows.length));
+    if (widthInput) {
+      widthInput.value = "30";
+      widthInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    expect(onCanvasResize).toHaveBeenCalledWith(
+      30,
+      createDefaultMauOfficeSceneConfig().zoneRows.length,
+    );
+  });
+
+  it("renders visual pickers for items, brushes, zones, and markers", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const propContainer = document.createElement("div");
+    const autotileContainer = document.createElement("div");
+    const zoneContainer = document.createElement("div");
+    const markerContainer = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+    const onPropItemChange = vi.fn();
+    const onAutotileItemChange = vi.fn();
+    const onZoneBrushChange = vi.fn();
+    const onMarkerRoleChange = vi.fn();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "prop",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange,
+          onPropItemChange,
+          onAutotileItemChange,
+          onMarkerRoleChange,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      propContainer,
+    );
+
+    const propPreview = propContainer.querySelector<HTMLElement>(
+      '.mau-office__editor-picker-button[data-picker-id="plant"] .mau-office__editor-picker-image',
+    );
+    expect(propPreview).not.toBeNull();
+    propContainer
+      .querySelector<HTMLButtonElement>('.mau-office__editor-picker-button[data-picker-id="plant"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onPropItemChange).toHaveBeenCalledWith("plant");
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "autotile",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange,
+          onPropItemChange,
+          onAutotileItemChange,
+          onMarkerRoleChange,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      autotileContainer,
+    );
+
+    const autotilePreview = autotileContainer.querySelector<HTMLElement>(
+      '.mau-office__editor-picker-button[data-picker-id="support-counter"] .mau-office__editor-picker-image',
+    );
+    expect(autotilePreview).not.toBeNull();
+    autotileContainer
+      .querySelector<HTMLButtonElement>('.mau-office__editor-picker-button[data-picker-id="support-counter"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onAutotileItemChange).toHaveBeenCalledWith("support-counter");
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "zone",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange,
+          onPropItemChange,
+          onAutotileItemChange,
+          onMarkerRoleChange,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      zoneContainer,
+    );
+
+    expect(
+      zoneContainer.querySelector(
+        '.mau-office__editor-picker-button[data-picker-id="meeting"] .mau-office__editor-picker-swatch--meeting',
+      ),
+    ).not.toBeNull();
+    zoneContainer
+      .querySelector<HTMLButtonElement>('.mau-office__editor-picker-button[data-picker-id="meeting"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onZoneBrushChange).toHaveBeenCalledWith("meeting");
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "marker",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange,
+          onPropItemChange,
+          onAutotileItemChange,
+          onMarkerRoleChange,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      markerContainer,
+    );
+
+    expect(
+      markerContainer.querySelector(
+        '.mau-office__editor-picker-button[data-picker-id="meeting.presenter"] .mau-office__editor-picker-marker-preview',
+      ),
+    ).not.toBeNull();
+    markerContainer
+      .querySelector<HTMLButtonElement>(
+        '.mau-office__editor-picker-button[data-picker-id="meeting.presenter"]',
+      )
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onMarkerRoleChange).toHaveBeenCalledWith("meeting.presenter");
   });
 });

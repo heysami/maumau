@@ -62722,6 +62722,24 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.voice-call.config.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "self-hosted",
+        "vapi"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Voice Mode",
+      "help": "Use vapi for the simple guided setup or self-hosted for direct provider webhooks.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.voice-call.config.outbound",
       "kind": "plugin",
       "type": "object",
@@ -62835,6 +62853,7 @@
         "advanced"
       ],
       "label": "Response Model",
+      "help": "Leave blank to inherit the main Maumau agent model.",
       "hasChildren": false
     },
     {
@@ -64044,6 +64063,169 @@
         "security"
       ],
       "label": "Twilio Auth Token",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.apiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "auth",
+        "security"
+      ],
+      "label": "Vapi API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.assistantId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Assistant ID",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.baseUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi API Base URL",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeAuthToken",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "advanced",
+        "auth",
+        "security"
+      ],
+      "label": "Maumau Bridge Auth Token",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeMode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "auto",
+        "manual-public-url"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Bridge Mode",
+      "help": "Use \"auto\" for the managed Tailscale Funnel bridge or \"manual-public-url\" to keep a fixed public callback URL.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgePath",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "storage"
+      ],
+      "label": "Maumau Bridge Path",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Maumau Bridge URL",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.phoneNumberId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Phone Number ID",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.preferredLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preferred Language",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.telephonyProvider",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "twilio"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Telephony Provider",
+      "help": "Use \"twilio\" for imported international numbers.",
       "hasChildren": false
     },
     {
@@ -67513,7 +67695,7 @@
         "advanced"
       ],
       "label": "Team Preset Metadata",
-      "help": "Preset metadata that records whether the team came from a bundled starter or a user-defined template. Keep this so bundled starter teams can be recreated safely.",
+      "help": "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
       "hasChildren": true
     },
     {
@@ -67527,7 +67709,7 @@
         "advanced"
       ],
       "label": "Preset ID",
-      "help": "Preset identifier for bundled or user-defined starter templates. Use durable IDs so starter-team upgrades can recognize prior derivations.",
+      "help": "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
       "hasChildren": false
     },
     {
@@ -67541,7 +67723,7 @@
         "advanced"
       ],
       "label": "Preset Source",
-      "help": "Preset origin marker: \"bundled\" for Maumau starter teams or \"user\" for locally-authored templates.",
+      "help": "Preset origin marker: \"bundled\" for Maumau bundled presets or \"user\" for locally-authored templates.",
       "hasChildren": false
     },
     {
@@ -67555,7 +67737,7 @@
         "advanced"
       ],
       "label": "Preset Version",
-      "help": "Preset schema/content version used to track starter-team upgrades. Increment this when bundled starter semantics change in a way that UI or migrations may care about.",
+      "help": "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
       "hasChildren": false
     },
     {

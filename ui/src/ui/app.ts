@@ -58,6 +58,14 @@ import { exportChatMarkdown } from "./chat/export.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
 import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
+import {
+  normalizeSceneSelection,
+  redoSceneHistory,
+  type MauOfficeEditorBrushMode,
+  type MauOfficeEditorSelection,
+  type MauOfficeEditorTool,
+  undoSceneHistory,
+} from "./controllers/mau-office-editor.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
@@ -67,6 +75,7 @@ import type {
 } from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
+import type { MauOfficeMarkerRole, MauOfficeSceneConfig, MauOfficeZoneId } from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
@@ -107,6 +116,18 @@ declare global {
 }
 
 const bootAssistantIdentity = normalizeAssistantIdentity({});
+
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
+  );
+}
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
@@ -378,6 +399,21 @@ export class MaumauApp extends LitElement {
   @state() mauOfficeLoading = false;
   @state() mauOfficeError: string | null = null;
   @state() mauOfficeState = createEmptyMauOfficeState();
+  @state() mauOfficeEditorOpen = false;
+  @state() mauOfficeEditorDraft: MauOfficeSceneConfig | null = null;
+  @state() mauOfficeEditorUndoStack: MauOfficeSceneConfig[] = [];
+  @state() mauOfficeEditorRedoStack: MauOfficeSceneConfig[] = [];
+  @state() mauOfficeEditorTool: MauOfficeEditorTool = "select";
+  @state() mauOfficeEditorToolPanelOpen = true;
+  @state() mauOfficeEditorBrushMode: MauOfficeEditorBrushMode = "paint";
+  @state() mauOfficeEditorZoneBrush: MauOfficeZoneId = "desk";
+  @state() mauOfficeEditorPropItemId = "desk-wide";
+  @state() mauOfficeEditorAutotileItemId = "meeting-table";
+  @state() mauOfficeEditorMarkerRole: MauOfficeMarkerRole = "desk.workerSeat";
+  @state() mauOfficeEditorSelection: MauOfficeEditorSelection = null;
+  @state() mauOfficeEditorDragSelection: MauOfficeEditorSelection = null;
+  @state() mauOfficeEditorHoverTileX: number | null = null;
+  @state() mauOfficeEditorHoverTileY: number | null = null;
   @state() mauOfficeChatOpen = false;
   @state() mauOfficeChatMinimized = false;
   @state() mauOfficeChatActorId: string | null = null;
@@ -565,6 +601,59 @@ export class MaumauApp extends LitElement {
     this.syncMauOfficeTicker();
   };
   private globalKeydownHandler = (e: KeyboardEvent) => {
+    const lowerKey = e.key.toLowerCase();
+    const canUseMauOfficeHistoryShortcuts =
+      this.tab === "dashboardMauOffice" &&
+      this.mauOfficeEditorOpen &&
+      !e.altKey &&
+      !isEditableKeyTarget(e.target) &&
+      (e.metaKey || e.ctrlKey);
+    if (canUseMauOfficeHistoryShortcuts) {
+      const isUndoShortcut = lowerKey === "z" && !e.shiftKey;
+      const isRedoShortcut =
+        (lowerKey === "z" && e.shiftKey) || (lowerKey === "y" && e.ctrlKey && !e.metaKey);
+      const currentDraft = this.mauOfficeEditorDraft ?? this.mauOfficeState.scene.authored;
+      if (isUndoShortcut) {
+        e.preventDefault();
+        const result = undoSceneHistory({
+          draft: currentDraft,
+          undo: this.mauOfficeEditorUndoStack,
+          redo: this.mauOfficeEditorRedoStack,
+        });
+        if (result) {
+          this.mauOfficeEditorDraft = result.draft;
+          this.mauOfficeEditorUndoStack = result.undo;
+          this.mauOfficeEditorRedoStack = result.redo;
+          this.mauOfficeEditorSelection = normalizeSceneSelection(
+            result.draft,
+            this.mauOfficeEditorSelection,
+          );
+          this.mauOfficeEditorHoverTileX = null;
+          this.mauOfficeEditorHoverTileY = null;
+        }
+        return;
+      }
+      if (isRedoShortcut) {
+        e.preventDefault();
+        const result = redoSceneHistory({
+          draft: currentDraft,
+          undo: this.mauOfficeEditorUndoStack,
+          redo: this.mauOfficeEditorRedoStack,
+        });
+        if (result) {
+          this.mauOfficeEditorDraft = result.draft;
+          this.mauOfficeEditorUndoStack = result.undo;
+          this.mauOfficeEditorRedoStack = result.redo;
+          this.mauOfficeEditorSelection = normalizeSceneSelection(
+            result.draft,
+            this.mauOfficeEditorSelection,
+          );
+          this.mauOfficeEditorHoverTileX = null;
+          this.mauOfficeEditorHoverTileY = null;
+        }
+        return;
+      }
+    }
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "k") {
       e.preventDefault();
       this.paletteOpen = !this.paletteOpen;

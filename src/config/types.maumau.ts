@@ -101,6 +101,61 @@ export type MaumauConfig = {
         /** Enabled built-in idle package ids. */
         enabled?: string[];
       };
+      scene?: {
+        /** Authored MauOffice scene payload stored as zones, props, autotiles, and typed markers. */
+        version?: 1;
+        zoneRows?: Array<Array<"desk" | "meeting" | "break" | "support" | "hall" | "outside">>;
+        wallRows?: Array<Array<boolean>>;
+        props?: Array<{
+          id: string;
+          itemId: string;
+          tileX: number;
+          tileY: number;
+          mirrored?: boolean;
+          mountOverride?: "floor" | "wall" | "underlay";
+          zOffsetOverride?: number;
+          collisionOverride?: boolean;
+          loopId?: string;
+        }>;
+        autotiles?: Array<{
+          id: string;
+          itemId: string;
+          cells?: Array<{ tileX: number; tileY: number }>;
+          mountOverride?: "floor" | "wall" | "underlay";
+          zOffsetOverride?: number;
+          collisionOverride?: boolean;
+          loopId?: string;
+        }>;
+        markers?: Array<{
+          id: string;
+          role:
+            | "spawn.office"
+            | "spawn.support"
+            | "desk.board"
+            | "desk.workerSeat"
+            | "meeting.presenter"
+            | "meeting.seat"
+            | "support.staff"
+            | "support.customer"
+            | "break.arcade"
+            | "break.snack"
+            | "break.volley"
+            | "break.tableSeat"
+            | "break.chase"
+            | "break.game"
+            | "break.jukebox"
+            | "break.reading";
+          tileX: number;
+          tileY: number;
+          pose: "stand" | "sit";
+          layer: number;
+          facingOverride?: "north" | "east" | "south" | "west";
+          footprintTiles?: {
+            width: number;
+            height: number;
+          };
+        }>;
+      };
     };
   };
   secrets?: SecretsConfig;

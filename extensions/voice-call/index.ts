@@ -243,7 +243,11 @@ const voiceCallConfigSchema = {
       advanced: true,
     },
     store: { label: "Call Log Store Path", advanced: true },
-    responseModel: { label: "Response Model", advanced: true },
+    responseModel: {
+      label: "Response Model",
+      help: "Leave blank to inherit the main Maumau agent model.",
+      advanced: true,
+    },
     responseSystemPrompt: { label: "Response System Prompt", advanced: true },
     responseTimeoutMs: { label: "Response Timeout (ms)", advanced: true },
   },

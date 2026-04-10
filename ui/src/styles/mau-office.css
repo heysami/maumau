@@ -39,6 +39,386 @@
   margin-top: -2px;
 }
 
+.mau-office__editor {
+  position: absolute;
+  inset: 12px;
+  z-index: 1305;
+  pointer-events: none;
+}
+
+.mau-office__editor-rail,
+.mau-office__editor-panel,
+.mau-office__editor-dock-status,
+.mau-office__editor-actions {
+  pointer-events: auto;
+}
+
+.mau-office__editor-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  width: 56px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(11, 15, 19, 0.94), rgba(6, 10, 13, 0.96)),
+    radial-gradient(circle at top, rgba(82, 176, 255, 0.12), transparent 56%);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.24);
+}
+
+.mau-office__editor-tool-button,
+.mau-office__editor-mode-button,
+.mau-office__editor-mini-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7f3ff;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.mau-office__editor-tool-button:hover,
+.mau-office__editor-mode-button:hover,
+.mau-office__editor-mini-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 231, 153, 0.44);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mau-office__editor-tool-button:disabled,
+.mau-office__editor-mode-button:disabled,
+.mau-office__editor-mini-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mau-office__editor-tool-button.active,
+.mau-office__editor-mode-button.active {
+  border-color: rgba(255, 220, 130, 0.82);
+  background:
+    linear-gradient(180deg, rgba(137, 101, 32, 0.42), rgba(67, 45, 9, 0.42)),
+    rgba(255, 236, 185, 0.1);
+  color: #fff5d2;
+  box-shadow: inset 0 0 0 1px rgba(86, 54, 5, 0.52);
+}
+
+.mau-office__editor-tool-button svg,
+.mau-office__editor-mode-button svg,
+.mau-office__editor-mini-button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mau-office__editor-panel {
+  position: absolute;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(11, 15, 19, 0.94), rgba(6, 10, 13, 0.96)),
+    radial-gradient(circle at top left, rgba(82, 176, 255, 0.1), transparent 52%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.mau-office__editor-rail-spacer {
+  display: block;
+  height: 1px;
+  margin: 2px 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mau-office__editor-panel--tool {
+  left: 70px;
+  top: 0;
+  width: min(320px, calc(100% - 82px));
+  max-height: calc(100% - 12px);
+  overflow: auto;
+}
+
+.mau-office__editor-panel--selection {
+  right: 0;
+  top: 0;
+  width: min(var(--mau-editor-selection-panel-width-px, 300px), calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+}
+
+.mau-office__editor-panel--selection-docked {
+  position: static;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  min-width: 0;
+  align-self: start;
+}
+
+.mau-office__editor-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mau-office__editor-mode-switch,
+.mau-office__editor-panel-actions,
+.mau-office__editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.mau-office__editor-panel label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mau-office__editor-panel span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mau-office__editor-panel select,
+.mau-office__editor-panel input {
+  min-height: 36px;
+  border-radius: 10px;
+}
+
+.mau-office__editor-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.mau-office__editor-picker-list {
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.mau-office__editor-picker-button {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+}
+
+.mau-office__editor-picker-button:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mau-office__editor-picker-button.active {
+  border-color: rgba(255, 214, 122, 0.48);
+  background:
+    linear-gradient(180deg, rgba(255, 214, 122, 0.12), rgba(255, 214, 122, 0.05)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 122, 0.12);
+}
+
+.mau-office__editor-picker-preview {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.1), transparent 56%),
+    rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.mau-office__editor-picker-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.mau-office__editor-picker-empty {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.mau-office__editor-picker-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mau-office__editor-picker-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mau-office__editor-picker-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.mau-office__editor-picker-swatch {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mau-office__editor-picker-swatch--desk {
+  background: rgba(78, 151, 255, 0.22);
+}
+
+.mau-office__editor-picker-swatch--meeting {
+  background: rgba(91, 202, 140, 0.24);
+}
+
+.mau-office__editor-picker-swatch--break {
+  background: rgba(200, 112, 255, 0.22);
+}
+
+.mau-office__editor-picker-swatch--support {
+  background: rgba(255, 198, 88, 0.24);
+}
+
+.mau-office__editor-picker-swatch--hall {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.mau-office__editor-picker-swatch--outside {
+  background: rgba(17, 20, 24, 0.68);
+}
+
+.mau-office__editor-picker-marker-preview {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 214, 122, 0.1);
+  color: #ffe1a0;
+  font-size: 10px;
+  text-align: center;
+}
+
+.mau-office__editor-picker-marker-preview svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+.mau-office__editor-heading {
+  font-family: "Silkscreen", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e8f4ff;
+}
+
+.mau-office__editor-meta,
+.mau-office__editor-ok,
+.mau-office__editor-empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.mau-office__editor-error {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(131, 39, 39, 0.18);
+  color: #ffd9d9;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mau-office__editor-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mau-office__editor-footer-panels {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.mau-office__editor-dock-status {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(11, 15, 19, 0.94), rgba(6, 10, 13, 0.96)),
+    radial-gradient(circle at top left, rgba(82, 176, 255, 0.08), transparent 52%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.mau-office__editor-canvas-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mau-office__editor-dock-status label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mau-office__editor-dock-status span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.mau-office__editor-dock-status input {
+  min-height: 36px;
+  border-radius: 10px;
+}
+
+.mau-office__editor-footer .mau-office__editor-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
 .mau-office__viewport {
   position: relative;
   display: block;
@@ -56,7 +436,7 @@
 
 .mau-office__camera {
   position: absolute;
-  left: 0;
+  left: var(--mau-editor-left-gutter-px, 0px);
   top: 0;
   width: var(--stage-width-px);
   height: var(--stage-height-px);
@@ -79,13 +459,170 @@
 
 .mau-office__tile,
 .mau-office__sprite,
-.mau-office__path-marker {
+.mau-office__path-marker,
+.mau-office__editor-preview-cell,
+.mau-office__editor-cell,
+.mau-office__editor-hit-target,
+.mau-office__editor-selection {
   position: absolute;
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   user-select: none;
+}
+
+.mau-office__editor-cell,
+.mau-office__editor-selection {
+  pointer-events: auto;
+}
+
+.mau-office__sprite,
+.mau-office__editor-selection,
+.mau-office__editor-hit-target {
   pointer-events: none;
+}
+
+.mau-office__editor-cell {
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: crosshair;
+}
+
+.mau-office__editor-cell--desk {
+  background: rgba(78, 151, 255, 0.08);
+}
+
+.mau-office__editor-cell--meeting {
+  background: rgba(91, 202, 140, 0.09);
+}
+
+.mau-office__editor-cell--break {
+  background: rgba(200, 112, 255, 0.09);
+}
+
+.mau-office__editor-cell--support {
+  background: rgba(255, 198, 88, 0.09);
+}
+
+.mau-office__editor-cell--hall {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mau-office__editor-cell--outside {
+  background: rgba(17, 20, 24, 0.16);
+}
+
+.mau-office__editor-cell--has-wall {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 214, 122, 0.2),
+    inset 0 4px 0 0 rgba(255, 214, 122, 0.78);
+}
+
+.mau-office__editor-cell:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.mau-office__sprite--editor-wall-preview {
+  opacity: 0.58;
+  filter: saturate(0.92) brightness(1.05);
+}
+
+.mau-office__editor-hit-target {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.mau-office__editor-hit-target--prop {
+  z-index: 1250;
+}
+
+.mau-office__editor-hit-target--autotile {
+  z-index: 1240;
+}
+
+.mau-office__editor-hit-target:hover {
+  box-shadow: inset 0 0 0 2px rgba(255, 240, 169, 0.48);
+}
+
+.mau-office__editor-preview-cell {
+  border: 2px dashed rgba(255, 224, 139, 0.92);
+  background: rgba(255, 224, 139, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(66, 42, 0, 0.42);
+  pointer-events: none;
+  z-index: 1235;
+}
+
+.mau-office__editor-preview-cell--desk {
+  background: rgba(78, 151, 255, 0.22);
+}
+
+.mau-office__editor-preview-cell--meeting {
+  background: rgba(93, 223, 154, 0.22);
+}
+
+.mau-office__editor-preview-cell--break {
+  background: rgba(255, 146, 221, 0.2);
+}
+
+.mau-office__editor-preview-cell--support {
+  background: rgba(255, 204, 102, 0.22);
+}
+
+.mau-office__editor-preview-cell--hall {
+  background: rgba(198, 214, 233, 0.24);
+}
+
+.mau-office__editor-preview-cell--outside {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mau-office__editor-selection {
+  border: 2px solid #ffd364;
+  box-shadow: inset 0 0 0 1px rgba(61, 40, 8, 0.6);
+  background: rgba(255, 211, 100, 0.18);
+  pointer-events: none;
+}
+
+.mau-office__editor-selection--prop {
+  background: rgba(255, 211, 100, 0.12);
+}
+
+.mau-office__editor-marker {
+  position: absolute;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(6, 9, 12, 0.88);
+  color: #f6f7f9;
+  font-family: "Silkscreen", monospace;
+  font-size: 7px;
+  line-height: 1;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  cursor: default;
+}
+
+.mau-office__editor-marker--preview {
+  border-color: rgba(255, 225, 149, 0.8);
+  background: rgba(34, 24, 8, 0.68);
+  color: #fff3cf;
+  opacity: 0.8;
+}
+
+.mau-office__editor-marker--interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.mau-office__sprite--editor-hover-preview {
+  opacity: 0.56;
+  filter: saturate(1.04) brightness(1.08);
 }
 
 .mau-office__sign,
@@ -222,6 +759,63 @@
   position: absolute;
   display: block;
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .mau-office__editor {
+    inset: 8px;
+  }
+
+  .mau-office__editor-rail {
+    left: 0;
+    right: 0;
+    width: auto;
+    grid-auto-flow: column;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+
+  .mau-office__editor-rail-spacer {
+    width: 1px;
+    height: auto;
+    margin: 4px 2px;
+  }
+
+  .mau-office__editor-panel--tool {
+    left: 0;
+    right: 0;
+    top: 72px;
+    width: auto;
+  }
+
+  .mau-office__editor-panel--selection {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 78px;
+    width: auto;
+    max-height: min(48%, 300px);
+  }
+
+  .mau-office__editor-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mau-office__editor-footer-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .mau-office__editor-dock-status {
+    max-width: none;
+  }
+
+  .mau-office__editor-actions {
+    justify-content: stretch;
+  }
+
+  .mau-office__editor-actions .btn {
+    flex: 1 1 0;
+  }
 }
 
 .mau-office__activity-ball {

@@ -62,7 +62,6 @@ export function createVoiceCallBaseConfig(params?: {
       provider: "openai",
       openai: { model: "gpt-4o-mini-tts", voice: "coral" },
     },
-    responseModel: "openai/gpt-4o-mini",
     responseTimeoutMs: 30000,
   };
 }

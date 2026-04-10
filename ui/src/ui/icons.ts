@@ -222,6 +222,28 @@ export const icons = {
       <path d="m4.9 4.9 2.9 2.9" />
     </svg>
   `,
+  cursor: html`
+    <svg viewBox="0 0 24 24">
+      <path d="m4 3 7.5 16.5 2.58-6.42L20.5 10.5 4 3Z" />
+      <path d="m13 13 6 6" />
+    </svg>
+  `,
+  layoutGrid: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M12 3v18" />
+      <path d="M3 12h18" />
+    </svg>
+  `,
+  bricks: html`
+    <svg viewBox="0 0 24 24">
+      <path d="M3 8h18" />
+      <path d="M3 16h18" />
+      <path d="M7 8v4" />
+      <path d="M17 8v4" />
+      <path d="M12 16v4" />
+    </svg>
+  `,
 
   // Tool icons
   wrench: html`
@@ -445,6 +467,18 @@ export const icons = {
     <svg viewBox="0 0 24 24">
       <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
       <path d="M21 3v5h-5" />
+    </svg>
+  `,
+  undo: html`
+    <svg viewBox="0 0 24 24">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M20 20a8 8 0 0 0-8-8H4" />
+    </svg>
+  `,
+  redo: html`
+    <svg viewBox="0 0 24 24">
+      <path d="m15 14 5-5-5-5" />
+      <path d="M4 20a8 8 0 0 1 8-8h8" />
     </svg>
   `,
   trash: html`
