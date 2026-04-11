@@ -111,6 +111,12 @@ export {
   stringEnum,
 } from "../agents/schema/typebox.js";
 export {
+  jsonResult,
+  readNumberParam,
+  readStringArrayParam,
+  readStringParam,
+} from "../agents/tools/common.js";
+export {
   DEFAULT_SECRET_FILE_MAX_BYTES,
   loadSecretFileSync,
   readSecretFileSync,

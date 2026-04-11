@@ -1,5 +1,9 @@
 export {
   definePluginEntry,
+  jsonResult,
+  readNumberParam,
+  readStringArrayParam,
+  readStringParam,
   resolveGatewayBindUrl,
   resolveGatewayPort,
   resolveTailnetHostWithRunner,
@@ -7,12 +11,6 @@ export {
   type MaumauPluginApi,
   type MaumauPluginToolContext,
 } from "maumau/plugin-sdk/core";
-export {
-  jsonResult,
-  readNumberParam,
-  readStringArrayParam,
-  readStringParam,
-} from "maumau/plugin-sdk/agent-runtime";
 export {
   resolveStorePath,
   resolveSessionStoreEntry,

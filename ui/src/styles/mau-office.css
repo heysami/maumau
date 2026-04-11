@@ -303,12 +303,20 @@
   background: rgba(91, 202, 140, 0.24);
 }
 
+.mau-office__editor-picker-swatch--browser {
+  background: rgba(72, 222, 255, 0.28);
+}
+
 .mau-office__editor-picker-swatch--break {
   background: rgba(200, 112, 255, 0.22);
 }
 
 .mau-office__editor-picker-swatch--support {
   background: rgba(255, 198, 88, 0.24);
+}
+
+.mau-office__editor-picker-swatch--telephony {
+  background: rgba(255, 138, 92, 0.28);
 }
 
 .mau-office__editor-picker-swatch--hall {
@@ -498,12 +506,20 @@
   background: rgba(91, 202, 140, 0.09);
 }
 
+.mau-office__editor-cell--browser {
+  background: rgba(72, 222, 255, 0.12);
+}
+
 .mau-office__editor-cell--break {
   background: rgba(200, 112, 255, 0.09);
 }
 
 .mau-office__editor-cell--support {
   background: rgba(255, 198, 88, 0.09);
+}
+
+.mau-office__editor-cell--telephony {
+  background: rgba(255, 138, 92, 0.12);
 }
 
 .mau-office__editor-cell--hall {
@@ -566,12 +582,20 @@
   background: rgba(93, 223, 154, 0.22);
 }
 
+.mau-office__editor-preview-cell--browser {
+  background: rgba(72, 222, 255, 0.24);
+}
+
 .mau-office__editor-preview-cell--break {
   background: rgba(255, 146, 221, 0.2);
 }
 
 .mau-office__editor-preview-cell--support {
   background: rgba(255, 204, 102, 0.22);
+}
+
+.mau-office__editor-preview-cell--telephony {
+  background: rgba(255, 162, 118, 0.24);
 }
 
 .mau-office__editor-preview-cell--hall {

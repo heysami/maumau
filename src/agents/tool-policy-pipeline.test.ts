@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import {
   applyToolPolicyPipeline,
+  buildDefaultToolPolicyPipelineSteps,
   resetToolPolicyWarningCacheForTest,
 } from "./tool-policy-pipeline.js";
 
@@ -157,5 +158,21 @@ describe("tool-policy-pipeline", () => {
       ],
     });
     expect(filtered.map((t) => (t as unknown as DummyTool).name)).toEqual(["exec"]);
+  });
+
+  test("keeps agent plugin-only allowlists restrictive", () => {
+    const tools = [{ name: "exec" }, { name: "plugin_tool" }] as unknown as DummyTool[];
+    const filtered = applyToolPolicyPipeline({
+      // oxlint-disable-next-line typescript/no-explicit-any
+      tools: tools as any,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      toolMeta: (t: any) => (t.name === "plugin_tool" ? { pluginId: "foo" } : undefined),
+      warn: () => {},
+      steps: buildDefaultToolPolicyPipelineSteps({
+        agentId: "memory-curator",
+        agentPolicy: { allow: ["plugin_tool"] },
+      }),
+    });
+    expect(filtered.map((t) => (t as unknown as DummyTool).name)).toEqual(["plugin_tool"]);
   });
 });

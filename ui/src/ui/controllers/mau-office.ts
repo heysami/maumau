@@ -55,6 +55,8 @@ const EVENT_ACTIVITY_WINDOW_MS = 12_000;
 const IDLE_ACTIVITY_WINDOW_MS = 18_000;
 const PATH_MS_PER_TILE = 320;
 const MIN_PATH_SEGMENT_MS = 180;
+const LOCAL_ROOM_HOP_MAX_TILES = 8;
+const LOCAL_NODE_HOP_MAX_TILES = 8;
 const MAX_VISITOR_WORKERS = 4;
 const SOLO_IDLE_PACKAGE_IDS = [
   "arcade_corner",
@@ -683,6 +685,35 @@ function nodeForAnchor(anchorId: string) {
   return scene.nodes[anchor.nodeId] ?? fallbackNode();
 }
 
+function resolveActorGraphNodeId(
+  actor: Pick<OfficeActor, "nodeId" | "anchorId">,
+  preferredNodeId?: string | null,
+): string {
+  const scene = activeScene();
+  if (preferredNodeId && scene.nodes[preferredNodeId]) {
+    return preferredNodeId;
+  }
+  if (scene.nodes[actor.nodeId]) {
+    return actor.nodeId;
+  }
+  const anchorNodeId = scene.anchors[actor.anchorId]?.nodeId;
+  if (anchorNodeId && scene.nodes[anchorNodeId]) {
+    return anchorNodeId;
+  }
+  return fallbackNode().id;
+}
+
+function resolveActorGraphRoomId(
+  actor: Pick<OfficeActor, "anchorId" | "currentRoomId">,
+  nodeId: string,
+): MauOfficeRoomId | "hall" | "outside" {
+  return (
+    activeScene().nodes[nodeId]?.roomId ??
+    activeScene().anchors[actor.anchorId]?.roomId ??
+    actor.currentRoomId
+  );
+}
+
 function tileKey(tileX: number, tileY: number): string {
   return `${tileX},${tileY}`;
 }
@@ -729,6 +760,62 @@ function tileDistance(
   return Math.abs(left.tileX - right.tileX) + Math.abs(left.tileY - right.tileY);
 }
 
+function hasClearNodeEdgePath(fromNodeId: string, toNodeId: string): boolean {
+  const scene = activeScene();
+  const from = scene.nodes[fromNodeId];
+  const to = scene.nodes[toNodeId];
+  if (!from || !to || !from.neighbors.includes(toNodeId)) {
+    return false;
+  }
+  if (from.tileX !== to.tileX && from.tileY !== to.tileY) {
+    return false;
+  }
+  const stepX = Math.sign(to.tileX - from.tileX);
+  const stepY = Math.sign(to.tileY - from.tileY);
+  let tileX = from.tileX;
+  let tileY = from.tileY;
+  while (tileX !== to.tileX || tileY !== to.tileY) {
+    tileX += stepX;
+    tileY += stepY;
+    const key = tileKey(tileX, tileY);
+    if (!scene.walkableTileKeys.has(key) || scene.blockedTileKeys.has(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isAbstractPathSegment(
+  from: Pick<OfficePath["waypoints"][number], "x" | "y">,
+  to: Pick<OfficePath["waypoints"][number], "x" | "y">,
+): boolean {
+  const fromTile = tilePointFromPixelPosition(from.x, from.y);
+  const toTile = tilePointFromPixelPosition(to.x, to.y);
+  const dx = toTile.tileX - fromTile.tileX;
+  const dy = toTile.tileY - fromTile.tileY;
+  if (dx === 0 && dy === 0) {
+    return false;
+  }
+  if (dx !== 0 && dy !== 0) {
+    return true;
+  }
+  const stepX = Math.sign(dx);
+  const stepY = Math.sign(dy);
+  let tileX = fromTile.tileX;
+  let tileY = fromTile.tileY;
+  while (tileX !== toTile.tileX || tileY !== toTile.tileY) {
+    tileX += stepX;
+    tileY += stepY;
+    if (tileX === toTile.tileX && tileY === toTile.tileY) {
+      break;
+    }
+    if (activeScene().blockedTileKeys.has(tileKey(tileX, tileY))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function candidateAnchorIds(anchorId: string): string[] {
   const scene = activeScene();
   const anchor = scene.anchors[anchorId];
@@ -738,7 +825,8 @@ function candidateAnchorIds(anchorId: string): string[] {
   const sortByDistance = (ids: readonly string[]) =>
     [...ids].sort(
       (leftId, rightId) =>
-        tileDistance(scene.anchors[leftId]!, anchor) - tileDistance(scene.anchors[rightId]!, anchor),
+        tileDistance(scene.anchors[leftId]!, anchor) -
+        tileDistance(scene.anchors[rightId]!, anchor),
     );
   const role = sceneMarkerRoleForId(scene, anchorId);
   if (role === "desk.workerSeat") {
@@ -908,7 +996,10 @@ function syncActorToAnchor(actor: OfficeActor, anchorId: string) {
     return;
   }
   actor.nodeId = anchor.nodeId;
-  const reachableTile = resolveNearestWalkableTile(Math.round(anchor.tileX), Math.round(anchor.tileY));
+  const reachableTile = resolveNearestWalkableTile(
+    Math.round(anchor.tileX),
+    Math.round(anchor.tileY),
+  );
   if (reachableTile.wasAdjusted) {
     const reachablePoint = pixelPointForTile(reachableTile.tileX, reachableTile.tileY);
     actor.x = reachablePoint.x;
@@ -993,7 +1084,36 @@ function bubbleTextForTool(toolId: string): {
       anchorId: "meeting_presenter",
     };
   }
-  if (normalized.includes("canvas") || normalized.includes("browser")) {
+  if (
+    normalized.includes("browser") ||
+    normalized.includes("playwright") ||
+    normalized.includes("cursor") ||
+    normalized.includes("clawd")
+  ) {
+    return {
+      label: "Working in the browser room",
+      kind: "desk_work",
+      roomId: "browser",
+      anchorId: "browser_worker_1",
+    };
+  }
+  if (
+    normalized.includes("telephony") ||
+    normalized.includes("voice-call") ||
+    normalized.includes("phone") ||
+    normalized.includes("twilio") ||
+    normalized.includes("telnyx") ||
+    normalized.includes("plivo") ||
+    normalized.includes("vapi")
+  ) {
+    return {
+      label: "Taking an outside call",
+      kind: "customer_support",
+      roomId: "telephony",
+      anchorId: "telephony_staff_1",
+    };
+  }
+  if (normalized.includes("canvas")) {
     return {
       label: "Updating the whiteboard",
       kind: "whiteboard_update",
@@ -1310,8 +1430,35 @@ function createMeetingActivityForActor(
   });
 }
 
+function createPostMeetingActivityForActor(
+  actor: Pick<OfficeActor, "kind" | "homeAnchorId">,
+  params: {
+    id: string;
+    source: ActivitySource;
+  },
+): OfficeActivity {
+  if (actor.kind === "visitor") {
+    const outsideAnchorId = actor.homeAnchorId.startsWith("outside_")
+      ? actor.homeAnchorId
+      : "outside_mauHome";
+    return {
+      ...offsiteActivityForAnchor(outsideAnchorId),
+      id: params.id,
+      source: params.source,
+    };
+  }
+  return createActivity({
+    id: params.id,
+    kind: "desk_work",
+    label: "Working through a task",
+    roomId: roomFromAnchor(actor.homeAnchorId),
+    anchorId: actor.homeAnchorId,
+    source: params.source,
+  });
+}
+
 function snapshotActivityForRow(
-  actor: Pick<OfficeActor, "roleHint" | "homeAnchorId">,
+  actor: Pick<OfficeActor, "kind" | "roleHint" | "homeAnchorId">,
   row: GatewaySessionRow | null,
   nowMs: number,
   isHeartbeatSession = false,
@@ -1333,6 +1480,12 @@ function snapshotActivityForRow(
     });
   }
   if (isMeetingSessionRow(row)) {
+    if (normalizePreviewText(row.lastMessagePreview)) {
+      return createPostMeetingActivityForActor(actor, {
+        id: "snapshot-meeting-followup",
+        source: "snapshot",
+      });
+    }
     return createActivity({
       id: "snapshot-meeting",
       kind: "meeting",
@@ -1359,6 +1512,16 @@ function snapshotActivityForRow(
     });
   }
   return null;
+}
+
+function isInterAgentCoordinationTool(toolId: string): boolean {
+  const normalized = toolId.trim().toLowerCase();
+  return (
+    normalized === "sessions_send" ||
+    normalized === "sessions_spawn" ||
+    normalized.includes("subagent") ||
+    normalized.includes("yield")
+  );
 }
 
 function pathBetween(startNodeId: string, targetNodeId: string): string[] {
@@ -1412,14 +1575,98 @@ function pushPathWaypoint(
 }
 
 function buildPathWaypoints(
-  actor: Pick<OfficeActor, "x" | "y" | "nodeId">,
+  actor: Pick<OfficeActor, "x" | "y" | "nodeId" | "anchorId" | "currentRoomId">,
   nodeIds: string[],
   targetAnchorId: string,
   targetTile: { tileX: number; tileY: number; requiresAnchorSnap: boolean },
-): OfficePath["waypoints"] {
-  const waypoints: OfficePath["waypoints"] = [{ x: actor.x, y: actor.y, nodeId: actor.nodeId }];
-  let currentTile = tilePointFromPixelPosition(actor.x, actor.y);
-  const routeStops = [
+): OfficePath["waypoints"] | null {
+  const targetAnchor = activeScene().anchors[targetAnchorId];
+  const startNodeId = resolveActorGraphNodeId(actor);
+  const buildWaypointsForStops = (
+    routeStops: Array<{
+      tileX: number;
+      tileY: number;
+      waypointNodeId: string | null;
+      graphNodeId: string | null;
+      roomId: MauOfficeRoomId | "hall" | "outside";
+    }>,
+  ): OfficePath["waypoints"] | null => {
+    const waypoints: OfficePath["waypoints"] = [
+      {
+        x: actor.x,
+        y: actor.y,
+        nodeId: activeScene().nodes[actor.nodeId] ? actor.nodeId : null,
+      },
+    ];
+    let currentTile = tilePointFromPixelPosition(actor.x, actor.y);
+    let currentRoomId = resolveActorGraphRoomId(actor, startNodeId);
+    let currentNodeId: string | null = startNodeId;
+    for (const stop of routeStops) {
+      const segment = tilePathBetween(currentTile, stop);
+      if (!segment) {
+        if (currentTile.tileX === stop.tileX && currentTile.tileY === stop.tileY) {
+          currentRoomId = stop.roomId;
+          currentNodeId = stop.graphNodeId ?? currentNodeId;
+          continue;
+        }
+        const isInteriorShortHop =
+          currentRoomId === stop.roomId &&
+          stop.roomId !== "hall" &&
+          stop.roomId !== "outside" &&
+          tileDistance(currentTile, stop) <= LOCAL_ROOM_HOP_MAX_TILES;
+        const isNeighborNodeHop =
+          Boolean(currentNodeId && stop.graphNodeId) &&
+          activeScene().nodes[currentNodeId!]?.neighbors.includes(stop.graphNodeId!);
+        const isShortNeighborNodeHop =
+          isNeighborNodeHop && tileDistance(currentTile, stop) <= LOCAL_NODE_HOP_MAX_TILES;
+        const isClearNeighborCorridor =
+          isNeighborNodeHop && hasClearNodeEdgePath(currentNodeId!, stop.graphNodeId!);
+        if (!isInteriorShortHop && !isShortNeighborNodeHop && !isClearNeighborCorridor) {
+          return null;
+        }
+        const pixelPoint = pixelPointForTile(stop.tileX, stop.tileY);
+        pushPathWaypoint(waypoints, {
+          x: pixelPoint.x,
+          y: pixelPoint.y,
+          nodeId: stop.waypointNodeId,
+        });
+      } else {
+        for (let index = 1; index < segment.length; index += 1) {
+          const tile = segment[index]!;
+          const pixelPoint = pixelPointForTile(tile.tileX, tile.tileY);
+          pushPathWaypoint(waypoints, {
+            x: pixelPoint.x,
+            y: pixelPoint.y,
+            nodeId:
+              routeStops.find(
+                (candidate) =>
+                  candidate.waypointNodeId &&
+                  candidate.tileX === tile.tileX &&
+                  candidate.tileY === tile.tileY,
+              )?.waypointNodeId ?? null,
+          });
+        }
+      }
+      currentTile = { tileX: stop.tileX, tileY: stop.tileY };
+      currentRoomId = stop.roomId;
+      currentNodeId = stop.graphNodeId ?? currentNodeId;
+    }
+
+    if (targetAnchor && !targetTile.requiresAnchorSnap) {
+      const targetPoint = pixelPointForTile(targetTile.tileX, targetTile.tileY);
+      pushPathWaypoint(waypoints, {
+        x: targetPoint.x,
+        y: targetPoint.y,
+        nodeId:
+          targetAnchor.tileX === targetTile.tileX && targetAnchor.tileY === targetTile.tileY
+            ? targetAnchor.nodeId
+            : null,
+      });
+    }
+    return waypoints;
+  };
+
+  const preferredRouteStops = [
     ...nodeIds.flatMap((nodeId) => {
       const node = activeScene().nodes[nodeId];
       if (!node) {
@@ -1430,55 +1677,33 @@ function buildPathWaypoints(
         {
           tileX: reachableTile.tileX,
           tileY: reachableTile.tileY,
-          nodeId: reachableTile.wasAdjusted ? null : nodeId,
+          waypointNodeId: reachableTile.wasAdjusted ? null : nodeId,
+          graphNodeId: nodeId,
+          roomId: node.roomId,
         },
       ];
     }),
-    { tileX: targetTile.tileX, tileY: targetTile.tileY, nodeId: null },
+    {
+      tileX: targetTile.tileX,
+      tileY: targetTile.tileY,
+      waypointNodeId: null,
+      graphNodeId: targetAnchor?.nodeId ?? null,
+      roomId: targetAnchor?.roomId ?? "hall",
+    },
   ];
 
-  for (const stop of routeStops) {
-    const segment = tilePathBetween(currentTile, stop);
-    if (segment) {
-      for (let index = 1; index < segment.length; index += 1) {
-        const tile = segment[index]!;
-        const pixelPoint = pixelPointForTile(tile.tileX, tile.tileY);
-        pushPathWaypoint(waypoints, {
-          x: pixelPoint.x,
-          y: pixelPoint.y,
-          nodeId:
-            routeStops.find(
-              (candidate) =>
-                candidate.nodeId &&
-                candidate.tileX === tile.tileX &&
-                candidate.tileY === tile.tileY,
-            )?.nodeId ?? null,
-        });
-      }
-    } else if (currentTile.tileX !== stop.tileX || currentTile.tileY !== stop.tileY) {
-      const pixelPoint = pixelPointForTile(stop.tileX, stop.tileY);
-      pushPathWaypoint(waypoints, {
-        x: pixelPoint.x,
-        y: pixelPoint.y,
-        nodeId: stop.nodeId,
-      });
-    }
-    currentTile = { tileX: stop.tileX, tileY: stop.tileY };
-  }
-
-  const targetAnchor = activeScene().anchors[targetAnchorId];
-  if (targetAnchor && !targetTile.requiresAnchorSnap) {
-    const targetPoint = pixelPointForTile(targetTile.tileX, targetTile.tileY);
-    pushPathWaypoint(waypoints, {
-      x: targetPoint.x,
-      y: targetPoint.y,
-      nodeId:
-        targetAnchor.tileX === targetTile.tileX && targetAnchor.tileY === targetTile.tileY
-          ? targetAnchor.nodeId
-          : null,
-    });
-  }
-  return waypoints;
+  return (
+    buildWaypointsForStops(preferredRouteStops) ??
+    buildWaypointsForStops([
+      {
+        tileX: targetTile.tileX,
+        tileY: targetTile.tileY,
+        waypointNodeId: null,
+        graphNodeId: targetAnchor?.nodeId ?? null,
+        roomId: targetAnchor?.roomId ?? "hall",
+      },
+    ])
+  );
 }
 
 function preferRecentBubbleText(
@@ -1534,6 +1759,9 @@ function resolvePathSegmentDuration(
   from: { x: number; y: number },
   to: { x: number; y: number },
 ): number {
+  if (isAbstractPathSegment(from, to)) {
+    return 1;
+  }
   const tiles = Math.hypot(to.x - from.x, to.y - from.y) / activeScene().tileSize;
   return Math.max(MIN_PATH_SEGMENT_MS, Math.round(tiles * PATH_MS_PER_TILE));
 }
@@ -1667,18 +1895,18 @@ function setActorActivity(
     return;
   }
   const startNodeId = actor.path
-    ? (actor.path.waypoints[Math.min(actor.path.segmentIndex + 1, actor.path.waypoints.length - 1)]
-        ?.nodeId ?? actor.nodeId)
-    : actor.nodeId;
+    ? resolveActorGraphNodeId(
+        actor,
+        actor.path.waypoints[Math.min(actor.path.segmentIndex + 1, actor.path.waypoints.length - 1)]
+          ?.nodeId,
+      )
+    : resolveActorGraphNodeId(actor);
   const targetNodeId = nodeForAnchor(resolvedActivity.anchorId).id;
   const nodeIds = pathBetween(startNodeId, targetNodeId);
   const targetTile = resolveReachableTargetTile(resolvedActivity.anchorId);
   const waypoints = buildPathWaypoints(actor, nodeIds, resolvedActivity.anchorId, targetTile);
-  if (waypoints.length < 2) {
+  if (!waypoints || waypoints.length < 2) {
     actor.currentActivity = resolvedActivity;
-    actor.anchorId = resolvedActivity.anchorId;
-    actor.currentRoomId = resolvedActivity.roomId;
-    syncActorToAnchor(actor, resolvedActivity.anchorId);
     actor.queuedActivity = null;
     actor.path = null;
     if (resolvedActivity.bubbleText) {
@@ -2178,7 +2406,12 @@ function buildSnapshotState(
       prev,
       preferRecentBubbleText(
         prev,
-        snapshotActivityForRow({ roleHint, homeAnchorId }, snapshotRow, nowMs, isHeartbeatSnapshot),
+        snapshotActivityForRow(
+          { kind: "worker", roleHint, homeAnchorId },
+          snapshotRow,
+          nowMs,
+          isHeartbeatSnapshot,
+        ),
         snapshotRow?.updatedAt,
       ),
       nowMs,
@@ -2238,7 +2471,7 @@ function buildSnapshotState(
           preferRecentBubbleText(
             prev,
             snapshotActivityForRow(
-              { roleHint, homeAnchorId },
+              { kind: "visitor", roleHint, homeAnchorId },
               row,
               nowMs,
               Boolean(heartbeatSessionKeys[row.key]),
@@ -2703,7 +2936,7 @@ export function applyMauOfficeSessionToolEvent(
   const sessionRoleHint = roleHintForSessionKey(sessionKey);
   const baseMapped = bubbleTextForTool(toolId);
   const mapped =
-    sessionRoleHint === "meeting"
+    sessionRoleHint === "meeting" && isInterAgentCoordinationTool(toolId)
       ? {
           label: "Coordinating with helpers",
           kind: "meeting" as const,
@@ -2770,9 +3003,11 @@ export function applyMauOfficeSessionToolEvent(
           roomId: mapped.roomId,
           anchorId:
             mapped.kind === "customer_support"
-              ? actor.kind === "visitor" && isUserSessionKey(actor.sessionKey)
-                ? visitorSupportAnchorForAgentId(next.actors, actor.agentId)
-                : supportAnchorForHome(actor.homeAnchorId)
+              ? mapped.roomId === "telephony"
+                ? mapped.anchorId
+                : actor.kind === "visitor" && isUserSessionKey(actor.sessionKey)
+                  ? visitorSupportAnchorForAgentId(next.actors, actor.agentId)
+                  : supportAnchorForHome(actor.homeAnchorId)
               : mapped.kind === "meeting"
                 ? actor.kind === "visitor"
                   ? visitorMeetingAnchor()
@@ -2783,7 +3018,7 @@ export function applyMauOfficeSessionToolEvent(
         }),
     nowMs,
   );
-  if (mapped.kind === "customer_support" && !isHeartbeatSession) {
+  if (mapped.kind === "customer_support" && mapped.roomId === "support" && !isHeartbeatSession) {
     touchSupportVisitorForSession(next, sessionKey, nowMs);
   }
   return next;
@@ -2895,6 +3130,12 @@ export function applyMauOfficeSessionMessageEvent(
           }),
     nowMs,
   );
+  if (!isHeartbeatSession && sessionRoleHint === "meeting") {
+    actor.snapshotActivity = createPostMeetingActivityForActor(actor, {
+      id: "snapshot-meeting-followup",
+      source: "snapshot",
+    });
+  }
   if (isSupport && !isHeartbeatSession) {
     touchSupportVisitorForSession(next, sessionKey, nowMs);
     if (role === "user") {

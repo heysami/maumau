@@ -114,7 +114,16 @@ type WorkerRenderPlacement = {
   anchor?: MauOfficeAnchor;
 };
 
-const ZONE_OPTIONS: MauOfficeZoneId[] = ["desk", "meeting", "break", "support", "hall", "outside"];
+const ZONE_OPTIONS: MauOfficeZoneId[] = [
+  "desk",
+  "meeting",
+  "browser",
+  "break",
+  "support",
+  "telephony",
+  "hall",
+  "outside",
+];
 
 const MARKER_ROLE_OPTIONS: MauOfficeMarkerRole[] = [
   "spawn.office",
@@ -123,8 +132,10 @@ const MARKER_ROLE_OPTIONS: MauOfficeMarkerRole[] = [
   "desk.workerSeat",
   "meeting.presenter",
   "meeting.seat",
+  "browser.workerSeat",
   "support.staff",
   "support.customer",
+  "telephony.staff",
   "break.arcade",
   "break.snack",
   "break.volley",
@@ -581,7 +592,14 @@ function resolveViewportAvailableWidth(): number {
 }
 
 function labelForRoom(scene: CompiledMauOfficeScene, roomId: MauOfficeRoomId | "all"): string {
-  return roomId === "all" ? t("dashboard.mauOffice.allRooms") : scene.rooms[roomId].label;
+  if (roomId === "all") {
+    return t("dashboard.mauOffice.allRooms");
+  }
+  return (
+    t(`dashboard.mauOffice.rooms.${roomId}` as const) ??
+    scene.rooms[roomId].doorLabel ??
+    scene.rooms[roomId].label
+  );
 }
 
 function resolveEffectiveRoomFocus(state: MauOfficeState): MauOfficeRoomId | "all" {
@@ -1458,16 +1476,14 @@ function selectionAlreadyAtHover(
     const marker = draft.markers.find((entry) => entry.id === selection.id);
     return Boolean(
       marker &&
-        Math.round(marker.tileX) === hover.tileX &&
-        Math.round(marker.tileY) === hover.tileY,
+      Math.round(marker.tileX) === hover.tileX &&
+      Math.round(marker.tileY) === hover.tileY,
     );
   }
   if (selection.kind === "prop") {
     const entry = draft.props.find((candidate) => candidate.id === selection.id);
     return Boolean(
-      entry &&
-        Math.round(entry.tileX) === hover.tileX &&
-        Math.round(entry.tileY) === hover.tileY,
+      entry && Math.round(entry.tileX) === hover.tileX && Math.round(entry.tileY) === hover.tileY,
     );
   }
   const entry = draft.autotiles.find((candidate) => candidate.id === selection.id);
@@ -1560,7 +1576,9 @@ function startEditorSelectionDrag(
   window.addEventListener("pointercancel", handleCancel);
 }
 
-function spritePreviewKey(sprite: Pick<MauOfficeSpritePlacement, "id" | "asset" | "tileX" | "tileY">) {
+function spritePreviewKey(
+  sprite: Pick<MauOfficeSpritePlacement, "id" | "asset" | "tileX" | "tileY">,
+) {
   return `${sprite.id}:${sprite.asset}:${sprite.tileX}:${sprite.tileY}`;
 }
 
@@ -1636,7 +1654,13 @@ function renderEditorHoverPreview(props: MauOfficeProps, scene: CompiledMauOffic
         ? previewScene.map.propSprites.filter((sprite) => sprite.sourceId === activeSelection.id)
         : previewScene.map.propSprites.filter((sprite) => sprite.id === activeSelection.id);
     return previewSprites.map((sprite) =>
-      renderProp(previewScene, sprite, props.basePath, 0, "mau-office__sprite--editor-hover-preview"),
+      renderProp(
+        previewScene,
+        sprite,
+        props.basePath,
+        0,
+        "mau-office__sprite--editor-hover-preview",
+      ),
     );
   }
   if (editor.brushMode !== "paint") {
@@ -1688,7 +1712,13 @@ function renderEditorHoverPreview(props: MauOfficeProps, scene: CompiledMauOffic
     return renderEditorHoverMarkerPreview(scene, hover.tileX, hover.tileY, editor.markerRole);
   }
   if (editor.tool === "autotile") {
-    const result = paintSceneAutotileCell(editor.draft, editor.autotileItemId, hover.tileX, hover.tileY, "paint");
+    const result = paintSceneAutotileCell(
+      editor.draft,
+      editor.autotileItemId,
+      hover.tileX,
+      hover.tileY,
+      "paint",
+    );
     if (!result.id) {
       return nothing;
     }
@@ -1721,9 +1751,7 @@ function renderEditorHoverPreview(props: MauOfficeProps, scene: CompiledMauOffic
 
 function editorSupportsDirectSelection(
   editor: NonNullable<MauOfficeProps["editor"]>,
-  kind: MauOfficeEditorSelection extends { kind: infer SelectionKind }
-    ? SelectionKind
-    : never,
+  kind: MauOfficeEditorSelection extends { kind: infer SelectionKind } ? SelectionKind : never,
 ): boolean {
   if (editor.tool === "select") {
     return true;
@@ -1756,7 +1784,8 @@ function interactWithEditorSelection(
 }
 
 function renderEditorWallPreview(scene: CompiledMauOfficeScene, basePath: string) {
-  return scene.map.wallSprites.map((sprite) => html`
+  return scene.map.wallSprites.map(
+    (sprite) => html`
     <img
       class="mau-office__sprite mau-office__sprite--${sprite.kind} mau-office__sprite--${sprite.layer} mau-office__sprite--editor-wall-preview"
       style=${positionForSprite(scene, sprite)}
@@ -1764,7 +1793,8 @@ function renderEditorWallPreview(scene: CompiledMauOfficeScene, basePath: string
       alt=""
       draggable="false"
     />
-  `);
+  `,
+  );
 }
 
 function renderEditorSelectionTargets(props: MauOfficeProps, scene: CompiledMauOfficeScene) {
@@ -1835,7 +1865,9 @@ function formatEditorLabel(value: string): string {
     .join(" ");
 }
 
-function resolveCatalogPreviewAsset(item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number]) {
+function resolveCatalogPreviewAsset(
+  item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number],
+) {
   if (item.asset) {
     return item.asset;
   }
@@ -1851,7 +1883,9 @@ function resolveCatalogPreviewAsset(item: (typeof FLOOR_PROP_ITEMS)[number] | (t
   return null;
 }
 
-function describeCatalogItem(item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number]) {
+function describeCatalogItem(
+  item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number],
+) {
   const parts = [`${item.tileWidth}x${item.tileHeight}`, formatEditorLabel(item.mount)];
   if (item.autotileMode) {
     parts.unshift(formatEditorLabel(item.autotileMode));
@@ -1875,14 +1909,17 @@ function renderCatalogPicker(params: {
   basePath: string;
   onSelect: (id: string) => void;
 }) {
-  const selectedItem = params.items.find((item) => item.id === params.selectedId) ?? params.items[0] ?? null;
+  const selectedItem =
+    params.items.find((item) => item.id === params.selectedId) ?? params.items[0] ?? null;
   return html`
     <div class="mau-office__editor-picker">
       <div>
         <div class="mau-office__editor-heading">${params.label}</div>
-        ${selectedItem
-          ? html`<div class="mau-office__editor-meta">${selectedItem.label}</div>`
-          : nothing}
+        ${
+          selectedItem
+            ? html`<div class="mau-office__editor-meta">${selectedItem.label}</div>`
+            : nothing
+        }
       </div>
       <div class="mau-office__editor-picker-list" role="listbox" aria-label=${params.label}>
         ${params.items.map((item) => {
@@ -1897,8 +1934,9 @@ function renderCatalogPicker(params: {
               @click=${() => params.onSelect(item.id)}
             >
               <span class="mau-office__editor-picker-preview">
-                ${previewAsset
-                  ? html`
+                ${
+                  previewAsset
+                    ? html`
                       <img
                         class="mau-office__editor-picker-image"
                         src=${resolveMauOfficeAssetUrl(params.basePath, previewAsset)}
@@ -1906,7 +1944,10 @@ function renderCatalogPicker(params: {
                         draggable="false"
                       />
                     `
-                  : html`<span class="mau-office__editor-picker-empty">No Preview</span>`}
+                    : html`
+                        <span class="mau-office__editor-picker-empty">No Preview</span>
+                      `
+                }
               </span>
               <span class="mau-office__editor-picker-copy">
                 <span class="mau-office__editor-picker-label">${item.label}</span>
@@ -2169,7 +2210,9 @@ function selectedSceneSummary(editor: NonNullable<MauOfficeProps["editor"]>) {
     };
   }
   if (editor.selection.kind === "autotile") {
-    const selectedAutotile = editor.draft.autotiles.find((entry) => entry.id === editor.selection?.id);
+    const selectedAutotile = editor.draft.autotiles.find(
+      (entry) => entry.id === editor.selection?.id,
+    );
     if (!selectedAutotile) {
       return null;
     }
@@ -2190,10 +2233,7 @@ function selectedSceneSummary(editor: NonNullable<MauOfficeProps["editor"]>) {
   };
 }
 
-function renderEditorToolPalette(
-  editor: NonNullable<MauOfficeProps["editor"]>,
-  basePath: string,
-) {
+function renderEditorToolPalette(editor: NonNullable<MauOfficeProps["editor"]>, basePath: string) {
   if (editor.toolPanelOpen === false) {
     return nothing;
   }
@@ -2227,11 +2267,7 @@ function renderEditorToolPalette(
             `
           : nothing
       }
-      ${
-        editor.tool === "zone"
-          ? renderZonePicker(editor)
-          : nothing
-      }
+      ${editor.tool === "zone" ? renderZonePicker(editor) : nothing}
       ${
         editor.tool === "prop"
           ? renderCatalogPicker({
@@ -2254,11 +2290,7 @@ function renderEditorToolPalette(
             })
           : nothing
       }
-      ${
-        editor.tool === "marker"
-          ? renderMarkerPicker(editor)
-          : nothing
-      }
+      ${editor.tool === "marker" ? renderMarkerPicker(editor) : nothing}
     </div>
   `;
 }
@@ -2281,9 +2313,11 @@ function renderEditorSelectionPanel(
         ];
   return html`
     <div
-      class="mau-office__editor-panel ${options?.docked
-        ? "mau-office__editor-panel--selection-docked"
-        : "mau-office__editor-panel--selection"}"
+      class="mau-office__editor-panel ${
+        options?.docked
+          ? "mau-office__editor-panel--selection-docked"
+          : "mau-office__editor-panel--selection"
+      }"
     >
       <div class="mau-office__editor-panel-header">
         <div>
@@ -2336,9 +2370,11 @@ function renderEditorSelectionPanel(
                 <span>Z Offset</span>
                 <input
                   type="number"
-                  .value=${selectedSummary.prop.zOffsetOverride != null
-                    ? String(selectedSummary.prop.zOffsetOverride)
-                    : ""}
+                  .value=${
+                    selectedSummary.prop.zOffsetOverride != null
+                      ? String(selectedSummary.prop.zOffsetOverride)
+                      : ""
+                  }
                   @input=${(event: Event) =>
                     editor.onSelectionPatch({
                       zOffsetOverride: (event.target as HTMLInputElement).value
@@ -2350,9 +2386,11 @@ function renderEditorSelectionPanel(
               <label>
                 <span>Collision</span>
                 <select
-                  .value=${selectedSummary.prop.collisionOverride == null
-                    ? "auto"
-                    : String(selectedSummary.prop.collisionOverride)}
+                  .value=${
+                    selectedSummary.prop.collisionOverride == null
+                      ? "auto"
+                      : String(selectedSummary.prop.collisionOverride)
+                  }
                   @change=${(event: Event) =>
                     editor.onSelectionPatch({
                       collisionOverride:
@@ -2416,9 +2454,11 @@ function renderEditorSelectionPanel(
                   <span>Z Offset</span>
                   <input
                     type="number"
-                    .value=${selectedSummary.autotile.zOffsetOverride != null
-                      ? String(selectedSummary.autotile.zOffsetOverride)
-                      : ""}
+                    .value=${
+                      selectedSummary.autotile.zOffsetOverride != null
+                        ? String(selectedSummary.autotile.zOffsetOverride)
+                        : ""
+                    }
                     @input=${(event: Event) =>
                       editor.onSelectionPatch({
                         zOffsetOverride: (event.target as HTMLInputElement).value
@@ -2430,9 +2470,11 @@ function renderEditorSelectionPanel(
                 <label>
                   <span>Collision</span>
                   <select
-                    .value=${selectedSummary.autotile.collisionOverride == null
-                      ? "auto"
-                      : String(selectedSummary.autotile.collisionOverride)}
+                    .value=${
+                      selectedSummary.autotile.collisionOverride == null
+                        ? "auto"
+                        : String(selectedSummary.autotile.collisionOverride)
+                    }
                     @change=${(event: Event) =>
                       editor.onSelectionPatch({
                         collisionOverride:
@@ -2526,8 +2568,7 @@ function renderEditorSelectionPanel(
                     .value=${String(selectedSummary.marker.layer)}
                     @input=${(event: Event) =>
                       editor.onSelectionPatch({
-                        layer:
-                          Number.parseInt((event.target as HTMLInputElement).value, 10) || 0,
+                        layer: Number.parseInt((event.target as HTMLInputElement).value, 10) || 0,
                       })}
                   />
                 </label>
@@ -2549,13 +2590,12 @@ function renderEditorControls(props: MauOfficeProps) {
   return html`
     <section class="mau-office__editor" aria-label="MauOffice editor tools">
       <div class="mau-office__editor-rail" role="toolbar" aria-label="MauOffice editor tools">
-        ${EDITOR_TOOL_ORDER.map(
-          (tool) => {
-            const active = editor.tool === tool;
-            const label = active
-              ? `${editor.toolPanelOpen === false ? "Show" : "Hide"} ${EDITOR_TOOL_LABELS[tool]} options`
-              : EDITOR_TOOL_LABELS[tool];
-            return html`
+        ${EDITOR_TOOL_ORDER.map((tool) => {
+          const active = editor.tool === tool;
+          const label = active
+            ? `${editor.toolPanelOpen === false ? "Show" : "Hide"} ${EDITOR_TOOL_LABELS[tool]} options`
+            : EDITOR_TOOL_LABELS[tool];
+          return html`
               <button
                 class="mau-office__editor-tool-button ${active ? "active" : ""}"
                 type="button"
@@ -2566,8 +2606,7 @@ function renderEditorControls(props: MauOfficeProps) {
                 ${icons[EDITOR_TOOL_ICONS[tool]]}
               </button>
             `;
-          },
-        )}
+        })}
         <span class="mau-office__editor-rail-spacer" aria-hidden="true"></span>
         <button
           class="mau-office__editor-tool-button"
@@ -2618,10 +2657,7 @@ function renderEditorFooter(
                 max=${String(MAU_OFFICE_SCENE_MAX_TILES_W)}
                 .value=${String(canvasWidth)}
                 @change=${(event: Event) => {
-                  const nextWidth = Number.parseInt(
-                    (event.target as HTMLInputElement).value,
-                    10,
-                  );
+                  const nextWidth = Number.parseInt((event.target as HTMLInputElement).value, 10);
                   if (Number.isFinite(nextWidth)) {
                     editor.onCanvasResize?.(nextWidth, canvasHeight);
                   }
@@ -2636,10 +2672,7 @@ function renderEditorFooter(
                 max=${String(MAU_OFFICE_SCENE_MAX_TILES_H)}
                 .value=${String(canvasHeight)}
                 @change=${(event: Event) => {
-                  const nextHeight = Number.parseInt(
-                    (event.target as HTMLInputElement).value,
-                    10,
-                  );
+                  const nextHeight = Number.parseInt((event.target as HTMLInputElement).value, 10);
                   if (Number.isFinite(nextHeight)) {
                     editor.onCanvasResize?.(canvasWidth, nextHeight);
                   }
@@ -2652,7 +2685,9 @@ function renderEditorFooter(
           <div class="mau-office__editor-heading">Save</div>
           ${
             editor.validationErrors.length === 0
-              ? html`<div class="mau-office__editor-ok">Scene is valid.</div>`
+              ? html`
+                  <div class="mau-office__editor-ok">Scene is valid.</div>
+                `
               : html`
                   <div class="mau-office__editor-error">${editor.validationErrors[0]}</div>
                   <div class="mau-office__editor-meta">
@@ -2669,6 +2704,24 @@ function renderEditorFooter(
         ${options?.showDockedSelection ? renderEditorSelectionPanel(editor, { docked: true }) : nothing}
       </div>
       <div class="mau-office__editor-actions">
+        <button
+          class="btn btn--ghost"
+          type="button"
+          ?disabled=${!editor.canUndo}
+          title=${editor.undoShortcutLabel ? `Undo (${editor.undoShortcutLabel})` : "Undo"}
+          @click=${editor.onUndo}
+        >
+          Undo
+        </button>
+        <button
+          class="btn btn--ghost"
+          type="button"
+          ?disabled=${!editor.canRedo}
+          title=${editor.redoShortcutLabel ? `Redo (${editor.redoShortcutLabel})` : "Redo"}
+          @click=${editor.onRedo}
+        >
+          Redo
+        </button>
         <button class="btn btn--ghost" type="button" title="Close the editor." @click=${editor.onCancel}>
           Close
         </button>
@@ -2676,9 +2729,10 @@ function renderEditorFooter(
           class="btn btn--ghost"
           type="button"
           ?disabled=${editor.validationErrors.length > 0}
-          title=${editor.validationErrors.length > 0
-            ? "Fix validation errors above to enable apply."
-            : "Update the live Control UI preview without saving the config file."
+          title=${
+            editor.validationErrors.length > 0
+              ? "Fix validation errors above to enable apply."
+              : "Update the live Control UI preview without saving the config file."
           }
           @click=${editor.onApply}
         >
@@ -2688,11 +2742,12 @@ function renderEditorFooter(
           class="btn"
           type="button"
           ?disabled=${editor.validationErrors.length > 0 || editor.saving}
-          title=${editor.validationErrors.length > 0
-            ? "Fix validation errors above to enable save."
-            : editor.saving
-              ? "Saving..."
-              : "Write the layout to config and close the editor."
+          title=${
+            editor.validationErrors.length > 0
+              ? "Fix validation errors above to enable save."
+              : editor.saving
+                ? "Saving..."
+                : "Write the layout to config and close the editor."
           }
           @click=${editor.onSave}
         >
@@ -2812,9 +2867,11 @@ export function renderMauOffice(props: MauOfficeProps) {
         ${renderEditorControls(props)}
         ${props.editor?.open && !narrowViewport ? renderEditorSelectionPanel(props.editor) : nothing}
       </div>
-      ${props.editor?.open
-        ? renderEditorFooter(props.editor, { showDockedSelection: narrowViewport })
-        : nothing}
+      ${
+        props.editor?.open
+          ? renderEditorFooter(props.editor, { showDockedSelection: narrowViewport })
+          : nothing
+      }
 
       ${renderOfficeChatWindow(props, activeChatActor)}
     </section>

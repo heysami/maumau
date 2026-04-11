@@ -104,7 +104,11 @@ export type MaumauConfig = {
       scene?: {
         /** Authored MauOffice scene payload stored as zones, props, autotiles, and typed markers. */
         version?: 1;
-        zoneRows?: Array<Array<"desk" | "meeting" | "break" | "support" | "hall" | "outside">>;
+        zoneRows?: Array<
+          Array<
+            "desk" | "meeting" | "browser" | "break" | "support" | "telephony" | "hall" | "outside"
+          >
+        >;
         wallRows?: Array<Array<boolean>>;
         props?: Array<{
           id: string;
@@ -135,8 +139,10 @@ export type MaumauConfig = {
             | "desk.workerSeat"
             | "meeting.presenter"
             | "meeting.seat"
+            | "browser.workerSeat"
             | "support.staff"
             | "support.customer"
+            | "telephony.staff"
             | "break.arcade"
             | "break.snack"
             | "break.volley"

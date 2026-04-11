@@ -286,6 +286,24 @@ describe("mau-office scene authoring", () => {
     expect(compiled.walkableTileKeys.has("0,0")).toBe(true);
   });
 
+  it("preserves the legacy node graph for authored MauOffice scenes", () => {
+    const compiled = compileMauOfficeScene(createDefaultMauOfficeSceneConfig());
+
+    expect(compiled.anchors.desk_worker_1?.nodeId).toBe("desk_center");
+    expect(compiled.nodes.desk_center).toMatchObject({
+      tileX: 8,
+      tileY: 6,
+      neighbors: expect.arrayContaining(["desk_door", "desk_board", "top_passage_left"]),
+    });
+    expect(compiled.nodes.support_entry?.neighbors).toEqual([
+      "outside_support",
+      "support_customer_1",
+      "support_customer_2",
+      "support_customer_3",
+    ]);
+    expect(compiled.blockedTileKeys.has("21,10")).toBe(false);
+  });
+
   it("keeps wall authoring separate from floor zones", () => {
     const base = createDefaultMauOfficeSceneConfig();
     const before = base.wallRows[0]?.[0];
@@ -340,12 +358,7 @@ describe("mau-office scene authoring", () => {
     const base = createDefaultMauOfficeSceneConfig();
     const withWall = paintSceneWall(base, 5, 5, true);
     const placed = placeSceneMarker(withWall, "desk.workerSeat", 5, 5);
-    const moved = moveSceneSelection(
-      placed.scene,
-      { kind: "marker", id: placed.id },
-      5,
-      5,
-    );
+    const moved = moveSceneSelection(placed.scene, { kind: "marker", id: placed.id }, 5, 5);
 
     expect(placed.scene.markers.find((entry) => entry.id === placed.id)).toMatchObject({
       tileX: 5,
@@ -384,12 +397,7 @@ describe("mau-office scene authoring", () => {
   it("moves selected props, brush regions, and markers within the authored board", () => {
     const base = createDefaultMauOfficeSceneConfig();
     const movedProp = moveSceneSelection(base, { kind: "prop", id: "desk-a" }, 20, 12);
-    const movedAutotile = moveSceneSelection(
-      base,
-      { kind: "autotile", id: "break-rug" },
-      8,
-      12,
-    );
+    const movedAutotile = moveSceneSelection(base, { kind: "autotile", id: "break-rug" }, 8, 12);
     const movedMarker = moveSceneSelection(base, { kind: "marker", id: "desk_board" }, 24, 18);
 
     expect(movedProp.props.find((entry) => entry.id === "desk-a")).toMatchObject({
@@ -469,15 +477,38 @@ describe("mau-office scene authoring", () => {
     expect(sanitized.wallRows.some((row) => row.some(Boolean))).toBe(true);
   });
 
+  it("upgrades legacy saved scenes so the new right-side rooms appear", () => {
+    const current = createDefaultMauOfficeSceneConfig();
+    const legacy = {
+      version: 1 as const,
+      zoneRows: current.zoneRows.map((row) => row.slice(0, 26)),
+      wallRows: current.wallRows.map((row) => row.slice(0, 26)),
+      props: current.props.filter(
+        (entry) => !entry.id.startsWith("browser-") && !entry.id.startsWith("telephony-"),
+      ),
+      autotiles: current.autotiles.filter((entry) => entry.id !== "telephony-counter"),
+      markers: current.markers.filter(
+        (entry) => entry.id !== "browser_worker_1" && entry.id !== "telephony_staff_1",
+      ),
+    };
+
+    const sanitized = sanitizeMauOfficeSceneConfig(legacy);
+
+    expect(sanitized.zoneRows[0]).toHaveLength(MAU_OFFICE_SCENE_TILES_W);
+    expect(sanitized.zoneRows.some((row) => row.some((value) => value === "browser"))).toBe(true);
+    expect(sanitized.zoneRows.some((row) => row.some((value) => value === "telephony"))).toBe(true);
+    expect(sanitized.zoneRows[10]?.[21]).toBe("hall");
+    expect(sanitized.props.some((entry) => entry.id === "browser-desk")).toBe(true);
+    expect(sanitized.autotiles.some((entry) => entry.id === "telephony-counter")).toBe(true);
+    expect(sanitized.markers.some((entry) => entry.id === "browser_worker_1")).toBe(true);
+    expect(sanitized.markers.some((entry) => entry.id === "telephony_staff_1")).toBe(true);
+  });
+
   it("preserves variable canvas dimensions during scene sanitization", () => {
     const sanitized = sanitizeMauOfficeSceneConfig({
       version: 1,
-      zoneRows: Array.from({ length: 12 }, () =>
-        Array.from({ length: 18 }, () => "outside"),
-      ),
-      wallRows: Array.from({ length: 12 }, () =>
-        Array.from({ length: 18 }, () => false),
-      ),
+      zoneRows: Array.from({ length: 12 }, () => Array.from({ length: 18 }, () => "outside")),
+      wallRows: Array.from({ length: 12 }, () => Array.from({ length: 18 }, () => false)),
       props: [],
       autotiles: [],
       markers: [],
@@ -549,10 +580,12 @@ describe("mau-office scene authoring", () => {
         ),
       ),
     ).toBe(true);
-    expect(resized.props.some((entry) => {
-      const item = MAU_OFFICE_CATALOG[entry.itemId];
-      return Boolean(item && entry.tileX + item.tileWidth === 8);
-    })).toBe(true);
+    expect(
+      resized.props.some((entry) => {
+        const item = MAU_OFFICE_CATALOG[entry.itemId];
+        return Boolean(item && entry.tileX + item.tileWidth === 8);
+      }),
+    ).toBe(true);
   });
 
   it("auto-selects nine-slice and three-slice assets from painted autotile cells", () => {
@@ -942,6 +975,76 @@ Need help recovering the shared workspace password.`,
       host.mauOfficeState.actors["visitor:agent:ops:subagent:delegate-review"]?.snapshotActivity
         ?.kind,
     ).toBe("meeting");
+  });
+
+  it("moves delegated subagent snapshots back out of the meeting room after the first message", async () => {
+    const nowMs = Date.now();
+    const host = {
+      client: {
+        request: vi.fn(async (method: string) => {
+          if (method === "agents.list") {
+            return {
+              defaultId: "ops",
+              mainKey: "main",
+              scope: "operator",
+              agents: [{ id: "ops", name: "Ops" }],
+            };
+          }
+          if (method === "sessions.list") {
+            return {
+              ts: nowMs,
+              path: "/tmp/sessions.json",
+              count: 1,
+              defaults: {
+                modelProvider: null,
+                model: null,
+                contextTokens: null,
+              },
+              sessions: [
+                {
+                  key: "agent:ops:subagent:delegate-review",
+                  kind: "direct",
+                  displayName: "Delegate Review",
+                  lastMessagePreview: "Please take the first pass on this plan.",
+                  updatedAt: nowMs,
+                },
+              ],
+            };
+          }
+          if (method === "sessions.preview") {
+            return { ts: nowMs, previews: [] };
+          }
+          if (method === "system-presence") {
+            return [];
+          }
+          if (method === "tools.catalog") {
+            return {
+              groups: [
+                { label: "Coordination", tools: [{ id: "sessions_spawn", label: "Delegate" }] },
+              ],
+            };
+          }
+          throw new Error(`unexpected method ${method}`);
+        }),
+      },
+      connected: true,
+      configSnapshot: null,
+      mauOfficeLoading: false,
+      mauOfficeError: null,
+      mauOfficeState: createEmptyMauOfficeState(),
+      mauOfficeReloadTimer: null,
+    };
+
+    await loadMauOffice(host as never);
+
+    expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.kind).toBe("desk_work");
+    expect(host.mauOfficeState.actors["worker:ops"]?.snapshotActivity?.anchorId).toBe(
+      "desk_worker_1",
+    );
+    expect(
+      host.mauOfficeState.actors["visitor:agent:ops:subagent:delegate-review"]?.snapshotActivity
+        ?.kind,
+    ).toBe("offsite");
   });
 
   it("does not roll a support worker back to an older preview when a fresher assistant bubble already exists", async () => {
@@ -1528,11 +1631,17 @@ Need help recovering the shared workspace password.`,
     );
     const actor = advanced.actors["worker:support"]!;
     const blockedCounterTiles = new Set(
-      createEmptyMauOfficeState().scene.map.propSprites
-        .filter((sprite) => sprite.sourceId === "support-counter" && sprite.blocksWalkway)
+      createEmptyMauOfficeState()
+        .scene.map.propSprites.filter(
+          (sprite) => sprite.sourceId === "support-counter" && sprite.blocksWalkway,
+        )
         .flatMap((sprite) => {
           const tiles: string[] = [];
-          for (let tileX = Math.floor(sprite.tileX); tileX < sprite.tileX + sprite.tileWidth; tileX += 1) {
+          for (
+            let tileX = Math.floor(sprite.tileX);
+            tileX < sprite.tileX + sprite.tileWidth;
+            tileX += 1
+          ) {
             for (
               let tileY = Math.floor(sprite.tileY);
               tileY < sprite.tileY + sprite.tileHeight;
@@ -1554,6 +1663,68 @@ Need help recovering the shared workspace password.`,
     expect(
       waypointTiles?.some((tile) => blockedCounterTiles.has(`${tile.tileX},${tile.tileY}`)),
     ).toBe(false);
+  });
+
+  it("does not create a direct-path fallback when the target room is unreachable", () => {
+    let scene = createDefaultMauOfficeSceneConfig();
+    for (let tileY = 1; tileY < MAU_OFFICE_SCENE_TILES_H; tileY += 1) {
+      scene = paintSceneWall(scene, 15, tileY, true);
+      scene = paintSceneWall(scene, 16, tileY, true);
+    }
+
+    const deskAnchor = MAU_OFFICE_LAYOUT.anchors.desk_worker_1;
+    const state = advanceMauOfficeState(
+      {
+        ...createEmptyMauOfficeState({
+          ui: {
+            mauOffice: {
+              scene,
+            },
+          },
+        }),
+        loaded: true,
+        nowMs: 10_000,
+        actorOrder: ["worker:blocked"],
+        actors: {
+          "worker:blocked": makeActor({
+            id: "worker:blocked",
+            anchorId: "desk_worker_1",
+            nodeId: "desk_center",
+            x: deskAnchor.x,
+            y: deskAnchor.y,
+            currentActivity: {
+              id: "event-expired",
+              kind: "desk_work",
+              label: "Working at desk",
+              priority: 50,
+              roomId: "desk",
+              anchorId: "desk_worker_1",
+              source: "event",
+              expiresAtMs: 9_999,
+            },
+            snapshotActivity: makeActivity(
+              "support",
+              "customer_support",
+              "support",
+              "support_staff_1",
+              "Handling support",
+            ),
+            lastSeenAtMs: 10_000,
+          }),
+        },
+      },
+      10_000,
+    );
+
+    const actor = state.actors["worker:blocked"]!;
+    expect(actor.anchorId).toBe("desk_worker_1");
+    expect(actor.x).toBe(deskAnchor.x);
+    expect(actor.y).toBe(deskAnchor.y);
+    expect(actor.path).toBeNull();
+    expect(actor.currentActivity).toMatchObject({
+      kind: "customer_support",
+      anchorId: "support_staff_1",
+    });
   });
 
   it("treats configured heartbeat sessions as meeting-room work instead of support visitors", async () => {
@@ -2573,6 +2744,147 @@ describe("applyMauOfficeSessionToolEvent", () => {
     expect(first.actors["visitor:agent:ops:subagent:support"]).toBeUndefined();
   });
 
+  it("routes delegated browser work into the browser room after the handoff", () => {
+    const startedAt = 1_000;
+    const first = applyMauOfficeSessionToolEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "meeting",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            homeAnchorId: "desk_worker_1",
+            currentRoomId: "break",
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:subagent:support",
+        data: {
+          toolName: "browser.open",
+          input: {
+            text: "Pull up the referenced docs and compare the changes.",
+          },
+        },
+      },
+      startedAt,
+    );
+    const actor = first.actors["worker:ops"]!;
+
+    expect(actor.currentActivity.kind).toBe("walking");
+    expect(actor.path?.targetAnchorId).toBe("browser_worker_1");
+    expect(actor.queuedActivity?.kind).toBe("desk_work");
+    expect(actor.queuedActivity?.roomId).toBe("browser");
+  });
+
+  it("routes telephony tools into the telephony room", () => {
+    const startedAt = 1_000;
+    const first = applyMauOfficeSessionToolEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "desk",
+            anchorId: "desk_worker_1",
+            nodeId: "desk_worker_1",
+            homeAnchorId: "desk_worker_1",
+            currentRoomId: "desk",
+            currentActivity: makeActivity(
+              "desk",
+              "desk_work",
+              "desk",
+              "desk_worker_1",
+              "Working at a desk",
+            ),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:main",
+        data: {
+          toolName: "plugin:voice-call",
+          input: {
+            text: "Call the carrier to confirm the line status.",
+          },
+        },
+      },
+      startedAt,
+    );
+    const actor = first.actors["worker:ops"]!;
+
+    expect(actor.currentActivity.kind).toBe("walking");
+    expect(actor.path?.targetAnchorId).toBe("telephony_staff_1");
+    expect(actor.queuedActivity?.kind).toBe("customer_support");
+    expect(actor.queuedActivity?.roomId).toBe("telephony");
+  });
+
+  it("snaps abstract desk exit hops before hallway walking", () => {
+    const startedAt = 1_000;
+    const first = applyMauOfficeSessionToolEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "desk",
+            anchorId: "desk_worker_1",
+            nodeId: "desk_worker_1",
+            homeAnchorId: "desk_worker_1",
+            currentRoomId: "desk",
+            currentActivity: makeActivity(
+              "desk",
+              "desk_work",
+              "desk",
+              "desk_worker_1",
+              "Working at a desk",
+            ),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:main",
+        data: {
+          toolName: "browser.open",
+          input: {
+            text: "Pull up the referenced docs and compare the changes.",
+          },
+        },
+      },
+      startedAt,
+    );
+
+    const advanced = advanceMauOfficeState(first, startedAt + 16);
+    const actor = advanced.actors["worker:ops"]!;
+
+    expect(actor.currentActivity.kind).toBe("walking");
+    expect(actor.path?.targetAnchorId).toBe("browser_worker_1");
+    expect(actor.x).not.toBe(first.actors["worker:ops"]!.x);
+    expect(actor.y).not.toBe(first.actors["worker:ops"]!.y);
+    expect(actor.path?.segmentIndex).toBeGreaterThan(0);
+  });
+
   it("routes direct support tool updates to the worker instead of overwriting the visitor bubble", () => {
     const startedAt = 1_000;
     const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;
@@ -3054,6 +3366,69 @@ describe("applyMauOfficeSessionMessageEvent", () => {
     expect(first.actors["visitor:agent:ops:subagent:delegate-review"]).toBeUndefined();
   });
 
+  it("sends delegated subagents back to desk work after the first meeting message settles", () => {
+    const startedAt = 2_000;
+    const breakAnchor = MAU_OFFICE_LAYOUT.anchors.break_arcade;
+    const first = applyMauOfficeSessionMessageEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:ops"],
+        actors: {
+          "worker:ops": makeActor({
+            id: "worker:ops",
+            agentId: "ops",
+            sessionKey: "agent:ops:main",
+            roleHint: "meeting",
+            homeAnchorId: "desk_worker_1",
+            anchorId: "break_arcade",
+            nodeId: "break_center",
+            currentRoomId: "break",
+            x: breakAnchor.x,
+            y: breakAnchor.y,
+            snapshotActivity: makeActivity(
+              "snapshot-meeting",
+              "meeting",
+              "meeting",
+              "meeting_seat_1",
+              "Collaborating in a meeting",
+            ),
+            currentActivity: makeActivity(
+              "idle",
+              "idle",
+              "break",
+              "break_arcade",
+              "Taking a breather",
+            ),
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:ops:subagent:delegate-review",
+        message: {
+          role: "assistant",
+          text: "Let's talk through the delegated plan together.",
+        },
+      },
+      startedAt,
+    );
+
+    expect(first.actors["worker:ops"]?.snapshotActivity?.kind).toBe("desk_work");
+
+    const walkingBack = advanceMauOfficeState(first, startedAt + 30_000);
+    const returningWorker = walkingBack.actors["worker:ops"]!;
+
+    expect(returningWorker.currentActivity.kind).toBe("walking");
+    expect(returningWorker.path?.targetAnchorId).toBe("desk_worker_1");
+
+    const settled = advanceMauOfficeState(walkingBack, startedAt + 60_000);
+    const worker = settled.actors["worker:ops"]!;
+
+    expect(worker.currentActivity.kind).toBe("desk_work");
+    expect(worker.anchorId).toBe("desk_worker_1");
+    expect(worker.currentRoomId).toBe("desk");
+  });
+
   it("strips injected metadata blocks from visitor-facing support messages", () => {
     const startedAt = 2_000;
     const first = applyMauOfficeSessionMessageEvent(
@@ -3439,9 +3814,9 @@ Need an invoice update for this account before Friday.`,
 
 describe("mau-office contract", () => {
   it("keeps the logical scene on a 16px grid", () => {
-    expect(MAU_OFFICE_SCENE_WIDTH).toBe(1664);
+    expect(MAU_OFFICE_SCENE_WIDTH).toBe(2560);
     expect(MAU_OFFICE_SCENE_HEIGHT).toBe(1280);
-    expect(MAU_OFFICE_LAYOUT.width).toBe(1664);
+    expect(MAU_OFFICE_LAYOUT.width).toBe(2560);
     expect(MAU_OFFICE_LAYOUT.height).toBe(1280);
 
     for (const room of Object.values(MAU_OFFICE_LAYOUT.rooms)) {
@@ -3727,6 +4102,8 @@ describe("mau-office contract", () => {
       [8, 9],
       [8, 11],
       [20, 11],
+      [31, 9],
+      [31, 11],
     ] as const;
 
     for (const [tileX, tileY] of thresholdTiles) {
@@ -3739,7 +4116,7 @@ describe("mau-office contract", () => {
       MAU_OFFICE_LAYOUT.map.floorTiles.find((tile) => tile.tileX === 7 && tile.tileY === 10),
     ).toBeUndefined();
     expect(
-      MAU_OFFICE_LAYOUT.map.floorTiles.find((tile) => tile.tileX === 21 && tile.tileY === 10),
+      MAU_OFFICE_LAYOUT.map.floorTiles.find((tile) => tile.tileX === 32 && tile.tileY === 10),
     ).toBeUndefined();
     expect(
       MAU_OFFICE_LAYOUT.map.wallSprites.some((sprite) => sprite.id.startsWith("hall-divider:")),
@@ -3798,7 +4175,7 @@ describe("mau-office contract", () => {
     ).toMatchObject({ tileX: 7, tileY: 10 });
     expect(
       MAU_OFFICE_LAYOUT.map.wallSprites.find((sprite) => sprite.id === "hall-cap-right:10"),
-    ).toMatchObject({ tileX: 21, tileY: 10 });
+    ).toMatchObject({ tileX: 32, tileY: 10 });
     expect(
       MAU_OFFICE_LAYOUT.map.wallSprites.find((sprite) => sprite.id === "desk:wall-bottom:7"),
     ).toMatchObject({ asset: expect.stringContaining("tiles/wall-corner-br.png") });
@@ -4436,10 +4813,10 @@ describe("mau-office view", () => {
     expect(historyStyle).toContain("--mau-history-lines:2");
 
     expect(container.querySelector(".mau-office__viewport")?.getAttribute("style")).toContain(
-      "--crop-width-px:1664px",
+      "--crop-width-px:2560px",
     );
     expect(container.querySelector(".mau-office__viewport")?.getAttribute("style")).toContain(
-      "--mau-camera-scale:0.75",
+      "--mau-camera-scale:0.5",
     );
   });
 
@@ -4841,7 +5218,13 @@ describe("mau-office view", () => {
           x: driftAnchor.x,
           y: driftAnchor.y,
           currentActivity: {
-            ...makeActivity("idle-ball", "idle_package", "break", "break_arcade", "Passing the ball"),
+            ...makeActivity(
+              "idle-ball",
+              "idle_package",
+              "break",
+              "break_arcade",
+              "Passing the ball",
+            ),
             source: "idle",
           },
           idleAssignment: { ...rallyAssignment },
@@ -5513,7 +5896,7 @@ describe("mau-office view", () => {
     );
 
     const meetingButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("MauHome"),
+      button.textContent?.includes("Meeting"),
     );
     expect(meetingButton).not.toBeUndefined();
     meetingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -5806,7 +6189,9 @@ describe("mau-office view", () => {
       container.querySelector(".mau-office__viewport .mau-office__editor-panel--selection"),
     ).not.toBeNull();
     expect(
-      container.querySelector(".mau-office__editor-footer .mau-office__editor-panel--selection-docked"),
+      container.querySelector(
+        ".mau-office__editor-footer .mau-office__editor-panel--selection-docked",
+      ),
     ).toBeNull();
   });
 
@@ -5858,9 +6243,7 @@ describe("mau-office view", () => {
       container,
     );
 
-    expect(
-      container.querySelector(".mau-office__sprite--editor-wall-preview"),
-    ).not.toBeNull();
+    expect(container.querySelector(".mau-office__sprite--editor-wall-preview")).not.toBeNull();
   });
 
   it("shows a live hover preview for floor paint, wall paint, and active selection drags", () => {
@@ -5970,7 +6353,9 @@ describe("mau-office view", () => {
     );
 
     expect(
-      wallContainer.querySelector(".mau-office__sprite--wall.mau-office__sprite--editor-hover-preview"),
+      wallContainer.querySelector(
+        ".mau-office__sprite--wall.mau-office__sprite--editor-hover-preview",
+      ),
     ).not.toBeNull();
 
     render(
@@ -6019,7 +6404,9 @@ describe("mau-office view", () => {
     );
 
     expect(
-      idleMoveContainer.querySelector(".mau-office__sprite--desk.mau-office__sprite--editor-hover-preview"),
+      idleMoveContainer.querySelector(
+        ".mau-office__sprite--desk.mau-office__sprite--editor-hover-preview",
+      ),
     ).toBeNull();
 
     render(
@@ -6293,8 +6680,8 @@ describe("mau-office view", () => {
       container,
     );
 
-    const prop = container.querySelector<HTMLElement>('.mau-office__sprite--plant');
-    const wall = container.querySelector<HTMLElement>('.mau-office__sprite--editor-wall-preview');
+    const prop = container.querySelector<HTMLElement>(".mau-office__sprite--plant");
+    const wall = container.querySelector<HTMLElement>(".mau-office__sprite--editor-wall-preview");
     expect(prop).not.toBeNull();
     expect(wall).not.toBeNull();
     expect(Number.parseInt(prop?.style.zIndex ?? "0", 10)).toBeGreaterThan(
@@ -6361,9 +6748,7 @@ describe("mau-office view", () => {
     expect(container.textContent).toContain("Config hash missing; reload and retry.");
     const editorFooter = container.querySelector<HTMLElement>(".mau-office__editor-footer");
     expect(editorFooter).not.toBeNull();
-    expect(
-      container.querySelector(".mau-office__viewport .mau-office__editor-footer"),
-    ).toBeNull();
+    expect(container.querySelector(".mau-office__viewport .mau-office__editor-footer")).toBeNull();
     const saveButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent?.trim() === "Save & Close",
     );
@@ -6481,11 +6866,15 @@ describe("mau-office view", () => {
       container,
     );
 
-    const canvasPanel = container.querySelector<HTMLElement>(".mau-office__editor-dock-status--canvas");
+    const canvasPanel = container.querySelector<HTMLElement>(
+      ".mau-office__editor-dock-status--canvas",
+    );
     expect(canvasPanel?.textContent).toContain("Canvas");
     const widthInput = canvasPanel?.querySelectorAll<HTMLInputElement>('input[type="number"]')[0];
     const heightInput = canvasPanel?.querySelectorAll<HTMLInputElement>('input[type="number"]')[1];
-    expect(widthInput?.value).toBe(String(createDefaultMauOfficeSceneConfig().zoneRows[0]?.length ?? 0));
+    expect(widthInput?.value).toBe(
+      String(createDefaultMauOfficeSceneConfig().zoneRows[0]?.length ?? 0),
+    );
     expect(heightInput?.value).toBe(String(createDefaultMauOfficeSceneConfig().zoneRows.length));
     if (widthInput) {
       widthInput.value = "30";
@@ -6608,7 +6997,9 @@ describe("mau-office view", () => {
     );
     expect(autotilePreview).not.toBeNull();
     autotileContainer
-      .querySelector<HTMLButtonElement>('.mau-office__editor-picker-button[data-picker-id="support-counter"]')
+      .querySelector<HTMLButtonElement>(
+        '.mau-office__editor-picker-button[data-picker-id="support-counter"]',
+      )
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onAutotileItemChange).toHaveBeenCalledWith("support-counter");
 
@@ -6659,8 +7050,20 @@ describe("mau-office view", () => {
         '.mau-office__editor-picker-button[data-picker-id="meeting"] .mau-office__editor-picker-swatch--meeting',
       ),
     ).not.toBeNull();
+    expect(
+      zoneContainer.querySelector(
+        '.mau-office__editor-picker-button[data-picker-id="browser"] .mau-office__editor-picker-swatch--browser',
+      ),
+    ).not.toBeNull();
+    expect(
+      zoneContainer.querySelector(
+        '.mau-office__editor-picker-button[data-picker-id="telephony"] .mau-office__editor-picker-swatch--telephony',
+      ),
+    ).not.toBeNull();
     zoneContainer
-      .querySelector<HTMLButtonElement>('.mau-office__editor-picker-button[data-picker-id="meeting"]')
+      .querySelector<HTMLButtonElement>(
+        '.mau-office__editor-picker-button[data-picker-id="meeting"]',
+      )
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onZoneBrushChange).toHaveBeenCalledWith("meeting");
 
@@ -6717,5 +7120,60 @@ describe("mau-office view", () => {
       )
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onMarkerRoleChange).toHaveBeenCalledWith("meeting.presenter");
+  });
+
+  it("renders visible undo and redo actions in the editor footer", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const draft = createDefaultMauOfficeSceneConfig();
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: createEmptyMauOfficeState(),
+        basePath: "",
+        editor: {
+          open: true,
+          draft,
+          compiled: compileMauOfficeScene(draft),
+          tool: "zone",
+          brushMode: "paint",
+          zoneBrush: "desk",
+          propItemId: "desk-wide",
+          autotileItemId: "meeting-table",
+          markerRole: "desk.workerSeat",
+          selection: null,
+          validationErrors: [],
+          canUndo: true,
+          canRedo: true,
+          onToggle: () => undefined,
+          onCancel: () => undefined,
+          onApply: () => undefined,
+          onSave: () => undefined,
+          onToolChange: () => undefined,
+          onBrushModeChange: () => undefined,
+          onZoneBrushChange: () => undefined,
+          onPropItemChange: () => undefined,
+          onAutotileItemChange: () => undefined,
+          onMarkerRoleChange: () => undefined,
+          onCellInteract: () => undefined,
+          onSelectionChange: () => undefined,
+          onSelectionPatch: () => undefined,
+          onUndo: () => undefined,
+          onRedo: () => undefined,
+          onDeleteSelection: () => undefined,
+        },
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const footer = container.querySelector(".mau-office__editor-actions");
+    expect(footer?.textContent).toContain("Undo");
+    expect(footer?.textContent).toContain("Redo");
   });
 });

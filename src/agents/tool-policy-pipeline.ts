@@ -69,12 +69,14 @@ export function buildDefaultToolPolicyPipelineSteps(params: {
     {
       policy: params.agentPolicy,
       label: agentId ? `agents.${agentId}.tools.allow` : "agent tools.allow",
-      stripPluginOnlyAllowlist: true,
+      // Agent-scoped allowlists are commonly used for tightly locked-down
+      // workers that should expose only a small plugin surface.
+      stripPluginOnlyAllowlist: false,
     },
     {
       policy: params.agentProviderPolicy,
       label: agentId ? `agents.${agentId}.tools.byProvider.allow` : "agent tools.byProvider.allow",
-      stripPluginOnlyAllowlist: true,
+      stripPluginOnlyAllowlist: false,
     },
     { policy: params.groupPolicy, label: "group tools.allow", stripPluginOnlyAllowlist: true },
   ];

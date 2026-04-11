@@ -948,11 +948,16 @@ function extractAssistantNextStepSuggestion(text: string): string | undefined {
 
 function extractAssistantTranscriptBlocker(text: string): TrustedTranscriptBlocker | null {
   const normalized = stripTranscriptDisplayMarkup(text);
+  const hasExplicitBlockedCue =
+    /\bblocked\b/i.test(normalized) ||
+    /\brefused the job\b/i.test(normalized) ||
+    /\bno preview link exists yet\b/i.test(normalized) ||
+    /\bno workspace changes were made\b/i.test(normalized) ||
+    /\bno [a-z ]+ was created\b/i.test(normalized);
+  const hasActionableBlockerCue = /\bi hit [^.?!\n]{0,60}\bblocker\b/i.test(normalized);
   if (
     !normalized ||
-    !/\b(blocked|blocker|refused the job|no preview link exists yet|no workspace changes were made|no [a-z ]+ was created)\b/i.test(
-      normalized,
-    )
+    (!hasExplicitBlockedCue && !hasActionableBlockerCue)
   ) {
     return null;
   }
@@ -961,7 +966,12 @@ function extractAssistantTranscriptBlocker(text: string): TrustedTranscriptBlock
     .map((paragraph) => normalizeText(paragraph))
     .filter(Boolean);
   const description = excerptText(
-    paragraphs.find((paragraph) => /\b(blocked|blocker|refused the job)\b/i.test(paragraph)) ||
+    paragraphs.find((paragraph) => {
+      const hasExplicitCue =
+        /\bblocked\b/i.test(paragraph) || /\brefused the job\b/i.test(paragraph);
+      const hasActionableCue = /\bi hit [^.?!\n]{0,60}\bblocker\b/i.test(paragraph);
+      return hasExplicitCue || hasActionableCue;
+    }) ||
       paragraphs[0] ||
       normalized,
     220,
@@ -1050,6 +1060,33 @@ function excerptText(text: string, maxLen = 180): string {
     return normalized;
   }
   return `${normalized.slice(0, maxLen - 1).trim()}…`;
+}
+
+function resolveStableNamedSessionKey(sessionKey: string): string | null {
+  const parsed = parseAgentSessionKey(sessionKey);
+  const rest = normalizeText(parsed?.rest).toLowerCase();
+  if (!rest || rest === "main" || rest.includes(":")) {
+    return null;
+  }
+  return rest;
+}
+
+function resolveStableNamedSessionLineageKey(
+  sessionKey: string,
+  store: Record<string, SessionEntry>,
+): string | null {
+  let current = normalizeText(sessionKey);
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    const stableKey = resolveStableNamedSessionKey(current);
+    if (stableKey) {
+      return stableKey;
+    }
+    seen.add(current);
+    const entry = store[current];
+    current = normalizeText(entry?.parentSessionKey) || normalizeText(entry?.spawnedBy);
+  }
+  return null;
 }
 
 function stripTaskControlText(text: string): string {
@@ -2464,6 +2501,7 @@ async function reconcileDashboardWorkItems(params: {
   const taskIdBySessionKey = new Map<string, string>();
   const activeSessionKeys = new Set(params.sessions.map((row) => row.key));
   const candidateSessionKeys = new Set<string>();
+  const latestNamedSessionsByKey = new Map<string, { sessionKey: string; updatedAtMs: number }>();
   const approvalSessionKeys = new Set(
     params.approvals.map((approval) => normalizeText(approval.request.sessionKey)).filter(Boolean),
   );
@@ -2474,6 +2512,20 @@ async function reconcileDashboardWorkItems(params: {
   const teamLabelById = new Map(
     listConfiguredTeams(params.cfg).map((team) => [team.id, team.name?.trim() || team.id]),
   );
+
+  for (const row of params.sessions) {
+    const stableKey = resolveStableNamedSessionKey(row.key);
+    if (!stableKey || !row.updatedAt) {
+      continue;
+    }
+    const current = latestNamedSessionsByKey.get(stableKey);
+    if (!current || row.updatedAt > current.updatedAtMs) {
+      latestNamedSessionsByKey.set(stableKey, {
+        sessionKey: row.key,
+        updatedAtMs: row.updatedAt,
+      });
+    }
+  }
 
   for (const row of params.sessions) {
     const entry = params.store[row.key];
@@ -2532,6 +2584,14 @@ async function reconcileDashboardWorkItems(params: {
   }
 
   const allRetainedItems = [...nextById.values()]
+    .filter((item) => {
+      const stableKey = resolveStableNamedSessionLineageKey(item.sessionKey, params.store);
+      if (!stableKey) {
+        return true;
+      }
+      const latest = latestNamedSessionsByKey.get(stableKey);
+      return !latest || isSessionDescendantOf(item.sessionKey, latest.sessionKey, params.store);
+    })
     .map((item) => {
       const approvalBlockers = approvalBlockersByTaskId.get(item.id) ?? [];
       const nonApprovalBlockers = item.blockerLinks.filter(

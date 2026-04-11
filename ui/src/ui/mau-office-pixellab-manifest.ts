@@ -307,6 +307,13 @@ const FIXED_UPLOADED_ENTRIES = [
     "Monitor-back lets the customer desk read from the visitor side instead of repeating the same front-facing screen.",
   ),
   uploaded(
+    "mau-office/items/fax-machine-v1.png",
+    "prop",
+    "objects-2.png",
+    "fax-machine.png",
+    "Fax machine gives the telephony counter a dedicated calling prop instead of reusing a generic monitor.",
+  ),
+  uploaded(
     "mau-office/items/book-open-v1.png",
     "prop",
     "objects.png",

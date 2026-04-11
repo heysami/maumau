@@ -1041,9 +1041,9 @@ export const FIELD_HELP: Record<string, string> = {
   "ui.mauOffice.scene.version":
     "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
   "ui.mauOffice.scene.zoneRows":
-    "Two-dimensional fixed-size 26x20 floor-zone grid describing which room or hall each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+    "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
   "ui.mauOffice.scene.wallRows":
-    "Two-dimensional fixed-size 26x20 wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+    "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
   "ui.mauOffice.scene.props":
     "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
   "ui.mauOffice.scene.autotiles":

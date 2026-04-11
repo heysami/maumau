@@ -22,14 +22,14 @@ export {
 
 export const MAU_OFFICE_TILE_SIZE = MAU_OFFICE_LOGICAL_TILE_PX;
 export const MAU_OFFICE_ASSET_PIXELS_PER_TILE = MAU_OFFICE_SOURCE_TILE_PX;
-export const MAU_OFFICE_SCENE_TILES_W = 26;
+export const MAU_OFFICE_SCENE_TILES_W = 40;
 export const MAU_OFFICE_SCENE_TILES_H = 20;
 export const MAU_OFFICE_SCENE_WIDTH = MAU_OFFICE_SCENE_TILES_W * MAU_OFFICE_TILE_SIZE;
 export const MAU_OFFICE_SCENE_HEIGHT = MAU_OFFICE_SCENE_TILES_H * MAU_OFFICE_TILE_SIZE;
 export const MAU_OFFICE_FOOT_OFFSET_Y = 56;
 export const MAU_OFFICE_FOCUS_PADDING_TILES = 1;
 
-export type MauOfficeRoomId = "desk" | "meeting" | "break" | "support";
+export type MauOfficeRoomId = "desk" | "meeting" | "break" | "support" | "browser" | "telephony";
 export type MauOfficeDirection = "north" | "east" | "south" | "west";
 export type MauOfficePathTurnKey = "ne" | "nw" | "se" | "sw";
 export type OfficeActorKind = "worker" | "visitor";
@@ -221,8 +221,10 @@ const MAU_OFFICE_HALL_HORIZONTAL_TILE_Y = 10;
 const MAU_OFFICE_HALL_HORIZONTAL_HEIGHT_TILES = 1;
 const MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X = 8;
 const MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X = 20;
+const MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X = 31;
 const MAU_OFFICE_RIGHT_ROOM_TILE_X =
   MAU_OFFICE_HALL_VERTICAL_TILE_X + MAU_OFFICE_HALL_VERTICAL_WIDTH_TILES;
+const MAU_OFFICE_EXTENSION_ROOM_TILE_X = 26;
 const MAU_OFFICE_TOP_PASSAGE_LEFT_TILE_X = MAU_OFFICE_RIGHT_ROOM_TILE_X - 1;
 const MAU_OFFICE_TOP_PASSAGE_RIGHT_TILE_X = MAU_OFFICE_RIGHT_ROOM_TILE_X;
 const MAU_OFFICE_TOP_PASSAGE_TILE_Y = 6;
@@ -231,7 +233,8 @@ const MAU_OFFICE_BOTTOM_ROOM_TILE_Y =
   MAU_OFFICE_HALL_HORIZONTAL_TILE_Y + MAU_OFFICE_HALL_HORIZONTAL_HEIGHT_TILES;
 const MAU_OFFICE_BOTTOM_ROOM_HEIGHT_TILES = 9;
 const MAU_OFFICE_BOTTOM_LEFT_ROOM_WIDTH_TILES = 15;
-const MAU_OFFICE_RIGHT_ROOM_WIDTH_TILES = 25 - MAU_OFFICE_RIGHT_ROOM_TILE_X;
+const MAU_OFFICE_RIGHT_ROOM_WIDTH_TILES = 9;
+const MAU_OFFICE_EXTENSION_ROOM_WIDTH_TILES = 11;
 const MAU_OFFICE_FRONT_WALL_HEIGHT_TILES = 3;
 
 function tileToPixel(tile: number): number {
@@ -359,6 +362,26 @@ export const MAU_OFFICE_ROOMS = {
     tileWidth: MAU_OFFICE_RIGHT_ROOM_WIDTH_TILES,
     tileHeight: MAU_OFFICE_BOTTOM_ROOM_HEIGHT_TILES,
   }),
+  browser: makeRoom({
+    id: "browser",
+    label: "MauBrowse",
+    doorLabel: "Browser",
+    signTone: "blue",
+    tileX: MAU_OFFICE_EXTENSION_ROOM_TILE_X,
+    tileY: 1,
+    tileWidth: MAU_OFFICE_EXTENSION_ROOM_WIDTH_TILES,
+    tileHeight: MAU_OFFICE_TOP_ROOM_HEIGHT_TILES,
+  }),
+  telephony: makeRoom({
+    id: "telephony",
+    label: "MauCall",
+    doorLabel: "Telephony",
+    signTone: "gold",
+    tileX: MAU_OFFICE_EXTENSION_ROOM_TILE_X,
+    tileY: MAU_OFFICE_BOTTOM_ROOM_TILE_Y,
+    tileWidth: MAU_OFFICE_EXTENSION_ROOM_WIDTH_TILES,
+    tileHeight: MAU_OFFICE_BOTTOM_ROOM_HEIGHT_TILES,
+  }),
 } satisfies Record<MauOfficeRoomId, MauOfficeRoom>;
 
 function roomContains(room: MauOfficeRoom, tileX: number, tileY: number): boolean {
@@ -375,7 +398,11 @@ function isRoomThresholdTile(tileX: number, tileY: number): boolean {
     (tileX === MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X &&
       tileY === MAU_OFFICE_ROOMS.desk.tileY + MAU_OFFICE_ROOMS.desk.tileHeight - 1) ||
     (tileX === MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X && tileY === MAU_OFFICE_ROOMS.break.tileY) ||
-    (tileX === MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X && tileY === MAU_OFFICE_ROOMS.support.tileY)
+    (tileX === MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X && tileY === MAU_OFFICE_ROOMS.support.tileY) ||
+    (tileX === MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X &&
+      tileY === MAU_OFFICE_ROOMS.browser.tileY + MAU_OFFICE_ROOMS.browser.tileHeight - 1) ||
+    (tileX === MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X &&
+      tileY === MAU_OFFICE_ROOMS.telephony.tileY)
   );
 }
 
@@ -391,7 +418,7 @@ function isHallTile(tileX: number, tileY: number): boolean {
     tileY >= MAU_OFFICE_HALL_HORIZONTAL_TILE_Y &&
     tileY < MAU_OFFICE_HALL_HORIZONTAL_TILE_Y + MAU_OFFICE_HALL_HORIZONTAL_HEIGHT_TILES &&
     tileX >= MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X &&
-    tileX <= MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X;
+    tileX <= MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X;
   return (
     inHorizontalSpine || isRoomThresholdTile(tileX, tileY) || isTopRoomPassageTile(tileX, tileY)
   );
@@ -619,6 +646,7 @@ function addCounterWithCaps(
 const TOP_WALL_DOOR_TILE_X: Partial<Record<MauOfficeRoomId, number>> = {
   break: 8,
   support: 20,
+  telephony: 31,
 };
 
 function resolveTopWallPropTileX(
@@ -788,8 +816,10 @@ function makeWallSprites(): MauOfficeSpritePlacement[] {
 
   addRoomShell(MAU_OFFICE_ROOMS.desk, 8, false);
   addRoomShell(MAU_OFFICE_ROOMS.meeting, 20, false);
+  addRoomShell(MAU_OFFICE_ROOMS.browser, 31, false);
   addRoomShell(MAU_OFFICE_ROOMS.break, 8, true);
   addRoomShell(MAU_OFFICE_ROOMS.support, 20, true);
+  addRoomShell(MAU_OFFICE_ROOMS.telephony, 31, true);
 
   sprites.push({
     id: `hall-cap-left:${MAU_OFFICE_HALL_HORIZONTAL_TILE_Y}`,
@@ -806,7 +836,7 @@ function makeWallSprites(): MauOfficeSpritePlacement[] {
   sprites.push({
     id: `hall-cap-right:${MAU_OFFICE_HALL_HORIZONTAL_TILE_Y}`,
     asset: joinAsset("tiles/hall-cap-right.png"),
-    tileX: MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X + 1,
+    tileX: MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X + 1,
     tileY: MAU_OFFICE_HALL_HORIZONTAL_TILE_Y,
     tileWidth: 1,
     tileHeight: 1,
@@ -1060,6 +1090,66 @@ function makePropSprites(): MauOfficeSpritePlacement[] {
   }
 
   add({
+    id: "browser-board",
+    asset: joinAsset("tiles/desk-roadmap-board-v1.png"),
+    tileX: 27,
+    tileY: resolveTopWallPropTileY("browser", 2),
+    tileWidth: 4,
+    tileHeight: 2,
+    layer: "prop",
+    roomId: "browser",
+    kind: "board",
+  });
+  add({
+    id: "browser-desk",
+    asset: joinAsset("items/desk-wide-v1.png"),
+    tileX: 30,
+    tileY: 4,
+    tileWidth: 3,
+    tileHeight: 2,
+    layer: "prop",
+    roomId: "browser",
+    kind: "desk",
+  });
+  add({
+    id: "browser-chair",
+    asset: joinAsset("items/chair-front-v1.png"),
+    tileX: 31,
+    tileY: 6,
+    tileWidth: 1,
+    tileHeight: 1,
+    layer: "prop",
+    roomId: "browser",
+    kind: "chair",
+    zOffset: MAU_OFFICE_SEATED_OCCLUDER_Z_OFFSET + 8,
+  });
+  addSurfaceAccessory({
+    id: "browser-monitor",
+    asset: "items/monitor-code-v1.png",
+    centerTileX: 31,
+    centerTileY: 4.5,
+    roomId: "browser",
+  });
+  addSurfaceAccessory({
+    id: "browser-book",
+    asset: "items/book-open-v1.png",
+    centerTileX: 32,
+    centerTileY: 4.5,
+    roomId: "browser",
+  });
+  add({
+    id: "browser-plant",
+    asset: joinAsset("items/plant-v1.png"),
+    tileX: 35,
+    tileY: 3,
+    tileWidth: 1,
+    tileHeight: 1,
+    layer: "prop",
+    roomId: "browser",
+    kind: "plant",
+  });
+
+  add({
     id: "break-neon",
     asset: joinAsset("items/neon-sign-v1.png"),
     tileX: 4,
@@ -1242,6 +1332,79 @@ function makePropSprites(): MauOfficeSpritePlacement[] {
     roomId: "support",
     kind: "plant",
   });
+  add({
+    id: "telephony-poster",
+    asset: joinAsset("tiles/notice-board-v1.png"),
+    tileX: 27,
+    tileY: resolveTopWallPropTileY("telephony", 1),
+    tileWidth: 2,
+    tileHeight: 1,
+    layer: "prop",
+    roomId: "telephony",
+    kind: "board",
+  });
+  add({
+    id: "telephony-calendar",
+    asset: joinAsset("tiles/calendar-wall-v1.png"),
+    tileX: resolveTopWallPropTileX("telephony", 34, 1),
+    tileY: resolveTopWallPropTileY("telephony", 1),
+    tileWidth: 1,
+    tileHeight: 1,
+    layer: "prop",
+    roomId: "telephony",
+    kind: "board",
+  });
+  addCounterWithCaps(add, {
+    idPrefix: "telephony-counter",
+    roomId: "telephony",
+    kind: "counter",
+    layer: "prop",
+    tileX: resolveCenteredTileX("telephony", 5),
+    tileY: 14,
+    tileWidth: 5,
+    tileHeight: 2,
+    capTileWidth: 1,
+    assets: {
+      left: joinAsset("items/counter-left-v1.png"),
+      center: joinAsset("items/counter-mid-v1.png"),
+      right: joinAsset("items/counter-right-v1.png"),
+    },
+  });
+  addSurfaceAccessory({
+    id: "telephony-monitor",
+    asset: "items/monitor-back-v1.png",
+    centerTileX: 30,
+    centerTileY: 14.5,
+    roomId: "telephony",
+    zOffset: MAU_OFFICE_COUNTER_OCCLUDER_Z_OFFSET + 18,
+  });
+  addSurfaceAccessory({
+    id: "telephony-fax",
+    asset: "items/fax-machine-v1.png",
+    centerTileX: 31,
+    centerTileY: 14.5,
+    roomId: "telephony",
+    zOffset: MAU_OFFICE_COUNTER_OCCLUDER_Z_OFFSET + 18,
+  });
+  addSurfaceAccessory({
+    id: "telephony-paper",
+    asset: "items/paper-stack-v1.png",
+    centerTileX: 32,
+    centerTileY: 14.5,
+    roomId: "telephony",
+    zOffset: MAU_OFFICE_COUNTER_OCCLUDER_Z_OFFSET + 18,
+  });
+  add({
+    id: "telephony-plant",
+    asset: joinAsset("items/plant-v1.png"),
+    tileX: 35,
+    tileY: 17,
+    tileWidth: 1,
+    tileHeight: 1,
+    layer: "prop",
+    roomId: "telephony",
+    kind: "plant",
+  });
 
   return sprites;
 }
@@ -1250,7 +1413,14 @@ function makeLabels(): MauOfficeLabelPlacement[] {
   return [];
 }
 
-export const MAU_OFFICE_ROOM_IDS: MauOfficeRoomId[] = ["desk", "break", "meeting", "support"];
+export const MAU_OFFICE_ROOM_IDS: MauOfficeRoomId[] = [
+  "desk",
+  "break",
+  "meeting",
+  "support",
+  "browser",
+  "telephony",
+];
 
 const MAU_OFFICE_NODES = {
   outside_mauHome: makeNode(
@@ -1268,6 +1438,12 @@ const MAU_OFFICE_NODES = {
   east_spine: makeNode("east_spine", MAU_OFFICE_RIGHT_ROOM_JUNCTION_TILE_X, 10, "hall", [
     "west_spine",
     "support_door",
+    "far_spine",
+  ]),
+  far_spine: makeNode("far_spine", MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X, 10, "hall", [
+    "east_spine",
+    "browser_door",
+    "telephony_door",
   ]),
   desk_door: makeNode("desk_door", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 9, "desk", [
     "west_spine",
@@ -1281,6 +1457,17 @@ const MAU_OFFICE_NODES = {
     "east_spine",
     "support_center",
   ]),
+  browser_door: makeNode("browser_door", MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X, 9, "browser", [
+    "far_spine",
+    "browser_center",
+  ]),
+  telephony_door: makeNode(
+    "telephony_door",
+    MAU_OFFICE_EXTENSION_ROOM_JUNCTION_TILE_X,
+    11,
+    "telephony",
+    ["far_spine", "telephony_center"],
+  ),
   break_entry: makeNode("break_entry", MAU_OFFICE_LEFT_ROOM_JUNCTION_TILE_X, 19, "break", [
     "outside_mauHome",
     "break_center",
@@ -1304,6 +1491,8 @@ const MAU_OFFICE_NODES = {
   ]),
   break_center: makeNode("break_center", 8, 15, "break", ["break_door", "break_entry"]),
   support_center: makeNode("support_center", 20, 14, "support", ["support_door"]),
+  browser_center: makeNode("browser_center", 31, 6, "browser", ["browser_door"]),
+  telephony_center: makeNode("telephony_center", 31, 14, "telephony", ["telephony_door"]),
   support_customer_1: makeNode("support_customer_1", 18, 16, "support", ["support_entry"]),
   support_customer_2: makeNode("support_customer_2", 20, 16, "support", ["support_entry"]),
   support_customer_3: makeNode("support_customer_3", 22, 16, "support", ["support_entry"]),
@@ -1494,6 +1683,16 @@ export const MAU_OFFICE_LAYOUT = {
       layer: 3,
       facingOverride: "north",
     }),
+    browser_worker_1: makeAnchor({
+      id: "browser_worker_1",
+      tileX: 31,
+      tileY: 6,
+      roomId: "browser",
+      nodeId: "browser_center",
+      pose: "sit",
+      layer: 3,
+      facingOverride: "north",
+    }),
     support_staff_1: makeAnchor({
       id: "support_staff_1",
       tileX: 18,
@@ -1553,6 +1752,16 @@ export const MAU_OFFICE_LAYOUT = {
       pose: "stand",
       layer: 4,
       facingOverride: "north",
+    }),
+    telephony_staff_1: makeAnchor({
+      id: "telephony_staff_1",
+      tileX: 31,
+      tileY: 14,
+      roomId: "telephony",
+      nodeId: "telephony_center",
+      pose: "stand",
+      layer: 4,
+      facingOverride: "south",
     }),
     break_arcade: makeAnchor({
       id: "break_arcade",

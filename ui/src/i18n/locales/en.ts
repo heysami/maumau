@@ -361,6 +361,14 @@ export const en: TranslationMap = {
       gridStage: "Grid stage",
       focusRoom: "Focus room",
       allRooms: "All rooms",
+      rooms: {
+        desk: "Desks",
+        meeting: "Meeting",
+        browser: "Browser",
+        break: "Break",
+        support: "Support",
+        telephony: "Telephony",
+      },
       chat: {
         image: "Image",
         toolOutput: "Tool output",

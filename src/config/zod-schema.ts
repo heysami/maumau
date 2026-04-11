@@ -232,8 +232,10 @@ const McpConfigSchema = z
 const MauOfficeZoneIdSchema = z.union([
   z.literal("desk"),
   z.literal("meeting"),
+  z.literal("browser"),
   z.literal("break"),
   z.literal("support"),
+  z.literal("telephony"),
   z.literal("hall"),
   z.literal("outside"),
 ]);
@@ -245,8 +247,10 @@ const MauOfficeMarkerRoleSchema = z.union([
   z.literal("desk.workerSeat"),
   z.literal("meeting.presenter"),
   z.literal("meeting.seat"),
+  z.literal("browser.workerSeat"),
   z.literal("support.staff"),
   z.literal("support.customer"),
+  z.literal("telephony.staff"),
   z.literal("break.arcade"),
   z.literal("break.snack"),
   z.literal("break.volley"),

@@ -18,7 +18,7 @@ export const REFLECTION_WEEKLY_JOB_NAME = "Weekly reflection reviewer";
 const DAILY_REFLECTION_PROMPT = `You are the daily reflection curator for this Maumau gateway.
 
 Review user-facing sessions across agents and workspaces on this gateway.
-Stay plan-only. You may inspect sessions, memory, and current public information when needed, and you may write today's daily note. Do not edit code, config, bootstrap/personality files, cron, plugins, or any workspace files except reviews/daily/YYYY-MM-DD.md.
+Do this work directly in this session. Do not delegate to teams or subagents unless a required tool is unavailable here. You may inspect sessions, memory, and current public information when needed, and you may write today's daily note. Do not edit code, config, bootstrap/personality files, cron, plugins, or any workspace files except reviews/daily/YYYY-MM-DD.md.
 
 1. Use sessions_list with activeMinutes=1440, kinds=["main","group","other"], limit=200, messageLimit=0.
 2. Treat kind other rows as possible direct user sessions. Skip operational or internal chatter such as cron, hook, node, subagent, ACP, heartbeat, rows whose channel is internal, and rows whose key, label, or display name are clearly operational.
@@ -32,7 +32,7 @@ Stay plan-only. You may inspect sessions, memory, and current public information
 const WEEKLY_REFLECTION_PROMPT = `You are the weekly reflection reviewer for this Maumau gateway.
 
 Review user-facing sessions across agents and workspaces on this gateway.
-Stay plan-only. You may inspect daily notes, sessions, memory, and current public information when needed, and you may write the weekly report. Do not edit code, config, bootstrap/personality files, cron, plugins, or any workspace files except reviews/weekly/YYYY-WW.md.
+Do this work directly in this session. Do not delegate to teams or subagents unless a required tool is unavailable here. You may inspect daily notes, sessions, memory, and current public information when needed, and you may write the weekly report. Do not edit code, config, bootstrap/personality files, cron, plugins, or any workspace files except reviews/weekly/YYYY-WW.md.
 
 1. Read the latest 7 daily notes under reviews/daily/.
 2. If coverage is missing or incomplete, use sessions_list with activeMinutes=10080, kinds=["main","group","other"], limit=200, messageLimit=0, then inspect up to the latest 200 non-tool messages with sessions_history(includeTools=false).
@@ -50,23 +50,42 @@ function resolveReviewTimezone(config: MaumauConfig): string {
   return configured || Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-function shouldUseDedicatedReviewerAgent(config: MaumauConfig): boolean {
-  const defaultAgentId = resolveDefaultAgentId(config);
-  const sandbox = config.agents?.defaults?.sandbox;
-  const mode = sandbox?.mode ?? "off";
-  const sandboxed =
-    mode === "all" ||
-    (mode === "non-main" && normalizeAgentId(defaultAgentId) !== DEFAULT_AGENT_ID);
-  if (!sandboxed) {
-    return false;
-  }
-  return (sandbox?.sessionToolsVisibility ?? "spawned") === "spawned";
+function shouldUseDedicatedReviewerAgent(_config: MaumauConfig): boolean {
+  return true;
 }
 
 function ensureReviewerAgent(config: MaumauConfig): MaumauConfig {
   const currentAgents = Array.isArray(config.agents?.list) ? config.agents.list : [];
-  if (currentAgents.some((entry) => normalizeAgentId(entry?.id) === REFLECTION_REVIEWER_AGENT_ID)) {
-    return config;
+  const reviewerIndex = currentAgents.findIndex(
+    (entry) => normalizeAgentId(entry?.id) === REFLECTION_REVIEWER_AGENT_ID,
+  );
+  const reviewerWorkspace =
+    currentAgents[reviewerIndex]?.workspace?.trim() || config.agents?.defaults?.workspace?.trim();
+  const reviewerAgent = {
+    id: REFLECTION_REVIEWER_AGENT_ID,
+    name: REFLECTION_REVIEWER_AGENT_NAME,
+    executionStyle: "direct" as const,
+    ...(reviewerWorkspace ? { workspace: reviewerWorkspace } : {}),
+    sandbox: {
+      ...(reviewerIndex >= 0 && currentAgents[reviewerIndex]?.sandbox
+        ? currentAgents[reviewerIndex].sandbox
+        : {}),
+      mode: "off" as const,
+    },
+  };
+  if (reviewerIndex >= 0) {
+    const nextAgents = [...currentAgents];
+    nextAgents[reviewerIndex] = {
+      ...currentAgents[reviewerIndex],
+      ...reviewerAgent,
+    };
+    return {
+      ...config,
+      agents: {
+        ...config.agents,
+        list: nextAgents,
+      },
+    };
   }
   const hasExplicitDefault = currentAgents.some((entry) => entry?.default);
   return {
@@ -83,13 +102,7 @@ function ensureReviewerAgent(config: MaumauConfig): MaumauConfig {
             ]
           : []),
         ...currentAgents,
-        {
-          id: REFLECTION_REVIEWER_AGENT_ID,
-          name: REFLECTION_REVIEWER_AGENT_NAME,
-          sandbox: {
-            mode: "off",
-          },
-        },
+        reviewerAgent,
       ],
     },
   };
@@ -117,10 +130,6 @@ export function applyLocalSetupReflectionReviewerDefaults(baseConfig: MaumauConf
     : withToolDefaults;
 }
 
-function hasReflectionJob(jobs: Array<{ name?: string | null }>, name: string): boolean {
-  return jobs.some((job) => job?.name === name);
-}
-
 function createQuietCronState(config: MaumauConfig, storePath: string) {
   return createCronServiceState({
     log: {
@@ -144,6 +153,60 @@ function resolveReflectionJobAgentId(config: MaumauConfig): string | undefined {
   return shouldUseDedicatedReviewerAgent(config) ? REFLECTION_REVIEWER_AGENT_ID : undefined;
 }
 
+function syncManagedReflectionJob(params: {
+  job: ReturnType<typeof createJob>;
+  agentId: string;
+  description: string;
+  sessionTarget: string;
+  message: string;
+}) {
+  let changed = false;
+  const { job } = params;
+
+  if (job.agentId !== params.agentId) {
+    job.agentId = params.agentId;
+    changed = true;
+  }
+  if (job.description !== params.description) {
+    job.description = params.description;
+    changed = true;
+  }
+  if (job.sessionTarget !== params.sessionTarget) {
+    job.sessionTarget = params.sessionTarget;
+    changed = true;
+  }
+  if (job.wakeMode !== "now") {
+    job.wakeMode = "now";
+    changed = true;
+  }
+  if (job.payload.kind !== "agentTurn") {
+    job.payload = {
+      kind: "agentTurn",
+      message: params.message,
+    };
+    changed = true;
+  } else if (job.payload.message !== params.message) {
+    job.payload = {
+      ...job.payload,
+      message: params.message,
+    };
+    changed = true;
+  }
+  if (!job.delivery || job.delivery.mode !== "none") {
+    job.delivery = { mode: "none" };
+    changed = true;
+  }
+  if (typeof job.state?.runningAtMs === "number") {
+    job.state.runningAtMs = undefined;
+    changed = true;
+  }
+
+  if (changed) {
+    job.updatedAtMs = Date.now();
+  }
+  return changed;
+}
+
 async function ensureReflectionWorkspace(
   workspaceDir: string,
   runtime: RuntimeEnv,
@@ -164,21 +227,24 @@ export async function ensureOnboardedReflectionReviewerArtifacts(params: {
   config: MaumauConfig;
   runtime: RuntimeEnv;
 }): Promise<void> {
-  const jobAgentId = resolveReflectionJobAgentId(params.config);
+  const managedConfig = ensureReviewerAgent(params.config);
+  const jobAgentId = resolveReflectionJobAgentId(managedConfig);
   const workspaceDir = resolveAgentWorkspaceDir(
-    params.config,
+    managedConfig,
     jobAgentId ?? resolveDefaultAgentId(params.config),
   );
   await ensureReflectionWorkspace(workspaceDir, params.runtime, jobAgentId);
 
-  const storePath = resolveCronStorePath(params.config.cron?.store);
+  const storePath = resolveCronStorePath(managedConfig.cron?.store);
   const store = await loadCronStore(storePath);
-  const state = createQuietCronState(params.config, storePath);
-  const tz = resolveReviewTimezone(params.config);
+  const state = createQuietCronState(managedConfig, storePath);
+  const tz = resolveReviewTimezone(managedConfig);
 
   let changed = false;
+  const managedDaily = store.jobs.find((job) => job.name === REFLECTION_DAILY_JOB_NAME);
+  const managedWeekly = store.jobs.find((job) => job.name === REFLECTION_WEEKLY_JOB_NAME);
 
-  if (!hasReflectionJob(store.jobs, REFLECTION_DAILY_JOB_NAME)) {
+  if (!managedDaily) {
     store.jobs.push(
       createJob(state, {
         ...(jobAgentId ? { agentId: jobAgentId } : {}),
@@ -202,9 +268,18 @@ export async function ensureOnboardedReflectionReviewerArtifacts(params: {
       }),
     );
     changed = true;
+  } else if (jobAgentId) {
+    changed =
+      syncManagedReflectionJob({
+        job: managedDaily,
+        agentId: jobAgentId,
+        description: "Daily cross-agent reflection curation job.",
+        sessionTarget: "session:daily-reflection-curation",
+        message: DAILY_REFLECTION_PROMPT,
+      }) || changed;
   }
 
-  if (!hasReflectionJob(store.jobs, REFLECTION_WEEKLY_JOB_NAME)) {
+  if (!managedWeekly) {
     store.jobs.push(
       createJob(state, {
         ...(jobAgentId ? { agentId: jobAgentId } : {}),
@@ -228,6 +303,15 @@ export async function ensureOnboardedReflectionReviewerArtifacts(params: {
       }),
     );
     changed = true;
+  } else if (jobAgentId) {
+    changed =
+      syncManagedReflectionJob({
+        job: managedWeekly,
+        agentId: jobAgentId,
+        description: "Weekly cross-agent reflection synthesis job.",
+        sessionTarget: "session:weekly-reflection",
+        message: WEEKLY_REFLECTION_PROMPT,
+      }) || changed;
   }
 
   if (changed) {

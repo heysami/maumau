@@ -28,8 +28,10 @@ export type MauOfficeMarkerRole =
   | "desk.workerSeat"
   | "meeting.presenter"
   | "meeting.seat"
+  | "browser.workerSeat"
   | "support.staff"
   | "support.customer"
+  | "telephony.staff"
   | "break.arcade"
   | "break.snack"
   | "break.volley"
@@ -154,6 +156,24 @@ export const MAU_OFFICE_SCENE_MIN_TILES_W = 4;
 export const MAU_OFFICE_SCENE_MIN_TILES_H = 4;
 export const MAU_OFFICE_SCENE_MAX_TILES_W = 80;
 export const MAU_OFFICE_SCENE_MAX_TILES_H = 80;
+const MAU_OFFICE_LEGACY_SCENE_TILES_W = 26;
+const MAU_OFFICE_RIGHT_WING_MERGE_TILE_X = 21;
+const RIGHT_WING_PROP_IDS = new Set([
+  "browser-board",
+  "browser-book",
+  "browser-chair",
+  "browser-desk",
+  "browser-monitor",
+  "browser-plant",
+  "telephony-calendar",
+  "telephony-fax",
+  "telephony-monitor",
+  "telephony-paper",
+  "telephony-plant",
+  "telephony-poster",
+]);
+const RIGHT_WING_AUTOTILE_IDS = new Set(["telephony-counter"]);
+const RIGHT_WING_MARKER_IDS = new Set(["browser_worker_1", "telephony_staff_1"]);
 
 const ROOM_META: Record<
   MauOfficeRoomId,
@@ -161,8 +181,10 @@ const ROOM_META: Record<
 > = {
   desk: { label: "MauApps", doorLabel: "Desk", signTone: "blue" },
   meeting: { label: "MauHome", doorLabel: "Meeting", signTone: "green" },
+  browser: { label: "MauBrowse", doorLabel: "Browser", signTone: "blue" },
   break: { label: "MauBreak", doorLabel: "Break", signTone: "purple" },
   support: { label: "MauWorld", doorLabel: "Support", signTone: "gold" },
+  telephony: { label: "MauCall", doorLabel: "Telephony", signTone: "gold" },
 };
 
 const REQUIRED_MARKER_COUNTS: Array<{
@@ -174,6 +196,8 @@ const REQUIRED_MARKER_COUNTS: Array<{
   { role: "spawn.support", exact: 1 },
   { role: "desk.board", exact: 1 },
   { role: "meeting.presenter", exact: 1 },
+  { role: "browser.workerSeat", exact: 1 },
+  { role: "telephony.staff", exact: 1 },
   { role: "break.arcade", exact: 1 },
   { role: "break.snack", exact: 1 },
   { role: "break.jukebox", exact: 1 },
@@ -255,8 +279,14 @@ function roomIdForRole(role: MauOfficeMarkerRole): MauOfficeRoomId | "outside" {
   if (role.startsWith("meeting.")) {
     return "meeting";
   }
+  if (role.startsWith("browser.")) {
+    return "browser";
+  }
   if (role.startsWith("support.")) {
     return "support";
+  }
+  if (role.startsWith("telephony.")) {
+    return "telephony";
   }
   return "break";
 }
@@ -296,12 +326,7 @@ function resolveNearestMarkerTile(
     ] as const) {
       const nextTileX = current.tileX + dx;
       const nextTileY = current.tileY + dy;
-      if (
-        nextTileX < 0 ||
-        nextTileX >= width ||
-        nextTileY < 0 ||
-        nextTileY >= height
-      ) {
+      if (nextTileX < 0 || nextTileX >= width || nextTileY < 0 || nextTileY >= height) {
         continue;
       }
       const nextKey = tileKey(nextTileX, nextTileY);
@@ -337,9 +362,7 @@ export function getMauOfficeSceneTileWidth(scene: Pick<MauOfficeSceneConfig, "zo
   return scene.zoneRows.reduce((max, row) => Math.max(max, row.length), 0);
 }
 
-export function getMauOfficeSceneTileHeight(
-  scene: Pick<MauOfficeSceneConfig, "zoneRows">,
-): number {
+export function getMauOfficeSceneTileHeight(scene: Pick<MauOfficeSceneConfig, "zoneRows">): number {
   return scene.zoneRows.length;
 }
 
@@ -364,12 +387,10 @@ function createEmptyWallRows(
   width = MAU_OFFICE_SCENE_TILES_W,
   height = MAU_OFFICE_SCENE_TILES_H,
 ): boolean[][] {
-  return Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => false),
-  );
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => false));
 }
 
-function buildDefaultZoneRows(): MauOfficeZoneId[][] {
+function buildLegacyDefaultZoneRows(): MauOfficeZoneId[][] {
   return [
     [
       "outside",
@@ -934,6 +955,52 @@ function buildDefaultZoneRows(): MauOfficeZoneId[][] {
   ];
 }
 
+function createEmptyZoneRows(
+  width = MAU_OFFICE_SCENE_TILES_W,
+  height = MAU_OFFICE_SCENE_TILES_H,
+): MauOfficeZoneId[][] {
+  return Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => "outside" satisfies MauOfficeZoneId),
+  );
+}
+
+function buildDefaultZoneRows(): MauOfficeZoneId[][] {
+  const rows = createEmptyZoneRows();
+  const legacyRows = buildLegacyDefaultZoneRows();
+  for (let tileY = 0; tileY < legacyRows.length; tileY += 1) {
+    for (let tileX = 0; tileX < legacyRows[tileY]!.length; tileX += 1) {
+      rows[tileY]![tileX] = legacyRows[tileY]![tileX]!;
+    }
+  }
+  for (const tile of LEGACY_LAYOUT.map.floorTiles) {
+    rows[tile.tileY]![tile.tileX] = tile.roomId;
+  }
+  for (const [tileX, tileY, zoneId] of [
+    [15, 1, "outside"],
+    [15, 2, "outside"],
+    [15, 3, "outside"],
+    [15, 4, "outside"],
+    [15, 5, "outside"],
+    [16, 6, "meeting"],
+    [25, 6, "hall"],
+    [15, 7, "outside"],
+    [15, 8, "outside"],
+    [15, 9, "outside"],
+    [15, 11, "outside"],
+    [15, 12, "outside"],
+    [15, 13, "outside"],
+    [15, 14, "outside"],
+    [15, 15, "outside"],
+    [15, 16, "outside"],
+    [15, 17, "outside"],
+    [15, 18, "outside"],
+    [15, 19, "outside"],
+  ] as const) {
+    rows[tileY]![tileX] = zoneId;
+  }
+  return rows;
+}
+
 const CATALOG_ITEMS: MauOfficeCatalogItem[] = [
   {
     id: "kanban-board",
@@ -1078,6 +1145,17 @@ const CATALOG_ITEMS: MauOfficeCatalogItem[] = [
     label: "Monitor Back",
     kind: "accessory",
     asset: "mau-office/items/monitor-back-v1.png",
+    mount: "floor",
+    tileWidth: 1,
+    tileHeight: 1,
+    defaultZOffset: 278,
+    blocksWalkway: false,
+  },
+  {
+    id: "fax-machine",
+    label: "Fax Machine",
+    kind: "accessory",
+    asset: "mau-office/items/fax-machine-v1.png",
     mount: "floor",
     tileWidth: 1,
     tileHeight: 1,
@@ -1411,40 +1489,72 @@ function compileAnchors(
   rows: MauOfficeZoneId[][],
 ): Record<string, MauOfficeAnchor> {
   return Object.fromEntries(
-    markers.map((marker) => [
-      marker.id,
-      {
-        id: marker.id,
-        tileX: marker.tileX,
-        tileY: marker.tileY,
-        x: tileCenterX(marker.tileX),
-        y: tileFootY(marker.tileY),
-        roomId: resolveAnchorRoomId(marker, rows),
-        nodeId: marker.id,
-        pose: marker.pose,
-        layer: marker.layer,
-        footprintTiles: marker.footprintTiles ?? { width: 1, height: 1 },
-        facingOverride: marker.facingOverride,
-      } satisfies MauOfficeAnchor,
-    ]),
+    markers.map((marker) => {
+      const legacyAnchor = Object.prototype.hasOwnProperty.call(LEGACY_LAYOUT.anchors, marker.id)
+        ? LEGACY_LAYOUT.anchors[marker.id as keyof typeof LEGACY_LAYOUT.anchors]
+        : undefined;
+      return [
+        marker.id,
+        {
+          id: marker.id,
+          tileX: marker.tileX,
+          tileY: marker.tileY,
+          x: tileCenterX(marker.tileX),
+          y: tileFootY(marker.tileY),
+          roomId: resolveAnchorRoomId(marker, rows),
+          nodeId: legacyAnchor?.nodeId ?? marker.id,
+          pose: marker.pose,
+          layer: marker.layer,
+          footprintTiles: marker.footprintTiles ?? { width: 1, height: 1 },
+          facingOverride: marker.facingOverride,
+        } satisfies MauOfficeAnchor,
+      ];
+    }),
   );
 }
 
 function compileNodes(anchors: Record<string, MauOfficeAnchor>): Record<string, MauOfficeNode> {
-  return Object.fromEntries(
-    Object.values(anchors).map((anchor) => [
-      anchor.id,
+  const nodes = new Map<string, MauOfficeNode>(
+    Object.entries(LEGACY_LAYOUT.nodes).map(([nodeId, node]) => [
+      nodeId,
       {
-        id: anchor.id,
-        tileX: Math.round(anchor.tileX),
-        tileY: Math.round(anchor.tileY),
-        x: tileCenterX(Math.round(anchor.tileX)),
-        y: tileFootY(Math.round(anchor.tileY)),
-        roomId: anchor.roomId,
-        neighbors: [],
+        ...node,
+        neighbors: [...node.neighbors],
       } satisfies MauOfficeNode,
     ]),
   );
+  const anchorsByNodeId = new Map<string, MauOfficeAnchor[]>();
+  for (const anchor of Object.values(anchors)) {
+    const siblings = anchorsByNodeId.get(anchor.nodeId);
+    if (siblings) {
+      siblings.push(anchor);
+    } else {
+      anchorsByNodeId.set(anchor.nodeId, [anchor]);
+    }
+  }
+  for (const [nodeId, nodeAnchors] of anchorsByNodeId) {
+    const explicitAnchor = anchors[nodeId];
+    const legacyNode = nodes.get(nodeId);
+    if (legacyNode && !explicitAnchor) {
+      continue;
+    }
+    const sourceAnchor = explicitAnchor ?? nodeAnchors[0];
+    if (!sourceAnchor) {
+      continue;
+    }
+    const tileX = Math.round(sourceAnchor.tileX);
+    const tileY = Math.round(sourceAnchor.tileY);
+    nodes.set(nodeId, {
+      id: nodeId,
+      tileX,
+      tileY,
+      x: tileCenterX(tileX),
+      y: tileFootY(tileY),
+      roomId: sourceAnchor.roomId,
+      neighbors: legacyNode ? [...legacyNode.neighbors] : [],
+    });
+  }
+  return Object.fromEntries(nodes);
 }
 
 function compileFloorTiles(rows: MauOfficeZoneId[][]): MauOfficeTilePlacement[] {
@@ -1656,8 +1766,10 @@ function deriveLegacyWallRows(
   const rooms = {
     desk: roomBoundsForZone(rows, "desk"),
     meeting: roomBoundsForZone(rows, "meeting"),
+    browser: roomBoundsForZone(rows, "browser"),
     break: roomBoundsForZone(rows, "break"),
     support: roomBoundsForZone(rows, "support"),
+    telephony: roomBoundsForZone(rows, "telephony"),
   } satisfies Record<MauOfficeRoomId, MauOfficeRoom>;
   const wallRows = createEmptyWallRows(
     rows.reduce((max, row) => Math.max(max, row.length), 0),
@@ -1820,8 +1932,7 @@ function compileGenericWallSprite(
   const south = wallAt(wallRows, tileX, tileY + 1);
   const west = wallAt(wallRows, tileX - 1, tileY);
   if (!north) {
-    const variant =
-      !west && east ? "left" : west && !east ? "right" : "mid";
+    const variant = !west && east ? "left" : west && !east ? "right" : "mid";
     return createWallSprite({
       id: `wall-generic-front:${tileX}:${tileY}`,
       asset: `mau-office/tiles/wall-front-${variant}.png`,
@@ -2163,8 +2274,10 @@ export function compileMauOfficeScene(scene: MauOfficeSceneConfig): CompiledMauO
   const rooms = {
     desk: roomBoundsForZone(authored.zoneRows, "desk"),
     meeting: roomBoundsForZone(authored.zoneRows, "meeting"),
+    browser: roomBoundsForZone(authored.zoneRows, "browser"),
     break: roomBoundsForZone(authored.zoneRows, "break"),
     support: roomBoundsForZone(authored.zoneRows, "support"),
+    telephony: roomBoundsForZone(authored.zoneRows, "telephony"),
   } satisfies Record<MauOfficeRoomId, MauOfficeRoom>;
   const anchors = compileAnchors(authored.markers, authored.zoneRows);
   const nodes = compileNodes(anchors);
@@ -2234,7 +2347,15 @@ export function validateMauOfficeScene(scene: MauOfficeSceneConfig): MauOfficeSc
       errors.push(`${requirement.role} requires at least ${requirement.min} marker(s).`);
     }
   }
-  for (const roomId of ["desk", "meeting", "break", "support", "hall"] as const) {
+  for (const roomId of [
+    "desk",
+    "meeting",
+    "browser",
+    "break",
+    "support",
+    "telephony",
+    "hall",
+  ] as const) {
     const hasTile = scene.zoneRows.some((row) => row.some((value) => value === roomId));
     if (!hasTile) {
       errors.push(`${roomId} must contain at least one tile.`);
@@ -2255,11 +2376,7 @@ export function validateMauOfficeScene(scene: MauOfficeSceneConfig): MauOfficeSc
     const roleRoomId = roomIdForRole(marker.role);
     const tileX = Math.round(marker.tileX);
     const tileY = Math.round(marker.tileY);
-    if (
-      tileY >= 0 &&
-      tileY < scene.wallRows.length &&
-      wallAt(scene.wallRows, tileX, tileY)
-    ) {
+    if (tileY >= 0 && tileY < scene.wallRows.length && wallAt(scene.wallRows, tileX, tileY)) {
       errors.push(`${marker.id} should not be placed on a wall tile.`);
     }
     const zone = zoneAt(scene.zoneRows, Math.round(marker.tileX), Math.round(marker.tileY));
@@ -2319,15 +2436,20 @@ function defaultSceneProps(): MauOfficeScenePropPlacement[] {
     { id: "meeting-chair-bottom-left", itemId: "chair-front", tileX: 19, tileY: 7 },
     { id: "meeting-chair-bottom-mid", itemId: "chair-front", tileX: 20, tileY: 7 },
     { id: "meeting-chair-bottom-right", itemId: "chair-front", tileX: 21, tileY: 7 },
+    { id: "browser-board", itemId: "desk-roadmap-board", tileX: 27, tileY: 1.5 },
+    { id: "browser-desk", itemId: "desk-wide", tileX: 30, tileY: 4 },
+    { id: "browser-chair", itemId: "chair-front", tileX: 31, tileY: 6 },
+    { id: "browser-monitor", itemId: "monitor-code", tileX: 31, tileY: 4.5 },
+    { id: "browser-book", itemId: "book-open", tileX: 32, tileY: 4.5 },
+    { id: "browser-plant", itemId: "plant", tileX: 35, tileY: 3 },
     { id: "break-neon", itemId: "neon-sign", tileX: 4, tileY: 11 },
     { id: "break-shelf", itemId: "snack-shelf", tileX: 11, tileY: 12 },
-    { id: "break-arcade", itemId: "arcade", tileX: 1, tileY: 15 },
-    { id: "break-round-table", itemId: "round-table", tileX: 4, tileY: 16 },
-    { id: "break-beanbag-blue", itemId: "beanbag-blue", tileX: 2.5, tileY: 17, mirrored: true },
-    { id: "break-beanbag-pink", itemId: "beanbag-pink", tileX: 4, tileY: 15 },
-    { id: "break-beanbag-green", itemId: "beanbag-green", tileX: 6.5, tileY: 16 },
-    { id: "break-foosball", itemId: "foosball", tileX: 10, tileY: 16 },
-    { id: "break-bench", itemId: "bench", tileX: 11, tileY: 17 },
+    { id: "break-arcade", itemId: "arcade", tileX: 1, tileY: 13 },
+    { id: "break-round-table", itemId: "round-table", tileX: 4, tileY: 13 },
+    { id: "break-beanbag-blue", itemId: "beanbag-blue", tileX: 6, tileY: 14, mirrored: true },
+    { id: "break-beanbag-pink", itemId: "beanbag-pink", tileX: 3, tileY: 14 },
+    { id: "break-foosball", itemId: "foosball", tileX: 11, tileY: 16 },
+    { id: "break-bench", itemId: "bench", tileX: 12, tileY: 14 },
     { id: "support-poster", itemId: "notice-board", tileX: 18, tileY: 12 },
     { id: "support-calendar", itemId: "calendar-wall", tileX: 22, tileY: 12 },
     { id: "support-monitor-back-left", itemId: "monitor-back", tileX: 19, tileY: 14.5 },
@@ -2335,6 +2457,12 @@ function defaultSceneProps(): MauOfficeScenePropPlacement[] {
     { id: "support-monitor-back-right", itemId: "monitor-back", tileX: 22, tileY: 14.5 },
     { id: "support-bench", itemId: "bench", tileX: 22, tileY: 17 },
     { id: "support-plant", itemId: "plant", tileX: 17, tileY: 17 },
+    { id: "telephony-poster", itemId: "notice-board", tileX: 27, tileY: 12 },
+    { id: "telephony-calendar", itemId: "calendar-wall", tileX: 34, tileY: 12 },
+    { id: "telephony-monitor", itemId: "monitor-back", tileX: 30, tileY: 14.5 },
+    { id: "telephony-fax", itemId: "fax-machine", tileX: 31, tileY: 14.5 },
+    { id: "telephony-paper", itemId: "paper-stack", tileX: 32, tileY: 14.5 },
+    { id: "telephony-plant", itemId: "plant", tileX: 35, tileY: 17 },
   ];
 }
 
@@ -2365,22 +2493,18 @@ function defaultSceneAutotiles(): MauOfficeSceneAutotilePlacement[] {
       id: "break-rug",
       itemId: "rug",
       cells: [
-        { tileX: 3, tileY: 15 },
-        { tileX: 4, tileY: 15 },
-        { tileX: 5, tileY: 15 },
-        { tileX: 6, tileY: 15 },
-        { tileX: 3, tileY: 16 },
-        { tileX: 4, tileY: 16 },
-        { tileX: 5, tileY: 16 },
-        { tileX: 6, tileY: 16 },
-        { tileX: 3, tileY: 17 },
-        { tileX: 4, tileY: 17 },
-        { tileX: 5, tileY: 17 },
-        { tileX: 6, tileY: 17 },
-        { tileX: 3, tileY: 18 },
-        { tileX: 4, tileY: 18 },
-        { tileX: 5, tileY: 18 },
-        { tileX: 6, tileY: 18 },
+        { tileX: 10, tileY: 16 },
+        { tileX: 11, tileY: 16 },
+        { tileX: 12, tileY: 16 },
+        { tileX: 13, tileY: 16 },
+        { tileX: 10, tileY: 17 },
+        { tileX: 11, tileY: 17 },
+        { tileX: 12, tileY: 17 },
+        { tileX: 13, tileY: 17 },
+        { tileX: 10, tileY: 18 },
+        { tileX: 11, tileY: 18 },
+        { tileX: 12, tileY: 18 },
+        { tileX: 13, tileY: 18 },
       ],
     },
     {
@@ -2392,6 +2516,17 @@ function defaultSceneAutotiles(): MauOfficeSceneAutotilePlacement[] {
         { tileX: 20, tileY: 15 },
         { tileX: 21, tileY: 15 },
         { tileX: 22, tileY: 15 },
+      ],
+    },
+    {
+      id: "telephony-counter",
+      itemId: "support-counter",
+      cells: [
+        { tileX: 29, tileY: 15 },
+        { tileX: 30, tileY: 15 },
+        { tileX: 31, tileY: 15 },
+        { tileX: 32, tileY: 15 },
+        { tileX: 33, tileY: 15 },
       ],
     },
   ];
@@ -2474,7 +2609,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "desk_board",
       role: "desk.board",
-      tileX: 8,
+      tileX: 2,
       tileY: 4,
       pose: "stand",
       layer: 4,
@@ -2483,7 +2618,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "meeting_presenter",
       role: "meeting.presenter",
-      tileX: 20,
+      tileX: 23,
       tileY: 4,
       pose: "stand",
       layer: 4,
@@ -2544,6 +2679,15 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
       facingOverride: "north",
     },
     {
+      id: "browser_worker_1",
+      role: "browser.workerSeat",
+      tileX: 31,
+      tileY: 6,
+      pose: "sit",
+      layer: 3,
+      facingOverride: "north",
+    },
+    {
       id: "support_staff_1",
       role: "support.staff",
       tileX: 18,
@@ -2598,10 +2742,19 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
       facingOverride: "north",
     },
     {
+      id: "telephony_staff_1",
+      role: "telephony.staff",
+      tileX: 31,
+      tileY: 14,
+      pose: "stand",
+      layer: 4,
+      facingOverride: "south",
+    },
+    {
       id: "break_arcade",
       role: "break.arcade",
       tileX: 2,
-      tileY: 16,
+      tileY: 14,
       pose: "stand",
       layer: 3,
       facingOverride: "west",
@@ -2618,7 +2771,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_volley_1",
       role: "break.volley",
-      tileX: 3,
+      tileX: 2,
       tileY: 16,
       pose: "stand",
       layer: 3,
@@ -2627,7 +2780,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_volley_2",
       role: "break.volley",
-      tileX: 6,
+      tileX: 4,
       tileY: 16,
       pose: "stand",
       layer: 3,
@@ -2636,8 +2789,8 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_table_1",
       role: "break.tableSeat",
-      tileX: 4,
-      tileY: 16,
+      tileX: 3,
+      tileY: 14,
       pose: "sit",
       layer: 3,
       facingOverride: "south",
@@ -2645,8 +2798,8 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_table_2",
       role: "break.tableSeat",
-      tileX: 5,
-      tileY: 16,
+      tileX: 6,
+      tileY: 14,
       pose: "sit",
       layer: 3,
       facingOverride: "south",
@@ -2654,7 +2807,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_volley_3",
       role: "break.volley",
-      tileX: 4,
+      tileX: 2,
       tileY: 18,
       pose: "stand",
       layer: 3,
@@ -2663,7 +2816,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_volley_4",
       role: "break.volley",
-      tileX: 6,
+      tileX: 4,
       tileY: 18,
       pose: "stand",
       layer: 3,
@@ -2681,8 +2834,8 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_chase_2",
       role: "break.chase",
-      tileX: 12,
-      tileY: 16,
+      tileX: 8,
+      tileY: 15,
       pose: "stand",
       layer: 3,
       facingOverride: "west",
@@ -2690,8 +2843,8 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_chase_3",
       role: "break.chase",
-      tileX: 11,
-      tileY: 18,
+      tileX: 7,
+      tileY: 17,
       pose: "stand",
       layer: 3,
       facingOverride: "north",
@@ -2708,7 +2861,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_game_2",
       role: "break.game",
-      tileX: 11,
+      tileX: 13,
       tileY: 16,
       pose: "stand",
       layer: 3,
@@ -2726,7 +2879,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_game_4",
       role: "break.game",
-      tileX: 11,
+      tileX: 13,
       tileY: 17,
       pose: "stand",
       layer: 3,
@@ -2735,7 +2888,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_jukebox",
       role: "break.jukebox",
-      tileX: 5,
+      tileX: 10,
       tileY: 14,
       pose: "stand",
       layer: 3,
@@ -2744,8 +2897,8 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
     {
       id: "break_reading",
       role: "break.reading",
-      tileX: 12,
-      tileY: 17,
+      tileX: 13,
+      tileY: 14,
       pose: "stand",
       layer: 3,
       facingOverride: "west",
@@ -2753,7 +2906,7 @@ function defaultSceneMarkers(): MauOfficeSceneMarker[] {
   ];
 }
 
-function buildDefaultWallRows(): boolean[][] {
+function buildLegacyDefaultWallRows(): boolean[][] {
   return [
     [
       false,
@@ -3318,6 +3471,70 @@ function buildDefaultWallRows(): boolean[][] {
   ];
 }
 
+function buildDefaultWallRows(): boolean[][] {
+  const rows = createEmptyWallRows();
+  const legacyRows = buildLegacyDefaultWallRows();
+  for (let tileY = 0; tileY < legacyRows.length; tileY += 1) {
+    for (let tileX = 0; tileX < legacyRows[tileY]!.length; tileX += 1) {
+      rows[tileY]![tileX] = legacyRows[tileY]![tileX]!;
+    }
+  }
+  for (const sprite of LEGACY_LAYOUT.map.wallSprites) {
+    const tileX = Math.round(sprite.tileX);
+    const tileY = Math.round(sprite.tileY);
+    if (tileY >= 0 && tileY < rows.length && tileX >= 0 && tileX < (rows[tileY]?.length ?? 0)) {
+      rows[tileY]![tileX] = true;
+    }
+  }
+  const eastSpine = LEGACY_LAYOUT.nodes.east_spine;
+  const farSpine = LEGACY_LAYOUT.nodes.far_spine;
+  if (eastSpine.tileY === farSpine.tileY) {
+    const tileY = eastSpine.tileY;
+    for (
+      let tileX = Math.min(eastSpine.tileX, farSpine.tileX);
+      tileX <= Math.max(eastSpine.tileX, farSpine.tileX);
+      tileX += 1
+    ) {
+      rows[tileY]![tileX] = false;
+    }
+  }
+  for (const [tileX, tileY, blocked] of [
+    [15, 1, false],
+    [16, 3, false],
+    [25, 3, true],
+    [14, 4, true],
+    [15, 4, false],
+    [14, 5, true],
+    [15, 5, false],
+    [24, 6, false],
+    [26, 6, false],
+    [14, 7, true],
+    [15, 7, false],
+    [14, 8, true],
+    [15, 8, false],
+    [15, 9, false],
+    [7, 10, false],
+    [32, 10, false],
+    [15, 11, false],
+    [15, 12, false],
+    [15, 13, false],
+    [14, 14, true],
+    [15, 14, false],
+    [14, 15, true],
+    [15, 15, false],
+    [14, 16, true],
+    [15, 16, false],
+    [14, 17, true],
+    [15, 17, false],
+    [14, 18, true],
+    [15, 18, false],
+    [15, 19, false],
+  ] as const) {
+    rows[tileY]![tileX] = blocked;
+  }
+  return rows;
+}
+
 export function createDefaultMauOfficeSceneConfig(): MauOfficeSceneConfig {
   return {
     version: 1,
@@ -3333,8 +3550,10 @@ function isZoneId(value: unknown): value is MauOfficeZoneId {
   return (
     value === "desk" ||
     value === "meeting" ||
+    value === "browser" ||
     value === "break" ||
     value === "support" ||
+    value === "telephony" ||
     value === "hall" ||
     value === "outside"
   );
@@ -3344,7 +3563,88 @@ function clampSceneTileDimension(value: number, min: number, max: number): numbe
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-function inferSanitizedSceneDimensions(record: Record<string, unknown>, fallback: MauOfficeSceneConfig) {
+function sceneHasZoneTile(rows: MauOfficeZoneId[][], zoneId: MauOfficeZoneId): boolean {
+  return rows.some((row) => row.some((value) => value === zoneId));
+}
+
+function upgradeLegacySceneRightWing(
+  scene: MauOfficeSceneConfig,
+  fallback: MauOfficeSceneConfig,
+): MauOfficeSceneConfig {
+  const currentWidth = getMauOfficeSceneTileWidth(scene);
+  const currentHeight = getMauOfficeSceneTileHeight(scene);
+  const looksLikeLegacyScene =
+    currentWidth >= MAU_OFFICE_LEGACY_SCENE_TILES_W && currentHeight >= MAU_OFFICE_SCENE_TILES_H;
+  const missingBrowserWing = !sceneHasZoneTile(scene.zoneRows, "browser");
+  const missingTelephonyWing = !sceneHasZoneTile(scene.zoneRows, "telephony");
+  if (!looksLikeLegacyScene || (!missingBrowserWing && !missingTelephonyWing)) {
+    return scene;
+  }
+
+  const targetWidth = Math.max(currentWidth, getMauOfficeSceneTileWidth(fallback));
+  const targetHeight = Math.max(currentHeight, getMauOfficeSceneTileHeight(fallback));
+  const zoneRows = Array.from({ length: targetHeight }, (_, rowIndex) =>
+    Array.from({ length: targetWidth }, (_, colIndex) => {
+      const current = scene.zoneRows[rowIndex]?.[colIndex];
+      const fallbackValue = fallback.zoneRows[rowIndex]?.[colIndex] ?? "outside";
+      if (
+        (current === undefined || current === "outside") &&
+        colIndex >= MAU_OFFICE_RIGHT_WING_MERGE_TILE_X &&
+        fallbackValue !== "outside"
+      ) {
+        return fallbackValue;
+      }
+      return current ?? fallbackValue;
+    }),
+  );
+  const wallRows = Array.from({ length: targetHeight }, (_, rowIndex) =>
+    Array.from({ length: targetWidth }, (_, colIndex) => {
+      const current = scene.wallRows[rowIndex]?.[colIndex] === true;
+      const fallbackValue = fallback.wallRows[rowIndex]?.[colIndex] === true;
+      if (!current && colIndex >= MAU_OFFICE_RIGHT_WING_MERGE_TILE_X && fallbackValue) {
+        return true;
+      }
+      return current;
+    }),
+  );
+  const props = [
+    ...scene.props,
+    ...fallback.props.filter(
+      (entry) =>
+        RIGHT_WING_PROP_IDS.has(entry.id) &&
+        !scene.props.some((current) => current.id === entry.id),
+    ),
+  ];
+  const autotiles = [
+    ...scene.autotiles,
+    ...fallback.autotiles.filter(
+      (entry) =>
+        RIGHT_WING_AUTOTILE_IDS.has(entry.id) &&
+        !scene.autotiles.some((current) => current.id === entry.id),
+    ),
+  ];
+  const markers = [
+    ...scene.markers,
+    ...fallback.markers.filter(
+      (entry) =>
+        RIGHT_WING_MARKER_IDS.has(entry.id) &&
+        !scene.markers.some((current) => current.id === entry.id),
+    ),
+  ];
+  return {
+    version: 1,
+    zoneRows,
+    wallRows,
+    props,
+    autotiles,
+    markers,
+  };
+}
+
+function inferSanitizedSceneDimensions(
+  record: Record<string, unknown>,
+  fallback: MauOfficeSceneConfig,
+) {
   const zoneRowInputs = Array.isArray(record.zoneRows) ? record.zoneRows : [];
   const wallRowInputs = Array.isArray(record.wallRows) ? record.wallRows : [];
   const hasExplicitRows = zoneRowInputs.length > 0 || wallRowInputs.length > 0;
@@ -3385,10 +3685,8 @@ function sanitizeScenePropPlacements(
     const maxTileY = Math.max(0, height - spanY);
     return {
       ...entry,
-      tileX:
-        typeof entry.tileX === "number" ? Math.max(0, Math.min(maxTileX, entry.tileX)) : 0,
-      tileY:
-        typeof entry.tileY === "number" ? Math.max(0, Math.min(maxTileY, entry.tileY)) : 0,
+      tileX: typeof entry.tileX === "number" ? Math.max(0, Math.min(maxTileX, entry.tileX)) : 0,
+      tileY: typeof entry.tileY === "number" ? Math.max(0, Math.min(maxTileY, entry.tileY)) : 0,
     };
   });
 }
@@ -3406,7 +3704,9 @@ function sanitizeSceneAutotilePlacements(
           tileX: Math.round(cell.tileX),
           tileY: Math.round(cell.tileY),
         }))
-        .filter((cell) => cell.tileX >= 0 && cell.tileX < width && cell.tileY >= 0 && cell.tileY < height),
+        .filter(
+          (cell) => cell.tileX >= 0 && cell.tileX < width && cell.tileY >= 0 && cell.tileY < height,
+        ),
     }))
     .filter((entry) => entry.cells.length > 0);
 }
@@ -3569,7 +3869,7 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
       (_, colIndex) => wallRows[rowIndex]?.[colIndex] === true,
     ),
   );
-  return {
+  const sanitized = {
     version: 1,
     zoneRows: normalizedRows,
     wallRows: normalizedWallRows,
@@ -3581,6 +3881,26 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
       normalizedWallRows,
       dimensions.width,
       dimensions.height,
+    ),
+  };
+  const upgraded = upgradeLegacySceneRightWing(sanitized, fallback);
+  if (upgraded === sanitized) {
+    return sanitized;
+  }
+  const upgradedWidth = getMauOfficeSceneTileWidth(upgraded);
+  const upgradedHeight = getMauOfficeSceneTileHeight(upgraded);
+  return {
+    version: 1,
+    zoneRows: upgraded.zoneRows,
+    wallRows: upgraded.wallRows,
+    props: sanitizeScenePropPlacements(upgraded.props, upgradedWidth, upgradedHeight),
+    autotiles: sanitizeSceneAutotilePlacements(upgraded.autotiles, upgradedWidth, upgradedHeight),
+    markers: sanitizeSceneMarkers(
+      upgraded.markers,
+      upgraded.zoneRows,
+      upgraded.wallRows,
+      upgradedWidth,
+      upgradedHeight,
     ),
   };
 }

@@ -255,6 +255,14 @@ export const id: TranslationMap = {
       gridStage: "Panggung grid",
       focusRoom: "Fokus ruangan",
       allRooms: "Semua ruangan",
+      rooms: {
+        desk: "Meja",
+        meeting: "Rapat",
+        browser: "Browser",
+        break: "Istirahat",
+        support: "Support",
+        telephony: "Telepon",
+      },
       chat: {
         image: "Gambar",
         toolOutput: "Output tool",

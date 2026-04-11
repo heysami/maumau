@@ -681,6 +681,161 @@ describe("dashboard aggregations", () => {
     );
   });
 
+  it("does not mark advisory mentions of blocker as active blockers", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-advisory-qa-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 5, 2, 30, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = "agent:main:subagent:visual-qa";
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-visual-qa",
+        sessionFile: "sess-visual-qa.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        endedAt: nowMs - 500,
+        status: "done",
+        teamId: "vibe-coder",
+        teamRole: "visual/ux qa",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-visual-qa.jsonl", [
+      {
+        role: "user",
+        text: "QA the Indonesia page copy.",
+      },
+      {
+        role: "assistant",
+        text: `Verdict:
+- For readability and structure, this passes.
+- Only blocker would be if the parent wants a stricter diff-scoped approval standard.
+- Keep the current wording and ship it.`,
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionKey,
+          status: "done",
+          blockerLinks: [],
+        }),
+      ]),
+    );
+    expect(
+      snapshot.today.blockers.some((blocker) => blocker.sessionKey === sessionKey),
+    ).toBe(false);
+  });
+
+  it("drops stale blockers when a newer named-session rerun succeeds on another agent", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-rerun-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 11, 4, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const oldSessionKey = "agent:main:daily-reflection-curation";
+    const newSessionKey = "agent:reviewer:daily-reflection-curation";
+    const oldChildSessionKey = "agent:vibe-coder-manager:subagent:old-daily";
+
+    await writeSessionStore(storePath, {
+      [oldSessionKey]: {
+        sessionId: "sess-daily-old",
+        sessionFile: "sess-daily-old.jsonl",
+        updatedAt: nowMs - 120_000,
+        startedAt: nowMs - 300_000,
+        endedAt: nowMs - 120_000,
+        status: "done",
+      },
+      [newSessionKey]: {
+        sessionId: "sess-daily-new",
+        sessionFile: "sess-daily-new.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        endedAt: nowMs - 1_000,
+        status: "done",
+      },
+      [oldChildSessionKey]: {
+        sessionId: "sess-daily-old-child",
+        sessionFile: "sess-daily-old-child.jsonl",
+        updatedAt: nowMs - 110_000,
+        startedAt: nowMs - 240_000,
+        endedAt: nowMs - 110_000,
+        status: "done",
+        parentSessionKey: oldSessionKey,
+        teamId: "vibe-coder",
+        teamRole: "manager",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-daily-old.jsonl", [
+      {
+        role: "assistant",
+        text: "I'm blocked from doing that directly from here.",
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-daily-new.jsonl", [
+      {
+        role: "assistant",
+        text: "All set. Wrote today's daily reflection note.",
+      },
+    ]);
+    await writeTranscriptMessages(storePath, "sess-daily-old-child.jsonl", [
+      {
+        role: "assistant",
+        text: "Technical QA blocked approval.",
+      },
+    ]);
+
+    const cfg = {
+      agents: {
+        default: "main",
+        list: [{ id: "reviewer" }],
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.tasks.some((task) => task.sessionKey === oldSessionKey)).toBe(false);
+    expect(snapshot.tasks.some((task) => task.sessionKey === oldChildSessionKey)).toBe(false);
+    expect(snapshot.today.blockers.some((blocker) => blocker.sessionKey === oldSessionKey)).toBe(
+      false,
+    );
+    expect(
+      snapshot.today.blockers.some((blocker) => blocker.sessionKey === oldChildSessionKey),
+    ).toBe(false);
+  });
+
   it("retains completed work items and expands daily routines across the visible month", async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-retain-"));
     tempDirs.push(tempRoot);

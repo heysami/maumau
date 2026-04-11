@@ -294,6 +294,27 @@ describe("resolveEffectiveToolPolicy", () => {
     expect(result.profileAlsoAllow).toEqual(["voice-call", "web_search"]);
   });
 
+  it("carries later explicit allowlists through restrictive profiles", () => {
+    const cfg = {
+      tools: {
+        profile: "coding",
+      },
+      agents: {
+        list: [
+          {
+            id: "memory-curator",
+            tools: {
+              allow: ["multi_user_memory_curate"],
+            },
+          },
+        ],
+      },
+    } as MaumauConfig;
+    const result = resolveEffectiveToolPolicy({ config: cfg, agentId: "memory-curator" });
+    expect(result.profileAlsoAllow).toEqual(["multi_user_memory_curate"]);
+    expect(result.providerProfileAlsoAllow).toEqual(["multi_user_memory_curate"]);
+  });
+
   it("merges global and agent provider-specific alsoAllow entries", () => {
     const cfg = {
       tools: {
