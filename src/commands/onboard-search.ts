@@ -309,15 +309,6 @@ export async function setupSearch(
     return config;
   }
 
-  await prompter.note(
-    [
-      "Web search lets your agent look things up online.",
-      "Choose a provider. Some providers need an API key, and some work key-free.",
-      "Docs: https://docs.maumau.ai/tools/web",
-    ].join("\n"),
-    "Web search",
-  );
-
   const existingProvider = config.tools?.web?.search?.provider;
 
   const options = providerOptions.map((entry) => {
@@ -342,18 +333,40 @@ export async function setupSearch(
     return providerOptions[0].id;
   })();
 
-  const choice = await prompter.select({
-    message: "Search provider",
-    options: [
-      ...options,
-      {
-        value: "__skip__" as const,
-        label: "Skip for now",
-        hint: "Configure later with maumau configure --section web",
-      },
-    ],
-    initialValue: defaultProvider,
-  });
+  const defaultEntry = providerOptions.find((entry) => entry.id === defaultProvider);
+  const embeddedAutoChoice =
+    opts?.embedded &&
+    opts?.quickstartDefaults &&
+    defaultEntry &&
+    providerIsReady(config, defaultEntry)
+      ? defaultProvider
+      : undefined;
+
+  if (!embeddedAutoChoice) {
+    await prompter.note(
+      [
+        "Web search lets your agent look things up online.",
+        "Choose a provider. Some providers need an API key, and some work key-free.",
+        "Docs: https://docs.maumau.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+  }
+
+  const choice =
+    embeddedAutoChoice ??
+    (await prompter.select({
+      message: "Search provider",
+      options: [
+        ...options,
+        {
+          value: "__skip__" as const,
+          label: "Skip for now",
+          hint: "Configure later with maumau configure --section web",
+        },
+      ],
+      initialValue: defaultProvider,
+    }));
 
   if (choice === "__skip__") {
     return config;
@@ -365,7 +378,7 @@ export async function setupSearch(
     return config;
   }
 
-  if (opts?.embedded) {
+  if (opts?.embedded && !embeddedAutoChoice) {
     const note = buildEmbeddedSearchProviderNote(entry);
     await prompter.note(note.message, note.title);
   }

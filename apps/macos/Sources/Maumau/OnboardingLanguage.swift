@@ -138,11 +138,11 @@ struct OnboardingStrings: Sendable {
         case (.en, .remote):
             "Setup is simpler than it looks: set up the Gateway, then pick a Channel for messages."
         case (.en, _):
-            "Setup is simpler than it looks: set up the Gateway, choose the brain, pick a Channel, then review Mac access and the included tools."
+            "Setup is simpler than it looks: choose the brain, pick a Channel, then turn on any Mac access or extras you want."
         case (.id, .remote):
             "Pengaturannya lebih sederhana dari yang terlihat: siapkan Gateway, lalu pilih Channel untuk pesan."
         case (.id, _):
-            "Pengaturannya lebih sederhana dari yang terlihat: siapkan Gateway, pilih brain, pilih Channel, lalu tinjau akses Mac dan tool bawaan."
+            "Pengaturannya lebih sederhana dari yang terlihat: pilih brain, pilih Channel, lalu nyalakan akses Mac atau tambahan apa pun yang Anda inginkan."
         }
     }
 

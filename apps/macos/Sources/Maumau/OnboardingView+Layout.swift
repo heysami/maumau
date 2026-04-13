@@ -115,6 +115,12 @@ extension OnboardingView {
             self.maybeDefaultToLocalConnectionMode()
             self.updateMonitoring(for: self.activePageIndex)
         }
+        .onChange(of: self.pageOrder) { oldValue, _ in
+            guard !oldValue.isEmpty else { return }
+            let clamped = min(max(0, self.currentPage), oldValue.count - 1)
+            let previousActivePageIndex = oldValue[clamped]
+            self.reconcilePageForModeChange(previousActivePageIndex: previousActivePageIndex)
+        }
         .onChange(of: self.currentPage) { _, newValue in
             self.updateMonitoring(for: self.activePageIndex(for: newValue))
         }

@@ -377,19 +377,30 @@ struct OnboardingView: View {
     let permissionsPageIndex = 5
     static func pageOrder(
         for mode: AppState.ConnectionMode,
-        showOnboardingChat: Bool) -> [Int]
+        showOnboardingChat: Bool,
+        showConnectionStep: Bool = true,
+        showIncludedToolsStep: Bool = false) -> [Int]
     {
         switch mode {
         case .remote:
             // Remote onboarding should stop after gateway connection + first channel.
             // Remote brain/provider setup belongs on the remote host itself.
-            [0, 1, 10, 9]
+            return [0, 1, 10, 9]
         case .unconfigured:
-            [0, 1, 9]
+            return [0, 1, 9]
         case .local:
             // Local setup still performs CLI/workspace prep automatically, then helps people
-            // review the Mac permissions and included tools that matter most.
-            [0, 1, 3, 10, 12, 5, 11, 13, 9]
+            // turn on the Mac access and extras that matter most.
+            var pages = [0]
+            if showConnectionStep {
+                pages.append(1)
+            }
+            pages.append(contentsOf: [3, 10, 12, 5, 11])
+            if showIncludedToolsStep {
+                pages.append(13)
+            }
+            pages.append(9)
+            return pages
         }
     }
 
@@ -399,7 +410,10 @@ struct OnboardingView: View {
 
     var pageOrder: [Int] {
         [self.languagePageIndex]
-            + Self.pageOrder(for: self.state.connectionMode, showOnboardingChat: self.showOnboardingChat)
+            + Self.pageOrder(
+                for: self.state.connectionMode,
+                showOnboardingChat: self.showOnboardingChat,
+                showConnectionStep: self.shouldShowConnectionSetupPage)
     }
 
     var pageCount: Int {
@@ -574,6 +588,13 @@ struct OnboardingView: View {
             runtimeAvailable: self.localRuntimeAvailable)
     }
 
+    var shouldShowConnectionSetupPage: Bool {
+        guard self.state.connectionMode == .local else { return true }
+        guard self.localGatewaySetupAvailable else { return true }
+        guard let probe = self.localGatewayProbe else { return false }
+        return !probe.expected
+    }
+
     var devLinkCommand: String {
         let version = GatewayEnvironment.expectedGatewayVersionString() ?? "latest"
         return "npm install -g maumau@\(version)"
@@ -624,15 +645,12 @@ struct OnboardingView: View {
     static func shouldAutoInstallDefaultSkills(
         mode: AppState.ConnectionMode,
         onboardingSeen: Bool,
-        activePageIndex: Int,
-        skillsSetupPageIndex: Int,
         didAutoInstallDefaultSkills: Bool,
         isLoadingSkills: Bool,
         hasSkills: Bool) -> Bool
     {
         mode == .local &&
             !onboardingSeen &&
-            activePageIndex == skillsSetupPageIndex &&
             !didAutoInstallDefaultSkills &&
             !isLoadingSkills &&
             hasSkills

@@ -135,7 +135,8 @@ extension OnboardingView {
                     Text(self.strings.nextStepsMeaningTitle)
                         .font(.headline)
 
-                    ForEach(Array(self.setupStepDefinitions.enumerated()), id: \.element.pageID) { index, step in
+                    let visibleSteps = self.setupStepDefinitions.filter { self.pageOrder.contains($0.pageID) }
+                    ForEach(Array(visibleSteps.enumerated()), id: \.element.pageID) { index, step in
                         if index > 0 {
                             Divider()
                         }
@@ -819,7 +820,7 @@ extension OnboardingView {
                 .frame(maxWidth: 560)
                 .fixedSize(horizontal: false, vertical: true)
 
-                self.onboardingCard(spacing: 8, padding: 12) {
+                self.onboardingCard(spacing: 12, padding: 16) {
                     self.setupMetadataRow(for: self.permissionsPageIndex)
 
                     if let step = self.setupStepDefinition(for: self.permissionsPageIndex),
@@ -828,11 +829,13 @@ extension OnboardingView {
                         Divider()
                     }
 
-                    ForEach(self.onboardingPermissionCapabilities, id: \.self) { cap in
+                    ForEach(Array(self.onboardingPermissionCapabilities.enumerated()), id: \.element) { index, cap in
+                        if index > 0 {
+                            Divider()
+                        }
                         PermissionRow(
                             capability: cap,
-                            status: self.permissionMonitor.status[cap] ?? false,
-                            compact: true)
+                            status: self.permissionMonitor.status[cap] ?? false)
                         {
                             Task { await self.request(cap) }
                         }
@@ -2097,6 +2100,16 @@ extension OnboardingView {
                     Divider()
                         .padding(.vertical, 6)
                     self.featureActionRow(
+                        title: self.strings.openFullSkillsTitle,
+                        subtitle: self.strings.openFullSkillsSubtitle,
+                        systemImage: "sparkles",
+                        buttonTitle: self.strings.openFullSkillsButtonTitle)
+                    {
+                        self.openSettings(tab: .skills)
+                    }
+                    Divider()
+                        .padding(.vertical, 6)
+                    self.featureActionRow(
                         title: macLocalized("Manage phone calls later", language: self.state.effectiveOnboardingLanguage),
                         subtitle: macLocalized(
                             "Open Settings → Phone Calls any time to change Vapi, switch modes, update provider credentials, or run another test call.",
@@ -2156,20 +2169,27 @@ extension OnboardingView {
                     }
             }
         }
+        .task(id: self.activePageIndex) {
+            guard Self.shouldActivateOnboardingPageSideEffects(
+                activePageIndex: self.activePageIndex,
+                pageIndex: 9)
+            else { return }
+            guard self.state.connectionMode == .local, !self.state.onboardingSeen else { return }
+            await self.maybeLoadOnboardingSkills()
+            await self.maybeAutoInstallDefaultSkills()
+        }
     }
 
-    private func maybeLoadOnboardingSkills() async {
+    func maybeLoadOnboardingSkills() async {
         guard !self.didLoadOnboardingSkills else { return }
         self.didLoadOnboardingSkills = true
         await self.onboardingSkillsModel.refresh()
     }
 
-    private func maybeAutoInstallDefaultSkills() async {
+    func maybeAutoInstallDefaultSkills() async {
         guard Self.shouldAutoInstallDefaultSkills(
             mode: self.state.connectionMode,
             onboardingSeen: self.state.onboardingSeen,
-            activePageIndex: self.activePageIndex,
-            skillsSetupPageIndex: self.skillsSetupPageIndex,
             didAutoInstallDefaultSkills: self.didAutoInstallDefaultSkills,
             isLoadingSkills: self.onboardingSkillsModel.isLoading,
             hasSkills: !self.onboardingSkillsModel.skills.isEmpty)

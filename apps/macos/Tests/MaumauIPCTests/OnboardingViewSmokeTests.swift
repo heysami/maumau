@@ -33,21 +33,30 @@ struct OnboardingViewSmokeTests {
         #expect(prompt.contains("secure dashboard on my phone"))
     }
 
-    @Test func `local page order adds private access before permissions and included tools`() {
+    @Test func `local page order keeps private access before permissions and finishes on all set`() {
         let order = OnboardingView.pageOrder(for: .local, showOnboardingChat: false)
-        #expect(order == [0, 1, 3, 10, 12, 5, 11, 13, 9])
+        #expect(order == [0, 1, 3, 10, 12, 5, 11, 9])
         let channelsIndex = order.firstIndex(of: 10)
         let privateAccessIndex = order.firstIndex(of: 12)
         let permissionsIndex = order.firstIndex(of: 5)
         let automationIndex = order.firstIndex(of: 11)
-        let toolsIndex = order.firstIndex(of: 13)
         #expect(privateAccessIndex == channelsIndex.map { $0 + 1 })
         #expect(permissionsIndex == privateAccessIndex.map { $0 + 1 })
         #expect(automationIndex == permissionsIndex.map { $0 + 1 })
-        #expect(toolsIndex == automationIndex.map { $0 + 1 })
+        #expect(order.last == 9)
+        #expect(!order.contains(13))
         #expect(!order.contains(6))
         #expect(!order.contains(7))
         #expect(!order.contains(8))
+    }
+
+    @Test func `local page order can skip gateway once this mac is already ready`() {
+        let order = OnboardingView.pageOrder(
+            for: .local,
+            showOnboardingChat: false,
+            showConnectionStep: false)
+        #expect(order == [0, 3, 10, 12, 5, 11, 9])
+        #expect(!order.contains(1))
     }
 
     @Test func `local onboarding step metadata marks required optional and voice prep`() {
@@ -1073,60 +1082,40 @@ struct OnboardingViewSmokeTests {
             didAutoInstallCLI: true) == false)
     }
 
-    @Test func `default skill installs only auto run on first local onboarding skills page`() {
+    @Test func `default skill installs only auto run on first local onboarding`() {
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true))
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .remote,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: true,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 10,
-            skillsSetupPageIndex: 11,
-            didAutoInstallDefaultSkills: false,
-            isLoadingSkills: false,
-            hasSkills: true) == false)
-        #expect(OnboardingView.shouldAutoInstallDefaultSkills(
-            mode: .local,
-            onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: true,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: true,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: false) == false)

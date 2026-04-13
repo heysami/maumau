@@ -371,4 +371,36 @@ describe("onboard-search provider resolution", () => {
       ),
     ).toBe(true);
   });
+
+  it("auto-selects the embedded quickstart search provider when the default is already ready", async () => {
+    const duckduckgoEntry = createBundledDuckDuckGoEntry();
+    mocks.resolvePluginWebSearchProviders.mockImplementation((params) =>
+      params?.config ? [duckduckgoEntry] : [duckduckgoEntry],
+    );
+
+    const prompter = {
+      intro: vi.fn(async () => {}),
+      outro: vi.fn(async () => {}),
+      note: vi.fn(async () => {}),
+      select: vi.fn(async () => {
+        throw new Error("select should not run when quickstart can auto-pick a ready provider");
+      }),
+      multiselect: vi.fn(async () => []),
+      text: vi.fn(async () => {
+        throw new Error("text should not run for a keyless quickstart provider");
+      }),
+      confirm: vi.fn(async () => true),
+      progress: vi.fn(() => ({ update: vi.fn(), stop: vi.fn() })),
+    };
+
+    const result = await mod.setupSearch({} as MaumauConfig, {} as never, prompter as never, {
+      embedded: true,
+      quickstartDefaults: true,
+    });
+
+    expect(result.tools?.web?.search?.provider).toBe("duckduckgo");
+    expect(result.tools?.web?.search?.enabled).toBe(true);
+    expect(prompter.note).not.toHaveBeenCalled();
+    expect(prompter.select).not.toHaveBeenCalled();
+  });
 });
