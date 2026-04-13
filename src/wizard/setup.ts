@@ -857,6 +857,11 @@ export async function runSetupWizard(
     config: nextConfig,
     runtime,
   });
+  const { ensureLifeImprovementRoutineArtifacts } =
+    await import("../teams/life-improvement-routine.js");
+  await ensureLifeImprovementRoutineArtifacts({
+    config: nextConfig,
+  });
 
   if (mode === "local" && shouldCreateStarterTeam) {
     const { ensureFreshInstallBundledTools } = await import("../commands/onboard-bundled-tools.js");

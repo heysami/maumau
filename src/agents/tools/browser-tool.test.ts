@@ -136,6 +136,12 @@ import { DEFAULT_AI_SNAPSHOT_MAX_CHARS } from "../../browser/constants.js";
 import { __testing as browserToolActionsTesting } from "./browser-tool.actions.js";
 import { __testing as browserToolTesting, createBrowserTool } from "./browser-tool.js";
 
+function createOwnerBrowserTool(
+  opts: Parameters<typeof createBrowserTool>[0] = {},
+): ReturnType<typeof createBrowserTool> {
+  return createBrowserTool({ senderIsOwner: true, ...opts });
+}
+
 function mockSingleBrowserProxyNode() {
   nodesUtilsMocks.listNodes.mockResolvedValue([
     {
@@ -218,7 +224,7 @@ async function runSnapshotToolCall(params: {
   maxChars?: number;
   profile?: string;
 }) {
-  const tool = createBrowserTool();
+  const tool = createOwnerBrowserTool();
   await tool.execute?.("call-1", { action: "snapshot", target: "host", ...params });
 }
 
@@ -238,7 +244,7 @@ describe("browser tool snapshot maxChars", () => {
   });
 
   it("respects an explicit maxChars override", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const override = 2_000;
     await tool.execute?.("call-1", {
       action: "snapshot",
@@ -256,7 +262,7 @@ describe("browser tool snapshot maxChars", () => {
   });
 
   it("skips the default when maxChars is explicitly zero", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "snapshot",
       target: "host",
@@ -272,14 +278,14 @@ describe("browser tool snapshot maxChars", () => {
   });
 
   it("lists profiles", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", { action: "profiles" });
 
     expect(browserClientMocks.browserProfiles).toHaveBeenCalledWith(undefined);
   });
 
   it("passes refs mode through to browser snapshot", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "snapshot",
       target: "host",
@@ -314,7 +320,7 @@ describe("browser tool snapshot maxChars", () => {
     configMocks.loadConfig.mockReturnValue({
       browser: { snapshotDefaults: { mode: "efficient" } },
     });
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "snapshot",
       target: "host",
@@ -332,7 +338,7 @@ describe("browser tool snapshot maxChars", () => {
     setResolvedBrowserProfiles({
       user: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
-    const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
+    const tool = createOwnerBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
     await tool.execute?.("call-1", {
       action: "snapshot",
       target: "host",
@@ -352,7 +358,7 @@ describe("browser tool snapshot maxChars", () => {
     setResolvedBrowserProfiles({
       "chrome-live": { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
-    const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
+    const tool = createOwnerBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
     await tool.execute?.("call-1", {
       action: "snapshot",
       target: "host",
@@ -372,7 +378,7 @@ describe("browser tool snapshot maxChars", () => {
     setResolvedBrowserProfiles({
       user: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
-    const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
+    const tool = createOwnerBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
 
     await expect(
       tool.execute?.("call-1", {
@@ -385,7 +391,7 @@ describe("browser tool snapshot maxChars", () => {
   });
 
   it("lets the server choose snapshot format when the user does not request one", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", { action: "snapshot", target: "host", profile: "user" });
 
     expect(browserClientMocks.browserSnapshot).toHaveBeenCalledWith(
@@ -403,7 +409,7 @@ describe("browser tool snapshot maxChars", () => {
 
   it("routes to node proxy when target=node", async () => {
     mockSingleBrowserProxyNode();
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", { action: "status", target: "node" });
 
     expect(gatewayMocks.callGatewayTool).toHaveBeenCalledWith(
@@ -428,7 +434,7 @@ describe("browser tool snapshot maxChars", () => {
         result: { ok: true, running: true },
       },
     });
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "dialog",
       target: "node",
@@ -446,13 +452,13 @@ describe("browser tool snapshot maxChars", () => {
     );
   });
 
-  it("keeps sandbox bridge url when node proxy is available", async () => {
+  it("keeps host routing when node proxy is available", async () => {
     mockSingleBrowserProxyNode();
-    const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
+    const tool = createOwnerBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
     await tool.execute?.("call-1", { action: "status" });
 
     expect(browserClientMocks.browserStatus).toHaveBeenCalledWith(
-      "http://127.0.0.1:9999",
+      undefined,
       expect.objectContaining({ profile: undefined }),
     );
     expect(gatewayMocks.callGatewayTool).not.toHaveBeenCalled();
@@ -463,7 +469,7 @@ describe("browser tool snapshot maxChars", () => {
     setResolvedBrowserProfiles({
       user: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", { action: "status", profile: "user" });
 
     expect(browserClientMocks.browserStatus).toHaveBeenCalledWith(
@@ -474,11 +480,114 @@ describe("browser tool snapshot maxChars", () => {
   });
 });
 
+describe("browser tool explicit routing", () => {
+  registerBrowserToolAfterEachReset();
+
+  it("stays on the host browser when target is omitted even if a sandbox browser is available", async () => {
+    const tool = createBrowserTool({
+      senderIsOwner: true,
+      sandboxBridgeUrl: "http://127.0.0.1:9999",
+    });
+
+    await tool.execute?.("call-1", { action: "status" });
+
+    expect(browserClientMocks.browserStatus).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ profile: undefined }),
+    );
+    expect(gatewayMocks.callGatewayTool).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-route to a browser node when target is omitted", async () => {
+    mockSingleBrowserProxyNode();
+    const tool = createBrowserTool({ senderIsOwner: true });
+
+    await tool.execute?.("call-1", { action: "status" });
+
+    expect(browserClientMocks.browserStatus).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ profile: undefined }),
+    );
+    expect(gatewayMocks.callGatewayTool).not.toHaveBeenCalled();
+  });
+
+  it("uses the configured default profile for receipt_digest when profile is omitted", async () => {
+    const cfg = {
+      browser: {
+        defaultProfile: "desktop",
+        profiles: {
+          user: { driver: "existing-session" as const, attachOnly: true, color: "#00AA00" },
+          desktop: { driver: "clawd" as const, cdpPort: 9333, color: "#336699" },
+        },
+      },
+    };
+    setResolvedBrowserProfiles(cfg.browser.profiles, "desktop");
+    browserClientMocks.browserOpenTab.mockResolvedValueOnce({ targetId: "tab-1" });
+    browserActionsMocks.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
+      result: {
+        state: "ready",
+        items: [],
+      },
+    });
+    const tool = createBrowserTool({ senderIsOwner: true, config: cfg });
+
+    await tool.execute?.("call-1", { action: "receipt_digest" });
+
+    expect(browserClientMocks.browserStatus).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ profile: "desktop" }),
+    );
+    expect(browserClientMocks.browserOpenTab).toHaveBeenCalledWith(
+      undefined,
+      expect.stringContaining("https://mail.google.com/mail/u/0/#search/"),
+      expect.objectContaining({ profile: "desktop" }),
+    );
+  });
+});
+
+describe("browser tool existing-session defaults", () => {
+  registerBrowserToolAfterEachReset();
+
+  it("uses the configured default existing-session profile for stale target recovery even when profile is omitted", async () => {
+    const cfg = {
+      browser: {
+        defaultProfile: "chrome-live",
+        profiles: {
+          "chrome-live": {
+            driver: "existing-session" as const,
+            attachOnly: true,
+            color: "#00AA00",
+          },
+        },
+      },
+    };
+    configMocks.loadConfig.mockReturnValue(cfg);
+    setResolvedBrowserProfiles(cfg.browser.profiles, "chrome-live");
+    browserActionsMocks.browserAct
+      .mockRejectedValueOnce(new Error("404: tab not found"))
+      .mockResolvedValueOnce({ ok: true });
+    browserClientMocks.browserTabs.mockResolvedValueOnce([{ targetId: "only-tab" }]);
+    const tool = createBrowserTool({ senderIsOwner: true, config: cfg });
+
+    const result = await tool.execute?.("call-1", {
+      action: "act",
+      request: {
+        kind: "hover",
+        targetId: "stale-tab",
+        ref: "btn-1",
+      },
+    });
+
+    expect(browserActionsMocks.browserAct).toHaveBeenCalledTimes(2);
+    expect(result?.details).toMatchObject({ ok: true });
+  });
+});
+
 describe("browser tool url alias support", () => {
   registerBrowserToolAfterEachReset();
 
   it("accepts url alias for open", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", { action: "open", url: "https://example.com" });
 
     expect(browserClientMocks.browserOpenTab).toHaveBeenCalledWith(
@@ -494,7 +603,7 @@ describe("browser tool url alias support", () => {
       title: "Example",
       url: "https://example.com",
     });
-    const tool = createBrowserTool({ agentSessionKey: "agent:main:main" });
+    const tool = createOwnerBrowserTool({ agentSessionKey: "agent:main:main" });
     await tool.execute?.("call-1", { action: "open", url: "https://example.com" });
 
     expect(sessionTabRegistryMocks.trackSessionBrowserTab).toHaveBeenCalledWith({
@@ -506,7 +615,7 @@ describe("browser tool url alias support", () => {
   });
 
   it("accepts url alias for navigate", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "navigate",
       url: "https://example.com",
@@ -524,7 +633,7 @@ describe("browser tool url alias support", () => {
   });
 
   it("keeps targetUrl required error label when both params are missing", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
 
     await expect(tool.execute?.("call-1", { action: "open" })).rejects.toThrow(
       "targetUrl required",
@@ -532,7 +641,7 @@ describe("browser tool url alias support", () => {
   });
 
   it("untracks explicit tab close for tracked sessions", async () => {
-    const tool = createBrowserTool({ agentSessionKey: "agent:main:main" });
+    const tool = createOwnerBrowserTool({ agentSessionKey: "agent:main:main" });
     await tool.execute?.("call-1", {
       action: "close",
       targetId: "tab-xyz",
@@ -556,7 +665,7 @@ describe("browser tool act compatibility", () => {
   registerBrowserToolAfterEachReset();
 
   it("accepts flattened act params for backward compatibility", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "act",
       kind: "type",
@@ -580,7 +689,7 @@ describe("browser tool act compatibility", () => {
   });
 
   it("prefers request payload when both request and flattened fields are present", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await tool.execute?.("call-1", {
       action: "act",
       kind: "click",
@@ -608,7 +717,7 @@ describe("browser tool snapshot labels", () => {
   registerBrowserToolAfterEachReset();
 
   it("returns image + text when labels are requested", async () => {
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const imageResult = {
       content: [
         { type: "text", text: "label text" },
@@ -665,7 +774,7 @@ describe("browser tool external content wrapping", () => {
       ],
     });
 
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const result = await tool.execute?.("call-1", { action: "snapshot", snapshotFormat: "aria" });
     expect(result?.content?.[0]).toMatchObject({
       type: "text",
@@ -699,7 +808,7 @@ describe("browser tool external content wrapping", () => {
       },
     ]);
 
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const result = await tool.execute?.("call-1", { action: "tabs" });
     expect(result?.content?.[0]).toMatchObject({
       type: "text",
@@ -732,7 +841,7 @@ describe("browser tool external content wrapping", () => {
       ],
     });
 
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const result = await tool.execute?.("call-1", { action: "console" });
     expect(result?.content?.[0]).toMatchObject({
       type: "text",
@@ -767,7 +876,7 @@ describe("browser tool act stale target recovery", () => {
       .mockResolvedValueOnce({ ok: true });
     browserClientMocks.browserTabs.mockResolvedValueOnce([{ targetId: "only-tab" }]);
 
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     const result = await tool.execute?.("call-1", {
       action: "act",
       profile: "user",
@@ -798,7 +907,7 @@ describe("browser tool act stale target recovery", () => {
     browserActionsMocks.browserAct.mockRejectedValueOnce(new Error("404: tab not found"));
     browserClientMocks.browserTabs.mockResolvedValueOnce([{ targetId: "only-tab" }]);
 
-    const tool = createBrowserTool();
+    const tool = createOwnerBrowserTool();
     await expect(
       tool.execute?.("call-1", {
         action: "act",

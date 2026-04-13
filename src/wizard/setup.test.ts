@@ -67,6 +67,7 @@ const applyLocalSetupMultiUserMemoryDefaults = vi.hoisted(() => vi.fn((cfg) => c
 const ensureOnboardedMultiUserMemoryArtifacts = vi.hoisted(() => vi.fn(async () => {}));
 const applyLocalSetupReflectionReviewerDefaults = vi.hoisted(() => vi.fn((cfg) => cfg));
 const ensureOnboardedReflectionReviewerArtifacts = vi.hoisted(() => vi.fn(async () => {}));
+const ensureLifeImprovementRoutineArtifacts = vi.hoisted(() => vi.fn(async () => {}));
 
 const setupChannels = vi.hoisted(() => vi.fn(async (cfg) => cfg));
 const setupSkills = vi.hoisted(() => vi.fn(async (cfg) => cfg));
@@ -167,6 +168,10 @@ vi.mock("../commands/onboard-reflection-reviewer.js", () => ({
   ensureOnboardedReflectionReviewerArtifacts,
 }));
 
+vi.mock("../teams/life-improvement-routine.js", () => ({
+  ensureLifeImprovementRoutineArtifacts,
+}));
+
 vi.mock("../config/config.js", () => ({
   DEFAULT_GATEWAY_PORT: 18789,
   resolveGatewayPort: () => 18789,
@@ -250,6 +255,7 @@ afterEach(() => {
   ensureOnboardedMultiUserMemoryArtifacts.mockClear();
   applyLocalSetupReflectionReviewerDefaults.mockClear();
   ensureOnboardedReflectionReviewerArtifacts.mockClear();
+  ensureLifeImprovementRoutineArtifacts.mockClear();
   readTailscaleStatusJson.mockReset();
   readTailscaleStatusJson.mockResolvedValue({});
 });

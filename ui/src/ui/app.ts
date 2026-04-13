@@ -58,6 +58,8 @@ import { exportChatMarkdown } from "./chat/export.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
 import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
+import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
+import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import {
   normalizeSceneSelection,
   redoSceneHistory,
@@ -66,8 +68,6 @@ import {
   type MauOfficeEditorTool,
   undoSceneHistory,
 } from "./controllers/mau-office-editor.ts";
-import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
-import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
 import type {
   MultiUserMemoryAdminSnapshot,
@@ -75,7 +75,11 @@ import type {
 } from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
-import type { MauOfficeMarkerRole, MauOfficeSceneConfig, MauOfficeZoneId } from "./mau-office-scene.ts";
+import type {
+  MauOfficeMarkerRole,
+  MauOfficeSceneConfig,
+  MauOfficeZoneId,
+} from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
@@ -364,6 +368,10 @@ export class MaumauApp extends LitElement {
   @state() dashboardWalletStartDate = formatLocalDateOffset(-29);
   @state() dashboardWalletEndDate = formatLocalDateOffset(0);
   @state() dashboardWalletTimeZone: "local" | "utc" = "local";
+  @state() dashboardWalletGranularity: import("./types.js").DashboardWalletSpendGranularity = "day";
+  @state() dashboardWalletBreakdown: import("./types.js").DashboardWalletSpendBreakdown =
+    "category";
+  @state() dashboardWalletCurrency: string | null = null;
   @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
   @state() dashboardCalendarAnchorAtMs: number | null = null;
   @state() dashboardUserChannelsResult: import("./types.js").DashboardUserChannelsResult | null =
@@ -387,12 +395,20 @@ export class MaumauApp extends LitElement {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
   @state() dashboardWorkshopSelectedId: string | null = null;
-  @state() dashboardWorkshopTab: "saved" | "recent" = "recent";
+  @state() dashboardWorkshopTab: "saved" | "recent" | "agent-apps" = "recent";
   @state() dashboardWorkshopSelectedIds: Set<string> = new Set();
   @state() dashboardWorkshopProjectDraft = "";
   @state() dashboardWorkshopSaving = false;
   @state() dashboardWorkshopSaveError: string | null = null;
   @state() dashboardCalendarView: "month" | "week" | "day" = "month";
+  @state() dashboardCalendarFilters: import("./types.js").DashboardCalendarFilters = {
+    cron: true,
+    userActivity: true,
+    groupActivity: true,
+    approvals: true,
+  };
+  @state() dashboardRoutineSelection: string | null = null;
+  @state() dashboardProfileSelection: string | null = null;
   @state() dashboardTeamSelection: string | null = null;
   @state() dashboardMemoryAgentId: string | null = null;
   @state() dashboardAgentPanel: "memory" | "scope" = "memory";

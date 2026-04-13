@@ -3,6 +3,8 @@ import { generateTeamOpenProsePreview } from "./openprose.js";
 import {
   createDesignStudioTeamAgents,
   createDesignStudioTeamConfig,
+  createLifeImprovementTeamAgents,
+  createLifeImprovementTeamConfig,
   createMainOrchestrationTeamConfig,
   createStarterTeamAgents,
   createStarterTeamConfig,
@@ -264,6 +266,56 @@ describe("generateTeamOpenProsePreview", () => {
       "Verify the selected image candidate against the shared consistency guide",
     );
     expect(preview).toContain("approved_assets");
+  });
+
+  it("encodes the life-improvement dossier and dependency-note workflow", () => {
+    const lifeImprovementTeam = createLifeImprovementTeamConfig();
+    const preview = generateTeamOpenProsePreview({
+      config: {
+        agents: {
+          list: createLifeImprovementTeamAgents(),
+        },
+      },
+      team: lifeImprovementTeam,
+    });
+
+    expect(preview).toContain(
+      "# Step 0: the manager defines the primary user, scope, and available context",
+    );
+    expect(preview).toContain("Create the canonical subject dossier and initial file map");
+    expect(preview).toContain(
+      "Use other people only as supporting context for the primary user instead of replacing the subject of the plan.",
+    );
+    expect(preview).toContain(
+      "Treat the profile as incremental work instead of a giant all-domains intake",
+    );
+    expect(preview).toContain("starts with day-to-day life");
+    expect(preview).toContain("Do not wake the whole roster by default.");
+    expect(preview).toContain("first inspect existing app ideas");
+    expect(preview).toContain(
+      "Only create a net-new app proposal when the gap is materially different.",
+    );
+    expect(preview).toContain("one primary subject dossier");
+    expect(preview).toContain("one note file for each active domain");
+    expect(preview).toContain("one dependency note file");
+    expect(preview).toContain(
+      "which missing details can wait for later heartbeat check-ins or later getting-to-know-you turns",
+    );
+    expect(preview).toContain(
+      "Handle the physical activity coach portion of the physical health domain",
+    );
+    expect(preview).toContain(
+      "Handle the relationship & dating coach portion of the relationships & social life domain",
+    );
+    expect(preview).toContain(
+      "Handle the financial coach & assistant portion of the personal finance domain",
+    );
+    expect(preview).toContain("Update the working file map for this run.");
+    expect(preview).toContain("dependency_map");
+    expect(preview).toContain("commitment_plan");
+    expect(preview).toContain(
+      "When health, mental health, finance, or other higher-stakes questions appear, keep guidance conservative",
+    );
   });
 
   it("encodes root orchestration teams as routing flows instead of generic parallel specialists", () => {

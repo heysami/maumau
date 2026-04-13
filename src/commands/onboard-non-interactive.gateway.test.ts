@@ -19,6 +19,7 @@ const applyLocalSetupMultiUserMemoryDefaultsMock = vi.hoisted(() => vi.fn((cfg) 
 const ensureOnboardedMultiUserMemoryArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
 const applyLocalSetupReflectionReviewerDefaultsMock = vi.hoisted(() => vi.fn((cfg) => cfg));
 const ensureOnboardedReflectionReviewerArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
+const ensureLifeImprovementRoutineArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
 const ensureFreshInstallBundledToolsMock = vi.hoisted(() =>
   vi.fn(async () => ({
     attempted: true,
@@ -113,6 +114,10 @@ vi.mock("./onboard-multi-user-memory.js", () => ({
 vi.mock("./onboard-reflection-reviewer.js", () => ({
   applyLocalSetupReflectionReviewerDefaults: applyLocalSetupReflectionReviewerDefaultsMock,
   ensureOnboardedReflectionReviewerArtifacts: ensureOnboardedReflectionReviewerArtifactsMock,
+}));
+
+vi.mock("../teams/life-improvement-routine.js", () => ({
+  ensureLifeImprovementRoutineArtifacts: ensureLifeImprovementRoutineArtifactsMock,
 }));
 
 vi.mock("../commands/onboard-bundled-tools.js", () => ({
@@ -267,6 +272,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     ensureOnboardedMultiUserMemoryArtifactsMock.mockClear();
     applyLocalSetupReflectionReviewerDefaultsMock.mockClear();
     ensureOnboardedReflectionReviewerArtifactsMock.mockClear();
+    ensureLifeImprovementRoutineArtifactsMock.mockClear();
     ensureFreshInstallBundledToolsMock.mockClear();
     gatewayServiceMock.isLoaded.mockClear();
     gatewayServiceMock.readRuntime.mockClear();

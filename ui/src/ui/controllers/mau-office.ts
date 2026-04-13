@@ -2969,8 +2969,10 @@ export function applyMauOfficeSessionToolEvent(
     touchActiveHeartbeatSession(next.activeHeartbeatSessionKeys, sessionKey, nowMs);
   }
   const actor =
-    mapped.kind === "customer_support" && sessionRoleHint === "support" && !isHeartbeatSession
-      ? resolveWorkerActorForSessionKey(next, sessionKey)
+    sessionRoleHint === "support" && !isHeartbeatSession
+      ? (resolveWorkerActorForSessionKey(next, sessionKey) ??
+        resolveActorForSessionKey(next, sessionKey) ??
+        ensureVisitorActor(next, sessionKey, nowMs))
       : isHeartbeatSession
         ? (resolveWorkerActorForSessionKey(next, sessionKey) ??
           resolveActorForSessionKey(next, sessionKey))

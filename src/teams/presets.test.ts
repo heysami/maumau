@@ -6,6 +6,10 @@ import {
   DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID,
   DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID,
   DESIGN_STUDIO_TEAM_VECTOR_VISUAL_DESIGNER_AGENT_ID,
+  ensureBundledTeamPresetConfig,
+  LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID,
+  LIFE_IMPROVEMENT_TEAM_ID,
+  LIFE_IMPROVEMENT_TEAM_MANAGER_AGENT_ID,
   MAIN_ORCHESTRATION_TEAM_ID,
   MAIN_WORKER_AGENT_ID,
   STARTER_TEAM_CONTENT_VISUAL_DESIGNER_AGENT_ID,
@@ -313,5 +317,103 @@ describe("applyStarterTeamOnFreshInstall", () => {
 
     expect(applyStarterTeamOnFreshInstall(base, { freshInstall: false })).toEqual(base);
     expect(applyStarterTeamOnFreshInstall(base)).toEqual(base);
+  });
+
+  it("adds the life-improvement team alongside the starter defaults on fresh installs", () => {
+    const result = applyStarterTeamOnFreshInstall({}, { freshInstall: true });
+
+    expect(result.teams?.list?.map((team) => team.id)).toEqual(
+      expect.arrayContaining([
+        MAIN_ORCHESTRATION_TEAM_ID,
+        STARTER_TEAM_ID,
+        LIFE_IMPROVEMENT_TEAM_ID,
+      ]),
+    );
+    expect(
+      result.teams?.list
+        ?.find((team) => team.id === MAIN_ORCHESTRATION_TEAM_ID)
+        ?.crossTeamLinks?.map((link) => link.targetId),
+    ).toEqual(
+      expect.arrayContaining([STARTER_TEAM_ID, DESIGN_STUDIO_TEAM_ID, LIFE_IMPROVEMENT_TEAM_ID]),
+    );
+  });
+});
+
+describe("ensureBundledTeamPresetConfig", () => {
+  it("adds the life-improvement preset without auto-installing other optional teams", () => {
+    const result = ensureBundledTeamPresetConfig({}, LIFE_IMPROVEMENT_TEAM_ID);
+
+    expect(result.agents?.list?.[0]).toMatchObject({
+      id: "main",
+      executionStyle: "orchestrator",
+      executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+    });
+    expect(
+      result.agents?.list?.find((agent) => agent.id === LIFE_IMPROVEMENT_TEAM_MANAGER_AGENT_ID),
+    ).toMatchObject({
+      tools: {
+        allow: expect.arrayContaining([
+          "read",
+          "write",
+          "memory_search",
+          "sessions_spawn",
+          "sessions_yield",
+        ]),
+      },
+    });
+    expect(
+      result.agents?.list?.find((agent) => agent.id === LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID),
+    ).toMatchObject({
+      tools: {
+        allow: expect.arrayContaining(["browser", "read", "write", "memory_search"]),
+      },
+    });
+    expect(result.agents?.list?.some((agent) => agent.id === STARTER_TEAM_MANAGER_AGENT_ID)).toBe(
+      false,
+    );
+    expect(
+      result.agents?.list?.some((agent) => agent.id === DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID),
+    ).toBe(false);
+
+    expect(result.teams?.list?.map((team) => team.id)).toEqual([
+      MAIN_ORCHESTRATION_TEAM_ID,
+      LIFE_IMPROVEMENT_TEAM_ID,
+    ]);
+    expect(result.teams?.list?.[0]).toMatchObject({
+      id: MAIN_ORCHESTRATION_TEAM_ID,
+      crossTeamLinks: [
+        expect.objectContaining({
+          targetId: LIFE_IMPROVEMENT_TEAM_ID,
+          type: "team",
+        }),
+      ],
+    });
+    expect(result.teams?.list?.[1]).toMatchObject({
+      id: LIFE_IMPROVEMENT_TEAM_ID,
+      name: "Life Improvement Team",
+      managerAgentId: LIFE_IMPROVEMENT_TEAM_MANAGER_AGENT_ID,
+      preset: {
+        id: LIFE_IMPROVEMENT_TEAM_ID,
+        source: "bundled",
+      },
+      workflows: [
+        expect.objectContaining({
+          id: "default",
+          managerPrompt: expect.stringMatching(
+            /first inspect existing app ideas[\s\S]*Only create a net-new app proposal[\s\S]*Update the existing app record instead of duplicating it/u,
+          ),
+          contract: expect.objectContaining({
+            requiredRoles: expect.arrayContaining([
+              "life & mindset coach",
+              "research assistant",
+              "accountability partner",
+              "insight & pattern analyst",
+              "personal knowledge manager",
+            ]),
+            requireDelegation: true,
+          }),
+        }),
+      ],
+    });
   });
 });

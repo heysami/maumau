@@ -17,6 +17,11 @@ import type { CronJob } from "../cron/types.js";
 import { isWithinDir } from "../infra/path-safety.js";
 import { parseAgentSessionKey } from "../routing/session-key.js";
 import { hasInterSessionUserProvenance } from "../sessions/input-provenance.js";
+import { isCronRunSessionKey } from "../sessions/session-key-utils.js";
+import {
+  LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME,
+  LIFE_IMPROVEMENT_ROUTINE_JOB_NAME,
+} from "../teams/life-improvement-routine.js";
 import {
   findLifecycleStageById,
   findLifecycleStageByRole,
@@ -34,14 +39,19 @@ import {
 import { generateTeamOpenProsePreview } from "../teams/openprose.js";
 import { resolveSessionTeamContext } from "../teams/runtime.js";
 import { resolveGatewayAuth } from "./auth.js";
+import { collectDashboardAgentApps } from "./dashboard-agent-apps.js";
+import { collectDashboardLifeProfile } from "./dashboard-life-profile.js";
 import type {
+  DashboardAgentAppItem,
   DashboardBlocker,
   DashboardCalendarResult,
   DashboardCalendarView,
   DashboardCalendarEvent,
+  DashboardLifeProfileResult,
   DashboardMemoriesResult,
   DashboardRecentMemoryEntry,
   DashboardRoutine,
+  DashboardRoutinePreviewView,
   DashboardRoutineVisibility,
   DashboardRoutinesResult,
   DashboardSnapshot,
@@ -102,6 +112,7 @@ const MAX_OCCURRENCES_PER_JOB = 96;
 const FILE_ARTIFACT_RE = /^FILE:(.+)$/gm;
 const WORK_ITEM_LINE_RE = /^WORK_ITEM:(.+)$/gm;
 const URL_RE = /https?:\/\/[^\s)>\]]+/gi;
+const USER_ACTIVITY_SESSION_LOOKBACK_MS = 7 * CALENDAR_DAY_MS;
 const USER_FACING_ROUTINE_RE =
   /\b(reminder|routine|daily|weekly|morning|evening|standup|check-?in|review|habit|personal|today)\b/i;
 const OPS_ROUTINE_RE =
@@ -178,6 +189,16 @@ type CollectDashboardCalendarParams = CollectDashboardSnapshotParams & {
   anchorAtMs?: number;
 };
 
+type KnownActivityTemplate = {
+  key: string;
+  title: string;
+  description?: string;
+  activityScope: "user";
+  dayIndexes: readonly number[];
+  startMinutes: number;
+  endMinutes?: number;
+};
+
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -205,6 +226,20 @@ function createTodayBounds(nowMs: number) {
   };
 }
 
+function startOfLocalDay(ms: number): number {
+  const date = new Date(ms);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function clampMinutesWithinDay(value: number): number {
+  return Math.max(0, Math.min(23 * 60 + 59, Math.round(value)));
+}
+
+function roundMinutesToQuarterHour(value: number): number {
+  return Math.round(value / 15) * 15;
+}
+
 function extractMessageText(message: unknown): string {
   if (!isObject(message)) {
     return "";
@@ -228,6 +263,334 @@ function extractMessageText(message: unknown): string {
   return parts.join("\n").trim();
 }
 
+function getLifeProfileFieldValue(
+  lifeProfile: DashboardLifeProfileResult,
+  key: string,
+): string | undefined {
+  return lifeProfile.fields.find((field) => field.key === key)?.value;
+}
+
+function parseClockMinutes(params: {
+  hour: string | undefined;
+  minute: string | undefined;
+  meridiem: string | undefined;
+  preferPm?: boolean;
+}): number | undefined {
+  const hour = Number(params.hour);
+  const minute = Number(params.minute ?? "0");
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return undefined;
+  }
+  const meridiem = normalizeText(params.meridiem).toLowerCase();
+  let normalizedHour = hour;
+  if (meridiem === "am") {
+    normalizedHour = hour === 12 ? 0 : hour;
+  } else if (meridiem === "pm") {
+    normalizedHour = hour === 12 ? 12 : hour + 12;
+  } else if (params.preferPm && hour < 12) {
+    normalizedHour = hour + 12;
+  }
+  if (normalizedHour > 23) {
+    return undefined;
+  }
+  return normalizedHour * 60 + minute;
+}
+
+function parseWakeMinutes(text: string | undefined): number | undefined {
+  if (!text) {
+    return undefined;
+  }
+  const match = text.match(
+    /\bwake(?:s| up)?(?:\s+(?:around|at))?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  return parseClockMinutes({
+    hour: match[1],
+    minute: match[2],
+    meridiem: match[3],
+  });
+}
+
+function parseWorkWindow(
+  dailyWeeklyRhythm: string | undefined,
+  workPurpose: string | undefined,
+):
+  | {
+      dayIndexes: readonly number[];
+      startMinutes: number;
+      endMinutes: number;
+      description: string;
+    }
+  | undefined {
+  const candidates = [dailyWeeklyRhythm, workPurpose].filter(Boolean) as string[];
+  for (const sourceText of candidates) {
+    const normalized = sourceText.replace(/[–—]/g, "-");
+    const directRange =
+      normalized.match(
+        /\b(?:work(?:s|ing)?(?:\s+(?:roughly|from|during))?|office)\D{0,24}(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i,
+      ) ??
+      normalized.match(
+        /\bwork(?:\s+start(?:s)?(?:\s+(?:at|on))?)?\D{0,12}(\d{1,2})(?::(\d{2}))?\s*(am|pm)?[\s\S]{0,24}\bend(?:s|ing)?(?:\s+(?:at|on))?\D{0,6}(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i,
+      );
+    if (!directRange) {
+      continue;
+    }
+    const startMinutes = parseClockMinutes({
+      hour: directRange[1],
+      minute: directRange[2],
+      meridiem: directRange[3],
+    });
+    let endMinutes = parseClockMinutes({
+      hour: directRange[4],
+      minute: directRange[5],
+      meridiem: directRange[6],
+      preferPm: !normalizeText(directRange[6]),
+    });
+    if (startMinutes === undefined || endMinutes === undefined) {
+      continue;
+    }
+    if (!normalizeText(directRange[6]) && endMinutes <= startMinutes && endMinutes < 12 * 60) {
+      endMinutes += 12 * 60;
+    }
+    if (endMinutes <= startMinutes || endMinutes > 24 * 60) {
+      continue;
+    }
+    const dayIndexes = /\bweekday/i.test(sourceText)
+      ? ([1, 2, 3, 4, 5] as const)
+      : ([0, 1, 2, 3, 4, 5, 6] as const);
+    return {
+      dayIndexes,
+      startMinutes,
+      endMinutes,
+      description: sourceText,
+    };
+  }
+  return undefined;
+}
+
+function resolveLatestPrimaryUserSessionEntry(params: {
+  cfg: MaumauConfig;
+  store: Record<string, SessionEntry>;
+  nowMs: number;
+}): SessionEntry | undefined {
+  const defaultAgentId = resolveDefaultAgentId(params.cfg);
+  return Object.entries(params.store)
+    .filter(([sessionKey, entry]) => {
+      if (!entry || typeof entry.updatedAt !== "number") {
+        return false;
+      }
+      if (entry.updatedAt < params.nowMs - USER_ACTIVITY_SESSION_LOOKBACK_MS) {
+        return false;
+      }
+      if (sessionKey.includes(":subagent:") || isCronRunSessionKey(sessionKey)) {
+        return false;
+      }
+      const parsed = parseAgentSessionKey(sessionKey);
+      const agentId = parsed?.agentId ?? (sessionKey === "main" ? defaultAgentId : "");
+      if (agentId !== defaultAgentId) {
+        return false;
+      }
+      return normalizeText((entry as { channel?: string }).channel).toLowerCase() !== "internal";
+    })
+    .sort((left, right) => (right[1].updatedAt ?? 0) - (left[1].updatedAt ?? 0))[0]?.[1];
+}
+
+function extractRecentRoutineTemplateText(params: {
+  cfg: MaumauConfig;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+  nowMs: number;
+}): string {
+  const entry = resolveLatestPrimaryUserSessionEntry(params);
+  if (!entry?.sessionId) {
+    return "";
+  }
+  const messages = readSessionMessages(entry.sessionId, params.storePath, entry.sessionFile);
+  return messages
+    .flatMap((message) => {
+      if (!isObject(message)) {
+        return [];
+      }
+      if (normalizeText(message.role).toLowerCase() !== "assistant") {
+        return [];
+      }
+      const text = extractMessageText(message);
+      if (!text || extractAssistantTranscriptBlocker(text)) {
+        return [];
+      }
+      return [text];
+    })
+    .join("\n\n");
+}
+
+function collectKnownActivityTemplates(params: {
+  cfg: MaumauConfig;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+  lifeProfile: DashboardLifeProfileResult;
+  nowMs: number;
+}): KnownActivityTemplate[] {
+  const dailyWeeklyRhythm = getLifeProfileFieldValue(params.lifeProfile, "daily_weekly_rhythm");
+  const workPurpose = getLifeProfileFieldValue(params.lifeProfile, "work_purpose");
+  const wakeMinutes = parseWakeMinutes(dailyWeeklyRhythm);
+  const workWindow = parseWorkWindow(dailyWeeklyRhythm, workPurpose);
+  const templates: KnownActivityTemplate[] = [];
+
+  if (wakeMinutes !== undefined) {
+    templates.push({
+      key: "wake-up",
+      title: "Wake up",
+      description: dailyWeeklyRhythm,
+      activityScope: "user",
+      dayIndexes: [0, 1, 2, 3, 4, 5, 6],
+      startMinutes: wakeMinutes,
+    });
+  }
+
+  if (workWindow) {
+    templates.push({
+      key: "work",
+      title: "Work",
+      description: workWindow.description,
+      activityScope: "user",
+      dayIndexes: workWindow.dayIndexes,
+      startMinutes: workWindow.startMinutes,
+      endMinutes: workWindow.endMinutes,
+    });
+  }
+
+  const recentRoutineText = extractRecentRoutineTemplateText({
+    cfg: params.cfg,
+    storePath: params.storePath,
+    store: params.store,
+    nowMs: params.nowMs,
+  }).toLowerCase();
+
+  if (recentRoutineText.includes("morning check-in")) {
+    const morningCheckIn = clampMinutesWithinDay(
+      wakeMinutes !== undefined
+        ? workWindow
+          ? Math.min(wakeMinutes + 15, Math.max(0, workWindow.startMinutes - 15))
+          : wakeMinutes + 15
+        : workWindow
+          ? Math.max(0, workWindow.startMinutes - 30)
+          : 8 * 60,
+    );
+    templates.push({
+      key: "morning-check-in",
+      title: "Morning check-in",
+      description: "Agreed routine from your recent planning chat.",
+      activityScope: "user",
+      dayIndexes: [0, 1, 2, 3, 4, 5, 6],
+      startMinutes: morningCheckIn,
+    });
+  }
+
+  if (recentRoutineText.includes("midday reset")) {
+    const middayReset = clampMinutesWithinDay(
+      workWindow
+        ? roundMinutesToQuarterHour((workWindow.startMinutes + workWindow.endMinutes) / 2)
+        : 13 * 60,
+    );
+    templates.push({
+      key: "midday-reset",
+      title: "Midday reset",
+      description: "Agreed routine from your recent planning chat.",
+      activityScope: "user",
+      dayIndexes: workWindow?.dayIndexes ?? [1, 2, 3, 4, 5],
+      startMinutes: middayReset,
+    });
+  }
+
+  if (recentRoutineText.includes("evening shutdown")) {
+    const eveningShutdown = clampMinutesWithinDay(
+      workWindow ? workWindow.endMinutes + 30 : 20 * 60,
+    );
+    templates.push({
+      key: "evening-shutdown",
+      title: "Evening shutdown",
+      description: "Agreed routine from your recent planning chat.",
+      activityScope: "user",
+      dayIndexes: [0, 1, 2, 3, 4, 5, 6],
+      startMinutes: eveningShutdown,
+    });
+  }
+
+  if (recentRoutineText.includes("weekly reset")) {
+    templates.push({
+      key: "weekly-reset",
+      title: "Weekly reset",
+      description: "Agreed routine from your recent planning chat.",
+      activityScope: "user",
+      dayIndexes: [0],
+      startMinutes: 18 * 60,
+    });
+  }
+
+  return templates;
+}
+
+function buildKnownActivityCalendarEvents(params: {
+  cfg: MaumauConfig;
+  storePath: string;
+  store: Record<string, SessionEntry>;
+  lifeProfile: DashboardLifeProfileResult;
+  startAtMs: number;
+  endAtMs: number;
+  nowMs: number;
+}): DashboardCalendarEvent[] {
+  const templates = collectKnownActivityTemplates({
+    cfg: params.cfg,
+    storePath: params.storePath,
+    store: params.store,
+    lifeProfile: params.lifeProfile,
+    nowMs: params.nowMs,
+  });
+  if (templates.length === 0) {
+    return [];
+  }
+
+  const events: DashboardCalendarEvent[] = [];
+  for (
+    let dayStartAtMs = startOfLocalDay(params.startAtMs);
+    dayStartAtMs < params.endAtMs;
+    dayStartAtMs += CALENDAR_DAY_MS
+  ) {
+    const weekday = new Date(dayStartAtMs).getDay();
+    for (const template of templates) {
+      if (!template.dayIndexes.includes(weekday)) {
+        continue;
+      }
+      const startAtMs = dayStartAtMs + template.startMinutes * 60_000;
+      const endAtMs =
+        template.endMinutes !== undefined ? dayStartAtMs + template.endMinutes * 60_000 : undefined;
+      if (startAtMs < params.startAtMs || startAtMs >= params.endAtMs) {
+        continue;
+      }
+      events.push({
+        id: `activity:${template.key}:${startAtMs}`,
+        title: template.title,
+        kind: "known_activity",
+        status: "scheduled",
+        startAtMs,
+        endAtMs,
+        description: template.description,
+        activityScope: template.activityScope,
+      });
+    }
+  }
+
+  return events;
+}
+
 function resolveSessionAgentId(cfg: MaumauConfig, sessionKey: string): string {
   const parsed = parseAgentSessionKey(sessionKey);
   return parsed?.agentId?.trim() || resolveDefaultAgentId(cfg);
@@ -248,6 +611,81 @@ function buildScheduleLabel(job: CronJob): string {
   }
   const tz = normalizeText(job.schedule.tz);
   return `Cron: ${job.schedule.expr}${tz ? ` (${tz})` : ""}`;
+}
+
+function isManagedLifeImprovementRoutine(job: Pick<CronJob, "name">): boolean {
+  const name = normalizeText(job.name);
+  return (
+    name === LIFE_IMPROVEMENT_ROUTINE_JOB_NAME || name === LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME
+  );
+}
+
+function collectUpcomingOccurrenceTimestamps(params: {
+  job: CronJob;
+  cursorMs: number;
+  limit: number;
+}): number[] {
+  const timestamps: number[] = [];
+  let cursor = params.cursorMs - 1;
+  for (let index = 0; index < params.limit; index += 1) {
+    const nextRunAtMs = computeNextRunAtMs(params.job.schedule, cursor);
+    if (typeof nextRunAtMs !== "number" || !Number.isFinite(nextRunAtMs)) {
+      break;
+    }
+    timestamps.push(nextRunAtMs);
+    cursor = nextRunAtMs + 1;
+  }
+  return timestamps;
+}
+
+function inferRoutinePreviewView(job: CronJob, nowMs: number): DashboardRoutinePreviewView {
+  const upcoming = collectUpcomingOccurrenceTimestamps({
+    job,
+    cursorMs: job.state?.nextRunAtMs ?? nowMs,
+    limit: 4,
+  });
+  if (upcoming.length >= 2) {
+    const intervals = upcoming
+      .slice(1)
+      .map((timestamp, index) => timestamp - upcoming[index]!)
+      .filter((interval) => interval > 0);
+    const averageIntervalMs =
+      intervals.reduce((sum, interval) => sum + interval, 0) / Math.max(1, intervals.length);
+    if (averageIntervalMs <= Math.ceil(CALENDAR_DAY_MS * 1.5)) {
+      return "day";
+    }
+    if (averageIntervalMs <= 8 * CALENDAR_DAY_MS) {
+      return "week";
+    }
+    return "month";
+  }
+  const referenceAtMs = upcoming[0] ?? job.state?.nextRunAtMs ?? job.state?.lastRunAtMs ?? nowMs;
+  const deltaMs = Math.abs(referenceAtMs - nowMs);
+  if (deltaMs <= 2 * CALENDAR_DAY_MS) {
+    return "day";
+  }
+  if (deltaMs <= 14 * CALENDAR_DAY_MS) {
+    return "week";
+  }
+  return "month";
+}
+
+function buildRoutinePreview(job: CronJob, nowMs: number): DashboardRoutine["preview"] {
+  const anchorAtMs = job.state?.nextRunAtMs ?? job.state?.lastRunAtMs ?? nowMs;
+  const view = inferRoutinePreviewView(job, nowMs);
+  const window = resolveCalendarWindow(view, anchorAtMs);
+  const runAtMs = buildOccurrenceTimestampsForJob({
+    job,
+    startAtMs: window.startAtMs,
+    endAtMs: window.endAtMs,
+  });
+  return {
+    view,
+    anchorAtMs,
+    startAtMs: window.startAtMs,
+    endAtMs: window.endAtMs,
+    runAtMs,
+  };
 }
 
 function buildFallbackTeamSummary(params: {
@@ -955,10 +1393,7 @@ function extractAssistantTranscriptBlocker(text: string): TrustedTranscriptBlock
     /\bno workspace changes were made\b/i.test(normalized) ||
     /\bno [a-z ]+ was created\b/i.test(normalized);
   const hasActionableBlockerCue = /\bi hit [^.?!\n]{0,60}\bblocker\b/i.test(normalized);
-  if (
-    !normalized ||
-    (!hasExplicitBlockedCue && !hasActionableBlockerCue)
-  ) {
+  if (!normalized || (!hasExplicitBlockedCue && !hasActionableBlockerCue)) {
     return null;
   }
   const paragraphs = normalized
@@ -2741,6 +3176,11 @@ function mergeDashboardBlockers(
 }
 
 function classifyRoutineVisibility(job: CronJob): DashboardRoutineVisibility {
+  // These are user-facing routines even though their descriptions contain words
+  // like "heartbeat" and "sync" that would otherwise look operational.
+  if (isManagedLifeImprovementRoutine(job)) {
+    return "user_facing";
+  }
   if (job.delivery?.mode && job.delivery.mode !== "none") {
     return "user_facing";
   }
@@ -2771,21 +3211,34 @@ async function buildRoutinesFromCronJobs(params: {
   const routines = params.cronJobs
     .map((job) => {
       const existing = nextPreferences[job.id];
+      const fallbackVisibility = classifyRoutineVisibility(job);
       if (!existing) {
         nextPreferences[job.id] = {
-          visibility: classifyRoutineVisibility(job),
+          visibility: fallbackVisibility,
+          updatedAtMs: params.nowMs,
+        };
+        changed = true;
+      } else if (
+        existing.visibility === "hidden" &&
+        fallbackVisibility === "user_facing" &&
+        isManagedLifeImprovementRoutine(job)
+      ) {
+        nextPreferences[job.id] = {
+          visibility: "user_facing",
           updatedAtMs: params.nowMs,
         };
         changed = true;
       }
-      const visibility = nextPreferences[job.id]?.visibility ?? "hidden";
+      const visibility = nextPreferences[job.id]?.visibility ?? fallbackVisibility;
       return {
         id: `routine:${job.id}`,
         sourceJobId: job.id,
         title: job.name,
         description: normalizeText(job.description) || undefined,
         enabled: job.enabled,
+        scheduleKind: job.schedule.kind,
         scheduleLabel: buildScheduleLabel(job),
+        preview: buildRoutinePreview(job, params.nowMs),
         nextRunAtMs: job.state?.nextRunAtMs,
         lastRunAtMs: job.state?.lastRunAtMs,
         lastStatus: job.state?.lastStatus,
@@ -2860,7 +3313,11 @@ function buildSavedWorkshopItems(params: {
 async function buildWorkshopItems(
   tasks: DashboardWorkItem[],
   params: { cfg?: MaumauConfig; nowMs?: number; stateDir?: string },
-): Promise<{ items: DashboardWorkshopItem[]; savedItems: DashboardSavedWorkshopItem[] }> {
+): Promise<{
+  items: DashboardWorkshopItem[];
+  savedItems: DashboardSavedWorkshopItem[];
+  agentApps: DashboardAgentAppItem[];
+}> {
   const workshopStore = await readDashboardWorkshopStore({ stateDir: params.stateDir });
   const savedRecordBySourceIdentity = new Map(
     workshopStore.savedItems.map((record) => [record.sourceIdentity, record] as const),
@@ -2954,13 +3411,23 @@ async function buildWorkshopItems(
       deduped.set(item.dedupeKey, workshopItem);
     }
   }
+  const workshopItems = [...deduped.values()];
+  const savedItems = buildSavedWorkshopItems({
+    savedRecords: workshopStore.savedItems,
+    cfg: params.cfg,
+    nowMs: params.nowMs,
+  });
+  const agentApps = params.cfg
+    ? await collectDashboardAgentApps({
+        cfg: params.cfg,
+        items: workshopItems,
+        savedItems,
+      })
+    : [];
   return {
-    items: [...deduped.values()],
-    savedItems: buildSavedWorkshopItems({
-      savedRecords: workshopStore.savedItems,
-      cfg: params.cfg,
-      nowMs: params.nowMs,
-    }),
+    items: workshopItems,
+    savedItems,
+    agentApps,
   };
 }
 
@@ -3069,6 +3536,9 @@ function resolveRoutineOccurrenceStatus(params: {
 }
 
 function buildCalendarEvents(params: {
+  cfg: MaumauConfig;
+  storePath: string;
+  store: Record<string, SessionEntry>;
   cronJobs: CronJob[];
   cronRuns: Array<{
     ts: number;
@@ -3081,6 +3551,7 @@ function buildCalendarEvents(params: {
   view: DashboardCalendarView;
   anchorAtMs: number;
   nowMs: number;
+  lifeProfile: DashboardLifeProfileResult;
 }): DashboardCalendarResult {
   const window = resolveCalendarWindow(params.view, params.anchorAtMs);
   const visibleJobIds = new Set(params.routines.map((routine) => routine.sourceJobId));
@@ -3122,6 +3593,17 @@ function buildCalendarEvents(params: {
     }
   }
   events.push(...buildApprovalCalendarEvents(params.approvals));
+  events.push(
+    ...buildKnownActivityCalendarEvents({
+      cfg: params.cfg,
+      storePath: params.storePath,
+      store: params.store,
+      lifeProfile: params.lifeProfile,
+      startAtMs: window.startAtMs,
+      endAtMs: window.endAtMs,
+      nowMs: params.nowMs,
+    }),
+  );
   return {
     generatedAtMs: params.nowMs,
     anchorAtMs: window.anchorAtMs,
@@ -3205,7 +3687,11 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
     sortDir: "desc",
     jobNameById,
   });
+  const lifeProfile = await collectDashboardLifeProfile({ cfg, nowMs });
   const calendarResult = buildCalendarEvents({
+    cfg,
+    storePath,
+    store,
     cronJobs,
     cronRuns: cronRunsPage.entries,
     routines,
@@ -3213,8 +3699,12 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
     view: params.view ?? "month",
     anchorAtMs: params.anchorAtMs ?? nowMs,
     nowMs,
+    lifeProfile,
   });
   const todayCalendar = buildCalendarEvents({
+    cfg,
+    storePath,
+    store,
     cronJobs,
     cronRuns: cronRunsPage.entries,
     routines,
@@ -3222,6 +3712,7 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
     view: "day",
     anchorAtMs: nowMs,
     nowMs,
+    lifeProfile,
   });
   const recentMemory = await collectRecentMemoryEntries({ cfg, nowMs });
   const approvalBlockers = buildApprovalBlockers(approvals);
@@ -3260,8 +3751,10 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
       tasks: annotatedAllItems,
       workshop: workshop.items,
       workshopSaved: workshop.savedItems,
+      workshopAgentApps: workshop.agentApps,
       calendar: calendarResult.events,
       routines,
+      lifeProfile,
       memories: recentMemory,
     },
     tasks: {
@@ -3276,6 +3769,7 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
       generatedAtMs: nowMs,
       items: workshop.items,
       savedItems: workshop.savedItems,
+      agentApps: workshop.agentApps,
     },
     calendar: calendarResult,
     routines: {

@@ -16,6 +16,7 @@ import { generateTeamOpenProsePreview } from "../../../../src/teams/openprose.js
 import {
   createNextTeamWorkflowConfig,
   DESIGN_STUDIO_TEAM_ID,
+  LIFE_IMPROVEMENT_TEAM_ID,
   STARTER_TEAM_ID,
 } from "../../../../src/teams/presets.js";
 import type { AgentsListResult } from "../types.ts";
@@ -38,7 +39,7 @@ export type TeamsProps = {
   selectedWorkflowId: string | null;
   onSelectTeam: (teamId: string) => void;
   onSelectWorkflow: (workflowId: string) => void;
-  onCreateTeam: (preset: "custom" | "vibe-coder" | "design-studio") => void;
+  onCreateTeam: (preset: "custom" | "vibe-coder" | "design-studio" | "life-improvement") => void;
   onReplaceTeam: (teamId: string, nextTeam: TeamConfig) => void;
   onDeleteTeam: (teamId: string) => void;
   promptOpen: boolean;
@@ -365,6 +366,9 @@ export function renderTeams(props: TeamsProps) {
           <button class="btn btn--sm" @click=${() => props.onCreateTeam("design-studio")}>
             Add Design Studio
           </button>
+          <button class="btn btn--sm" @click=${() => props.onCreateTeam("life-improvement")}>
+            Add Life Improvement Team
+          </button>
           <button
             class="btn btn--sm"
             ?disabled=${props.configSaving || !props.configDirty}
@@ -406,6 +410,9 @@ export function renderTeams(props: TeamsProps) {
                 <button class="btn" @click=${() => props.onCreateTeam("vibe-coder")}>
                   Add Vibe Coder
                 </button>
+                <button class="btn" @click=${() => props.onCreateTeam("life-improvement")}>
+                  Add Life Improvement Team
+                </button>
                 <button class="btn primary" @click=${() => props.onCreateTeam("design-studio")}>
                   Add Design Studio
                 </button>
@@ -429,7 +436,8 @@ export function renderTeams(props: TeamsProps) {
                     const isBundledPreset =
                       team.preset?.source === "bundled" &&
                       (team.preset?.id === STARTER_TEAM_ID ||
-                        team.preset?.id === DESIGN_STUDIO_TEAM_ID);
+                        team.preset?.id === DESIGN_STUDIO_TEAM_ID ||
+                        team.preset?.id === LIFE_IMPROVEMENT_TEAM_ID);
                     return html`
                       <button
                         type="button"

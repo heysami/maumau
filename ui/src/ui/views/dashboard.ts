@@ -18,10 +18,18 @@ import {
 import type {
   AgentsListResult,
   DashboardCalendarResult,
+  DashboardCalendarFilters,
+  DashboardAgentAppItem,
   AttentionItem,
   DashboardCalendarEvent,
+  DashboardLifeProfileNeed,
   DashboardRecentMemoryEntry,
+  DashboardRoutine,
   DashboardSnapshot,
+  DashboardWalletSpendBar,
+  DashboardWalletSpendBreakdown,
+  DashboardWalletSpendGranularity,
+  DashboardWalletSpendSegment,
   DashboardUserChannelsResult,
   DashboardWalletCard,
   DashboardWalletResult,
@@ -56,6 +64,9 @@ type DashboardProps = {
   walletStartDate: string;
   walletEndDate: string;
   walletTimeZone: "local" | "utc";
+  walletGranularity: DashboardWalletSpendGranularity;
+  walletBreakdown: DashboardWalletSpendBreakdown;
+  walletCurrency: string | null;
   calendarResult: DashboardCalendarResult | null;
   calendarAnchorAtMs: number | null;
   userChannelsResult: DashboardUserChannelsResult | null;
@@ -74,12 +85,15 @@ type DashboardProps = {
   doneFromDate: string;
   doneToDate: string;
   workshopSelectedId: string | null;
-  workshopTab: "saved" | "recent";
+  workshopTab: "saved" | "recent" | "agent-apps";
   workshopSelectedIds: Set<string>;
   workshopProjectDraft: string;
   workshopSaving: boolean;
   workshopSaveError: string | null;
   calendarView: "month" | "week" | "day";
+  calendarFilters: DashboardCalendarFilters;
+  routineSelection: string | null;
+  profileSelection: string | null;
   teamSelection: string | null;
   memoryAgentId: string | null;
   agentPanel: "memory" | "scope";
@@ -144,24 +158,27 @@ type DashboardProps = {
   onSelectTaskGroup: (selection: string | null) => void;
   onDoneDateRangeChange: (params: { fromDate?: string; toDate?: string }) => void;
   onSelectWorkshop: (itemId: string) => void;
-  onWorkshopTabChange: (tab: "saved" | "recent") => void;
+  onWorkshopTabChange: (tab: "saved" | "recent" | "agent-apps") => void;
   onToggleWorkshopSelection: (itemId: string, selected: boolean) => void;
   onWorkshopProjectDraftChange: (value: string) => void;
   onSaveWorkshopSelection: () => void;
   onWalletDateRangeChange: (params: { startDate?: string; endDate?: string }) => void;
   onWalletTimeZoneChange: (timeZone: "local" | "utc") => void;
+  onWalletGranularityChange: (granularity: DashboardWalletSpendGranularity) => void;
+  onWalletBreakdownChange: (breakdown: DashboardWalletSpendBreakdown) => void;
+  onWalletCurrencyChange: (currency: string | null) => void;
   onWalletPresetSelect: (days: 1 | 7 | 30) => void;
   onCalendarViewChange: (view: "month" | "week" | "day") => void;
   onCalendarNavigate: (direction: -1 | 1) => void;
   onCalendarJumpToday: () => void;
+  onCalendarFiltersChange: (filters: DashboardCalendarFilters) => void;
+  onSelectRoutine: (routineId: string) => void;
+  onSelectProfileAgent: (agentId: string) => void;
   onCalendarSelectDay: (anchorAtMs: number, view?: "month" | "week" | "day") => void;
   onSelectUserChannel: (channelId: string) => void;
   onSelectUserChannelAccount: (channelId: string, accountId: string) => void;
   onOpenUserManagement: () => void;
-  onConnectUserChannel: (params: {
-    channelId: string;
-    fields: Record<string, string>;
-  }) => void;
+  onConnectUserChannel: (params: { channelId: string; fields: Record<string, string> }) => void;
   onSaveUserChannelAllowlist: (params: {
     channelId: string;
     accountId: string;
@@ -254,6 +271,20 @@ const CALENDAR_VIEW_LABELS: Record<DashboardProps["calendarView"], string> = {
   day: "calendar.views.day",
 };
 
+const CALENDAR_FILTER_KEYS: Array<keyof DashboardCalendarFilters> = [
+  "cron",
+  "userActivity",
+  "groupActivity",
+  "approvals",
+];
+
+const CALENDAR_FILTER_LABELS: Record<keyof DashboardCalendarFilters, string> = {
+  cron: "calendar.filters.cron",
+  userActivity: "calendar.filters.userActivity",
+  groupActivity: "calendar.filters.groupActivity",
+  approvals: "calendar.filters.approvals",
+};
+
 function dt(key: string, params?: Record<string, string>): string {
   return t(`dashboard.${key}`, params);
 }
@@ -283,6 +314,8 @@ function renderShellPageActions(props: DashboardProps, page: DashboardPage) {
     case "workshop":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "routines":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "profile":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "user-channels":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
@@ -456,6 +489,182 @@ function groupCalendarEventsByDay(events: DashboardCalendarEvent[]) {
   return grouped;
 }
 
+function isCronCalendarEvent(event: DashboardCalendarEvent): boolean {
+  return event.kind === "routine_occurrence" || event.kind === "reminder";
+}
+
+function isUserActivityCalendarEvent(event: DashboardCalendarEvent): boolean {
+  return event.kind === "known_activity" && (event.activityScope ?? "user") === "user";
+}
+
+function isGroupActivityCalendarEvent(event: DashboardCalendarEvent): boolean {
+  return (
+    event.kind === "known_activity" &&
+    ((event.activityScope ?? "user") === "group" || event.activityScope === "global")
+  );
+}
+
+function calendarEventMatchesFilters(
+  event: DashboardCalendarEvent,
+  filters: DashboardCalendarFilters,
+): boolean {
+  if (isCronCalendarEvent(event)) {
+    return filters.cron;
+  }
+  if (event.kind === "approval_needed") {
+    return filters.approvals;
+  }
+  if (isGroupActivityCalendarEvent(event)) {
+    return filters.groupActivity;
+  }
+  if (isUserActivityCalendarEvent(event)) {
+    return filters.userActivity;
+  }
+  return true;
+}
+
+function groupTimestampsByDay(timestamps: number[]) {
+  const grouped = new Map<number, number[]>();
+  for (const timestamp of timestamps) {
+    const day = startOfDay(timestamp);
+    const bucket = grouped.get(day) ?? [];
+    bucket.push(timestamp);
+    grouped.set(day, bucket);
+  }
+  for (const [day, bucket] of grouped) {
+    grouped.set(
+      day,
+      bucket.toSorted((left, right) => left - right),
+    );
+  }
+  return grouped;
+}
+
+function previewViewLabel(view: DashboardRoutine["preview"]["view"]): string {
+  return dt(CALENDAR_VIEW_LABELS[view]);
+}
+
+function routineScheduleKindLabel(kind: DashboardRoutine["scheduleKind"]): string {
+  switch (kind) {
+    case "at":
+      return dt("routines.kind.at");
+    case "cron":
+      return dt("routines.kind.cron");
+    default:
+      return dt("routines.kind.every");
+  }
+}
+
+function renderRoutinePreviewTimeline(routine: DashboardRoutine) {
+  const preview = routine.preview;
+  const visibleDays = Array.from(
+    {
+      length: Math.max(1, Math.round((preview.endAtMs - preview.startAtMs) / 86_400_000)),
+    },
+    (_, index) => preview.startAtMs + index * 86_400_000,
+  );
+  const runsByDay = groupTimestampsByDay(preview.runAtMs);
+  const todayStart = startOfDay(Date.now());
+  if (preview.view === "month") {
+    return html`
+      <div class="dashboard-routines__schedule">
+        <div class="dashboard-calendar-month">
+          <div class="dashboard-calendar-month__weekdays">
+            ${visibleDays
+              .slice(0, 7)
+              .map(
+                (day) =>
+                  html`<div class="dashboard-calendar-month__weekday">${formatWeekdayLabel(day)}</div>`,
+              )}
+          </div>
+          <div class="dashboard-calendar-month__grid">
+            ${visibleDays.map((day) => {
+              const dayRuns = runsByDay.get(day) ?? [];
+              return html`
+                <div
+                  class="dashboard-calendar-month__cell ${!isSameMonth(day, preview.anchorAtMs) ? "dashboard-calendar-month__cell--outside" : ""} ${isSameDay(day, todayStart) ? "dashboard-calendar-month__cell--today" : ""}"
+                >
+                  <div class="dashboard-calendar-month__cell-header">
+                    <span class="dashboard-calendar-month__date">${formatDayNumber(day)}</span>
+                    ${
+                      dayRuns.length > 0
+                        ? html`<span class="dashboard-calendar-month__count">${dayRuns.length}</span>`
+                        : nothing
+                    }
+                  </div>
+                  <div class="dashboard-calendar-month__items">
+                    ${dayRuns.slice(0, 3).map(
+                      (timestamp) => html`
+                        <div class="dashboard-calendar-month__item">
+                          <span class="dashboard-calendar-month__item-time">${formatTimeLabel(timestamp)}</span>
+                          <span class="dashboard-calendar-month__item-title">${dt("routines.run")}</span>
+                        </div>
+                      `,
+                    )}
+                    ${
+                      dayRuns.length > 3
+                        ? html`<div class="dashboard-calendar-month__more">${dt("calendar.moreItems", { count: String(dayRuns.length - 3) })}</div>`
+                        : nothing
+                    }
+                  </div>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  const hourSlots = Array.from({ length: 24 }, (_, hour) => hour);
+  return html`
+    <div class="dashboard-routines__schedule">
+      <div class="dashboard-timegrid-wrap">
+        <div
+          class="dashboard-timegrid dashboard-timegrid--${preview.view}"
+          style=${
+            preview.view === "week"
+              ? "grid-template-columns: 76px repeat(7, minmax(128px, 1fr));"
+              : "grid-template-columns: 76px minmax(0, 1fr);"
+          }
+        >
+          <div class="dashboard-timegrid__corner"></div>
+          ${visibleDays.map(
+            (day) => html`
+              <div class="dashboard-timegrid__day ${isSameDay(day, todayStart) ? "dashboard-timegrid__day--today" : ""}">
+                <span class="dashboard-timegrid__day-main">${formatWeekdayLabel(day)}</span>
+                <span class="dashboard-timegrid__day-sub">${formatDayLabel(day)}</span>
+              </div>
+            `,
+          )}
+          ${hourSlots.map(
+            (hour) => html`
+              <div class="dashboard-timegrid__time">${formatHourLabel(hour)}</div>
+              ${visibleDays.map((day) => {
+                const dayRuns = (runsByDay.get(day) ?? []).filter(
+                  (timestamp) => new Date(timestamp).getHours() === hour,
+                );
+                return html`
+                  <div class="dashboard-timegrid__slot ${isSameDay(day, todayStart) ? "dashboard-timegrid__slot--today" : ""}">
+                    ${dayRuns.map(
+                      (timestamp) => html`
+                        <article class="dashboard-timegrid__event dashboard-timegrid__event--scheduled">
+                          <div class="dashboard-timegrid__event-time">${formatTimeLabel(timestamp)}</div>
+                          <div class="dashboard-timegrid__event-title">${dt("routines.run")}</div>
+                          <div class="dashboard-timegrid__event-meta">${routine.scheduleLabel}</div>
+                        </article>
+                      `,
+                    )}
+                  </div>
+                `;
+              })}
+            `,
+          )}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function previewLocationLabel(previewUrl: string | undefined): string | null {
   const normalized = previewUrl?.trim();
   if (!normalized) {
@@ -472,7 +681,14 @@ function previewLocationLabel(previewUrl: string | undefined): string | null {
   }
 }
 
-type DashboardWorkshopRenderableItem = DashboardWorkshopItem | DashboardSavedWorkshopItem;
+type DashboardWorkshopRenderableItem =
+  | DashboardWorkshopItem
+  | DashboardSavedWorkshopItem
+  | DashboardAgentAppItem;
+
+function isAgentAppItem(item: DashboardWorkshopRenderableItem): item is DashboardAgentAppItem {
+  return "kind" in item && item.kind === "agent_app";
+}
 
 function workshopFrameUrl(item: DashboardWorkshopRenderableItem): string | null {
   const embedUrl = item.embedUrl?.trim();
@@ -513,7 +729,52 @@ function workshopArtifactDetail(item: DashboardWorkshopRenderableItem): string |
 }
 
 function workshopContextSummary(item: DashboardWorkshopRenderableItem): string {
+  if (isAgentAppItem(item)) {
+    return (
+      item.summary?.trim() ||
+      item.howItHelps?.trim() ||
+      item.whyNow?.trim() ||
+      dt("workshop.agentAppsDefaultSummary")
+    );
+  }
   return item.summary?.trim() || dt("workshop.defaultSummary");
+}
+
+function agentAppStatusLabel(status: DashboardAgentAppItem["status"]): string {
+  switch (status) {
+    case "building":
+      return dt("workshop.agentAppStatus.building");
+    case "ready":
+      return dt("workshop.agentAppStatus.ready");
+    default:
+      return dt("workshop.agentAppStatus.proposed");
+  }
+}
+
+function workshopItemStatusLabel(item: DashboardWorkshopRenderableItem): string {
+  return isAgentAppItem(item) ? agentAppStatusLabel(item.status) : statusLabel(item.taskStatus);
+}
+
+function workshopEmptyLabel(tab: DashboardProps["workshopTab"]): string {
+  switch (tab) {
+    case "saved":
+      return dt("workshop.savedEmpty");
+    case "agent-apps":
+      return dt("workshop.agentAppsEmpty");
+    default:
+      return dt("workshop.recentEmpty");
+  }
+}
+
+function workshopSelectionLabel(tab: DashboardProps["workshopTab"]): string {
+  switch (tab) {
+    case "saved":
+      return dt("workshop.chooseSaved");
+    case "agent-apps":
+      return dt("workshop.chooseAgentApp");
+    default:
+      return dt("workshop.chooseItem");
+  }
 }
 
 function renderProjectBadge(projectName: string | undefined) {
@@ -1514,6 +1775,8 @@ function walletCardTitle(card: DashboardWalletCard): string {
       return "LLM";
     case "twilio":
       return "Twilio";
+    case "vapi":
+      return "Vapi";
     case "deepgram-realtime":
       return "Deepgram Realtime";
     case "deepgram-audio":
@@ -1529,6 +1792,111 @@ function formatWalletBadge(card: DashboardWalletCard): string {
   return `${measurement} • ${coverage}`;
 }
 
+const WALLET_SPEND_GRANULARITIES: DashboardWalletSpendGranularity[] = [
+  "day",
+  "week",
+  "month",
+  "year",
+];
+
+const WALLET_SPEND_BREAKDOWNS: DashboardWalletSpendBreakdown[] = ["category", "merchant"];
+
+const WALLET_SPEND_COLORS = [
+  "#1f9d8b",
+  "#e76f51",
+  "#e9c46a",
+  "#2a9d8f",
+  "#8ab17d",
+  "#f4a261",
+  "#4d908e",
+  "#f28482",
+] as const;
+
+function walletSpendGranularityLabel(value: DashboardWalletSpendGranularity): string {
+  switch (value) {
+    case "day":
+      return dt("wallet.chart.granularity.day");
+    case "week":
+      return dt("wallet.chart.granularity.week");
+    case "month":
+      return dt("wallet.chart.granularity.month");
+    case "year":
+      return dt("wallet.chart.granularity.year");
+  }
+}
+
+function walletSpendBreakdownLabel(value: DashboardWalletSpendBreakdown): string {
+  return value === "merchant"
+    ? dt("wallet.chart.breakdown.merchant")
+    : dt("wallet.chart.breakdown.category");
+}
+
+function formatWalletSpendAmount(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
+function hashWalletSpendKey(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function walletSpendColor(value: string): string {
+  return WALLET_SPEND_COLORS[hashWalletSpendKey(value) % WALLET_SPEND_COLORS.length]!;
+}
+
+function renderWalletSpendLegendItem(segment: DashboardWalletSpendSegment, currency: string) {
+  return html`
+    <div class="dashboard-wallet-chart__legend-item">
+      <span
+        class="dashboard-wallet-chart__legend-swatch"
+        style=${`background:${walletSpendColor(segment.key)}`}
+      ></span>
+      <span class="dashboard-wallet-chart__legend-label">${segment.label}</span>
+      <span class="dashboard-wallet-chart__legend-value">
+        ${formatWalletSpendAmount(segment.totalValue, currency)}
+      </span>
+    </div>
+  `;
+}
+
+function renderWalletSpendBar(bar: DashboardWalletSpendBar, currency: string, maxBarValue: number) {
+  const totalHeight = maxBarValue > 0 ? (bar.totalValue / maxBarValue) * 100 : 0;
+  return html`
+    <div class="dashboard-wallet-chart__bar-group">
+      <div
+        class="dashboard-wallet-chart__bar"
+        title=${`${bar.label}: ${formatWalletSpendAmount(bar.totalValue, currency)} · ${String(bar.records)} receipt(s)`}
+      >
+        <div class="dashboard-wallet-chart__bar-stack" style=${`height:${totalHeight}%`}>
+          ${bar.segments.map((segment) => {
+            const segmentHeight =
+              bar.totalValue > 0 ? (segment.totalValue / bar.totalValue) * 100 : 0;
+            return html`
+              <div
+                class="dashboard-wallet-chart__bar-segment"
+                style=${`height:${segmentHeight}%;background:${walletSpendColor(segment.key)}`}
+                title=${`${segment.label}: ${formatWalletSpendAmount(segment.totalValue, currency)}`}
+              ></div>
+            `;
+          })}
+        </div>
+      </div>
+      <div class="dashboard-wallet-chart__bar-label">${bar.label}</div>
+    </div>
+  `;
+}
+
 function renderWalletPage(props: DashboardProps) {
   const presets: Array<{ label: string; days: 1 | 7 | 30 }> = [
     { label: t("usage.presets.today"), days: 1 },
@@ -1536,6 +1904,19 @@ function renderWalletPage(props: DashboardProps) {
     { label: t("usage.presets.last30d"), days: 30 },
   ];
   const cards = props.walletResult?.cards ?? [];
+  const spending = props.walletResult?.spending;
+  const currencies = spending?.currencies ?? [];
+  const selectedCurrency =
+    props.walletCurrency && currencies.includes(props.walletCurrency)
+      ? props.walletCurrency
+      : (currencies[0] ?? null);
+  const selectedChart =
+    spending?.charts.find(
+      (chart) =>
+        chart.currency === selectedCurrency &&
+        chart.granularity === props.walletGranularity &&
+        chart.breakdown === props.walletBreakdown,
+    ) ?? null;
   const content =
     props.loading && !props.walletResult
       ? html`
@@ -1651,6 +2032,137 @@ function renderWalletPage(props: DashboardProps) {
       </section>
 
       ${content}
+
+      <section class="card dashboard-wallet-chart">
+        <div class="dashboard-wallet-chart__header">
+          <div>
+            <div class="card-title">${dt("wallet.chart.title")}</div>
+            <div class="card-sub">${dt("wallet.chart.subtitle")}</div>
+          </div>
+          <div class="dashboard-page__actions">
+            ${
+              spending?.lastRecordedAtMs
+                ? html`
+                    <span class="pill">
+                      ${dt("wallet.chart.lastCollected", {
+                        time: formatRelativeTimestamp(spending.lastRecordedAtMs),
+                      })}
+                    </span>
+                  `
+                : nothing
+            }
+            ${
+              selectedChart
+                ? html`
+                    <span class="pill">
+                      ${formatWalletSpendAmount(selectedChart.totalValue, selectedChart.currency)}
+                    </span>
+                    <span class="pill">
+                      ${dt("wallet.chart.receipts", {
+                        count: String(selectedChart.totalRecords),
+                      })}
+                    </span>
+                  `
+                : nothing
+            }
+          </div>
+        </div>
+
+        ${
+          spending && spending.records > 0
+            ? html`
+                <div class="dashboard-wallet-chart__controls">
+                  <div class="dashboard-wallet-chart__control">
+                    <span>${dt("wallet.chart.breakdown.title")}</span>
+                    <div class="dashboard-segmented">
+                      ${WALLET_SPEND_BREAKDOWNS.map(
+                        (breakdown) => html`
+                          <button
+                            type="button"
+                            class="dashboard-segmented__item ${props.walletBreakdown === breakdown ? "dashboard-segmented__item--active" : ""}"
+                            @click=${() => props.onWalletBreakdownChange(breakdown)}
+                          >
+                            ${walletSpendBreakdownLabel(breakdown)}
+                          </button>
+                        `,
+                      )}
+                    </div>
+                  </div>
+                  <div class="dashboard-wallet-chart__control">
+                    <span>${dt("wallet.chart.granularity.title")}</span>
+                    <div class="dashboard-segmented">
+                      ${WALLET_SPEND_GRANULARITIES.map(
+                        (granularity) => html`
+                          <button
+                            type="button"
+                            class="dashboard-segmented__item ${props.walletGranularity === granularity ? "dashboard-segmented__item--active" : ""}"
+                            @click=${() => props.onWalletGranularityChange(granularity)}
+                          >
+                            ${walletSpendGranularityLabel(granularity)}
+                          </button>
+                        `,
+                      )}
+                    </div>
+                  </div>
+                  ${
+                    currencies.length > 1
+                      ? html`
+                          <div class="dashboard-wallet-chart__control">
+                            <span>${dt("wallet.chart.currency.title")}</span>
+                            <div class="dashboard-segmented">
+                              ${currencies.map(
+                                (currency) => html`
+                                  <button
+                                    type="button"
+                                    class="dashboard-segmented__item ${selectedCurrency === currency ? "dashboard-segmented__item--active" : ""}"
+                                    @click=${() => props.onWalletCurrencyChange(currency)}
+                                  >
+                                    ${currency}
+                                  </button>
+                                `,
+                              )}
+                            </div>
+                          </div>
+                        `
+                      : nothing
+                  }
+                </div>
+
+                ${
+                  spending.note
+                    ? html`<div class="dashboard-wallet-chart__note">${spending.note}</div>`
+                    : nothing
+                }
+
+                ${
+                  selectedChart
+                    ? html`
+                        <div class="dashboard-wallet-chart__canvas">
+                          ${selectedChart.bars.map((bar) =>
+                            renderWalletSpendBar(
+                              bar,
+                              selectedChart.currency,
+                              selectedChart.maxBarValue,
+                            ),
+                          )}
+                        </div>
+                        <div class="dashboard-wallet-chart__legend">
+                          ${selectedChart.legend.map((segment) =>
+                            renderWalletSpendLegendItem(segment, selectedChart.currency),
+                          )}
+                        </div>
+                      `
+                    : html`<div class="dashboard-empty">${dt("wallet.chart.empty")}</div>`
+                }
+              `
+            : html`
+                <div class="dashboard-empty">${dt("wallet.chart.noSpendData")}</div>
+                <div class="dashboard-wallet-chart__note">
+                  ${dt("wallet.chart.noSpendHint")}
+                </div>
+              `
+        }
+      </section>
     </section>
   `;
 }
@@ -2110,9 +2622,17 @@ function renderTasksPage(props: DashboardProps) {
 function renderWorkshopPage(props: DashboardProps) {
   const recentItems = props.snapshot?.workshop ?? [];
   const savedItems = props.snapshot?.workshopSaved ?? [];
-  const visibleItems = props.workshopTab === "saved" ? savedItems : recentItems;
+  const agentApps = props.snapshot?.workshopAgentApps ?? [];
+  const visibleItems =
+    props.workshopTab === "saved"
+      ? savedItems
+      : props.workshopTab === "agent-apps"
+        ? agentApps
+        : recentItems;
   const selected =
     visibleItems.find((item) => item.id === props.workshopSelectedId) ?? visibleItems[0] ?? null;
+  const selectedAgentApp = selected && isAgentAppItem(selected) ? selected : null;
+  const selectedWorkshopItem = selected && !isAgentAppItem(selected) ? selected : null;
   const selectedRecentItems = recentItems.filter((item) => props.workshopSelectedIds.has(item.id));
   const normalizedProjectDraft = props.workshopProjectDraft
     .trim()
@@ -2141,6 +2661,13 @@ function renderWorkshopPage(props: DashboardProps) {
             @click=${() => props.onWorkshopTabChange("recent")}
           >
             ${dt("workshop.recentTab")}
+          </button>
+          <button
+            type="button"
+            class="dashboard-segmented__item ${props.workshopTab === "agent-apps" ? "dashboard-segmented__item--active" : ""}"
+            @click=${() => props.onWorkshopTabChange("agent-apps")}
+          >
+            ${dt("workshop.agentAppsTab")}
           </button>
         </div>
         ${
@@ -2197,6 +2724,7 @@ function renderWorkshopPage(props: DashboardProps) {
           ${visibleItems.map((item) => {
             const isRecentItem = props.workshopTab === "recent";
             const recentItem = isRecentItem ? (item as DashboardWorkshopItem) : null;
+            const agentApp = isAgentAppItem(item) ? item : null;
             return html`
               <div
                 class="dashboard-workshop__item ${selected?.id === item.id ? "dashboard-workshop__item--active" : ""}"
@@ -2227,12 +2755,13 @@ function renderWorkshopPage(props: DashboardProps) {
                   <span class="dashboard-workshop__item-title">${item.title}</span>
                   <span class="dashboard-workshop__item-meta">${workshopContextSummary(item)}</span>
                   <span class="dashboard-workshop__item-meta">
-                    ${statusLabel(item.taskStatus)} ·
+                    ${workshopItemStatusLabel(item)} ·
                     ${item.updatedAtMs ? formatRelativeTimestamp(item.updatedAtMs) : dt("status.waiting")}
                   </span>
                   <span class="dashboard-workshop__item-pills">
                     ${item.projectName ? renderProjectBadge(item.projectName) : nothing}
                     ${recentItem?.isSaved ? html`<span class="pill">${dt("workshop.savedBadge")}</span>` : nothing}
+                    ${agentApp?.ownerLabel ? html`<span class="pill">${agentApp.ownerLabel}</span>` : nothing}
                     ${
                       props.workshopTab === "saved" && "savedAtMs" in item && item.savedAtMs
                         ? html`<span class="pill">${dt("workshop.savedAt", { time: formatRelativeTimestamp(item.savedAtMs) })}</span>`
@@ -2247,7 +2776,7 @@ function renderWorkshopPage(props: DashboardProps) {
             visibleItems.length === 0
               ? html`
                 <div class="dashboard-empty">
-                  ${props.workshopTab === "saved" ? dt("workshop.savedEmpty") : dt("workshop.recentEmpty")}
+                  ${workshopEmptyLabel(props.workshopTab)}
                 </div>
               `
               : nothing
@@ -2263,12 +2792,17 @@ function renderWorkshopPage(props: DashboardProps) {
                     <div class="card-sub">${workshopContextSummary(selected)}</div>
                   </div>
                   <div class="dashboard-page__actions">
-                    <span class="pill">${statusLabel(selected.taskStatus)}</span>
+                    <span class="pill">${workshopItemStatusLabel(selected)}</span>
                     ${selected.projectName ? renderProjectBadge(selected.projectName) : nothing}
+                    ${
+                      isAgentAppItem(selected) && selected.ownerLabel
+                        ? html`<span class="pill">${selected.ownerLabel}</span>`
+                        : nothing
+                    }
                     ${
                       props.workshopTab === "saved"
                         ? html`<span class="pill">${dt("workshop.savedBadge")}</span>`
-                        : (selected as DashboardWorkshopItem).isSaved
+                        : selectedWorkshopItem?.isSaved
                           ? html`<span class="pill">${dt("workshop.savedBadge")}</span>`
                           : nothing
                     }
@@ -2277,6 +2811,7 @@ function renderWorkshopPage(props: DashboardProps) {
                 <div class="dashboard-workshop__actions">
                   <button
                     class="btn btn--sm"
+                    ?disabled=${!selected.projectKey && !selected.taskId}
                     @click=${() =>
                       props.onFilterTasks(
                         selected.projectKey
@@ -2306,59 +2841,112 @@ function renderWorkshopPage(props: DashboardProps) {
                       : nothing
                   }
                 </div>
-                <div class="dashboard-workshop__meta-grid">
-                  <div class="dashboard-workshop__meta-card">
-                    <div class="dashboard-org-chart__label">${dt("workshop.artifact")}</div>
-                    <strong>${selected.title}</strong>
-                    ${
-                      artifactDetail
-                        ? html`<div class="dashboard-note__meta"><span>${artifactDetail}</span></div>`
-                        : nothing
-                    }
-                    <div class="dashboard-note__meta">
-                      <span>${
-                        frameUrl
-                          ? dt("workshop.livePreviewInDashboard")
-                          : selected.previewUrl
-                            ? dt("workshop.livePreviewAvailable")
-                            : dt("workshop.noLivePreviewYet")
-                      }</span>
-                    </div>
-                  </div>
-                  <div class="dashboard-workshop__meta-card">
-                    <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
-                    <strong>${previewLocationLabel(selected.previewUrl) ?? dt("workshop.notPublished")}</strong>
-                    ${
-                      selected.previewUrl
-                        ? html`<div class="dashboard-note__meta"><span>${selected.previewUrl}</span></div>`
-                        : nothing
-                    }
-                  </div>
-                  <div class="dashboard-workshop__meta-card">
-                    <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
-                    <strong>${selected.projectName ?? dt("workshop.notTagged")}</strong>
-                    ${
-                      selected.workspaceLabel
-                        ? html`<div class="dashboard-note__meta"><span>${selected.workspaceLabel}</span></div>`
-                        : nothing
-                    }
-                  </div>
-                  ${
-                    selected.taskTitle
-                      ? html`
+                ${
+                  selectedAgentApp
+                    ? html`
+                      <div class="dashboard-workshop__meta-grid">
                         <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
-                          <strong>${selected.taskTitle}</strong>
+                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppOwner")}</div>
+                          <strong>${selectedAgentApp.ownerLabel ?? dt("workshop.agentAppOwnerUnassigned")}</strong>
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppWhyNow")}</div>
+                          <strong>${selectedAgentApp.whyNow ?? dt("workshop.agentAppMissingContext")}</strong>
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppHowItHelps")}</div>
+                          <strong>${selectedAgentApp.howItHelps ?? dt("workshop.agentAppsDefaultSummary")}</strong>
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppScope")}</div>
+                          <strong>${selectedAgentApp.suggestedScope ?? dt("workshop.agentAppMissingContext")}</strong>
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
+                          <strong>${selectedAgentApp.projectName ?? dt("workshop.notTagged")}</strong>
                           ${
-                            selected.taskAssigneeLabel
-                              ? html`<div class="dashboard-note__meta"><span>${selected.taskAssigneeLabel}</span></div>`
+                            selectedAgentApp.workspaceLabel
+                              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.workspaceLabel}</span></div>`
                               : nothing
                           }
                         </div>
-                      `
-                      : nothing
-                  }
-                </div>
+                        ${
+                          selectedAgentApp.taskTitle
+                            ? html`
+                              <div class="dashboard-workshop__meta-card">
+                                <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
+                                <strong>${selectedAgentApp.taskTitle}</strong>
+                              </div>
+                            `
+                            : nothing
+                        }
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
+                          <strong>${previewLocationLabel(selectedAgentApp.previewUrl) ?? dt("workshop.notPublished")}</strong>
+                          ${
+                            selectedAgentApp.previewUrl
+                              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.previewUrl}</span></div>`
+                              : nothing
+                          }
+                        </div>
+                      </div>
+                    `
+                    : html`
+                      <div class="dashboard-workshop__meta-grid">
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.artifact")}</div>
+                          <strong>${selectedWorkshopItem?.title ?? selected.title}</strong>
+                          ${
+                            artifactDetail
+                              ? html`<div class="dashboard-note__meta"><span>${artifactDetail}</span></div>`
+                              : nothing
+                          }
+                          <div class="dashboard-note__meta">
+                            <span>${
+                              frameUrl
+                                ? dt("workshop.livePreviewInDashboard")
+                                : selected.previewUrl
+                                  ? dt("workshop.livePreviewAvailable")
+                                  : dt("workshop.noLivePreviewYet")
+                            }</span>
+                          </div>
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
+                          <strong>${previewLocationLabel(selected.previewUrl) ?? dt("workshop.notPublished")}</strong>
+                          ${
+                            selected.previewUrl
+                              ? html`<div class="dashboard-note__meta"><span>${selected.previewUrl}</span></div>`
+                              : nothing
+                          }
+                        </div>
+                        <div class="dashboard-workshop__meta-card">
+                          <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
+                          <strong>${selected.projectName ?? dt("workshop.notTagged")}</strong>
+                          ${
+                            selected.workspaceLabel
+                              ? html`<div class="dashboard-note__meta"><span>${selected.workspaceLabel}</span></div>`
+                              : nothing
+                          }
+                        </div>
+                        ${
+                          selectedWorkshopItem?.taskTitle
+                            ? html`
+                              <div class="dashboard-workshop__meta-card">
+                                <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
+                                <strong>${selectedWorkshopItem.taskTitle}</strong>
+                                ${
+                                  selectedWorkshopItem.taskAssigneeLabel
+                                    ? html`<div class="dashboard-note__meta"><span>${selectedWorkshopItem.taskAssigneeLabel}</span></div>`
+                                    : nothing
+                                }
+                              </div>
+                            `
+                            : nothing
+                        }
+                      </div>
+                    `
+                }
                 ${
                   frameUrl
                     ? html`
@@ -2386,7 +2974,7 @@ function renderWorkshopPage(props: DashboardProps) {
               `
               : html`
                 <div class="dashboard-empty">
-                  ${props.workshopTab === "saved" ? dt("workshop.chooseSaved") : dt("workshop.chooseItem")}
+                  ${workshopSelectionLabel(props.workshopTab)}
                 </div>
               `
           }
@@ -2412,7 +3000,10 @@ function renderCalendarPage(props: DashboardProps) {
     { length: Math.max(1, Math.round((calendar.endAtMs - calendar.startAtMs) / dayMs)) },
     (_, index) => calendar.startAtMs + index * dayMs,
   );
-  const eventsByDay = groupCalendarEventsByDay(calendar.events);
+  const filteredEvents = calendar.events.filter((event) =>
+    calendarEventMatchesFilters(event, props.calendarFilters),
+  );
+  const eventsByDay = groupCalendarEventsByDay(filteredEvents);
   const hourSlots = Array.from({ length: 24 }, (_, hour) => hour);
   return html`
     <section class="dashboard-page">
@@ -2420,7 +3011,7 @@ function renderCalendarPage(props: DashboardProps) {
         <div class="dashboard-calendar__summary">
           <div class="dashboard-calendar__range">${formatCalendarRange(calendar, anchorAtMs)}</div>
           <div class="dashboard-note__meta dashboard-calendar__meta">
-            <span>${dt("calendar.visibleItems", { count: String(calendar.events.length) })}</span>
+            <span>${dt("calendar.visibleItems", { count: String(filteredEvents.length) })}</span>
             <span>${dt("calendar.selectedDay", { day: formatLongDayLabel(selectedDay) })}</span>
           </div>
         </div>
@@ -2445,6 +3036,25 @@ function renderCalendarPage(props: DashboardProps) {
           </div>
         </div>
       </div>
+      <div class="dashboard-calendar__filters" role="group" aria-label=${dt("calendar.filters.ariaLabel")}>
+        ${CALENDAR_FILTER_KEYS.map((key) => {
+          const active = props.calendarFilters[key];
+          return html`
+            <button
+              type="button"
+              class="dashboard-calendar__filter ${active ? "dashboard-calendar__filter--active" : ""}"
+              aria-pressed=${active ? "true" : "false"}
+              @click=${() =>
+                props.onCalendarFiltersChange({
+                  ...props.calendarFilters,
+                  [key]: !active,
+                })}
+            >
+              ${dt(CALENDAR_FILTER_LABELS[key])}
+            </button>
+          `;
+        })}
+      </div>
       ${
         calendar.view === "month"
           ? html`
@@ -2461,8 +3071,18 @@ function renderCalendarPage(props: DashboardProps) {
                   <div class="dashboard-calendar-month__grid">
                     ${visibleDays.map((day) => {
                       const dayEvents = eventsByDay.get(day) ?? [];
-                      const visibleEventCount = 4;
-                      const overflowCount = Math.max(0, dayEvents.length - visibleEventCount);
+                      const cronEvents = dayEvents.filter((event) => isCronCalendarEvent(event));
+                      const listedEvents = dayEvents.filter((event) => !isCronCalendarEvent(event));
+                      const visibleRowCount = 4;
+                      const visibleEventCount = visibleRowCount - (cronEvents.length > 0 ? 1 : 0);
+                      const visibleListedEvents = listedEvents.slice(
+                        0,
+                        Math.max(0, visibleEventCount),
+                      );
+                      const overflowCount = Math.max(
+                        0,
+                        listedEvents.length - visibleListedEvents.length,
+                      );
                       return html`
                         <button
                           type="button"
@@ -2478,7 +3098,18 @@ function renderCalendarPage(props: DashboardProps) {
                             }
                           </div>
                           <div class="dashboard-calendar-month__items">
-                            ${dayEvents.slice(0, visibleEventCount).map(
+                            ${
+                              cronEvents.length > 0
+                                ? html`
+                                    <div class="dashboard-calendar-month__rollup">
+                                      ${dt("calendar.monthCronRollup", {
+                                        count: String(cronEvents.length),
+                                      })}
+                                    </div>
+                                  `
+                                : nothing
+                            }
+                            ${visibleListedEvents.map(
                               (event) => html`
                                 <div class="dashboard-calendar-month__item">
                                   <span class="dashboard-calendar-month__item-time">${formatTimeLabel(event.startAtMs)}</span>
@@ -2558,31 +3189,300 @@ function renderCalendarPage(props: DashboardProps) {
 
 function renderRoutinesPage(props: DashboardProps) {
   const routines = props.snapshot?.routines ?? [];
+  const selected =
+    routines.find((routine) => routine.id === props.routineSelection) ?? routines[0] ?? null;
+  const previewWindowLabel =
+    selected && selected.preview.view === "month"
+      ? formatMonthLabel(selected.preview.anchorAtMs)
+      : selected && selected.preview.view === "day"
+        ? formatLongDayLabel(selected.preview.anchorAtMs)
+        : selected
+          ? `${formatDayLabel(selected.preview.startAtMs)} - ${formatDayLabel(
+              selected.preview.endAtMs - 1,
+            )}`
+          : null;
   return html`
     <section class="dashboard-page">
-      <div class="dashboard-list dashboard-list--cards">
-        ${routines.map(
-          (routine) => html`
-            <article class="dashboard-note">
-              <div class="dashboard-note__title">${routine.title}</div>
-              <div class="dashboard-note__meta">
-                <span>${routine.enabled ? t("common.enabled") : dt("routines.paused")}</span>
-                <span>${routine.scheduleLabel}</span>
+      ${
+        routines.length === 0
+          ? html`<div class="dashboard-empty">${dt("routines.empty")}</div>`
+          : html`
+              <div class="dashboard-routines">
+                <aside class="dashboard-routines__list card">
+                  ${routines.map(
+                    (routine) => html`
+                      <button
+                        type="button"
+                        class="dashboard-routines__item ${selected?.id === routine.id ? "dashboard-routines__item--active" : ""}"
+                        @click=${() => props.onSelectRoutine(routine.id)}
+                      >
+                        <span class="dashboard-routines__item-title">${routine.title}</span>
+                        <span class="dashboard-routines__item-meta">${routine.scheduleLabel}</span>
+                        <span class="dashboard-routines__item-meta">
+                          ${routine.enabled ? t("common.enabled") : dt("routines.paused")} ·
+                          ${previewViewLabel(routine.preview.view)}
+                        </span>
+                        <span class="dashboard-routines__item-meta">
+                          ${
+                            routine.nextRunAtMs
+                              ? dt("routines.nextRun", {
+                                  time: formatDateTime(routine.nextRunAtMs),
+                                })
+                              : dt("routines.never")
+                          }
+                        </span>
+                      </button>
+                    `,
+                  )}
+                </aside>
+                <section class="dashboard-routines__preview card">
+                  ${
+                    selected
+                      ? html`
+                          <div class="dashboard-routines__hero">
+                            <div>
+                              <div class="card-title">${selected.title}</div>
+                              <div class="card-sub">${selected.description ?? selected.scheduleLabel}</div>
+                            </div>
+                            <div class="dashboard-page__actions">
+                              <span class="pill">${selected.enabled ? t("common.enabled") : dt("routines.paused")}</span>
+                              <span class="pill">${previewViewLabel(selected.preview.view)}</span>
+                              <span class="pill">${routineScheduleKindLabel(selected.scheduleKind)}</span>
+                            </div>
+                          </div>
+                          <div class="dashboard-routines__meta-grid">
+                            <div class="dashboard-routines__meta-card">
+                              <div class="dashboard-org-chart__label">${dt("routines.schedule")}</div>
+                              <strong>${selected.scheduleLabel}</strong>
+                              ${
+                                previewWindowLabel
+                                  ? html`<div class="dashboard-note__meta"><span>${previewWindowLabel}</span></div>`
+                                  : nothing
+                              }
+                            </div>
+                            <div class="dashboard-routines__meta-card">
+                              <div class="dashboard-org-chart__label">${dt("routines.nextRunLabel")}</div>
+                              <strong>
+                                ${
+                                  selected.nextRunAtMs
+                                    ? formatDateTime(selected.nextRunAtMs)
+                                    : dt("routines.never")
+                                }
+                              </strong>
+                            </div>
+                            <div class="dashboard-routines__meta-card">
+                              <div class="dashboard-org-chart__label">${dt("routines.lastRunLabel")}</div>
+                              <strong>
+                                ${
+                                  selected.lastRunAtMs
+                                    ? formatDateTime(selected.lastRunAtMs)
+                                    : dt("routines.never")
+                                }
+                              </strong>
+                            </div>
+                          </div>
+                          ${
+                            selected.preview.runAtMs.length > 0
+                              ? renderRoutinePreviewTimeline(selected)
+                              : html`<div class="dashboard-empty">${dt("routines.noRunsInWindow")}</div>`
+                          }
+                        `
+                      : html`<div class="dashboard-empty">${dt("routines.empty")}</div>`
+                  }
+                </section>
               </div>
-              ${routine.description ? html`<div class="dashboard-note__body">${routine.description}</div>` : nothing}
-              <div class="dashboard-note__meta">
-                <span>${dt("routines.nextRun", { time: formatDateTime(routine.nextRunAtMs) })}</span>
-                <span>${dt("routines.lastRun", {
-                  time: routine.lastRunAtMs
-                    ? formatRelativeTimestamp(routine.lastRunAtMs)
-                    : dt("routines.never"),
-                })}</span>
+            `
+      }
+    </section>
+  `;
+}
+
+function renderLifeProfileNeedSection(emptyLabel: string, needs: DashboardLifeProfileNeed[]) {
+  if (needs.length === 0) {
+    return html`<div class="dashboard-empty">${emptyLabel}</div>`;
+  }
+  return html`
+    <div class="dashboard-profile__need-list">
+      ${needs.map(
+        (need) => html`
+          <article class="dashboard-profile__need">
+            <div class="dashboard-profile__need-header">
+              <div>
+                <div class="dashboard-note__title">${need.label}</div>
+                <div class="dashboard-note__meta"><span>${need.description}</span></div>
               </div>
-            </article>
-          `,
-        )}
-        ${routines.length === 0 ? html`<div class="dashboard-empty">${dt("routines.empty")}</div>` : nothing}
-      </div>
+              <div class="dashboard-page__actions">
+                <span class="pill">${dt(`profile.status.${need.status}`)}</span>
+                <span class="pill">${dt(`profile.stage.${need.stage}`)}</span>
+              </div>
+            </div>
+            <div class="dashboard-profile__why">
+              <div class="dashboard-org-chart__label">${dt("profile.why")}</div>
+              <div>${need.why}</div>
+            </div>
+            ${
+              need.value
+                ? html`
+                    <div class="dashboard-profile__value">
+                      <div class="dashboard-org-chart__label">${dt("profile.currentValue")}</div>
+                      <div>${need.value}</div>
+                    </div>
+                  `
+                : nothing
+            }
+          </article>
+        `,
+      )}
+    </div>
+  `;
+}
+
+function renderLifeProfilePage(props: DashboardProps) {
+  const profile = props.snapshot?.lifeProfile ?? null;
+  const agents = profile?.agents ?? [];
+  const selected =
+    agents.find((agent) => agent.agentId === props.profileSelection) ?? agents[0] ?? null;
+  const recordedNeeds = selected?.needs.filter((need) => need.status === "recorded") ?? [];
+  const missingNeeds = selected?.needs.filter((need) => need.status === "missing") ?? [];
+  const futureNeeds = selected?.needs.filter((need) => need.status === "future") ?? [];
+
+  return html`
+    <section class="dashboard-page">
+      ${
+        profile
+          ? html`
+              ${!profile.teamConfigured ? html`<div class="callout warning">${dt("profile.teamMissing")}</div>` : nothing}
+              ${profile.bootstrapPending ? html`<div class="callout">${dt("profile.bootstrapPending")}</div>` : nothing}
+              <section class="dashboard-profile__summary">
+                <article class="card">
+                  <div class="card-title">${dt("profile.overviewTitle")}</div>
+                  <div class="card-sub">${dt("profile.overviewSubtitle")}</div>
+                  <div class="dashboard-note__meta">
+                    <span>
+                      ${
+                        profile.sourceStatus === "loaded"
+                          ? dt("profile.sourceLoaded", { source: profile.sourceLabel })
+                          : dt("profile.sourceMissing", { source: profile.sourceLabel })
+                      }
+                    </span>
+                  </div>
+                </article>
+                <article class="dashboard-routines__meta-card">
+                  <div class="dashboard-org-chart__label">${dt("profile.recordedFields")}</div>
+                  <strong>${profile.recordedFieldCount}</strong>
+                </article>
+                <article class="dashboard-routines__meta-card">
+                  <div class="dashboard-org-chart__label">${dt("profile.missingFields")}</div>
+                  <strong>${profile.missingFieldCount}</strong>
+                </article>
+                <article class="dashboard-routines__meta-card">
+                  <div class="dashboard-org-chart__label">${dt("profile.futureFields")}</div>
+                  <strong>${profile.futureFieldCount}</strong>
+                </article>
+              </section>
+
+              <section class="card dashboard-profile__field-map">
+                <div class="dashboard-routines__hero">
+                  <div>
+                    <div class="card-title">${dt("profile.fieldMapTitle")}</div>
+                    <div class="card-sub">${dt("profile.fieldMapSubtitle")}</div>
+                  </div>
+                </div>
+                <div class="dashboard-profile__field-grid">
+                  ${profile.fields.map(
+                    (field) => html`
+                      <article class="dashboard-profile__field dashboard-profile__field--${field.status}">
+                        <div class="dashboard-profile__need-header">
+                          <div>
+                            <div class="dashboard-note__title">${field.label}</div>
+                            <div class="dashboard-note__meta"><span>${field.description}</span></div>
+                          </div>
+                          <div class="dashboard-page__actions">
+                            <span class="pill">${dt(`profile.status.${field.status}`)}</span>
+                            <span class="pill">${dt(`profile.stage.${field.stage}`)}</span>
+                          </div>
+                        </div>
+                        ${
+                          field.value
+                            ? html`<div class="dashboard-profile__value">${field.value}</div>`
+                            : nothing
+                        }
+                      </article>
+                    `,
+                  )}
+                </div>
+              </section>
+
+              <div class="dashboard-profile">
+                <aside class="dashboard-profile__agents card">
+                  <div>
+                    <div class="card-title">${dt("profile.agentsTitle")}</div>
+                    <div class="card-sub">${dt("profile.agentsSubtitle")}</div>
+                  </div>
+                  ${agents.map(
+                    (agent) => html`
+                      <button
+                        type="button"
+                        class="dashboard-profile__agent ${selected?.agentId === agent.agentId ? "dashboard-profile__agent--active" : ""}"
+                        @click=${() => props.onSelectProfileAgent(agent.agentId)}
+                      >
+                        <span class="dashboard-routines__item-title">${agent.name}</span>
+                        <span class="dashboard-routines__item-meta">${agent.domainLabel}</span>
+                        <span class="dashboard-routines__item-meta">
+                          ${dt("profile.recordedNeeds", { count: String(agent.recordedCount) })} ·
+                          ${dt("profile.missingNeeds", { count: String(agent.missingCount) })} ·
+                          ${dt("profile.futureNeeds", { count: String(agent.futureCount) })}
+                        </span>
+                      </button>
+                    `,
+                  )}
+                </aside>
+
+                <section class="dashboard-profile__detail card">
+                  ${
+                    selected
+                      ? html`
+                          <div class="dashboard-profile__hero">
+                            <div>
+                              <div class="card-title">${selected.name}</div>
+                              <div class="card-sub">${selected.domainLabel}</div>
+                            </div>
+                            <div class="dashboard-page__actions">
+                              <span class="pill">${dt("profile.recordedNeeds", { count: String(selected.recordedCount) })}</span>
+                              <span class="pill">${dt("profile.missingNeeds", { count: String(selected.missingCount) })}</span>
+                              <span class="pill">${dt("profile.futureNeeds", { count: String(selected.futureCount) })}</span>
+                            </div>
+                          </div>
+                          <div class="dashboard-routines__meta-grid">
+                            <div class="dashboard-routines__meta-card">
+                              <div class="dashboard-org-chart__label">${dt("profile.covers")}</div>
+                              <strong>${selected.covers}</strong>
+                            </div>
+                            <div class="dashboard-routines__meta-card">
+                              <div class="dashboard-org-chart__label">${dt("profile.relatesTo")}</div>
+                              <strong>${selected.relatesTo}</strong>
+                            </div>
+                          </div>
+                          <section class="dashboard-profile__need-section">
+                            <div class="card-title">${dt("profile.recordedTitle")}</div>
+                            ${renderLifeProfileNeedSection(dt("profile.noRecorded"), recordedNeeds)}
+                          </section>
+                          <section class="dashboard-profile__need-section">
+                            <div class="card-title">${dt("profile.missingTitle")}</div>
+                            ${renderLifeProfileNeedSection(dt("profile.noMissing"), missingNeeds)}
+                          </section>
+                          <section class="dashboard-profile__need-section">
+                            <div class="card-title">${dt("profile.futureTitle")}</div>
+                            ${renderLifeProfileNeedSection(dt("profile.noFuture"), futureNeeds)}
+                          </section>
+                        `
+                      : html`<div class="dashboard-empty">${dt("profile.selectAgent")}</div>`
+                  }
+                </section>
+              </div>
+            `
+          : html`<div class="dashboard-empty">${dt("profile.selectAgent")}</div>`
+      }
     </section>
   `;
 }
@@ -3089,33 +3989,24 @@ export function renderDashboard(props: DashboardProps) {
                           onApply: props.onMauOfficeEditorApply ?? (() => {}),
                           onSave: props.onMauOfficeEditorSave ?? (() => {}),
                           onToolChange: props.onMauOfficeEditorToolChange ?? (() => {}),
-                          onBrushModeChange:
-                            props.onMauOfficeEditorBrushModeChange ?? (() => {}),
+                          onBrushModeChange: props.onMauOfficeEditorBrushModeChange ?? (() => {}),
                           onZoneBrushChange: props.onMauOfficeEditorZoneBrushChange ?? (() => {}),
                           onPropItemChange: props.onMauOfficeEditorPropItemChange ?? (() => {}),
                           onAutotileItemChange:
                             props.onMauOfficeEditorAutotileItemChange ?? (() => {}),
-                          onMarkerRoleChange:
-                            props.onMauOfficeEditorMarkerRoleChange ?? (() => {}),
+                          onMarkerRoleChange: props.onMauOfficeEditorMarkerRoleChange ?? (() => {}),
                           onCellInteract: props.onMauOfficeEditorCellInteract ?? (() => {}),
-                          onHoverTileChange:
-                            props.onMauOfficeEditorHoverTileChange ?? (() => {}),
-                          onSelectionChange:
-                            props.onMauOfficeEditorSelectionChange ?? (() => {}),
+                          onHoverTileChange: props.onMauOfficeEditorHoverTileChange ?? (() => {}),
+                          onSelectionChange: props.onMauOfficeEditorSelectionChange ?? (() => {}),
                           onSelectionDragStart:
                             props.onMauOfficeEditorSelectionDragStart ?? (() => {}),
-                          onSelectionDragEnd:
-                            props.onMauOfficeEditorSelectionDragEnd ?? (() => {}),
-                          onCanvasResize:
-                            props.onMauOfficeEditorCanvasResize ?? (() => {}),
-                          onClearSelection:
-                            props.onMauOfficeEditorClearSelection ?? (() => {}),
-                          onSelectionPatch:
-                            props.onMauOfficeEditorSelectionPatch ?? (() => {}),
+                          onSelectionDragEnd: props.onMauOfficeEditorSelectionDragEnd ?? (() => {}),
+                          onCanvasResize: props.onMauOfficeEditorCanvasResize ?? (() => {}),
+                          onClearSelection: props.onMauOfficeEditorClearSelection ?? (() => {}),
+                          onSelectionPatch: props.onMauOfficeEditorSelectionPatch ?? (() => {}),
                           onUndo: props.onMauOfficeEditorUndo ?? (() => {}),
                           onRedo: props.onMauOfficeEditorRedo ?? (() => {}),
-                          onDeleteSelection:
-                            props.onMauOfficeEditorDeleteSelection ?? (() => {}),
+                          onDeleteSelection: props.onMauOfficeEditorDeleteSelection ?? (() => {}),
                         }
                       : undefined,
                     chatWindow: {
@@ -3151,25 +4042,27 @@ export function renderDashboard(props: DashboardProps) {
                       ? renderCalendarPage(props)
                       : page === "routines"
                         ? renderRoutinesPage(props)
-                        : page === "user-channels"
-                          ? renderDashboardUserChannelsPage({
-                              result: props.userChannelsResult,
-                              selectedChannelId: props.userChannelId,
-                              selectedAccountId: props.userChannelAccountId,
-                              onSelectChannel: props.onSelectUserChannel,
-                              onSelectAccount: props.onSelectUserChannelAccount,
-                              onOpenUsersPage: props.onOpenUserManagement,
-                              onConnectChannel: props.onConnectUserChannel,
-                              onSaveAllowlist: props.onSaveUserChannelAllowlist,
-                              onSaveChats: props.onSaveUserChannelChats,
-                              whatsappMessage: props.whatsappMessage,
-                              whatsappQrDataUrl: props.whatsappQrDataUrl,
-                              whatsappBusy: props.whatsappBusy,
-                              onStartWhatsApp: props.onStartWhatsApp,
-                            })
-                          : page === "teams"
-                            ? renderTeamsPage(props)
-                            : renderMemoriesPage(props)
+                        : page === "profile"
+                          ? renderLifeProfilePage(props)
+                          : page === "user-channels"
+                            ? renderDashboardUserChannelsPage({
+                                result: props.userChannelsResult,
+                                selectedChannelId: props.userChannelId,
+                                selectedAccountId: props.userChannelAccountId,
+                                onSelectChannel: props.onSelectUserChannel,
+                                onSelectAccount: props.onSelectUserChannelAccount,
+                                onOpenUsersPage: props.onOpenUserManagement,
+                                onConnectChannel: props.onConnectUserChannel,
+                                onSaveAllowlist: props.onSaveUserChannelAllowlist,
+                                onSaveChats: props.onSaveUserChannelChats,
+                                whatsappMessage: props.whatsappMessage,
+                                whatsappQrDataUrl: props.whatsappQrDataUrl,
+                                whatsappBusy: props.whatsappBusy,
+                                onStartWhatsApp: props.onStartWhatsApp,
+                              })
+                            : page === "teams"
+                              ? renderTeamsPage(props)
+                              : renderMemoriesPage(props)
         }
       </main>
     </div>

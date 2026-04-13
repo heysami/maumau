@@ -3,6 +3,7 @@ import type { MaumauConfig } from "../../config/config.js";
 import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import type { RuntimeEnv } from "../../runtime.js";
+import { ensureLifeImprovementRoutineArtifacts } from "../../teams/life-improvement-routine.js";
 import { applyConversationAutomationPresetConfig } from "../conversation-automation-preset.js";
 import { DEFAULT_GATEWAY_DAEMON_RUNTIME } from "../daemon-runtime.js";
 import { ensureFreshInstallBundledTools } from "../onboard-bundled-tools.js";
@@ -193,6 +194,9 @@ export async function runNonInteractiveLocalSetup(params: {
   await ensureOnboardedReflectionReviewerArtifacts({
     config: nextConfig,
     runtime,
+  });
+  await ensureLifeImprovementRoutineArtifacts({
+    config: nextConfig,
   });
 
   const bundledTools = await ensureFreshInstallBundledTools({

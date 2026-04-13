@@ -160,6 +160,38 @@ describe("collectDashboardWallet", () => {
       },
       tempRoot,
     );
+    await appendWalletEvent(
+      {
+        kind: "expense",
+        completedAtMs: 3700,
+        source: "email_receipt",
+        fingerprint: "netflix|usd|12.99|2026-03-02",
+        merchant: "Netflix",
+        category: "software",
+        currency: "USD",
+        amountValue: 12.99,
+        occurredAtMs: 3800,
+        subject: "Netflix receipt",
+        dateText: "Mar 2",
+      },
+      tempRoot,
+    );
+    await appendWalletEvent(
+      {
+        kind: "expense",
+        completedAtMs: 3800,
+        source: "email_receipt",
+        fingerprint: "whole-foods|usd|22.00|2026-03-03",
+        merchant: "Whole Foods",
+        category: "groceries",
+        currency: "USD",
+        amountValue: 22,
+        occurredAtMs: 3900,
+        subject: "Whole Foods receipt",
+        dateText: "Mar 3",
+      },
+      tempRoot,
+    );
 
     const result = await collectDashboardWallet({
       cfg: {
@@ -216,5 +248,96 @@ describe("collectDashboardWallet", () => {
         coverage: "partial",
       }),
     ]);
+    expect(result.spending.records).toBe(2);
+    expect(result.spending.currencies).toEqual(["USD"]);
+    expect(result.spending.charts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          granularity: "day",
+          breakdown: "category",
+          currency: "USD",
+          totalValue: 34.99,
+          totalRecords: 2,
+          legend: expect.arrayContaining([
+            expect.objectContaining({
+              label: "Groceries",
+              totalValue: 22,
+            }),
+            expect.objectContaining({
+              label: "Software",
+              totalValue: 12.99,
+            }),
+          ]),
+        }),
+      ]),
+    );
+  });
+
+  it("shows Vapi telephony spend in dollars when the voice-call route uses Vapi", async () => {
+    const voiceCallStore = path.join(tempRoot, "voice-calls-vapi");
+    await fs.mkdir(voiceCallStore, { recursive: true });
+    await fs.writeFile(
+      path.join(voiceCallStore, "calls.jsonl"),
+      [
+        JSON.stringify({
+          callId: "call-vapi-exact",
+          provider: "vapi",
+          startedAt: 1_000,
+          answeredAt: 1_000,
+          endedAt: 61_000,
+          cost: 0.12,
+        }),
+        JSON.stringify({
+          callId: "call-vapi-estimated",
+          provider: "vapi",
+          startedAt: 61_000,
+          answeredAt: 61_000,
+          endedAt: 181_000,
+        }),
+        JSON.stringify({
+          callId: "call-twilio-ignored",
+          provider: "twilio",
+          startedAt: 2_000,
+          answeredAt: 2_500,
+          endedAt: 10_000,
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await collectDashboardWallet({
+      cfg: {
+        plugins: {
+          entries: {
+            "voice-call": {
+              config: {
+                mode: "vapi",
+                store: voiceCallStore,
+              },
+            },
+          },
+        },
+      } as never,
+      startMs: 0,
+      endMs: 200_000,
+      nowMs: 200_000,
+      stateDir: tempRoot,
+    });
+
+    const vapiCard = result.cards.find((card) => card.id === "vapi");
+    expect(vapiCard).toMatchObject({
+      id: "vapi",
+      records: 2,
+      totalUnit: "usd",
+      totalLabel: "Estimated cost",
+      measurement: "derived",
+      coverage: "partial",
+      missingTotals: 1,
+    });
+    expect(vapiCard?.totalValue).toBeCloseTo(0.22, 6);
+    expect(result.cards.some((card) => card.id === "twilio")).toBe(false);
+    expect(result.cards.some((card) => card.id === "deepgram-realtime")).toBe(false);
+    expect(result.cards.some((card) => card.id === "deepgram-audio")).toBe(false);
+    expect(result.cards.some((card) => card.id === "elevenlabs")).toBe(false);
   });
 });

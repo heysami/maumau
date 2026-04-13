@@ -10,13 +10,10 @@ import type {
   browserStatus,
   browserTabs,
 } from "../../browser/client.js";
-import { resolveBrowserConfig } from "../../browser/config.js";
+import { resolveBrowserConfig, resolveProfile } from "../../browser/config.js";
+import { getBrowserProfileCapabilities } from "../../browser/profile-capabilities.js";
 import type { MaumauConfig } from "../../config/config.js";
-import {
-  listSessionCapabilities,
-  type CapabilityRow,
-  type SessionCapabilityOptions,
-} from "../capabilities.js";
+import { appendWalletEvent } from "../../infra/wallet-events.js";
 
 const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_RESULT_LIMIT = 10;
@@ -32,10 +29,9 @@ type BrowserDeps = {
 };
 
 type GmailDigestLane = {
-  capabilityId: "browser-existing-session" | "clawd-cursor";
-  pathLabel: "Browser existing-session" | "Clawd Cursor desktop control";
+  capabilityId: string;
+  pathLabel: string;
   profile: string;
-  blockedRow?: CapabilityRow;
 };
 
 type GmailDigestExtractedPage = {
@@ -69,6 +65,10 @@ export type GmailReceiptDigestResult = {
   count: number;
   usedFallback: boolean;
   fallbackReason?: string;
+  persistedToWallet?: {
+    candidates: number;
+    recorded: number;
+  };
 };
 
 function normalizePositiveInteger(raw: unknown, fallback: number, max: number): number {
@@ -84,30 +84,6 @@ function trimToUndefined(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function findCapabilityRow(
-  rows: CapabilityRow[],
-  id: "browser-existing-session" | "clawd-cursor",
-): CapabilityRow | undefined {
-  return rows.find((row) => row.id === id);
-}
-
-function describeCapabilityBlock(row: CapabilityRow | undefined, label: string): string {
-  if (!row) {
-    return `${label} is unavailable.`;
-  }
-  if (row.ready) {
-    return `${label} is ready.`;
-  }
-  const reason = row.blockedReason ? ` (${row.blockedReason})` : "";
-  const fix = row.suggestedFix ? ` ${row.suggestedFix}` : "";
-  return `${label} is not ready${reason}.${fix}`;
-}
-
-function findClawdProfileName(cfg: MaumauConfig): string | undefined {
-  const resolved = resolveBrowserConfig(cfg.browser, cfg);
-  return Object.entries(resolved.profiles).find(([, profile]) => profile?.driver === "clawd")?.[0];
 }
 
 function buildSearchQuery(query: string | undefined, lookbackDays: number): string {
@@ -242,6 +218,104 @@ function sumTotalsByCurrency(items: GmailReceiptDigestItem[]): Record<string, nu
     totals.set(item.currency, Math.round((current + item.amountValue) * 100) / 100);
   }
   return Object.fromEntries(totals);
+}
+
+function normalizeFingerprintPart(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function buildExpenseFingerprint(item: GmailReceiptDigestItem): string | undefined {
+  if (!item.currency || typeof item.amountValue !== "number") {
+    return undefined;
+  }
+  return [
+    normalizeFingerprintPart(item.merchant),
+    normalizeFingerprintPart(item.subject),
+    normalizeFingerprintPart(item.dateText),
+    item.currency.trim().toUpperCase(),
+    item.amountValue.toFixed(2),
+  ].join("|");
+}
+
+function parseReceiptDateText(dateText: string | undefined, nowMs: number): number | undefined {
+  const trimmed = trimToUndefined(dateText);
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const monthDay = /^([A-Za-z]{3,9})\s+(\d{1,2})(?:,\s*(\d{4}))?$/.exec(trimmed);
+  if (monthDay) {
+    const year = monthDay[3] ? Number(monthDay[3]) : new Date(nowMs).getFullYear();
+    const parsed = Date.parse(`${monthDay[1]} ${monthDay[2]} ${year}`);
+    if (Number.isFinite(parsed)) {
+      const futureToleranceMs = 7 * 24 * 60 * 60 * 1_000;
+      if (!monthDay[3] && parsed > nowMs + futureToleranceMs) {
+        return Date.parse(`${monthDay[1]} ${monthDay[2]} ${year - 1}`);
+      }
+      return parsed;
+    }
+  }
+
+  const dayMonth = /^(\d{1,2})\s+([A-Za-z]{3,9})(?:\s+(\d{4}))?$/.exec(trimmed);
+  if (dayMonth) {
+    const year = dayMonth[3] ? Number(dayMonth[3]) : new Date(nowMs).getFullYear();
+    const parsed = Date.parse(`${dayMonth[2]} ${dayMonth[1]} ${year}`);
+    if (Number.isFinite(parsed)) {
+      const futureToleranceMs = 7 * 24 * 60 * 60 * 1_000;
+      if (!dayMonth[3] && parsed > nowMs + futureToleranceMs) {
+        return Date.parse(`${dayMonth[2]} ${dayMonth[1]} ${year - 1}`);
+      }
+      return parsed;
+    }
+  }
+
+  const direct =
+    /\d{4}/.test(trimmed) || trimmed.includes("/") || trimmed.includes("-")
+      ? Date.parse(trimmed)
+      : Number.NaN;
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+
+  return undefined;
+}
+
+async function persistDigestItemsToWallet(
+  items: GmailReceiptDigestItem[],
+  nowMs: number,
+): Promise<number> {
+  let recorded = 0;
+  for (const item of items) {
+    const fingerprint = buildExpenseFingerprint(item);
+    if (!fingerprint || !item.currency || typeof item.amountValue !== "number") {
+      continue;
+    }
+    await appendWalletEvent({
+      kind: "expense",
+      completedAtMs: nowMs,
+      source: "email_receipt",
+      fingerprint,
+      merchant: item.merchant,
+      category: item.category,
+      currency: item.currency,
+      amountValue: item.amountValue,
+      occurredAtMs: parseReceiptDateText(item.dateText, nowMs),
+      subject: item.subject,
+      dateText: item.dateText,
+    });
+    recorded += 1;
+  }
+  return recorded;
+}
+
+function countPersistableDigestItems(items: GmailReceiptDigestItem[]): number {
+  let count = 0;
+  for (const item of items) {
+    if (buildExpenseFingerprint(item)) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function buildReceiptExtractionScript(limit: number): string {
@@ -433,110 +507,60 @@ async function runLaneDigest(params: {
   });
 }
 
-function resolvePrimaryLane(params: {
-  capabilities: CapabilityRow[];
-  cfg: MaumauConfig;
-}): GmailDigestLane {
-  const existingRow = findCapabilityRow(params.capabilities, "browser-existing-session");
-  if (existingRow?.ready) {
-    return {
-      capabilityId: "browser-existing-session",
-      pathLabel: "Browser existing-session",
-      profile: "user",
-    };
+function resolveDigestLane(cfg: MaumauConfig, requestedProfile?: string): GmailDigestLane {
+  const resolved = resolveBrowserConfig(cfg.browser, cfg);
+  const profileName = trimToUndefined(requestedProfile) ?? resolved.defaultProfile;
+  const profile = resolveProfile(resolved, profileName);
+  if (!profile) {
+    throw new Error(
+      `Browser profile "${profileName}" is not configured. Use action=profiles to inspect available profiles.`,
+    );
   }
-
-  const clawdRow = findCapabilityRow(params.capabilities, "clawd-cursor");
-  const clawdProfile = findClawdProfileName(params.cfg);
-  if (clawdRow?.ready && clawdProfile) {
-    return {
-      capabilityId: "clawd-cursor",
-      pathLabel: "Clawd Cursor desktop control",
-      profile: clawdProfile,
-    };
-  }
-
-  throw new Error(
-    existingRow && !existingRow.ready
-      ? describeCapabilityBlock(existingRow, "Browser existing-session")
-      : describeCapabilityBlock(clawdRow, "Clawd Cursor desktop control"),
-  );
-}
-
-function resolveClawdFallbackLane(params: {
-  capabilities: CapabilityRow[];
-  cfg: MaumauConfig;
-}): GmailDigestLane | null {
-  const clawdRow = findCapabilityRow(params.capabilities, "clawd-cursor");
-  const clawdProfile = findClawdProfileName(params.cfg);
-  if (!clawdRow?.ready || !clawdProfile) {
-    return null;
+  const capabilities = getBrowserProfileCapabilities(profile);
+  if (capabilities.mode === "remote-cdp") {
+    throw new Error(
+      `receipt_digest requires a local host browser profile. Profile "${profileName}" is remote.`,
+    );
   }
   return {
-    capabilityId: "clawd-cursor",
-    pathLabel: "Clawd Cursor desktop control",
-    profile: clawdProfile,
+    capabilityId: `browser-profile:${profileName}`,
+    pathLabel:
+      capabilities.mode === "local-existing-session"
+        ? `Browser profile "${profileName}" (existing-session)`
+        : `Browser profile "${profileName}"`,
+    profile: profileName,
   };
-}
-
-function shouldAttemptClawdFallback(page: GmailDigestExtractedPage): boolean {
-  return page.state === "sign_in_required" || page.state === "not_gmail";
 }
 
 export async function runGmailReceiptDigest(params: {
   cfg: MaumauConfig;
   baseUrl: string | undefined;
   deps: BrowserDeps;
-  capabilityOpts: SessionCapabilityOptions;
-  listSessionCapabilities?: typeof listSessionCapabilities;
+  profile?: string;
   query?: string;
   lookbackDays?: number;
   limit?: number;
+  persistToWallet?: boolean;
 }): Promise<GmailReceiptDigestResult> {
   const lookbackDays = normalizePositiveInteger(params.lookbackDays, DEFAULT_LOOKBACK_DAYS, 365);
   const limit = normalizePositiveInteger(params.limit, DEFAULT_RESULT_LIMIT, MAX_RESULT_LIMIT);
   const searchQuery = buildSearchQuery(params.query, lookbackDays);
   const searchUrl = buildSearchUrl(searchQuery);
-  const capabilityLister = params.listSessionCapabilities ?? listSessionCapabilities;
-  const capabilities = await capabilityLister(params.capabilityOpts);
-  const primaryLane = resolvePrimaryLane({
-    capabilities,
-    cfg: params.cfg,
-  });
+  const selectedLane = resolveDigestLane(params.cfg, params.profile);
+  let page: GmailDigestExtractedPage = { state: "not_gmail", items: [] };
 
-  let page = await runLaneDigest({
-    lane: primaryLane,
-    deps: params.deps,
-    baseUrl: params.baseUrl,
-    searchQuery,
-    searchUrl,
-    limit,
-  });
-  let selectedLane = primaryLane;
-  let usedFallback = false;
-  let fallbackReason: string | undefined;
-
-  if (primaryLane.capabilityId === "browser-existing-session" && shouldAttemptClawdFallback(page)) {
-    const clawdLane = resolveClawdFallbackLane({
-      capabilities,
-      cfg: params.cfg,
+  try {
+    page = await runLaneDigest({
+      lane: selectedLane,
+      deps: params.deps,
+      baseUrl: params.baseUrl,
+      searchQuery,
+      searchUrl,
+      limit,
     });
-    if (clawdLane) {
-      usedFallback = true;
-      fallbackReason =
-        page.state === "sign_in_required"
-          ? "Browser existing-session did not expose a signed-in Gmail view."
-          : "Browser existing-session did not land on a usable Gmail page.";
-      page = await runLaneDigest({
-        lane: clawdLane,
-        deps: params.deps,
-        baseUrl: params.baseUrl,
-        searchQuery,
-        searchUrl,
-        limit,
-      });
-      selectedLane = clawdLane;
-    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${selectedLane.pathLabel} was unavailable. ${detail}`);
   }
 
   if (page.state === "sign_in_required") {
@@ -551,6 +575,10 @@ export async function runGmailReceiptDigest(params: {
   }
 
   const items = normalizeDigestItems(page.items, limit);
+  const nowMs = Date.now();
+  const persistableCount = countPersistableDigestItems(items);
+  const recorded =
+    params.persistToWallet === true ? await persistDigestItemsToWallet(items, nowMs) : 0;
   return {
     workflow: "gmail_receipt_digest",
     capabilityPathUsed: selectedLane.pathLabel,
@@ -561,7 +589,13 @@ export async function runGmailReceiptDigest(params: {
     items,
     totalsByCurrency: sumTotalsByCurrency(items),
     count: items.length,
-    usedFallback,
-    fallbackReason,
+    usedFallback: false,
+    persistedToWallet:
+      params.persistToWallet === true
+        ? {
+            candidates: persistableCount,
+            recorded,
+          }
+        : undefined,
   };
 }

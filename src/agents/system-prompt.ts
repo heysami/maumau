@@ -88,6 +88,96 @@ function buildTimeSection(params: { userTimezone?: string }) {
   return ["## Current Date & Time", `Time zone: ${params.userTimezone}`, ""];
 }
 
+function extractMarkdownSection(content: string, heading: string): string | null {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const headingIndex = normalized.indexOf(heading);
+  if (headingIndex < 0) {
+    return null;
+  }
+  const sectionStart = normalized.indexOf("\n", headingIndex);
+  if (sectionStart < 0) {
+    return "";
+  }
+  const remaining = normalized.slice(sectionStart + 1);
+  const nextHeadingMatch = remaining.match(/\n##\s+/u);
+  const nextRuleMatch = remaining.match(/\n---\s*(?:\n|$)/u);
+  const endIndexCandidates = [
+    nextHeadingMatch?.index,
+    nextRuleMatch?.index,
+    remaining.length,
+  ].filter((value): value is number => typeof value === "number");
+  const endIndex = Math.min(...endIndexCandidates);
+  return remaining.slice(0, endIndex);
+}
+
+function isUserLifeSnapshotEmpty(content: string): boolean {
+  const section = extractMarkdownSection(content, "## Life Snapshot");
+  if (!section) {
+    return false;
+  }
+  let currentFieldHasValue = false;
+  for (const rawLine of section.split(/\r?\n/u)) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("_(")) {
+      continue;
+    }
+    const fieldMatch = trimmed.match(/^-\s+\*\*[^*]+:\*\*\s*(.*)$/u);
+    if (fieldMatch) {
+      currentFieldHasValue = Boolean(fieldMatch[1]?.trim());
+      if (currentFieldHasValue) {
+        return false;
+      }
+      continue;
+    }
+    if (currentFieldHasValue) {
+      return false;
+    }
+    if (!trimmed.startsWith("- **")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function buildLifeSnapshotNudgeSection(params: {
+  contextFiles: EmbeddedContextFile[];
+  isMinimal: boolean;
+}) {
+  if (params.isMinimal) {
+    return [];
+  }
+  const hasBootstrap = params.contextFiles.some((file) => {
+    const normalizedPath = file.path?.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath?.split("/").pop()?.toLowerCase();
+    return baseName === "bootstrap.md";
+  });
+  if (hasBootstrap) {
+    return [];
+  }
+  const userFile = params.contextFiles.find((file) => {
+    const normalizedPath = file.path?.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath?.split("/").pop()?.toLowerCase();
+    return baseName === "user.md";
+  });
+  if (!userFile?.content || !isUserLifeSnapshotEmpty(userFile.content)) {
+    return [];
+  }
+  return [
+    "## User Snapshot",
+    "USER.md still has an empty Life Snapshot.",
+    "When the moment is natural, guide the user through it instead of dropping a tiny intake note at the end of a long unrelated reply.",
+    "Start with one focused, skippable prompt about what their normal day or week looks like.",
+    "If they engage, use later turns to move naturally into hobbies, exercise, and the shape of their work or study life.",
+    "Only later, if it feels welcome and useful, ask about family context such as siblings, parents, partner, or other important people.",
+    "Reflect back what you learned before moving to the next step, and keep it to one focused step at a time.",
+    'When they give real profile facts, update USER.md in the same turn before you claim it is locked in, saved, or remembered.',
+    "Do not interrupt an urgent concrete task just to do this; finish the current help first.",
+    'If they skip or say "not now," respect that and move on.',
+    "",
+  ];
+}
+
 function buildReplyTagsSection(isMinimal: boolean) {
   if (isMinimal) {
     return [];
@@ -628,6 +718,13 @@ export function buildAgentSystemPrompt(params: {
   const validContextFiles = contextFiles.filter(
     (file) => typeof file.path === "string" && file.path.trim().length > 0,
   );
+  const lifeSnapshotNudgeSection = buildLifeSnapshotNudgeSection({
+    contextFiles: validContextFiles,
+    isMinimal,
+  });
+  if (lifeSnapshotNudgeSection.length > 0) {
+    lines.push(...lifeSnapshotNudgeSection);
+  }
   if (validContextFiles.length > 0) {
     lines.push("# Project Context", "");
     if (validContextFiles.length > 0) {

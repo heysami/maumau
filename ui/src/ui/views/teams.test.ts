@@ -88,6 +88,7 @@ describe("renderTeams", () => {
 
     expect(container.textContent).toContain("Add Vibe Coder");
     expect(container.textContent).toContain("Add Design Studio");
+    expect(container.textContent).toContain("Add Life Improvement Team");
   });
 
   it("opens the prompt action for the selected team and workflow", async () => {

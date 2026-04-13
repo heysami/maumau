@@ -15,6 +15,7 @@ import {
   createBlankTeamConfig,
   DESIGN_STUDIO_TEAM_ID,
   ensureBundledTeamPresetConfig,
+  LIFE_IMPROVEMENT_TEAM_ID,
   STARTER_TEAM_ID,
 } from "../../../src/teams/presets.js";
 import { t } from "../i18n/index.ts";
@@ -928,6 +929,9 @@ export function renderApp(state: AppViewState) {
       walletStartDate: state.dashboardWalletStartDate,
       walletEndDate: state.dashboardWalletEndDate,
       walletTimeZone: state.dashboardWalletTimeZone,
+      walletGranularity: state.dashboardWalletGranularity,
+      walletBreakdown: state.dashboardWalletBreakdown,
+      walletCurrency: state.dashboardWalletCurrency,
       calendarResult: state.dashboardCalendarResult,
       calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
       userChannelsResult: state.dashboardUserChannelsResult,
@@ -952,6 +956,9 @@ export function renderApp(state: AppViewState) {
       workshopSaving: state.dashboardWorkshopSaving,
       workshopSaveError: state.dashboardWorkshopSaveError,
       calendarView: state.dashboardCalendarView,
+      calendarFilters: state.dashboardCalendarFilters,
+      routineSelection: state.dashboardRoutineSelection,
+      profileSelection: state.dashboardProfileSelection,
       teamSelection: state.dashboardTeamSelection,
       memoryAgentId: state.dashboardMemoryAgentId,
       agentPanel: state.dashboardAgentPanel,
@@ -1052,7 +1059,9 @@ export function renderApp(state: AppViewState) {
         const items =
           tab === "saved"
             ? (state.dashboardSnapshot?.workshopSaved ?? [])
-            : (state.dashboardSnapshot?.workshop ?? []);
+            : tab === "agent-apps"
+              ? (state.dashboardSnapshot?.workshopAgentApps ?? [])
+              : (state.dashboardSnapshot?.workshop ?? []);
         state.dashboardWorkshopSelectedId =
           items.find((item) => item.id === state.dashboardWorkshopSelectedId)?.id ??
           items[0]?.id ??
@@ -1094,6 +1103,15 @@ export function renderApp(state: AppViewState) {
         state.dashboardWalletTimeZone = timeZone;
         void loadDashboardData(state);
       },
+      onWalletGranularityChange: (granularity) => {
+        state.dashboardWalletGranularity = granularity;
+      },
+      onWalletBreakdownChange: (breakdown) => {
+        state.dashboardWalletBreakdown = breakdown;
+      },
+      onWalletCurrencyChange: (currency) => {
+        state.dashboardWalletCurrency = currency;
+      },
       onWalletPresetSelect: (days) => {
         if (state.dashboardWalletDateDebounceTimer != null) {
           clearTimeout(state.dashboardWalletDateDebounceTimer);
@@ -1116,6 +1134,15 @@ export function renderApp(state: AppViewState) {
       onCalendarJumpToday: () => {
         state.dashboardCalendarAnchorAtMs = Date.now();
         void loadDashboardData(state);
+      },
+      onCalendarFiltersChange: (filters) => {
+        state.dashboardCalendarFilters = filters;
+      },
+      onSelectRoutine: (routineId) => {
+        state.dashboardRoutineSelection = routineId;
+      },
+      onSelectProfileAgent: (agentId) => {
+        state.dashboardProfileSelection = agentId;
       },
       onCalendarSelectDay: (anchorAtMs, view) => {
         const withinVisibleWindow =
@@ -1309,10 +1336,7 @@ export function renderApp(state: AppViewState) {
       },
       onMauOfficeEditorDeleteSelection: () => {
         setMauOfficeEditorDraft(
-          removeSceneSelection(
-            mauOfficeEditorDraft,
-            state.mauOfficeEditorSelection ?? null,
-          ),
+          removeSceneSelection(mauOfficeEditorDraft, state.mauOfficeEditorSelection ?? null),
           {
             selection: null,
           },
@@ -2678,9 +2702,17 @@ export function renderApp(state: AppViewState) {
                     state.teamsSelectedWorkflowId = workflowId;
                   },
                   onCreateTeam: (preset) => {
-                    if (preset === "vibe-coder" || preset === "design-studio") {
+                    if (
+                      preset === "vibe-coder" ||
+                      preset === "design-studio" ||
+                      preset === "life-improvement"
+                    ) {
                       const presetTeamId =
-                        preset === "vibe-coder" ? STARTER_TEAM_ID : DESIGN_STUDIO_TEAM_ID;
+                        preset === "vibe-coder"
+                          ? STARTER_TEAM_ID
+                          : preset === "design-studio"
+                            ? DESIGN_STUDIO_TEAM_ID
+                            : LIFE_IMPROVEMENT_TEAM_ID;
                       const nextConfig = ensureBundledTeamPresetConfig(
                         (getCurrentConfigValue() ?? {}) as MaumauConfig,
                         presetTeamId,

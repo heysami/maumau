@@ -79,6 +79,24 @@ describe("ensureAgentWorkspace", () => {
 
     await expectBootstrapSeeded(tempDir);
     expect((await readWorkspaceState(tempDir)).setupCompletedAt).toBeUndefined();
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("Life Snapshot (Optional)");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("walk me through what your days usually look like");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("Do not tell the user something is \"locked in\"");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("Do not close bootstrap without handling that choice.");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_USER_FILENAME), "utf-8"),
+    ).resolves.toContain("## Life Snapshot");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_USER_FILENAME), "utf-8"),
+    ).resolves.toContain("**Family / siblings / parents:**");
   });
 
   it("recovers partial initialization by creating BOOTSTRAP.md when marker is missing", async () => {

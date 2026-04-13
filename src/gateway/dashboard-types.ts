@@ -105,6 +105,34 @@ export type DashboardWorkshopItem = {
   savedAtMs?: number;
 };
 
+export type DashboardAgentAppStatus = "proposed" | "building" | "ready";
+
+export type DashboardAgentAppItem = {
+  kind: "agent_app";
+  id: string;
+  title: string;
+  summary?: string;
+  updatedAtMs?: number;
+  status: DashboardAgentAppStatus;
+  ownerLabel?: string;
+  ownerAgentId?: string;
+  whyNow?: string;
+  howItHelps?: string;
+  suggestedScope?: string;
+  sessionKey?: string;
+  taskId?: string;
+  taskTitle?: string;
+  previewUrl?: string;
+  embedUrl?: string;
+  artifactPath?: string;
+  embeddable: boolean;
+  workspaceId?: string;
+  workspaceLabel?: string;
+  projectName?: string;
+  projectKey?: string;
+  linkedWorkshopKind?: "recent" | "saved";
+};
+
 export type DashboardSavedWorkshopItem = {
   id: string;
   sessionKey?: string;
@@ -140,6 +168,8 @@ export type DashboardCalendarEventStatus =
   | "error"
   | "needs_action";
 
+export type DashboardCalendarActivityScope = "user" | "group" | "global";
+
 export type DashboardCalendarEvent = {
   id: string;
   title: string;
@@ -148,6 +178,7 @@ export type DashboardCalendarEvent = {
   startAtMs: number;
   endAtMs?: number;
   description?: string;
+  activityScope?: DashboardCalendarActivityScope;
   jobId?: string;
   routineId?: string;
   agentId?: string;
@@ -155,6 +186,16 @@ export type DashboardCalendarEvent = {
 };
 
 export type DashboardRoutineVisibility = "user_facing" | "hidden";
+export type DashboardRoutineScheduleKind = "at" | "every" | "cron";
+export type DashboardRoutinePreviewView = "day" | "week" | "month";
+
+export type DashboardRoutinePreview = {
+  view: DashboardRoutinePreviewView;
+  anchorAtMs: number;
+  startAtMs: number;
+  endAtMs: number;
+  runAtMs: number[];
+};
 
 export type DashboardRoutine = {
   id: string;
@@ -162,13 +203,67 @@ export type DashboardRoutine = {
   title: string;
   description?: string;
   enabled: boolean;
+  scheduleKind: DashboardRoutineScheduleKind;
   scheduleLabel: string;
+  preview: DashboardRoutinePreview;
   nextRunAtMs?: number;
   lastRunAtMs?: number;
   lastStatus?: "ok" | "error" | "skipped";
   agentId?: string;
   visibility: DashboardRoutineVisibility;
   visibilitySource: "stored" | "fallback";
+};
+
+export type DashboardLifeProfileStage = "foundational" | "growth" | "later";
+export type DashboardLifeProfileStatus = "recorded" | "missing" | "future";
+
+export type DashboardLifeProfileField = {
+  key: string;
+  label: string;
+  description: string;
+  stage: DashboardLifeProfileStage;
+  status: DashboardLifeProfileStatus;
+  value?: string;
+};
+
+export type DashboardLifeProfileNeed = {
+  fieldKey: string;
+  label: string;
+  description: string;
+  stage: DashboardLifeProfileStage;
+  status: DashboardLifeProfileStatus;
+  value?: string;
+  why: string;
+};
+
+export type DashboardLifeProfileAgent = {
+  agentId: string;
+  name: string;
+  role: string;
+  domainId: string;
+  domainLabel: string;
+  covers: string;
+  relatesTo: string;
+  recordedCount: number;
+  missingCount: number;
+  futureCount: number;
+  needs: DashboardLifeProfileNeed[];
+};
+
+export type DashboardLifeProfileResult = {
+  generatedAtMs: number;
+  teamConfigured: boolean;
+  bootstrapPending: boolean;
+  sourceStatus: "loaded" | "missing";
+  sourceLabel: string;
+  recordedFieldCount: number;
+  missingFieldCount: number;
+  futureFieldCount: number;
+  recordedNeedCount: number;
+  missingNeedCount: number;
+  futureNeedCount: number;
+  fields: DashboardLifeProfileField[];
+  agents: DashboardLifeProfileAgent[];
 };
 
 export type DashboardRecentMemoryEntry = {
@@ -210,6 +305,7 @@ export type DashboardWorkshopResult = {
   generatedAtMs: number;
   items: DashboardWorkshopItem[];
   savedItems: DashboardSavedWorkshopItem[];
+  agentApps: DashboardAgentAppItem[];
 };
 
 export type DashboardWorkshopSaveResult = {
@@ -455,9 +551,49 @@ export type DashboardTeamRunsResult = {
 export type DashboardWalletCardId =
   | "llm"
   | "twilio"
+  | "vapi"
   | "deepgram-realtime"
   | "deepgram-audio"
   | "elevenlabs";
+
+export type DashboardWalletSpendGranularity = "day" | "week" | "month" | "year";
+export type DashboardWalletSpendBreakdown = "category" | "merchant";
+
+export type DashboardWalletSpendSegment = {
+  key: string;
+  label: string;
+  totalValue: number;
+  records: number;
+};
+
+export type DashboardWalletSpendBar = {
+  key: string;
+  label: string;
+  startAtMs: number;
+  endAtMs: number;
+  totalValue: number;
+  records: number;
+  segments: DashboardWalletSpendSegment[];
+};
+
+export type DashboardWalletSpendChart = {
+  granularity: DashboardWalletSpendGranularity;
+  breakdown: DashboardWalletSpendBreakdown;
+  currency: string;
+  totalValue: number;
+  totalRecords: number;
+  maxBarValue: number;
+  bars: DashboardWalletSpendBar[];
+  legend: DashboardWalletSpendSegment[];
+};
+
+export type DashboardWalletSpendResult = {
+  records: number;
+  lastRecordedAtMs?: number;
+  currencies: string[];
+  charts: DashboardWalletSpendChart[];
+  note?: string;
+};
 
 export type DashboardWalletCard = {
   id: DashboardWalletCardId;
@@ -480,6 +616,7 @@ export type DashboardWalletResult = {
   startDate: string;
   endDate: string;
   cards: DashboardWalletCard[];
+  spending: DashboardWalletSpendResult;
 };
 
 export type DashboardSnapshot = {
@@ -488,7 +625,9 @@ export type DashboardSnapshot = {
   tasks: DashboardWorkItem[];
   workshop: DashboardWorkshopItem[];
   workshopSaved: DashboardSavedWorkshopItem[];
+  workshopAgentApps: DashboardAgentAppItem[];
   calendar: DashboardCalendarEvent[];
   routines: DashboardRoutine[];
+  lifeProfile: DashboardLifeProfileResult;
   memories: DashboardRecentMemoryEntry[];
 };

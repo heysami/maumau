@@ -566,6 +566,77 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).not.toContain("# Project Context");
   });
 
+  it("nudges the agent to ask one skippable life snapshot question when bootstrap is done but USER.md is still blank", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+- **What they want more help with:**
+- **Energy / health / sleep:**
+`,
+        },
+      ],
+    });
+
+    expect(prompt).toContain("## User Snapshot");
+    expect(prompt).toContain("USER.md still has an empty Life Snapshot.");
+    expect(prompt).toContain("normal day or week looks like");
+    expect(prompt).toContain("hobbies, exercise, and the shape of their work or study life");
+    expect(prompt).toContain("update USER.md in the same turn");
+    expect(prompt).toContain("Do not interrupt an urgent concrete task just to do this");
+  });
+
+  it("does not add the life snapshot nudge when BOOTSTRAP.md is still present", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+- **What they want more help with:**
+`,
+        },
+        {
+          path: "BOOTSTRAP.md",
+          content: "# bootstrap",
+        },
+      ],
+    });
+
+    expect(prompt).not.toContain("## User Snapshot");
+  });
+
+  it("does not add the life snapshot nudge when USER.md already has life snapshot content", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+  sleep and stress
+- **What they want more help with:**
+`,
+        },
+      ],
+    });
+
+    expect(prompt).not.toContain("## User Snapshot");
+  });
+
   it("summarizes the message tool when available", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/maumau",

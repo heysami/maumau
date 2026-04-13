@@ -16,6 +16,11 @@ import type {
 } from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
+import type {
+  MauOfficeMarkerRole,
+  MauOfficeSceneConfig,
+  MauOfficeZoneId,
+} from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
@@ -52,11 +57,6 @@ import type {
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { SessionLogEntry } from "./views/usage.ts";
-import type {
-  MauOfficeMarkerRole,
-  MauOfficeSceneConfig,
-  MauOfficeZoneId,
-} from "./mau-office-scene.ts";
 
 export type AppViewState = {
   settings: UiSettings;
@@ -246,6 +246,9 @@ export type AppViewState = {
   dashboardWalletStartDate: string;
   dashboardWalletEndDate: string;
   dashboardWalletTimeZone: "local" | "utc";
+  dashboardWalletGranularity: import("./types.ts").DashboardWalletSpendGranularity;
+  dashboardWalletBreakdown: import("./types.ts").DashboardWalletSpendBreakdown;
+  dashboardWalletCurrency: string | null;
   dashboardCalendarResult: DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
   dashboardUserChannelsResult: DashboardUserChannelsResult | null;
@@ -262,12 +265,13 @@ export type AppViewState = {
   dashboardDoneFromDate: string;
   dashboardDoneToDate: string;
   dashboardWorkshopSelectedId: string | null;
-  dashboardWorkshopTab: "saved" | "recent";
+  dashboardWorkshopTab: "saved" | "recent" | "agent-apps";
   dashboardWorkshopSelectedIds: Set<string>;
   dashboardWorkshopProjectDraft: string;
   dashboardWorkshopSaving: boolean;
   dashboardWorkshopSaveError: string | null;
   dashboardCalendarView: "month" | "week" | "day";
+  dashboardProfileSelection: string | null;
   dashboardTeamSelection: string | null;
   dashboardMemoryAgentId: string | null;
   dashboardAgentPanel: "memory" | "scope";

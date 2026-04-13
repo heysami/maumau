@@ -46,7 +46,7 @@ type DashboardHost = {
   dashboardTeamRuns: DashboardTeamRunsResult | null;
   dashboardTaskFilter: DashboardTaskFilter;
   dashboardWorkshopSelectedId: string | null;
-  dashboardWorkshopTab: "saved" | "recent";
+  dashboardWorkshopTab: "saved" | "recent" | "agent-apps";
   dashboardWorkshopSelectedIds: Set<string>;
   dashboardWorkshopProjectDraft: string;
   dashboardWorkshopSaving: boolean;
@@ -105,8 +105,24 @@ function createEmptyDashboardSnapshot(): DashboardSnapshot {
     tasks: [],
     workshop: [],
     workshopSaved: [],
+    workshopAgentApps: [],
     calendar: [],
     routines: [],
+    lifeProfile: {
+      generatedAtMs: 0,
+      teamConfigured: false,
+      bootstrapPending: false,
+      sourceStatus: "missing",
+      sourceLabel: "main/USER.md",
+      recordedFieldCount: 0,
+      missingFieldCount: 0,
+      futureFieldCount: 0,
+      recordedNeedCount: 0,
+      missingNeedCount: 0,
+      futureNeedCount: 0,
+      fields: [],
+      agents: [],
+    },
     memories: [],
   };
 }
@@ -131,6 +147,7 @@ function applyTasks(snapshot: DashboardSnapshot, result: DashboardTasksResult) {
 function applyWorkshop(snapshot: DashboardSnapshot, result: DashboardWorkshopResult) {
   snapshot.workshop = result.items;
   snapshot.workshopSaved = result.savedItems;
+  snapshot.workshopAgentApps = result.agentApps;
   snapshot.generatedAtMs = Math.max(snapshot.generatedAtMs, result.generatedAtMs);
 }
 
@@ -139,16 +156,34 @@ function synchronizeWorkshopState(
   result: DashboardWorkshopResult,
   opts?: { preferSaved?: boolean; defaultToSaved?: boolean },
 ) {
-  if (opts?.preferSaved && result.savedItems.length > 0) {
+  const hasSaved = result.savedItems.length > 0;
+  const hasRecent = result.items.length > 0;
+  const hasAgentApps = result.agentApps.length > 0;
+  if (opts?.preferSaved && hasSaved) {
     host.dashboardWorkshopTab = "saved";
-  } else if (result.savedItems.length === 0) {
+  } else if (opts?.defaultToSaved && hasSaved) {
+    host.dashboardWorkshopTab = "saved";
+  } else if (host.dashboardWorkshopTab === "saved" && hasSaved) {
+    host.dashboardWorkshopTab = "saved";
+  } else if (host.dashboardWorkshopTab === "recent" && hasRecent) {
     host.dashboardWorkshopTab = "recent";
-  } else if (opts?.defaultToSaved) {
+  } else if (host.dashboardWorkshopTab === "agent-apps" && hasAgentApps) {
+    host.dashboardWorkshopTab = "agent-apps";
+  } else if (hasRecent) {
+    host.dashboardWorkshopTab = "recent";
+  } else if (hasAgentApps) {
+    host.dashboardWorkshopTab = "agent-apps";
+  } else if (hasSaved) {
     host.dashboardWorkshopTab = "saved";
-  } else if (host.dashboardWorkshopTab !== "saved" && host.dashboardWorkshopTab !== "recent") {
-    host.dashboardWorkshopTab = "saved";
+  } else {
+    host.dashboardWorkshopTab = "recent";
   }
-  const activeItems = host.dashboardWorkshopTab === "saved" ? result.savedItems : result.items;
+  const activeItems =
+    host.dashboardWorkshopTab === "saved"
+      ? result.savedItems
+      : host.dashboardWorkshopTab === "agent-apps"
+        ? result.agentApps
+        : result.items;
   if (!activeItems.some((item) => item.id === host.dashboardWorkshopSelectedId)) {
     host.dashboardWorkshopSelectedId = activeItems[0]?.id ?? null;
   }
@@ -242,7 +277,11 @@ async function loadDashboardPageData(host: DashboardHost): Promise<void> {
     }
     case "workshop": {
       const snapshot = ensureDashboardSnapshot(host);
-      const hasWorkshopData = Boolean(snapshot.workshop.length || snapshot.workshopSaved.length);
+      const hasWorkshopData = Boolean(
+        snapshot.workshop.length ||
+        snapshot.workshopSaved.length ||
+        snapshot.workshopAgentApps.length,
+      );
       const workshop = await host.client.request<DashboardWorkshopResult>("dashboard.workshop", {});
       applyWorkshop(snapshot, workshop);
       synchronizeWorkshopState(host, workshop, { defaultToSaved: !hasWorkshopData });
@@ -262,6 +301,13 @@ async function loadDashboardPageData(host: DashboardHost): Promise<void> {
       const snapshot = ensureDashboardSnapshot(host);
       const routines = await host.client.request<DashboardRoutinesResult>("dashboard.routines", {});
       applyRoutines(snapshot, routines);
+      return;
+    }
+    case "profile": {
+      host.dashboardSnapshot = await host.client.request<DashboardSnapshot>(
+        "dashboard.snapshot",
+        {},
+      );
       return;
     }
     case "user-channels": {

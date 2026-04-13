@@ -191,6 +191,9 @@ describe("applyLocalSetupWorkspaceConfig", () => {
         }),
       }),
     );
+    expect(result.teams?.list?.map((team) => team.id)).toEqual(
+      expect.arrayContaining(["main", "vibe-coder", "life-improvement"]),
+    );
   });
 
   it("detects serve as the fresh-install default when Tailscale is running", async () => {

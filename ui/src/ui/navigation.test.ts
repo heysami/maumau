@@ -52,6 +52,7 @@ describe("iconForTab", () => {
     expect(iconForTab("dashboardTasks")).toBe("checkSquare");
     expect(iconForTab("dashboardCalendar")).toBe("calendarDays");
     expect(iconForTab("dashboardRoutines")).toBe("repeat2");
+    expect(iconForTab("dashboardProfile")).toBe("book");
     expect(iconForTab("dashboardTeams")).toBe("users");
     expect(iconForTab("dashboardUserChannels")).toBe("link");
     expect(iconForTab("dashboardMemories")).toBe("brain");
@@ -86,6 +87,7 @@ describe("titleForTab", () => {
     expect(titleForTab("dashboardToday")).toBe("Today");
     expect(titleForTab("dashboardWallet")).toBe("Wallet");
     expect(titleForTab("dashboardMauOffice")).toBe("MauOffice");
+    expect(titleForTab("dashboardProfile")).toBe("Life Profile");
     expect(titleForTab("dashboardUserChannels")).toBe("User Channels");
     expect(titleForTab("dashboardMemories")).toBe("Agents");
     expect(titleForTab("cron")).toBe("Cron Jobs");
@@ -114,6 +116,7 @@ describe("subtitleForTab", () => {
     expect(subtitleForTab("dashboardMauOffice")).toContain("pixel office");
     expect(subtitleForTab("dashboardToday")).toContain("scheduled");
     expect(subtitleForTab("dashboardWallet")).toContain("provider usage");
+    expect(subtitleForTab("dashboardProfile")).toContain("life-improvement");
     expect(subtitleForTab("dashboardUserChannels")).toContain("sender allowlists");
   });
 
@@ -187,6 +190,7 @@ describe("pathForTab", () => {
     expect(pathForTab("dashboardToday")).toBe("/dashboard/today");
     expect(pathForTab("dashboardWallet")).toBe("/dashboard/wallet");
     expect(pathForTab("dashboardMauOffice")).toBe("/dashboard/mau-office");
+    expect(pathForTab("dashboardProfile")).toBe("/dashboard/profile");
     expect(pathForTab("dashboardUserChannels")).toBe("/dashboard/user-channels");
     expect(pathForTab("dashboardMemories")).toBe("/dashboard/agents");
   });
@@ -206,6 +210,7 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/dashboard/today")).toBe("dashboardToday");
     expect(tabFromPath("/dashboard/wallet")).toBe("dashboardWallet");
     expect(tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
+    expect(tabFromPath("/dashboard/profile")).toBe("dashboardProfile");
     expect(tabFromPath("/dashboard/user-channels")).toBe("dashboardUserChannels");
   });
 
@@ -266,11 +271,13 @@ describe("dashboard route helpers", () => {
     expect(tabForDashboardPage("mau-office")).toBe("dashboardMauOffice");
     expect(tabForDashboardPage("user-channels")).toBe("dashboardUserChannels");
     expect(tabForDashboardPage("memories")).toBe("dashboardMemories");
+    expect(tabForDashboardPage("profile")).toBe("dashboardProfile");
   });
 
   it("maps dashboard tabs back to pages", () => {
     expect(dashboardPageForTab("dashboardToday")).toBe("today");
     expect(dashboardPageForTab("dashboardWorkshop")).toBe("workshop");
+    expect(dashboardPageForTab("dashboardProfile")).toBe("profile");
     expect(dashboardPageForTab("dashboardUserChannels")).toBe("user-channels");
     expect(dashboardPageForTab("chat")).toBeNull();
   });

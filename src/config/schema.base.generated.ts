@@ -551,6 +551,324 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 },
                 additionalProperties: false,
               },
+              scene: {
+                type: "object",
+                properties: {
+                  version: {
+                    type: "number",
+                    const: 1,
+                  },
+                  zoneRows: {
+                    type: "array",
+                    items: {
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            type: "string",
+                            const: "desk",
+                          },
+                          {
+                            type: "string",
+                            const: "meeting",
+                          },
+                          {
+                            type: "string",
+                            const: "browser",
+                          },
+                          {
+                            type: "string",
+                            const: "break",
+                          },
+                          {
+                            type: "string",
+                            const: "support",
+                          },
+                          {
+                            type: "string",
+                            const: "telephony",
+                          },
+                          {
+                            type: "string",
+                            const: "hall",
+                          },
+                          {
+                            type: "string",
+                            const: "outside",
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  wallRows: {
+                    type: "array",
+                    items: {
+                      type: "array",
+                      items: {
+                        type: "boolean",
+                      },
+                    },
+                  },
+                  props: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        itemId: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        tileX: {
+                          type: "number",
+                        },
+                        tileY: {
+                          type: "number",
+                        },
+                        mirrored: {
+                          type: "boolean",
+                        },
+                        mountOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "floor",
+                            },
+                            {
+                              type: "string",
+                              const: "wall",
+                            },
+                            {
+                              type: "string",
+                              const: "underlay",
+                            },
+                          ],
+                        },
+                        zOffsetOverride: {
+                          type: "number",
+                        },
+                        collisionOverride: {
+                          type: "boolean",
+                        },
+                        loopId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["id", "itemId", "tileX", "tileY"],
+                      additionalProperties: false,
+                    },
+                  },
+                  autotiles: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        itemId: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        cells: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              tileX: {
+                                type: "number",
+                              },
+                              tileY: {
+                                type: "number",
+                              },
+                            },
+                            required: ["tileX", "tileY"],
+                            additionalProperties: false,
+                          },
+                        },
+                        mountOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "floor",
+                            },
+                            {
+                              type: "string",
+                              const: "wall",
+                            },
+                            {
+                              type: "string",
+                              const: "underlay",
+                            },
+                          ],
+                        },
+                        zOffsetOverride: {
+                          type: "number",
+                        },
+                        collisionOverride: {
+                          type: "boolean",
+                        },
+                        loopId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["id", "itemId"],
+                      additionalProperties: false,
+                    },
+                  },
+                  markers: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        role: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "spawn.office",
+                            },
+                            {
+                              type: "string",
+                              const: "spawn.support",
+                            },
+                            {
+                              type: "string",
+                              const: "desk.board",
+                            },
+                            {
+                              type: "string",
+                              const: "desk.workerSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting.presenter",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting.seat",
+                            },
+                            {
+                              type: "string",
+                              const: "browser.workerSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "support.staff",
+                            },
+                            {
+                              type: "string",
+                              const: "support.customer",
+                            },
+                            {
+                              type: "string",
+                              const: "telephony.staff",
+                            },
+                            {
+                              type: "string",
+                              const: "break.arcade",
+                            },
+                            {
+                              type: "string",
+                              const: "break.snack",
+                            },
+                            {
+                              type: "string",
+                              const: "break.volley",
+                            },
+                            {
+                              type: "string",
+                              const: "break.tableSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "break.chase",
+                            },
+                            {
+                              type: "string",
+                              const: "break.game",
+                            },
+                            {
+                              type: "string",
+                              const: "break.jukebox",
+                            },
+                            {
+                              type: "string",
+                              const: "break.reading",
+                            },
+                          ],
+                        },
+                        tileX: {
+                          type: "number",
+                        },
+                        tileY: {
+                          type: "number",
+                        },
+                        pose: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "stand",
+                            },
+                            {
+                              type: "string",
+                              const: "sit",
+                            },
+                          ],
+                        },
+                        layer: {
+                          type: "integer",
+                          minimum: -9007199254740991,
+                          maximum: 9007199254740991,
+                        },
+                        facingOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "north",
+                            },
+                            {
+                              type: "string",
+                              const: "east",
+                            },
+                            {
+                              type: "string",
+                              const: "south",
+                            },
+                            {
+                              type: "string",
+                              const: "west",
+                            },
+                          ],
+                        },
+                        footprintTiles: {
+                          type: "object",
+                          properties: {
+                            width: {
+                              type: "number",
+                            },
+                            height: {
+                              type: "number",
+                            },
+                          },
+                          required: ["width", "height"],
+                          additionalProperties: false,
+                        },
+                      },
+                      required: ["id", "role", "tileX", "tileY", "pose", "layer"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                additionalProperties: false,
+              },
             },
             additionalProperties: false,
           },
@@ -5075,6 +5393,58 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                       synthesisPrompt: {
                         type: "string",
                       },
+                      lifecycle: {
+                        type: "object",
+                        properties: {
+                          stages: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id: {
+                                  type: "string",
+                                },
+                                name: {
+                                  type: "string",
+                                },
+                                status: {
+                                  anyOf: [
+                                    {
+                                      type: "string",
+                                      const: "blocked",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "in_progress",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "review",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "done",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "idle",
+                                    },
+                                  ],
+                                },
+                                roles: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              },
+                              required: ["id"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        additionalProperties: false,
+                      },
                       contract: {
                         type: "object",
                         properties: {
@@ -5121,6 +5491,58 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                     },
                     synthesisPrompt: {
                       type: "string",
+                    },
+                    lifecycle: {
+                      type: "object",
+                      properties: {
+                        stages: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              id: {
+                                type: "string",
+                              },
+                              name: {
+                                type: "string",
+                              },
+                              status: {
+                                anyOf: [
+                                  {
+                                    type: "string",
+                                    const: "blocked",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "in_progress",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "review",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "done",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "idle",
+                                  },
+                                ],
+                              },
+                              roles: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                },
+                              },
+                            },
+                            required: ["id"],
+                            additionalProperties: false,
+                          },
+                        },
+                      },
+                      additionalProperties: false,
                     },
                     contract: {
                       type: "object",
@@ -12402,6 +12824,36 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
       tags: ["advanced"],
     },
+    "teams.list[].workflows[].lifecycle": {
+      label: "Workflow Lifecycle",
+      help: "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages": {
+      label: "Workflow Lifecycle Stages",
+      help: "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].id": {
+      label: "Lifecycle Stage ID",
+      help: "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].name": {
+      label: "Lifecycle Stage Name",
+      help: "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].status": {
+      label: "Lifecycle Stage Status",
+      help: 'Coarse task-status bucket for this stage: "in_progress", "review", "done", "blocked", or "idle". This controls how the dashboard maps the active stage into the global task board.',
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].roles": {
+      label: "Lifecycle Stage Roles",
+      help: "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
+      tags: ["advanced"],
+    },
     "teams.list[].workflow": {
       label: "Legacy Team Workflow",
       help: "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
@@ -14733,6 +15185,41 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
       placeholder:
         "jukebox_floor, reading_nook, arcade_corner, snack_table, chess_table, passing_ball_court",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene": {
+      label: "MauOffice Scene",
+      help: "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.version": {
+      label: "MauOffice Scene Version",
+      help: "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.zoneRows": {
+      label: "MauOffice Scene Zone Rows",
+      help: "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.wallRows": {
+      label: "MauOffice Scene Wall Rows",
+      help: "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.props": {
+      label: "MauOffice Scene Props",
+      help: "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.autotiles": {
+      label: "MauOffice Scene Autotiles",
+      help: "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.markers": {
+      label: "MauOffice Scene Markers",
+      help: "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
       tags: ["advanced"],
     },
     "browser.evaluateEnabled": {

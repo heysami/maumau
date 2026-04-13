@@ -106,17 +106,20 @@ function formatConsoleToolResult(result: {
   };
 }
 
+function resolveEffectiveProfileName(profileName: string | undefined): string | undefined {
+  const cfg = browserToolActionDeps.loadConfig();
+  const resolved = resolveBrowserConfig(cfg.browser, cfg);
+  return profileName?.trim() || resolved.defaultProfile;
+}
+
 function isChromeStaleTargetError(profile: string | undefined, err: unknown): boolean {
-  if (!profile) {
+  const effectiveProfileName = resolveEffectiveProfileName(profile);
+  if (!effectiveProfileName) {
     return false;
-  }
-  if (profile === "user") {
-    const msg = String(err);
-    return msg.includes("404:") && msg.includes("tab not found");
   }
   const cfg = browserToolActionDeps.loadConfig();
   const resolved = resolveBrowserConfig(cfg.browser, cfg);
-  const browserProfile = resolveProfile(resolved, profile);
+  const browserProfile = resolveProfile(resolved, effectiveProfileName);
   if (!browserProfile || !getBrowserProfileCapabilities(browserProfile).usesChromeMcp) {
     return false;
   }
@@ -337,6 +340,7 @@ export async function executeActAction(params: {
   proxyRequest: BrowserProxyRequest | null;
 }): Promise<AgentToolResult<unknown>> {
   const { request, baseUrl, profile, proxyRequest } = params;
+  const effectiveProfileName = resolveEffectiveProfileName(profile);
   try {
     const result = proxyRequest
       ? await proxyRequest({
@@ -361,7 +365,7 @@ export async function executeActAction(params: {
             })) as { tabs?: unknown[] }
           ).tabs ?? [])
         : await browserToolActionDeps.browserTabs(baseUrl, { profile }).catch(() => []);
-      // Some user-browser targetIds can go stale between snapshots and actions.
+      // Existing-session browser targetIds can go stale between snapshots and actions.
       // Only retry safe read-only actions, and only when exactly one tab remains attached.
       if (retryRequest && canRetryChromeActWithoutTargetId(request) && tabs.length === 1) {
         try {
@@ -382,12 +386,14 @@ export async function executeActAction(params: {
       }
       if (!tabs.length) {
         throw new Error(
-          `No browser tabs found for profile="${profile}". Make sure the configured Chromium-based browser (v144+) is running and has open tabs, then retry.`,
+          `No browser tabs found${effectiveProfileName ? ` for profile="${effectiveProfileName}"` : ""}. Make sure the configured Chromium-based browser (v144+) is running and has open tabs, then retry.`,
           { cause: err },
         );
       }
       throw new Error(
-        `Chrome tab not found (stale targetId?). Run action=tabs profile="${profile}" and use one of the returned targetIds.`,
+        effectiveProfileName
+          ? `Chrome tab not found (stale targetId?). Run action=tabs profile="${effectiveProfileName}" and use one of the returned targetIds.`
+          : "Chrome tab not found (stale targetId?). Run action=tabs and use one of the returned targetIds.",
         { cause: err },
       );
     }

@@ -1,13 +1,27 @@
 export type UpdateAvailable = import("../../../src/infra/update-startup.js").UpdateAvailable;
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
 import type {
+  DashboardAgentAppItem as SharedDashboardAgentAppItem,
   DashboardCalendarResult as SharedDashboardCalendarResult,
   DashboardCalendarView as SharedDashboardCalendarView,
+  DashboardLifeProfileAgent as SharedDashboardLifeProfileAgent,
+  DashboardLifeProfileField as SharedDashboardLifeProfileField,
+  DashboardLifeProfileNeed as SharedDashboardLifeProfileNeed,
+  DashboardLifeProfileResult as SharedDashboardLifeProfileResult,
+  DashboardWalletSpendBar as SharedDashboardWalletSpendBar,
+  DashboardWalletSpendBreakdown as SharedDashboardWalletSpendBreakdown,
+  DashboardWalletSpendChart as SharedDashboardWalletSpendChart,
+  DashboardWalletSpendGranularity as SharedDashboardWalletSpendGranularity,
+  DashboardWalletSpendResult as SharedDashboardWalletSpendResult,
+  DashboardWalletSpendSegment as SharedDashboardWalletSpendSegment,
   DashboardWalletCard as SharedDashboardWalletCard,
   DashboardWalletResult as SharedDashboardWalletResult,
   DashboardRecentMemoryEntry as SharedDashboardRecentMemoryEntry,
   DashboardMemoriesResult as SharedDashboardMemoriesResult,
   DashboardRoutine as SharedDashboardRoutine,
+  DashboardRoutinePreview as SharedDashboardRoutinePreview,
+  DashboardRoutinePreviewView as SharedDashboardRoutinePreviewView,
+  DashboardRoutineScheduleKind as SharedDashboardRoutineScheduleKind,
   DashboardRoutinesResult as SharedDashboardRoutinesResult,
   DashboardUserChannel as SharedDashboardUserChannel,
   DashboardUserChannelAccount as SharedDashboardUserChannelAccount,
@@ -55,13 +69,33 @@ export type DashboardTeamRunsResult = SharedDashboardTeamRunsResult;
 export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
 export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
 export type DashboardSavedWorkshopItem = SharedDashboardSavedWorkshopItem;
+export type DashboardAgentAppItem = SharedDashboardAgentAppItem;
 export type DashboardWorkshopSaveResult = SharedDashboardWorkshopSaveResult;
 export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
 export type DashboardCalendarResult = SharedDashboardCalendarResult;
 export type DashboardCalendarView = SharedDashboardCalendarView;
+export type DashboardLifeProfileField = SharedDashboardLifeProfileField;
+export type DashboardLifeProfileNeed = SharedDashboardLifeProfileNeed;
+export type DashboardLifeProfileAgent = SharedDashboardLifeProfileAgent;
+export type DashboardLifeProfileResult = SharedDashboardLifeProfileResult;
+export type DashboardCalendarFilters = {
+  cron: boolean;
+  userActivity: boolean;
+  groupActivity: boolean;
+  approvals: boolean;
+};
 export type DashboardWalletCard = SharedDashboardWalletCard;
+export type DashboardWalletSpendBar = SharedDashboardWalletSpendBar;
+export type DashboardWalletSpendBreakdown = SharedDashboardWalletSpendBreakdown;
+export type DashboardWalletSpendChart = SharedDashboardWalletSpendChart;
+export type DashboardWalletSpendGranularity = SharedDashboardWalletSpendGranularity;
+export type DashboardWalletSpendResult = SharedDashboardWalletSpendResult;
+export type DashboardWalletSpendSegment = SharedDashboardWalletSpendSegment;
 export type DashboardWalletResult = SharedDashboardWalletResult;
 export type DashboardRoutine = SharedDashboardRoutine;
+export type DashboardRoutinePreview = SharedDashboardRoutinePreview;
+export type DashboardRoutinePreviewView = SharedDashboardRoutinePreviewView;
+export type DashboardRoutineScheduleKind = SharedDashboardRoutineScheduleKind;
 export type DashboardRoutinesResult = SharedDashboardRoutinesResult;
 export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
 export type DashboardMemoriesResult = SharedDashboardMemoriesResult;

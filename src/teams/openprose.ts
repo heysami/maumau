@@ -1,6 +1,10 @@
 import type { MaumauConfig } from "../config/config.js";
 import type { TeamMemberConfig } from "../config/types.teams.js";
 import type { TeamConfig, TeamWorkflowConfig } from "../config/types.teams.js";
+import {
+  LIFE_IMPROVEMENT_DOMAIN_GROUPS,
+  LIFE_IMPROVEMENT_TEAM_ID,
+} from "./life-improvement-preset.js";
 import { resolveTeamWorkflowLifecycleStages } from "./lifecycle.js";
 import { findTeamWorkflow, listTeamMembers, resolveAgentDisplayName } from "./model.js";
 
@@ -1160,6 +1164,271 @@ function buildRootOrchestrationFlow(params: {
   ];
 }
 
+function buildLifeImprovementFlow(params: {
+  team: TeamConfig;
+  specialistBindings: SpecialistBinding[];
+  synthesisPrompt: string;
+}): string[] | null {
+  const normalizedTeamId = params.team.id.trim().toLowerCase();
+  const presetId = params.team.preset?.id?.trim().toLowerCase();
+  if (normalizedTeamId !== LIFE_IMPROVEMENT_TEAM_ID && presetId !== LIFE_IMPROVEMENT_TEAM_ID) {
+    return null;
+  }
+
+  const knowledgeManager = findSpecialistBindingByRole(
+    params.specialistBindings,
+    "personal knowledge manager",
+  );
+  const analyst = findSpecialistBindingByRole(
+    params.specialistBindings,
+    "insight & pattern analyst",
+  );
+  const accountabilityPartner = findSpecialistBindingByRole(
+    params.specialistBindings,
+    "accountability partner",
+  );
+  const researchAssistant = findSpecialistBindingByRole(
+    params.specialistBindings,
+    "research assistant",
+  );
+  const lifeCoach = findSpecialistBindingByRole(params.specialistBindings, "life & mindset coach");
+
+  if (!knowledgeManager || !analyst || !accountabilityPartner || !researchAssistant || !lifeCoach) {
+    return null;
+  }
+
+  const domainGroups = LIFE_IMPROVEMENT_DOMAIN_GROUPS.map((group) => ({
+    ...group,
+    bindings: group.roles
+      .map((role) => findSpecialistBindingByRole(params.specialistBindings, role))
+      .filter((entry): entry is SpecialistBinding => Boolean(entry)),
+  })).filter((group) => group.bindings.length > 0);
+
+  const lines: string[] = [
+    "",
+    "# Step 0: the manager defines the primary user, scope, and available context",
+    "let intake = session: manager",
+    '  prompt: "Identify the primary user for this run, the working life-improvement goal, the available user or group structure, the related people who materially matter, and the most important missing context. Use other people only as supporting context for the primary user instead of replacing the subject of the plan. Treat the profile as incremental work instead of a giant all-domains intake, and when follow-up is needed, plan a slow getting-to-know-you arc that starts with day-to-day life before later hobbies, work shape, or family context."',
+    "  context: { task }",
+    "",
+    "# Step 1: the core support roles build the dossier, context map, and activation plan",
+    ...buildAgentRunLines({
+      variableName: "subject_dossier",
+      binding: knowledgeManager.binding,
+      declaration: "let",
+      prompt:
+        "Create the canonical subject dossier and initial file map for this run. Center the dossier on the primary user, carry forward any user ids, group ids, relationship labels, and related-people context that matter, and propose note-file slots for the subject dossier, active domain notes, and cross-role dependency notes. Treat missing fields as future checkpoints instead of blockers unless they are required for the current recommendation.",
+      context: ["task", "intake"],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "context_research",
+      binding: researchAssistant.binding,
+      declaration: "let",
+      prompt:
+        "Summarize the most relevant background context for this run: related people, groups, routines, deadlines, cultural or social context, recent events, and any context gaps that the rest of the team should keep in view.",
+      context: ["task", "intake", "subject_dossier"],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "pattern_map",
+      binding: analyst.binding,
+      declaration: "let",
+      prompt:
+        "Connect the dots across the dossier and context. Identify the highest-leverage patterns, likely cause-and-effect chains, and which life domains seem active enough to deserve specialist work.",
+      context: ["task", "intake", "subject_dossier", "context_research"],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "guiding_principles",
+      binding: lifeCoach.binding,
+      declaration: "let",
+      prompt:
+        "Distill the user's purpose, values, direction, identity pressures, and motivating goals so the rest of the team can make aligned recommendations instead of piling up disconnected advice.",
+      context: ["task", "intake", "subject_dossier", "context_research", "pattern_map"],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "activation_plan",
+      binding: "manager",
+      declaration: "let",
+      mode: "resume",
+      prompt:
+        "Choose the active domains and the smallest useful set of specialists for this run. Do not wake the whole roster by default. Explain which domains need direct work now, which can stay parked, what each active domain is trying to improve for the primary user, and which missing details can wait for later heartbeat check-ins or later getting-to-know-you turns instead of becoming a giant intake now.",
+      context: [
+        "task",
+        "intake",
+        "subject_dossier",
+        "context_research",
+        "pattern_map",
+        "guiding_principles",
+      ],
+    }),
+  ];
+
+  for (const group of domainGroups) {
+    const groupVar = `${group.id}_domain`;
+    const specialistVars = group.bindings.map((entry) => `${group.id}_${entry.binding}`);
+    lines.push(
+      "",
+      `# ${group.label} only activates when the manager says this domain matters now`,
+      ...buildAgentRunLines({
+        variableName: groupVar,
+        binding: "manager",
+        declaration: "let",
+        mode: "resume",
+        prompt: `Initialize the ${group.label.toLowerCase()} domain note as not_requested unless the activation plan says this domain needs specialist work now.`,
+        context: [
+          "task",
+          "subject_dossier",
+          "context_research",
+          "pattern_map",
+          "guiding_principles",
+          "activation_plan",
+        ],
+      }),
+      "",
+      `if **the ${group.label.toLowerCase()} domain is active in the current plan**:`,
+      "  parallel:",
+    );
+
+    for (const [index, entry] of group.bindings.entries()) {
+      lines.push(
+        ...indent(
+          buildAgentRunLines({
+            variableName: specialistVars[index],
+            binding: entry.binding,
+            mode: entry.binding === researchAssistant.binding ? "resume" : "session",
+            prompt: `Handle the ${entry.member.role} portion of the ${group.label.toLowerCase()} domain for the primary user. Work from the dossier, related-people context, pattern map, and current domain brief. Return concrete recommendations, open questions, risks, and any dependency note another role should read.`,
+            context: [
+              "task",
+              "subject_dossier",
+              "context_research",
+              "pattern_map",
+              "guiding_principles",
+              "activation_plan",
+            ],
+          }),
+          "    ",
+        ),
+      );
+    }
+
+    lines.push(
+      ...indent(
+        buildAgentRunLines({
+          variableName: groupVar,
+          binding: "manager",
+          mode: "resume",
+          prompt: `Synthesize the ${group.label.toLowerCase()} specialists into one domain note. Capture the recommendations, the risks, the related-people context that matters, and the cross-role dependencies that should become dedicated dependency notes.`,
+          context: [
+            "task",
+            "subject_dossier",
+            "context_research",
+            "pattern_map",
+            "guiding_principles",
+            "activation_plan",
+            ...specialistVars,
+          ],
+        }),
+        "  ",
+      ),
+    );
+  }
+
+  const domainVars = domainGroups.map((group) => `${group.id}_domain`);
+  lines.push(
+    "",
+    "# Step 2: the analyst and knowledge manager turn domain work into explicit dependency files",
+    ...buildAgentRunLines({
+      variableName: "dependency_map",
+      binding: analyst.binding,
+      declaration: "let",
+      mode: "resume",
+      prompt:
+        "Review the active domain notes and identify the cross-role dependencies that should become dedicated dependency notes. Name the source role, the target role, why the dependency matters, the specific recommendation or tension being handed off, and any related-people context that must travel with it.",
+      context: [
+        "task",
+        "subject_dossier",
+        "context_research",
+        "pattern_map",
+        "guiding_principles",
+        "activation_plan",
+        ...domainVars,
+      ],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "working_files",
+      binding: knowledgeManager.binding,
+      declaration: "let",
+      mode: "resume",
+      prompt:
+        "Update the working file map for this run. Keep one canonical subject dossier file, one note file for each active domain, and one dependency note file for every material handoff named in dependency_map. Each dependency note should capture the source role, target role, recommendation, rationale, related-people context if any, and the open follow-up.",
+      context: [
+        "task",
+        "subject_dossier",
+        "context_research",
+        "pattern_map",
+        "guiding_principles",
+        "activation_plan",
+        ...domainVars,
+        "dependency_map",
+      ],
+    }),
+    "",
+    "# Step 3: priorities and accountability turn the work into a real plan",
+    ...buildAgentRunLines({
+      variableName: "priority_plan",
+      binding: lifeCoach.binding,
+      declaration: "let",
+      mode: "resume",
+      prompt:
+        "Turn the dossier, domain notes, and dependency map into a coherent priority stack. Name the highest-leverage changes, what should happen first, and how the plan stays aligned with the user's identity and values.",
+      context: [
+        "task",
+        "subject_dossier",
+        "context_research",
+        "pattern_map",
+        "guiding_principles",
+        "activation_plan",
+        ...domainVars,
+        "dependency_map",
+      ],
+    }),
+    "",
+    ...buildAgentRunLines({
+      variableName: "commitment_plan",
+      binding: accountabilityPartner.binding,
+      declaration: "let",
+      prompt:
+        "Turn the approved priorities into follow-through. Define the next commitments, check-in cadence, measurable progress signals, likely avoidance patterns, and what the user should revisit if the plan stalls.",
+      context: [
+        "task",
+        "subject_dossier",
+        "guiding_principles",
+        "activation_plan",
+        ...domainVars,
+        "dependency_map",
+        "priority_plan",
+      ],
+    }),
+    "",
+    "# Step 4: the manager closes with one synthesized life-improvement brief",
+    "output result = session: manager",
+    `  prompt: "${params.synthesisPrompt.replace(/"/g, '\\"')}"`,
+    `  context: { task, intake, subject_dossier, context_research, pattern_map, guiding_principles, activation_plan, ${[
+      ...domainVars,
+      "dependency_map",
+      "working_files",
+      "priority_plan",
+      "commitment_plan",
+    ].join(", ")} }`,
+  );
+
+  return lines;
+}
+
 export function generateTeamOpenProsePreview(params: {
   config: MaumauConfig;
   team: TeamConfig;
@@ -1185,6 +1454,11 @@ export function generateTeamOpenProsePreview(params: {
   });
   const designStudioFlow = buildDesignStudioFlow(specialistBindings, synthesisPrompt);
   const rootOrchestrationFlow = buildRootOrchestrationFlow({
+    team,
+    specialistBindings,
+    synthesisPrompt,
+  });
+  const lifeImprovementFlow = buildLifeImprovementFlow({
     team,
     specialistBindings,
     synthesisPrompt,
@@ -1236,6 +1510,8 @@ export function generateTeamOpenProsePreview(params: {
     lines.push(...stagedStarterFlow);
   } else if (rootOrchestrationFlow) {
     lines.push(...rootOrchestrationFlow);
+  } else if (lifeImprovementFlow) {
+    lines.push(...lifeImprovementFlow);
   } else if (specialists.length > 0) {
     lines.push(
       "",

@@ -6,6 +6,14 @@ import type {
   TeamWorkflowConfig,
 } from "../config/types.teams.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
+import {
+  createLifeImprovementTeamAgents,
+  createLifeImprovementTeamConfig,
+  LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID,
+  LIFE_IMPROVEMENT_TEAM_ID,
+  LIFE_IMPROVEMENT_TEAM_MANAGER_AGENT_ID,
+  LIFE_IMPROVEMENT_TEAM_PRESET_VERSION,
+} from "./life-improvement-preset.js";
 import { DEFAULT_TEAM_WORKFLOW_ID, listTeamWorkflows } from "./model.js";
 
 export const STARTER_TEAM_ID = "vibe-coder";
@@ -29,6 +37,14 @@ export const DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID = "design-studio-consist
 export const STARTER_TEAM_PRESET_VERSION = 5;
 export const DESIGN_STUDIO_TEAM_PRESET_VERSION = 1;
 export const MAIN_ORCHESTRATION_TEAM_PRESET_VERSION = 2;
+export {
+  createLifeImprovementTeamAgents,
+  createLifeImprovementTeamConfig,
+  LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID,
+  LIFE_IMPROVEMENT_TEAM_ID,
+  LIFE_IMPROVEMENT_TEAM_MANAGER_AGENT_ID,
+  LIFE_IMPROVEMENT_TEAM_PRESET_VERSION,
+} from "./life-improvement-preset.js";
 
 const STARTER_MAIN_AGENT_ALSO_ALLOW = [
   "agents_list",
@@ -71,13 +87,18 @@ const DESIGN_STUDIO_IMAGE_TOOL_ALLOW = [
 const DESIGN_STUDIO_QA_TOOL_ALLOW = ["image", "read"] as const;
 
 const ROOT_LINKED_TEAM_IDS = [STARTER_TEAM_ID, DESIGN_STUDIO_TEAM_ID] as const;
-type BundledSpecialistTeamId = (typeof ROOT_LINKED_TEAM_IDS)[number];
+type BundledSpecialistTeamId =
+  | typeof STARTER_TEAM_ID
+  | typeof DESIGN_STUDIO_TEAM_ID
+  | typeof LIFE_IMPROVEMENT_TEAM_ID;
 
 const ROOT_LINK_DESCRIPTIONS: Record<BundledSpecialistTeamId, string> = {
   [STARTER_TEAM_ID]:
     "Use for staged UI/product implementation, architecture, development, and ship-readiness QA.",
   [DESIGN_STUDIO_TEAM_ID]:
     "Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.",
+  [LIFE_IMPROVEMENT_TEAM_ID]:
+    "Use for incremental life-improvement planning, personal check-ins, and document-first coordination across health, identity, relationships, lifestyle, and accountability.",
 };
 
 const STARTER_LINK_DESCRIPTIONS: Record<typeof DESIGN_STUDIO_TEAM_ID, string> = {
@@ -164,6 +185,9 @@ function syncBundledCrossTeamLinks(teams: TeamConfig[]): TeamConfig[] {
   }
   if (teams.some((team) => team.id.trim().toLowerCase() === DESIGN_STUDIO_TEAM_ID)) {
     availableTeamIds.push(DESIGN_STUDIO_TEAM_ID);
+  }
+  if (teams.some((team) => team.id.trim().toLowerCase() === LIFE_IMPROVEMENT_TEAM_ID)) {
+    availableTeamIds.push(LIFE_IMPROVEMENT_TEAM_ID);
   }
 
   return teams.map((team) => {
@@ -652,7 +676,7 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
 
 export function ensureBundledTeamPresetConfig(
   baseConfig: MaumauConfig,
-  presetId: typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID,
+  presetId: typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID | typeof LIFE_IMPROVEMENT_TEAM_ID,
 ): MaumauConfig {
   const currentAgents = Array.isArray(baseConfig.agents?.list) ? [...baseConfig.agents.list] : [];
   const hasExplicitDefault = currentAgents.some((entry) => entry?.default);
@@ -671,7 +695,11 @@ export function ensureBundledTeamPresetConfig(
   }
 
   const presetAgents =
-    presetId === STARTER_TEAM_ID ? createStarterTeamAgents() : createDesignStudioTeamAgents();
+    presetId === STARTER_TEAM_ID
+      ? createStarterTeamAgents()
+      : presetId === DESIGN_STUDIO_TEAM_ID
+        ? createDesignStudioTeamAgents()
+        : createLifeImprovementTeamAgents();
   for (const agent of presetAgents) {
     if (!hasAgent(nextAgents, agent.id)) {
       nextAgents.push(agent);
@@ -683,7 +711,9 @@ export function ensureBundledTeamPresetConfig(
     const linkedTeamIds =
       presetId === STARTER_TEAM_ID
         ? ([STARTER_TEAM_ID] as const)
-        : ([DESIGN_STUDIO_TEAM_ID] as const);
+        : presetId === DESIGN_STUDIO_TEAM_ID
+          ? ([DESIGN_STUDIO_TEAM_ID] as const)
+          : ([] as const);
     nextTeams.unshift(createMainOrchestrationTeamConfig({ linkedTeamIds }));
   }
   if (presetId === STARTER_TEAM_ID && !hasTeam(baseConfig, STARTER_TEAM_ID)) {
@@ -694,6 +724,9 @@ export function ensureBundledTeamPresetConfig(
   }
   if (presetId === DESIGN_STUDIO_TEAM_ID && !hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)) {
     nextTeams.push(createDesignStudioTeamConfig());
+  }
+  if (presetId === LIFE_IMPROVEMENT_TEAM_ID && !hasTeam(baseConfig, LIFE_IMPROVEMENT_TEAM_ID)) {
+    nextTeams.push(createLifeImprovementTeamConfig());
   }
 
   return {
@@ -723,7 +756,10 @@ export function applyStarterTeamOnFreshInstall(
   if (options?.freshInstall !== true) {
     return baseConfig;
   }
-  return ensureStarterTeamConfig(baseConfig);
+  return ensureBundledTeamPresetConfig(
+    ensureStarterTeamConfig(baseConfig),
+    LIFE_IMPROVEMENT_TEAM_ID,
+  );
 }
 
 export function createBlankTeamConfig(baseConfig: MaumauConfig): TeamConfig {

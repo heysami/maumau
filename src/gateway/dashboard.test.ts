@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MaumauConfig } from "../config/types.maumau.js";
 import type { CronJob } from "../cron/types.js";
 import {
+  LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME,
+  LIFE_IMPROVEMENT_ROUTINE_JOB_NAME,
+} from "../teams/life-improvement-routine.js";
+import {
+  ensureBundledTeamPresetConfig,
   ensureStarterTeamConfig,
+  LIFE_IMPROVEMENT_TEAM_ID,
   STARTER_TEAM_MANAGER_AGENT_ID,
   STARTER_TEAM_SYSTEM_ARCHITECT_AGENT_ID,
   STARTER_TEAM_TECHNICAL_QA_AGENT_ID,
@@ -14,6 +20,7 @@ import { readDashboardWorkshopStore } from "./dashboard-workshop-saved.js";
 import {
   __testing,
   collectDashboardCalendar,
+  collectDashboardRoutines,
   collectDashboardSnapshot,
   collectDashboardTeamSnapshots,
   collectDashboardTeamRuns,
@@ -260,6 +267,94 @@ describe("dashboard aggregations", () => {
     expect(
       snapshot.today.scheduledToday.some((event) => event.title.includes("Conversation info")),
     ).toBe(false);
+  });
+
+  it("builds life profile coverage from USER.md for life-improvement agents", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-life-profile-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 12, 15, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const workspaceDir = path.join(tempRoot, "workspace-main");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await writeSessionStore(storePath, {});
+    await fs.writeFile(
+      path.join(workspaceDir, "USER.md"),
+      `# USER.md - About Your Human
+
+- **Name:** Sam
+- **What to call them:** Sam
+- **Timezone:** Asia/Singapore
+
+## Life Snapshot
+
+- **Daily / weekly rhythm:** Wake 7, office 9:30 to 10, finish 7 to 7:30.
+- **Current priorities:** Stay more consistent and less chaotic.
+- **What they want more help with:** Organization, reminders, and planning.
+- **Work / school / purpose:** Office work during the week.
+- **Home / routines / organization:** Weekends are mostly recovery and resetting.
+`,
+      "utf8",
+    );
+    const cfg = ensureBundledTeamPresetConfig(
+      {
+        agents: {
+          defaults: {
+            workspace: workspaceDir,
+          },
+        },
+        session: {
+          store: storePath,
+        },
+      } satisfies MaumauConfig,
+      LIFE_IMPROVEMENT_TEAM_ID,
+    );
+
+    const snapshot = await collectDashboardSnapshot({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(snapshot.lifeProfile.teamConfigured).toBe(true);
+    expect(snapshot.lifeProfile.sourceStatus).toBe("loaded");
+    expect(snapshot.lifeProfile.sourceLabel).toBe("main/USER.md");
+    expect(snapshot.lifeProfile.recordedFieldCount).toBeGreaterThanOrEqual(5);
+    expect(snapshot.lifeProfile.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "daily_weekly_rhythm",
+          status: "recorded",
+          value: expect.stringContaining("office 9:30"),
+        }),
+        expect.objectContaining({
+          key: "hobbies_interests",
+          status: "future",
+        }),
+      ]),
+    );
+    const lifeCoach = snapshot.lifeProfile.agents.find(
+      (agent) => agent.agentId === "life-improvement-life-mindset-coach",
+    );
+    expect(lifeCoach).toBeDefined();
+    expect(lifeCoach?.needs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "support_needs",
+          status: "recorded",
+          why: expect.stringContaining("Life & Mindset Coach"),
+          value: expect.stringContaining("Organization"),
+        }),
+        expect.objectContaining({
+          fieldKey: "hobbies_interests",
+          status: "future",
+        }),
+      ]),
+    );
   });
 
   it("prefers assistant follow-up advice for direct-session blockers", async () => {
@@ -743,9 +838,9 @@ describe("dashboard aggregations", () => {
         }),
       ]),
     );
-    expect(
-      snapshot.today.blockers.some((blocker) => blocker.sessionKey === sessionKey),
-    ).toBe(false);
+    expect(snapshot.today.blockers.some((blocker) => blocker.sessionKey === sessionKey)).toBe(
+      false,
+    );
   });
 
   it("drops stale blockers when a newer named-session rerun succeeds on another agent", async () => {
@@ -927,6 +1022,316 @@ describe("dashboard aggregations", () => {
     expect(
       new Set(dailyOccurrences.map((event) => new Date(event.startAtMs).getUTCDate())).size,
     ).toBeGreaterThan(10);
+  });
+
+  it("classifies routine preview windows from cron cadence", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-routines-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 12, 8, 0, 0);
+
+    const routines = await collectDashboardRoutines({
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [
+          buildCronJob({
+            id: "daily-review",
+            name: "Daily review",
+            nowMs,
+            schedule: {
+              kind: "every",
+              everyMs: 24 * 60 * 60 * 1_000,
+              anchorMs: Date.UTC(2026, 3, 11, 8, 0, 0),
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 8, 0, 0),
+          }),
+          buildCronJob({
+            id: "weekly-planning",
+            name: "Weekly planning",
+            nowMs,
+            schedule: {
+              kind: "cron",
+              expr: "0 9 * * 1",
+              tz: "UTC",
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 9, 0, 0),
+          }),
+        ],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(routines.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceJobId: "daily-review",
+          scheduleKind: "every",
+          preview: expect.objectContaining({
+            view: "day",
+            runAtMs: expect.arrayContaining([Date.UTC(2026, 3, 13, 8, 0, 0)]),
+          }),
+        }),
+        expect.objectContaining({
+          sourceJobId: "weekly-planning",
+          scheduleKind: "cron",
+          preview: expect.objectContaining({
+            view: "week",
+            runAtMs: expect.arrayContaining([Date.UTC(2026, 3, 13, 9, 0, 0)]),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("keeps managed life-improvement routines visible in the routines list", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-life-routines-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 12, 8, 0, 0);
+
+    const routines = await collectDashboardRoutines({
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [
+          buildCronJob({
+            id: "life-check-in",
+            name: LIFE_IMPROVEMENT_ROUTINE_JOB_NAME,
+            description:
+              "Daily heartbeat-backed personal check-in routine that updates an incremental life profile.",
+            nowMs,
+            schedule: {
+              kind: "cron",
+              expr: "0 10 * * *",
+              tz: "Asia/Singapore",
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 2, 0, 0),
+          }),
+          buildCronJob({
+            id: "life-expense-sync",
+            name: LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME,
+            description:
+              "Daily quiet finance collection that lets the financial coach gather receipt-based spending from email and persist normalized expenses into wallet history.",
+            nowMs,
+            schedule: {
+              kind: "cron",
+              expr: "15 8 * * *",
+              tz: "Asia/Singapore",
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
+          }),
+        ],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(routines.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceJobId: "life-check-in",
+          title: LIFE_IMPROVEMENT_ROUTINE_JOB_NAME,
+          visibility: "user_facing",
+        }),
+        expect.objectContaining({
+          sourceJobId: "life-expense-sync",
+          title: LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME,
+          visibility: "user_facing",
+        }),
+      ]),
+    );
+  });
+
+  it("repairs stale hidden routine visibility for managed life-improvement jobs", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "maumau-dashboard-life-routines-migrate-"),
+    );
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 12, 8, 0, 0);
+    await fs.mkdir(path.join(tempRoot, "dashboard"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempRoot, "dashboard", "routine-visibility.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          updatedAtMs: nowMs - 60_000,
+          preferences: {
+            "life-check-in": {
+              visibility: "hidden",
+              updatedAtMs: nowMs - 60_000,
+            },
+            "life-expense-sync": {
+              visibility: "hidden",
+              updatedAtMs: nowMs - 60_000,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const routines = await collectDashboardRoutines({
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [
+          buildCronJob({
+            id: "life-check-in",
+            name: LIFE_IMPROVEMENT_ROUTINE_JOB_NAME,
+            description:
+              "Daily heartbeat-backed personal check-in routine that updates an incremental life profile.",
+            nowMs,
+            schedule: {
+              kind: "cron",
+              expr: "0 10 * * *",
+              tz: "Asia/Singapore",
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 2, 0, 0),
+          }),
+          buildCronJob({
+            id: "life-expense-sync",
+            name: LIFE_IMPROVEMENT_FINANCE_SYNC_JOB_NAME,
+            description:
+              "Daily quiet finance collection that lets the financial coach gather receipt-based spending from email and persist normalized expenses into wallet history.",
+            nowMs,
+            schedule: {
+              kind: "cron",
+              expr: "15 8 * * *",
+              tz: "Asia/Singapore",
+            },
+            nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
+          }),
+        ],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(routines.items.map((routine) => routine.sourceJobId)).toEqual(
+      expect.arrayContaining(["life-check-in", "life-expense-sync"]),
+    );
+
+    const visibilityStore = JSON.parse(
+      await fs.readFile(path.join(tempRoot, "dashboard", "routine-visibility.json"), "utf8"),
+    ) as {
+      preferences: Record<string, { visibility: string }>;
+    };
+    expect(visibilityStore.preferences["life-check-in"]?.visibility).toBe("user_facing");
+    expect(visibilityStore.preferences["life-expense-sync"]?.visibility).toBe("user_facing");
+  });
+
+  it("projects user activities and agreed routines into calendar known-activity events", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "maumau-dashboard-calendar-activity-"),
+    );
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 13, 12, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const workspaceDir = path.join(tempRoot, "workspace-main");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceDir, "USER.md"),
+      `# USER.md - About Your Human
+
+- **Name:** Sami
+- **What to call them:** Sami
+- **Timezone:** Asia/Singapore
+
+## Life Snapshot
+
+- **Daily / weekly rhythm:** Usually wakes around 7. Works roughly 9-6 on weekdays. Weekends are for chilling.
+- **What they want more help with:** Organization, reminders, check-ins, and recurring nudges.
+- **Work / school / purpose:** Standard weekday work rhythm, roughly 9-6.
+`,
+      "utf8",
+    );
+    await writeSessionStore(storePath, {
+      "agent:main:telegram:direct:6925625562": {
+        sessionId: "sess-telegram",
+        sessionFile: "sess-telegram.jsonl",
+        updatedAt: nowMs - 60_000,
+        startedAt: nowMs - 600_000,
+        status: "running",
+        channel: "telegram",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-telegram.jsonl", [
+      {
+        role: "assistant",
+        text: `**Morning check-in**
+
+**Midday reset**
+
+**Evening shutdown**
+
+- **Weekly reset:** inbox/admin and planning.`,
+      },
+    ]);
+
+    const cfg = ensureBundledTeamPresetConfig(
+      {
+        agents: {
+          defaults: {
+            workspace: workspaceDir,
+          },
+        },
+        session: {
+          store: storePath,
+        },
+      } satisfies MaumauConfig,
+      LIFE_IMPROVEMENT_TEAM_ID,
+    );
+
+    const calendar = await collectDashboardCalendar({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      view: "week",
+      anchorAtMs: nowMs,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(calendar.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Wake up",
+          kind: "known_activity",
+          activityScope: "user",
+        }),
+        expect.objectContaining({
+          title: "Work",
+          kind: "known_activity",
+          activityScope: "user",
+          endAtMs: expect.any(Number),
+        }),
+        expect.objectContaining({
+          title: "Morning check-in",
+          kind: "known_activity",
+          activityScope: "user",
+        }),
+        expect.objectContaining({
+          title: "Midday reset",
+          kind: "known_activity",
+          activityScope: "user",
+        }),
+        expect.objectContaining({
+          title: "Evening shutdown",
+          kind: "known_activity",
+          activityScope: "user",
+        }),
+        expect.objectContaining({
+          title: "Weekly reset",
+          kind: "known_activity",
+          activityScope: "user",
+        }),
+      ]),
+    );
   });
 
   it("uses the task subject from prompt/output context instead of only the role label", async () => {
@@ -1479,6 +1884,87 @@ describe("dashboard aggregations", () => {
         previewUrl: "https://example.com/preview/task-123",
         embedUrl: undefined,
       }),
+    );
+  });
+
+  it("collects agent app proposals from AGENT_APPS.md and links them to workshop previews", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-agent-apps-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 13, 1, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const workspaceDir = path.join(tempRoot, "workspace-main");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await writeSessionStore(storePath, {
+      "agent:main:subagent:designer": {
+        sessionId: "sess-designer",
+        sessionFile: "sess-designer.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 45_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "ui/ux designer",
+        spawnedBy: "main",
+        parentSessionKey: "main",
+      },
+    });
+    await writeTranscript(
+      storePath,
+      "sess-designer.jsonl",
+      "Preview ready at https://example.com/preview/task-focus-helper\nFILE:artifacts/focus-helper.html",
+    );
+    await fs.writeFile(
+      path.join(workspaceDir, "AGENT_APPS.md"),
+      `# Agent Apps
+
+## Focus helper
+- **Owner:** Accountability Partner
+- **Status:** proposed
+- **Why now:** The user needs a lighter daily follow-through loop.
+- **How it helps:** Turns vague follow-through into a visible next step.
+- **Suggested scope:** One focused checklist with reset state.
+- **Task title:** UI design
+`,
+      "utf8",
+    );
+
+    const cfg = {
+      agents: {
+        default: "main",
+        defaults: {
+          workspace: workspaceDir,
+        },
+      },
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig;
+
+    const workshop = await collectDashboardWorkshop({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => ({ enabled: true }),
+      },
+    });
+
+    expect(workshop.agentApps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "agent_app",
+          title: "Focus helper",
+          ownerLabel: "Accountability Partner",
+          ownerAgentId: "life-improvement-accountability-partner",
+          status: "proposed",
+          whyNow: expect.stringContaining("lighter daily follow-through"),
+          howItHelps: expect.stringContaining("visible next step"),
+          suggestedScope: expect.stringContaining("focused checklist"),
+          previewUrl: "https://example.com/preview/task-focus-helper",
+          linkedWorkshopKind: "recent",
+        }),
+      ]),
     );
   });
 

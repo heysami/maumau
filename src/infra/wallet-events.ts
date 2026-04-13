@@ -15,6 +15,19 @@ export type WalletEvent =
       provider: "elevenlabs";
       characters: number;
       mode: "standard" | "telephony";
+    }
+  | {
+      kind: "expense";
+      completedAtMs: number;
+      source: "email_receipt";
+      fingerprint: string;
+      merchant: string;
+      category: string;
+      currency: string;
+      amountValue: number;
+      occurredAtMs?: number;
+      subject?: string;
+      dateText?: string;
     };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -56,6 +69,47 @@ function parseWalletEvent(value: unknown): WalletEvent | null {
       provider: "elevenlabs",
       characters,
       mode: value.mode,
+    };
+  }
+  if (value.kind === "expense" && value.source === "email_receipt") {
+    const fingerprint =
+      typeof value.fingerprint === "string" && value.fingerprint.trim()
+        ? value.fingerprint.trim()
+        : undefined;
+    const merchant =
+      typeof value.merchant === "string" && value.merchant.trim()
+        ? value.merchant.trim()
+        : undefined;
+    const category =
+      typeof value.category === "string" && value.category.trim()
+        ? value.category.trim()
+        : undefined;
+    const currency =
+      typeof value.currency === "string" && value.currency.trim()
+        ? value.currency.trim()
+        : undefined;
+    const amountValue = toFiniteNumber(value.amountValue);
+    if (!fingerprint || !merchant || !category || !currency || amountValue === undefined) {
+      return null;
+    }
+    return {
+      kind: "expense",
+      completedAtMs,
+      source: "email_receipt",
+      fingerprint,
+      merchant,
+      category,
+      currency,
+      amountValue,
+      occurredAtMs: toFiniteNumber(value.occurredAtMs),
+      subject:
+        typeof value.subject === "string" && value.subject.trim()
+          ? value.subject.trim()
+          : undefined,
+      dateText:
+        typeof value.dateText === "string" && value.dateText.trim()
+          ? value.dateText.trim()
+          : undefined,
     };
   }
   return null;

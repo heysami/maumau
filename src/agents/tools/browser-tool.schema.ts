@@ -97,6 +97,7 @@ export const BrowserToolSchema = Type.Object({
   query: Type.Optional(Type.String()),
   limit: Type.Optional(Type.Number()),
   lookbackDays: Type.Optional(Type.Number()),
+  persistToWallet: Type.Optional(Type.Boolean()),
   maxChars: Type.Optional(Type.Number()),
   mode: optionalStringEnum(BROWSER_SNAPSHOT_MODES),
   snapshotFormat: optionalStringEnum(BROWSER_SNAPSHOT_FORMATS),

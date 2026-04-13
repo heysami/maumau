@@ -2965,6 +2965,80 @@ describe("applyMauOfficeSessionToolEvent", () => {
     expect(visitor.bubbles[0]?.text).toBe("Can you reset my workspace access?");
   });
 
+  it("routes direct support browser tool updates to the worker browser desk", () => {
+    const startedAt = 1_000;
+    const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;
+    const visitorAnchor = MAU_OFFICE_LAYOUT.anchors.support_customer_1;
+    const first = applyMauOfficeSessionToolEvent(
+      {
+        ...createEmptyMauOfficeState(),
+        loaded: true,
+        actorOrder: ["worker:main", "visitor:agent:main:direct:customer-42"],
+        actors: {
+          "worker:main": makeActor({
+            id: "worker:main",
+            anchorId: "support_staff_1",
+            nodeId: "support_center",
+            agentId: "main",
+            roleHint: "support",
+            homeAnchorId: "support_staff_1",
+            currentRoomId: "support",
+            x: supportAnchor.x,
+            y: supportAnchor.y,
+            currentActivity: makeActivity(
+              "support",
+              "customer_support",
+              "support",
+              "support_staff_1",
+              "Helping a customer",
+            ),
+          }),
+          "visitor:agent:main:direct:customer-42": makeActor({
+            id: "visitor:agent:main:direct:customer-42",
+            kind: "visitor",
+            label: "Samiadji",
+            agentId: "main",
+            sessionKey: "agent:main:direct:customer-42",
+            anchorId: "support_customer_1",
+            nodeId: "support_customer_1",
+            homeAnchorId: "outside_support",
+            currentRoomId: "support",
+            x: visitorAnchor.x,
+            y: visitorAnchor.y,
+            currentActivity: {
+              id: "snapshot-support",
+              kind: "customer_support",
+              label: "Handling support",
+              bubbleText: "Can you reset my workspace access?",
+              priority: 70,
+              roomId: "support",
+              anchorId: "support_customer_1",
+              source: "snapshot",
+            },
+          }),
+        },
+      },
+      {
+        sessionKey: "agent:main:direct:customer-42",
+        data: {
+          toolName: "browser.open",
+          input: {
+            text: "Open Gmail in the signed-in browser session.",
+          },
+        },
+      },
+      startedAt,
+    );
+    const worker = first.actors["worker:main"]!;
+    const visitor = first.actors["visitor:agent:main:direct:customer-42"]!;
+
+    expect(worker.currentActivity.kind).toBe("walking");
+    expect(worker.path?.targetAnchorId).toBe("browser_worker_1");
+    expect(worker.queuedActivity?.roomId).toBe("browser");
+    expect(visitor.currentActivity.kind).toBe("customer_support");
+    expect(visitor.path).toBeNull();
+  });
+
   it("does not replace the worker's latest reply when a support tool event has no fresh visible text", () => {
     const startedAt = 1_000;
     const supportAnchor = MAU_OFFICE_LAYOUT.anchors.support_staff_1;

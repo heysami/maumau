@@ -37,6 +37,7 @@ import {
   scheduleGatewaySigusr1Restart,
 } from "../../infra/restart.js";
 import { loadMaumauPlugins } from "../../plugins/loader.js";
+import { ensureLifeImprovementRoutineArtifacts } from "../../teams/life-improvement-routine.js";
 import {
   buildGatewayReloadPlan,
   diffConfigPaths,
@@ -62,7 +63,7 @@ import {
 } from "../protocol/index.js";
 import { resolveBaseHashParam } from "./base-hash.js";
 import { parseRestartRequestParams } from "./restart-request.js";
-import type { GatewayRequestHandlers, RespondFn } from "./types.js";
+import type { GatewayRequestHandlerOptions, GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
 const MAX_CONFIG_ISSUES_IN_ERROR_MESSAGE = 3;
@@ -351,6 +352,18 @@ async function refreshDashboardTeamSnapshotsIfNeeded(params: {
   }
 }
 
+async function syncManagedLifeImprovementRoutine(params: {
+  nextConfig: MaumauConfig;
+  context?: GatewayRequestHandlerOptions["context"];
+}) {
+  await ensureLifeImprovementRoutineArtifacts({
+    config: params.nextConfig,
+    cron: params.context?.cron,
+    cronStorePath: params.context?.cronStorePath,
+    logger: params.context?.logGateway,
+  });
+}
+
 export const configHandlers: GatewayRequestHandlers = {
   "config.get": async ({ params, respond }) => {
     if (!assertValidParams(params, validateConfigGetParams, "config.get", respond)) {
@@ -424,6 +437,10 @@ export const configHandlers: GatewayRequestHandlers = {
       previousConfig: snapshot.config,
       nextConfig: parsed.config,
       logger: context?.logGateway,
+    });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: parsed.config,
+      context,
     });
     const nextSnapshot = await readConfigFileSnapshot();
     respond(
@@ -523,6 +540,10 @@ export const configHandlers: GatewayRequestHandlers = {
       nextConfig: validated.config,
       logger: context?.logGateway,
     });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: validated.config,
+      context,
+    });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =
       resolveConfigRestartRequest(params);
@@ -587,6 +608,10 @@ export const configHandlers: GatewayRequestHandlers = {
       previousConfig: snapshot.config,
       nextConfig: parsed.config,
       logger: context?.logGateway,
+    });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: parsed.config,
+      context,
     });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =

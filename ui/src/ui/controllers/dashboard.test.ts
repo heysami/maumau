@@ -150,6 +150,11 @@ describe("dashboard workshop controller state", () => {
       startDate: "2026-03-01",
       endDate: "2026-03-30",
       cards: [],
+      spending: {
+        records: 0,
+        currencies: [],
+        charts: [],
+      },
     });
 
     await loadDashboardData(host);
@@ -173,6 +178,11 @@ describe("dashboard workshop controller state", () => {
       startDate: "2026-03-01",
       endDate: "2026-03-30",
       cards: [],
+      spending: {
+        records: 0,
+        currencies: [],
+        charts: [],
+      },
     });
 
     await loadDashboardData(host);
@@ -243,6 +253,7 @@ describe("dashboard workshop controller state", () => {
               embeddable: false,
             },
           ],
+          agentApps: [],
         };
       }
       throw new Error(`unexpected method ${method}`);
@@ -272,6 +283,7 @@ describe("dashboard workshop controller state", () => {
             },
           ],
           savedItems: [],
+          agentApps: [],
         };
       }
       throw new Error(`unexpected method ${method}`);
@@ -297,8 +309,24 @@ describe("dashboard workshop controller state", () => {
       tasks: [],
       workshop: [],
       workshopSaved: [],
+      workshopAgentApps: [],
       calendar: [],
       routines: [],
+      lifeProfile: {
+        generatedAtMs: 1,
+        teamConfigured: false,
+        bootstrapPending: false,
+        sourceStatus: "missing",
+        sourceLabel: "main/USER.md",
+        recordedFieldCount: 0,
+        missingFieldCount: 0,
+        futureFieldCount: 0,
+        recordedNeedCount: 0,
+        missingNeedCount: 0,
+        futureNeedCount: 0,
+        fields: [],
+        agents: [],
+      },
       memories: [],
     };
     host.dashboardWorkshopSelectedIds = new Set(["workshop:1"]);
@@ -326,6 +354,7 @@ describe("dashboard workshop controller state", () => {
                 embeddable: false,
               },
             ],
+            agentApps: [],
           },
         };
       }
@@ -340,5 +369,35 @@ describe("dashboard workshop controller state", () => {
     expect(host.dashboardWorkshopTab).toBe("saved");
     expect(host.dashboardWorkshopSelectedId).toBe("saved:1");
     expect(host.dashboardSnapshot?.workshopSaved).toHaveLength(1);
+  });
+
+  it("uses the agent apps tab when there are no saved or recent workshop items", async () => {
+    const host = createHost();
+    host.tab = "dashboardWorkshop";
+    host.client.request = vi.fn(async (method: string) => {
+      if (method === "dashboard.workshop") {
+        return {
+          generatedAtMs: 123,
+          items: [],
+          savedItems: [],
+          agentApps: [
+            {
+              kind: "agent_app",
+              id: "agent-app:reset-board",
+              title: "Reset board",
+              status: "proposed",
+              ownerLabel: "Accountability Partner",
+              embeddable: false,
+            },
+          ],
+        };
+      }
+      throw new Error(`unexpected method ${method}`);
+    });
+
+    await loadDashboardData(host);
+
+    expect(host.dashboardWorkshopTab).toBe("agent-apps");
+    expect(host.dashboardWorkshopSelectedId).toBe("agent-app:reset-board");
   });
 });
