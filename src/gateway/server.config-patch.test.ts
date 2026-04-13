@@ -244,6 +244,48 @@ describe("gateway config methods", () => {
     expect(res.ok).toBe(false);
     expect(res.error?.message ?? "").toContain("raw must be an object");
   });
+
+  it("accepts MauOffice zone sign props with zoneId through config.patch", async () => {
+    const res = await rpcReq<{
+      ok?: boolean;
+      config?: {
+        ui?: {
+          mauOffice?: {
+            scene?: {
+              props?: Array<{ id: string; zoneId?: string }>;
+            };
+          };
+        };
+      };
+    }>(requireWs(), "config.patch", {
+      raw: JSON.stringify({
+        ui: {
+          mauOffice: {
+            scene: {
+              props: [
+                {
+                  id: "zone-sign-1",
+                  itemId: "zone-sign",
+                  tileX: 2,
+                  tileY: 1,
+                  zoneId: "telephony",
+                },
+              ],
+            },
+          },
+        },
+      }),
+      baseHash: await getConfigHash(),
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.payload?.config?.ui?.mauOffice?.scene?.props).toMatchObject([
+      {
+        id: "zone-sign-1",
+        zoneId: "telephony",
+      },
+    ]);
+  });
 });
 
 describe("gateway server sessions", () => {

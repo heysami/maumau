@@ -79,6 +79,10 @@ export type MauOfficeCatalogItem = {
       };
   defaultZOffset?: number;
   blocksWalkway: boolean;
+  labelOverlay?: {
+    kind: "room-name";
+    defaultRoomId: MauOfficeRoomId;
+  };
   loops?: {
     defaultLoopId: string;
     values: MauOfficeCatalogLoop[];
@@ -90,6 +94,7 @@ export type MauOfficeScenePropPlacement = {
   itemId: string;
   tileX: number;
   tileY: number;
+  zoneId?: MauOfficeRoomId;
   mirrored?: boolean;
   mountOverride?: MauOfficeSpriteMount;
   zOffsetOverride?: number;
@@ -177,15 +182,37 @@ const RIGHT_WING_MARKER_IDS = new Set(["browser_worker_1", "telephony_staff_1"])
 
 const ROOM_META: Record<
   MauOfficeRoomId,
-  Pick<MauOfficeRoom, "label" | "doorLabel" | "signTone">
+  Pick<MauOfficeRoom, "label" | "doorLabel" | "signTone"> & { signLabel: string }
 > = {
-  desk: { label: "MauApps", doorLabel: "Desk", signTone: "blue" },
-  meeting: { label: "MauHome", doorLabel: "Meeting", signTone: "green" },
-  browser: { label: "MauBrowse", doorLabel: "Browser", signTone: "blue" },
-  break: { label: "MauBreak", doorLabel: "Break", signTone: "purple" },
-  support: { label: "MauWorld", doorLabel: "Support", signTone: "gold" },
-  telephony: { label: "MauCall", doorLabel: "Telephony", signTone: "gold" },
+  desk: { label: "MauApps", doorLabel: "Desk", signTone: "blue", signLabel: "Desks" },
+  meeting: {
+    label: "MauHome",
+    doorLabel: "Meeting",
+    signTone: "green",
+    signLabel: "Meeting",
+  },
+  browser: {
+    label: "MauBrowse",
+    doorLabel: "Browser",
+    signTone: "blue",
+    signLabel: "Browser",
+  },
+  break: { label: "MauBreak", doorLabel: "Break", signTone: "purple", signLabel: "Break" },
+  support: {
+    label: "MauWorld",
+    doorLabel: "Support",
+    signTone: "gold",
+    signLabel: "Support",
+  },
+  telephony: {
+    label: "MauCall",
+    doorLabel: "Telephony",
+    signTone: "gold",
+    signLabel: "Telephony",
+  },
 };
+
+export const MAU_OFFICE_ROOM_META = ROOM_META;
 
 const REQUIRED_MARKER_COUNTS: Array<{
   role: MauOfficeMarkerRole;
@@ -1228,6 +1255,31 @@ const CATALOG_ITEMS: MauOfficeCatalogItem[] = [
     blocksWalkway: false,
   },
   {
+    id: "zone-sign",
+    label: "Zone Sign",
+    kind: "board",
+    asset: "mau-office/items/zone-sign-v1.png",
+    mount: "wall",
+    tileWidth: 3,
+    tileHeight: 1,
+    blocksWalkway: false,
+    labelOverlay: {
+      kind: "room-name",
+      defaultRoomId: "desk",
+    },
+    loops: {
+      defaultLoopId: "off",
+      values: [
+        {
+          id: "pulse",
+          label: "Pulse",
+          fps: 2,
+          frames: ["mau-office/items/zone-sign-v1.png", "mau-office/items/zone-sign-glow-v1.png"],
+        },
+      ],
+    },
+  },
+  {
     id: "plant",
     label: "Plant",
     kind: "plant",
@@ -2089,6 +2141,22 @@ function zoneForPlacement(
   return zone === "outside" ? "outside" : zone;
 }
 
+function isRoomId(value: unknown): value is MauOfficeRoomId {
+  return (
+    value === "desk" ||
+    value === "meeting" ||
+    value === "browser" ||
+    value === "break" ||
+    value === "support" ||
+    value === "telephony"
+  );
+}
+
+function roomIdAt(rows: MauOfficeZoneId[][], tileX: number, tileY: number): MauOfficeRoomId | null {
+  const zone = zoneAt(rows, Math.round(tileX), Math.round(tileY));
+  return isRoomId(zone) ? zone : null;
+}
+
 function resolveLoop(
   item: MauOfficeCatalogItem,
   loopId: string | undefined,
@@ -2122,6 +2190,12 @@ function compilePropPlacement(
   const mount = placement.mountOverride ?? item.mount;
   const blocksWalkway =
     placement.collisionOverride ?? (mount === "wall" ? false : item.blocksWalkway);
+  const labelRoomId =
+    item.labelOverlay?.kind === "room-name"
+      ? (placement.zoneId ??
+        roomIdAt(rows, placement.tileX, placement.tileY) ??
+        item.labelOverlay.defaultRoomId)
+      : null;
   return {
     id: placement.id,
     sourceId: placement.id,
@@ -2139,6 +2213,13 @@ function compilePropPlacement(
     blocksWalkway,
     kind: item.kind,
     animation: resolveLoop(item, placement.loopId),
+    overlayLabel:
+      labelRoomId != null
+        ? {
+            text: ROOM_META[labelRoomId].signLabel,
+            tone: ROOM_META[labelRoomId].signTone,
+          }
+        : undefined,
   };
 }
 
@@ -2443,6 +2524,7 @@ function defaultSceneProps(): MauOfficeScenePropPlacement[] {
     { id: "browser-book", itemId: "book-open", tileX: 32, tileY: 4.5 },
     { id: "browser-plant", itemId: "plant", tileX: 35, tileY: 3 },
     { id: "break-neon", itemId: "neon-sign", tileX: 4, tileY: 11 },
+    { id: "break-zone-sign", itemId: "zone-sign", tileX: 1, tileY: 11, zoneId: "break" },
     { id: "break-shelf", itemId: "snack-shelf", tileX: 11, tileY: 12 },
     { id: "break-arcade", itemId: "arcade", tileX: 1, tileY: 13 },
     { id: "break-round-table", itemId: "round-table", tileX: 4, tileY: 13 },
@@ -2451,6 +2533,7 @@ function defaultSceneProps(): MauOfficeScenePropPlacement[] {
     { id: "break-foosball", itemId: "foosball", tileX: 11, tileY: 16 },
     { id: "break-bench", itemId: "bench", tileX: 12, tileY: 14 },
     { id: "support-poster", itemId: "notice-board", tileX: 18, tileY: 12 },
+    { id: "support-zone-sign", itemId: "zone-sign", tileX: 16, tileY: 11, zoneId: "support" },
     { id: "support-calendar", itemId: "calendar-wall", tileX: 22, tileY: 12 },
     { id: "support-monitor-back-left", itemId: "monitor-back", tileX: 19, tileY: 14.5 },
     { id: "support-paper-center", itemId: "paper-stack", tileX: 20.5, tileY: 14.5 },
@@ -2458,11 +2541,21 @@ function defaultSceneProps(): MauOfficeScenePropPlacement[] {
     { id: "support-bench", itemId: "bench", tileX: 22, tileY: 17 },
     { id: "support-plant", itemId: "plant", tileX: 17, tileY: 17 },
     { id: "telephony-poster", itemId: "notice-board", tileX: 27, tileY: 12 },
+    {
+      id: "telephony-zone-sign",
+      itemId: "zone-sign",
+      tileX: 32,
+      tileY: 11,
+      zoneId: "telephony",
+    },
     { id: "telephony-calendar", itemId: "calendar-wall", tileX: 34, tileY: 12 },
     { id: "telephony-monitor", itemId: "monitor-back", tileX: 30, tileY: 14.5 },
     { id: "telephony-fax", itemId: "fax-machine", tileX: 31, tileY: 14.5 },
     { id: "telephony-paper", itemId: "paper-stack", tileX: 32, tileY: 14.5 },
     { id: "telephony-plant", itemId: "plant", tileX: 35, tileY: 17 },
+    { id: "desk-zone-sign", itemId: "zone-sign", tileX: 1, tileY: 9, zoneId: "desk" },
+    { id: "meeting-zone-sign", itemId: "zone-sign", tileX: 16, tileY: 9, zoneId: "meeting" },
+    { id: "browser-zone-sign", itemId: "zone-sign", tileX: 32, tileY: 9, zoneId: "browser" },
   ];
 }
 
@@ -3778,6 +3871,7 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
             itemId,
             tileX: typeof entry.tileX === "number" ? entry.tileX : 0,
             tileY: typeof entry.tileY === "number" ? entry.tileY : 0,
+            zoneId: isRoomId(entry.zoneId) ? entry.zoneId : undefined,
             mirrored: entry.mirrored === true,
             mountOverride:
               entry.mountOverride === "floor" ||

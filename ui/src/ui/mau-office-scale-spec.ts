@@ -554,6 +554,18 @@ const FIXED_ASSET_SPECS: MauOfficeAssetScaleSpec[] = [
     visibleBounds: { width: px(160, 168), height: px(44, 48), maxOffsetY: 8 },
   }),
   completeSpec({
+    asset: "mau-office/items/zone-sign-v1.png",
+    family: "sign",
+    sourceCanvas: { width: 192, height: 64 },
+    visibleBounds: { width: px(120, 122), height: px(39, 40), maxOffsetY: 14 },
+  }),
+  completeSpec({
+    asset: "mau-office/items/zone-sign-glow-v1.png",
+    family: "sign",
+    sourceCanvas: { width: 192, height: 64 },
+    visibleBounds: { width: px(134, 136), height: px(47, 48), maxOffsetY: 12 },
+  }),
+  completeSpec({
     asset: "mau-office/ui/speech-bubble-r1c1.png",
     family: "bubble",
     sourceCanvas: { width: 32, height: 24 },

@@ -7,6 +7,7 @@ import {
   MAU_OFFICE_PATH_TURN_ASSETS,
   MAU_OFFICE_WORKER_RIGS,
 } from "./mau-office-contract.ts";
+import { MAU_OFFICE_CATALOG } from "./mau-office-scene.ts";
 
 export type MauOfficePixellabAssetFamily = "board" | "floor" | "prop" | "shell" | "ui" | "worker";
 
@@ -32,6 +33,23 @@ export type MauOfficePixellabProvenance = {
 
 export function collectMauOfficeReferencedAssetPaths(): string[] {
   const assets = new Set<string>();
+  for (const item of Object.values(MAU_OFFICE_CATALOG)) {
+    if (item.asset) {
+      assets.add(item.asset);
+    }
+    if (item.sliceAssets) {
+      for (const asset of Object.values(item.sliceAssets)) {
+        assets.add(asset);
+      }
+    }
+    if (item.loops) {
+      for (const loop of item.loops.values) {
+        for (const asset of loop.frames) {
+          assets.add(asset);
+        }
+      }
+    }
+  }
   for (const tile of MAU_OFFICE_LAYOUT.map.floorTiles) {
     assets.add(tile.asset);
   }
@@ -439,6 +457,38 @@ const FIXED_UPLOADED_ENTRIES = [
     "neon-sign.png",
     "Neon sign adds atmosphere above the lounge without breaking the pixel discipline.",
   ),
+  entry({
+    asset: "mau-office/items/zone-sign-v1.png",
+    family: "board",
+    tool: "create_map_object",
+    jobId: "00fbc321-61ef-4a08-bc95-5d24e5955d40",
+    selectedOutput: "zone-sign-v1.png",
+    prompt:
+      "front-facing pixel art office wall zone sign plaque spanning nearly the entire canvas width, wide cream enamel sign with warm wood trim and tiny brass corner pins, blank center panel reserved for text, no letters, no symbols, edge-to-edge horizontal plaque, transparent background",
+    postprocess: [
+      "accept the full-width blank plaque with the cleanest central text area",
+      "download the Pixellab export onto the shared 192x64 MauOffice sign canvas",
+      "overlay the fixed room-name text in the UI so every zone label stays crisp and editable from the fixed list",
+    ],
+    beautyCritique:
+      "The blank plaque reads as an authored wall prop instead of a placeholder rectangle, and it leaves enough quiet space for the fixed room-name overlay to stay legible.",
+  }),
+  entry({
+    asset: "mau-office/items/zone-sign-glow-v1.png",
+    family: "board",
+    tool: "create_map_object",
+    jobId: "b07abdf0-6584-42dc-a2e6-f182a68298ae",
+    selectedOutput: "zone-sign-glow-v1.png",
+    prompt:
+      "front-facing pixel art office wall zone sign plaque spanning nearly the entire canvas width, wide cream enamel sign with warm wood trim and tiny brass corner pins, blank center panel reserved for text, no letters, no symbols, slightly brighter cream panel with a subtle warm golden glow, edge-to-edge horizontal plaque, transparent background",
+    postprocess: [
+      "accept the brighter companion plaque that preserves the same silhouette as the base frame",
+      "download the Pixellab export onto the shared 192x64 MauOffice sign canvas",
+      "pair it with the base plaque as the zone-sign pulse loop while keeping the room-name overlay text identical across both frames",
+    ],
+    beautyCritique:
+      "The lit frame gives the sign a gentle pulse without changing its shape, so the animation reads like a live sign instead of a popping sprite swap.",
+  }),
   uploaded(
     "mau-office/items/bench-v1.png",
     "prop",

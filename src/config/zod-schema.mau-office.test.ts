@@ -41,4 +41,26 @@ describe("MaumauSchema MauOffice scene validation", () => {
 
     expect(result.success).toBe(true);
   });
+
+  it("accepts fixed room-name zone sign selections on scene props", () => {
+    const result = MaumauSchema.safeParse({
+      ui: {
+        mauOffice: {
+          scene: {
+            props: [
+              {
+                id: "zone-sign-1",
+                itemId: "zone-sign",
+                tileX: 2,
+                tileY: 1,
+                zoneId: "telephony",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });

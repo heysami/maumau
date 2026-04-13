@@ -273,6 +273,20 @@ describe("createEmptyMauOfficeState", () => {
 
     expect(state.scene.authored.zoneRows).toHaveLength(20);
     expect(state.scene.authored.wallRows).toHaveLength(20);
+    expect(state.scene.authored.props.filter((entry) => entry.itemId === "zone-sign")).toEqual([
+      { id: "break-zone-sign", itemId: "zone-sign", tileX: 1, tileY: 11, zoneId: "break" },
+      { id: "support-zone-sign", itemId: "zone-sign", tileX: 16, tileY: 11, zoneId: "support" },
+      {
+        id: "telephony-zone-sign",
+        itemId: "zone-sign",
+        tileX: 32,
+        tileY: 11,
+        zoneId: "telephony",
+      },
+      { id: "desk-zone-sign", itemId: "zone-sign", tileX: 1, tileY: 9, zoneId: "desk" },
+      { id: "meeting-zone-sign", itemId: "zone-sign", tileX: 16, tileY: 9, zoneId: "meeting" },
+      { id: "browser-zone-sign", itemId: "zone-sign", tileX: 32, tileY: 9, zoneId: "browser" },
+    ]);
     expect(state.scene.markerIdsByRole["desk.workerSeat"]).toHaveLength(6);
     expect(state.scene.anchors.desk_board?.roomId).toBe("desk");
   });
@@ -5482,6 +5496,187 @@ describe("mau-office view", () => {
     } finally {
       danceFrames.splice(0, danceFrames.length, ...originalFrames);
     }
+  });
+
+  it("keeps zone signs static by default", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const sceneConfig = createDefaultMauOfficeSceneConfig();
+    sceneConfig.props = [{ id: "zone-sign-static", itemId: "zone-sign", tileX: 2, tileY: 2 }];
+    sceneConfig.autotiles = [];
+
+    const compiled = compileMauOfficeScene(sceneConfig);
+    expect(
+      compiled.map.propSprites.find((sprite) => sprite.id === "zone-sign-static"),
+    ).toMatchObject({
+      animation: undefined,
+    });
+
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      nowMs: 0,
+      scene: compiled,
+      actorOrder: [],
+      actors: {},
+    };
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state,
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const initialSrc =
+      container.querySelector<HTMLImageElement>(".mau-office__sign-image")?.getAttribute("src") ??
+      "";
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: { ...state, nowMs: 500 },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const nextSrc =
+      container.querySelector<HTMLImageElement>(".mau-office__sign-image")?.getAttribute("src") ??
+      "";
+
+    expect(initialSrc).not.toBe("");
+    expect(nextSrc).toBe(initialSrc);
+  });
+
+  it("animates prop loops when a catalog item explicitly enables them", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const sceneConfig = createDefaultMauOfficeSceneConfig();
+    sceneConfig.props = [
+      {
+        id: "zone-sign-animated",
+        itemId: "zone-sign",
+        tileX: 2,
+        tileY: 2,
+        zoneId: "desk",
+        loopId: "pulse",
+      },
+    ];
+    sceneConfig.autotiles = [];
+
+    const compiled = compileMauOfficeScene(sceneConfig);
+    expect(
+      compiled.map.propSprites.find((sprite) => sprite.id === "zone-sign-animated"),
+    ).toMatchObject({
+      animation: {
+        loopId: "pulse",
+        fps: 2,
+        frames: ["mau-office/items/zone-sign-v1.png", "mau-office/items/zone-sign-glow-v1.png"],
+      },
+    });
+
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      nowMs: 0,
+      scene: compiled,
+      actorOrder: [],
+      actors: {},
+    };
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state,
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const initialSrc =
+      container.querySelector<HTMLImageElement>(".mau-office__sign-image")?.getAttribute("src") ??
+      "";
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state: { ...state, nowMs: 500 },
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+    const nextSrc =
+      container.querySelector<HTMLImageElement>(".mau-office__sign-image")?.getAttribute("src") ??
+      "";
+
+    expect(initialSrc).not.toBe("");
+    expect(nextSrc).not.toBe("");
+    expect(nextSrc).not.toBe(initialSrc);
+  });
+
+  it("renders zone sign names from the fixed room list", () => {
+    installMatchMediaStub(false);
+    installViewportWidthStub(1600);
+    const container = document.createElement("div");
+    const sceneConfig = createDefaultMauOfficeSceneConfig();
+    sceneConfig.props = [
+      { id: "zone-sign-room", itemId: "zone-sign", tileX: 2, tileY: 2, zoneId: "telephony" },
+    ];
+    sceneConfig.autotiles = [];
+
+    const compiled = compileMauOfficeScene(sceneConfig);
+    expect(compiled.map.propSprites.find((sprite) => sprite.id === "zone-sign-room")).toMatchObject(
+      {
+        overlayLabel: {
+          text: "Telephony",
+          tone: "gold",
+        },
+      },
+    );
+
+    const state: MauOfficeState = {
+      ...createEmptyMauOfficeState(),
+      loaded: true,
+      nowMs: 0,
+      scene: compiled,
+      actorOrder: [],
+      actors: {},
+    };
+
+    render(
+      renderMauOffice({
+        loading: false,
+        error: null,
+        state,
+        basePath: "",
+        onRefresh: () => undefined,
+        onRoomFocus: () => undefined,
+        onActorOpen: () => undefined,
+      }),
+      container,
+    );
+
+    const sign = container.querySelector<HTMLElement>(".mau-office__sign");
+    expect(sign?.classList.contains("mau-office__sign--gold")).toBe(true);
+    expect(sign?.querySelector(".mau-office__sign-text")?.textContent?.trim()).toBe("Telephony");
   });
 
   it("advances stationary standing workers through their idle animation frames", () => {

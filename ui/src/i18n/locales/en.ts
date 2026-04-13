@@ -640,8 +640,7 @@ export const en: TranslationMap = {
       unavailableConfig:
         "Gateway config is unavailable, so this scope view is using runtime defaults only.",
       loadingTools: "Loading runtime tool catalog…",
-      unavailableTools:
-        "Tool catalog unavailable. Showing the fallback tool groups instead.",
+      unavailableTools: "Tool catalog unavailable. Showing the fallback tool groups instead.",
       rules: {
         explicitAllowlist: "Explicit allowlist",
         explicitAllowlistEmpty: "No per-agent tools.allow override.",
@@ -723,9 +722,9 @@ export const en: TranslationMap = {
             "Click to switch selection. Click empty space to clear it. Press and drag the selected prop, brush region, or marker to move it.",
           selectEmpty: "Click a placed item, brush region, or marker to inspect and adjust it.",
           zone: "Drag to paint floor zones. Floors no longer create walls automatically.",
-          wall:
-            "Drag to paint wall tiles anywhere on the grid. Edit mode shows the saved wall art as a translucent preview.",
-          autotilePaint: "Drag to paint smart brush cells. Neighboring slices update automatically.",
+          wall: "Drag to paint wall tiles anywhere on the grid. Edit mode shows the saved wall art as a translucent preview.",
+          autotilePaint:
+            "Drag to paint smart brush cells. Neighboring slices update automatically.",
           autotileErase: "Drag to carve cells out of the selected smart brush region.",
           propPaint: "Click to place the selected catalog item.",
           propErase: "Click an item to remove it.",
@@ -741,6 +740,7 @@ export const en: TranslationMap = {
           mount: "Mount",
           zOffset: "Z Offset",
           collision: "Collision",
+          zoneName: "Zone Name",
           blocks: "Blocks",
           walkable: "Walkable",
           loop: "Loop",
@@ -779,8 +779,7 @@ export const en: TranslationMap = {
           height: "Height",
           save: "Save",
           sceneValid: "Scene is valid.",
-          fixValidation:
-            "Fix validation errors above to enable Apply and Save & Close.",
+          fixValidation: "Fix validation errors above to enable Apply and Save & Close.",
           saveHint:
             "Apply updates the live Control UI preview without writing the config file. Save & Close writes the layout to config and exits edit mode.",
           close: "Close",

@@ -115,6 +115,7 @@ export type MaumauConfig = {
           itemId: string;
           tileX: number;
           tileY: number;
+          zoneId?: "desk" | "meeting" | "browser" | "break" | "support" | "telephony";
           mirrored?: boolean;
           mountOverride?: "floor" | "wall" | "underlay";
           zOffsetOverride?: number;

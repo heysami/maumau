@@ -95,12 +95,7 @@ function resolveNearestMarkerTile(
     ] as const) {
       const nextTileX = current.tileX + dx;
       const nextTileY = current.tileY + dy;
-      if (
-        nextTileX < 0 ||
-        nextTileX >= width ||
-        nextTileY < 0 ||
-        nextTileY >= height
-      ) {
+      if (nextTileX < 0 || nextTileX >= width || nextTileY < 0 || nextTileY >= height) {
         continue;
       }
       const nextKey = `${nextTileX},${nextTileY}`;
@@ -247,6 +242,15 @@ export function placeSceneProp(
     itemId,
     tileX: x,
     tileY: y,
+    zoneId:
+      item.labelOverlay?.kind === "room-name"
+        ? (() => {
+            const zone = next.zoneRows[y]?.[x];
+            return zone && zone !== "hall" && zone !== "outside"
+              ? zone
+              : item.labelOverlay.defaultRoomId;
+          })()
+        : undefined,
     mountOverride: mountOnWall ? "wall" : undefined,
   });
   return { scene: next, id };
@@ -402,10 +406,7 @@ function cloneHistoryStack(stack: MauOfficeSceneConfig[]): MauOfficeSceneConfig[
   return stack.map((entry) => cloneMauOfficeSceneConfig(entry));
 }
 
-export function scenesMatch(
-  left: MauOfficeSceneConfig,
-  right: MauOfficeSceneConfig,
-): boolean {
+export function scenesMatch(left: MauOfficeSceneConfig, right: MauOfficeSceneConfig): boolean {
   return sceneHistoryKey(left) === sceneHistoryKey(right);
 }
 
@@ -552,7 +553,11 @@ export function moveSceneSelection(
     }
     target.tileX = clampPlacementTile(tileX, item.tileWidth, maxTileX);
     target.tileY = clampPlacementTile(tileY, item.tileHeight, maxTileY);
-    if (target.mountOverride == null && wallAt(next, target.tileX, target.tileY) && item.mount !== "wall") {
+    if (
+      target.mountOverride == null &&
+      wallAt(next, target.tileX, target.tileY) &&
+      item.mount !== "wall"
+    ) {
       target.mountOverride = "wall";
     }
     return next;
@@ -617,10 +622,7 @@ export function resizeSceneCanvas(
   }
   const next = cloneMauOfficeSceneConfig(scene);
   next.zoneRows = Array.from({ length: targetHeight }, (_, tileY) =>
-    Array.from(
-      { length: targetWidth },
-      (_, tileX) => next.zoneRows[tileY]?.[tileX] ?? "outside",
-    ),
+    Array.from({ length: targetWidth }, (_, tileX) => next.zoneRows[tileY]?.[tileX] ?? "outside"),
   );
   next.wallRows = Array.from({ length: targetHeight }, (_, tileY) =>
     Array.from({ length: targetWidth }, (_, tileX) => next.wallRows[tileY]?.[tileX] === true),

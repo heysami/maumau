@@ -240,6 +240,15 @@ const MauOfficeZoneIdSchema = z.union([
   z.literal("outside"),
 ]);
 
+const MauOfficeRoomIdSchema = z.union([
+  z.literal("desk"),
+  z.literal("meeting"),
+  z.literal("browser"),
+  z.literal("break"),
+  z.literal("support"),
+  z.literal("telephony"),
+]);
+
 const MauOfficeMarkerRoleSchema = z.union([
   z.literal("spawn.office"),
   z.literal("spawn.support"),
@@ -273,6 +282,7 @@ const MauOfficeScenePropSchema = z
     itemId: z.string().min(1),
     tileX: z.number(),
     tileY: z.number(),
+    zoneId: MauOfficeRoomIdSchema.optional(),
     mirrored: z.boolean().optional(),
     mountOverride: MauOfficeMountSchema.optional(),
     zOffsetOverride: z.number().optional(),

@@ -146,6 +146,10 @@ export type MauOfficeSpritePlacement = {
     fps: number;
     frames: string[];
   };
+  overlayLabel?: {
+    text: string;
+    tone: MauOfficeLabelTone;
+  };
   kind:
     | "accessory"
     | "arcade"

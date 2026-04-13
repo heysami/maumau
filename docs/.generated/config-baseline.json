@@ -56542,6 +56542,127 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.lossless-claw",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lossless Claw",
+      "help": "Lossless transcript continuity across compaction and spawned agents. (plugin: lossless-claw)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lossless Claw Config",
+      "help": "Plugin-defined config payload for lossless-claw.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Lossless Claw",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.matrix",
       "kind": "plugin",
       "type": "object",
@@ -58131,7 +58252,7 @@
         "advanced"
       ],
       "label": "Enable Multi-User Memory",
-      "help": "Turns on scoped user and group memory resolution for the active memory slot.",
+      "help": "Turns on scoped user and group memory overlays for the default memory stack.",
       "hasChildren": false
     },
     {
@@ -67835,6 +67956,86 @@
       "hasChildren": false
     },
     {
+      "path": "teams.list.*.workflow.lifecycle",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.roles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.roles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.status",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
       "path": "teams.list.*.workflow.managerPrompt",
       "kind": "core",
       "type": "string",
@@ -67996,6 +68197,110 @@
       ],
       "label": "Workflow ID",
       "help": "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Lifecycle",
+      "help": "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Lifecycle Stages",
+      "help": "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage ID",
+      "help": "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Name",
+      "help": "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.roles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Roles",
+      "help": "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.roles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.status",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Status",
+      "help": "Coarse task-status bucket for this stage: \"in_progress\", \"review\", \"done\", \"blocked\", or \"idle\". This controls how the dashboard maps the active stage into the global task board.",
       "hasChildren": false
     },
     {
@@ -72847,6 +73152,464 @@
       ],
       "label": "MauOffice Max Visible Workers",
       "help": "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene",
+      "help": "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Autotiles",
+      "help": "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.collisionOverride",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.itemId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.loopId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.mountOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.zOffsetOverride",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Markers",
+      "help": "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.facingOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles.height",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles.width",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.layer",
+      "kind": "core",
+      "type": "integer",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.pose",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.role",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Props",
+      "help": "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.collisionOverride",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.itemId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.loopId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.mirrored",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.mountOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.zOffsetOverride",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.version",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Version",
+      "help": "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Wall Rows",
+      "help": "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows.*",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows.*.*",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Zone Rows",
+      "help": "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows.*",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows.*.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
       "hasChildren": false
     },
     {

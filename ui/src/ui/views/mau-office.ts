@@ -39,6 +39,7 @@ import {
 } from "../mau-office-contract.ts";
 import {
   MAU_OFFICE_CATALOG,
+  MAU_OFFICE_ROOM_META,
   MAU_OFFICE_SCENE_MAX_TILES_H,
   MAU_OFFICE_SCENE_MAX_TILES_W,
   MAU_OFFICE_SCENE_MIN_TILES_H,
@@ -1235,6 +1236,14 @@ function renderTile(scene: CompiledMauOfficeScene, tile: MauOfficeTilePlacement,
   `;
 }
 
+function resolveSignFontPx(text: string): number {
+  const maxWidthPx = 110;
+  const estimated = Math.floor(
+    maxWidthPx / Math.max(1, text.length * PIXEL_TEXT_GLYPH_WIDTH_RATIO),
+  );
+  return Math.max(13, Math.min(20, estimated));
+}
+
 function renderProp(
   scene: CompiledMauOfficeScene,
   sprite: MauOfficeSpritePlacement,
@@ -1246,11 +1255,29 @@ function renderProp(
     sprite.animation && sprite.animation.frames.length > 0
       ? resolveAnimationFrame(sprite.sourceId ?? sprite.id, sprite.animation, nowMs)
       : sprite.asset;
+  const spriteClasses =
+    `mau-office__sprite mau-office__sprite--${sprite.kind} mau-office__sprite--${sprite.layer} ${extraClass}`.trim();
+  const spriteUrl = resolveMauOfficeAssetUrl(basePath, asset);
+  if (sprite.overlayLabel) {
+    return html`
+      <span
+        class=${`mau-office__sign ${spriteClasses} mau-office__sign--${sprite.overlayLabel.tone}`}
+        style=${positionForSprite(scene, sprite)}
+      >
+        <img class="mau-office__sign-image" src=${spriteUrl} alt="" draggable="false" />
+        <span
+          class="mau-office__sign-text"
+          style=${styleMap({ fontSize: `${resolveSignFontPx(sprite.overlayLabel.text)}px` })}
+          >${sprite.overlayLabel.text}</span
+        >
+      </span>
+    `;
+  }
   return html`
     <img
-      class="mau-office__sprite mau-office__sprite--${sprite.kind} mau-office__sprite--${sprite.layer} ${extraClass}"
+      class=${spriteClasses}
       style=${positionForSprite(scene, sprite)}
-      src=${resolveMauOfficeAssetUrl(basePath, asset)}
+      src=${spriteUrl}
       alt=""
       draggable="false"
     />
@@ -2213,9 +2240,7 @@ function currentEditorModeLabel(editor: NonNullable<MauOfficeProps["editor"]>): 
 function editorHint(editor: NonNullable<MauOfficeProps["editor"]>): string {
   switch (editor.tool) {
     case "select":
-      return editor.selection
-        ? editorT("hints.selectWithSelection")
-        : editorT("hints.selectEmpty");
+      return editor.selection ? editorT("hints.selectWithSelection") : editorT("hints.selectEmpty");
     case "zone":
       return editorT("hints.zone");
     case "wall":
@@ -2225,9 +2250,7 @@ function editorHint(editor: NonNullable<MauOfficeProps["editor"]>): string {
         ? editorT("hints.autotilePaint")
         : editorT("hints.autotileErase");
     case "prop":
-      return editor.brushMode === "paint"
-        ? editorT("hints.propPaint")
-        : editorT("hints.propErase");
+      return editor.brushMode === "paint" ? editorT("hints.propPaint") : editorT("hints.propErase");
     case "marker":
       return editor.brushMode === "paint"
         ? editorT("hints.markerPaint")
@@ -2474,6 +2497,30 @@ function renderEditorSelectionPanel(
                     `
                   : nothing
               }
+              ${
+                selectedCatalogItem?.labelOverlay?.kind === "room-name"
+                  ? html`
+                      <label>
+                        <span>${editorT("selection.zoneName")}</span>
+                        <select
+                          .value=${
+                            selectedSummary.prop.zoneId ??
+                            selectedCatalogItem.labelOverlay.defaultRoomId
+                          }
+                          @change=${(event: Event) =>
+                            editor.onSelectionPatch({
+                              zoneId: (event.target as HTMLSelectElement).value,
+                            })}
+                        >
+                          ${MAU_OFFICE_ROOM_IDS.map(
+                            (roomId) =>
+                              html`<option value=${roomId}>${MAU_OFFICE_ROOM_META[roomId].signLabel}</option>`,
+                          )}
+                        </select>
+                      </label>
+                    `
+                  : nothing
+              }
             `
           : selectedSummary.kind === "autotile"
             ? html`
@@ -2637,9 +2684,12 @@ function renderEditorControls(props: MauOfficeProps) {
         ${EDITOR_TOOL_ORDER.map((tool) => {
           const active = editor.tool === tool;
           const label = active
-            ? editorT(editor.toolPanelOpen === false ? "controls.showOptions" : "controls.hideOptions", {
-                tool: editorToolLabel(tool),
-              })
+            ? editorT(
+                editor.toolPanelOpen === false ? "controls.showOptions" : "controls.hideOptions",
+                {
+                  tool: editorToolLabel(tool),
+                },
+              )
             : editorToolLabel(tool);
           return html`
               <button
