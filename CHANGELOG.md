@@ -8,6 +8,14 @@ Docs: https://docs.maumau.ai
 
 ### Changes
 
+### Fixes
+
+## 2026.4.14
+
+### Breaking
+
+### Changes
+
 - macOS/models settings: replace the raw model editor with a guided provider-first flow inside Settings, including in-place provider connect, provider-scoped primary/fallback selection, and clearer loading/saving states.
 
 ### Fixes

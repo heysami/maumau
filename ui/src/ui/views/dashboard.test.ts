@@ -15,6 +15,7 @@ import type {
   DashboardTeamRun,
   DashboardTeamRunsResult,
   DashboardTeamSnapshotsResult,
+  DashboardUserChannelsResult,
   DashboardWalletResult,
   DashboardWorkshopItem,
 } from "../types.ts";
@@ -2106,7 +2107,7 @@ describe("dashboard view", () => {
       agents: [{ id: "agent-1", name: "Focus Coach", identity: { name: "Focus Coach" } }],
     };
 
-    const userChannelsResult = {
+    const userChannelsResult: DashboardUserChannelsResult = {
       generatedAtMs: 1,
       channels: [
         {
@@ -2185,7 +2186,7 @@ describe("dashboard view", () => {
     };
 
     const cases: Array<{
-      tab: Parameters<typeof buildProps>[0]["tab"];
+      tab: NonNullable<Parameters<typeof buildProps>[0]>["tab"];
       overrides: Partial<Parameters<typeof renderDashboard>[0]>;
       expected: string[];
     }> = [

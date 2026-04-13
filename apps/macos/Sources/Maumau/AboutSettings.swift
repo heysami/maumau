@@ -70,7 +70,7 @@ struct AboutSettings: View {
                     .padding(.horizontal, 18)
 
                 VStack(spacing: 2) {
-                    Text("Maumau is based on OpenClaw.")
+                    Text("Maumau is built by Peter Steinberger.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Link("Peter Steinberger on X", destination: URL(string: AboutLinks.peterX)!)
@@ -110,7 +110,7 @@ struct AboutSettings: View {
                 }
             }
 
-            Text("OpenClaw © 2025 Peter Steinberger — MIT License.")
+            Text("Maumau © 2025 Peter Steinberger — MIT License.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)

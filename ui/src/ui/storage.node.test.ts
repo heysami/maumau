@@ -364,12 +364,13 @@ describe("loadSettings default gateway URL derivation", () => {
       theme: "dash",
       themeMode: "light",
     });
-    expect(JSON.parse(localStorage.getItem(`maumau.control.settings.v1:${gwUrl}`) ?? "{}"))
-      .toMatchObject({
-        theme: "dash",
-        themeMode: "light",
-        themePreferenceVersion: 2,
-      });
+    expect(
+      JSON.parse(localStorage.getItem(`maumau.control.settings.v1:${gwUrl}`) ?? "{}"),
+    ).toMatchObject({
+      theme: "dash",
+      themeMode: "light",
+      themePreferenceVersion: 2,
+    });
   });
 
   it("persists themeMode and navWidth alongside the selected theme", async () => {

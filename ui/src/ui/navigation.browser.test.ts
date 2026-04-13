@@ -148,15 +148,15 @@ describe("control UI routing", () => {
     expect(app.querySelector(".sidebar-utility-link")).not.toBeNull();
   });
 
-  it("shows OpenClaw documentation copy in the sidebar footer", async () => {
+  it("shows Maumau documentation copy in the sidebar footer", async () => {
     const app = mountApp("/chat");
     await app.updateComplete;
 
     const docsCard = app.querySelector<HTMLAnchorElement>(".sidebar-docs-card");
     expect(docsCard).not.toBeNull();
-    expect(docsCard?.getAttribute("href")).toBe("https://docs.openclaw.ai");
-    expect(docsCard?.textContent).toContain("Maumau is based on OpenClaw.");
-    expect(docsCard?.textContent).toContain("OpenClaw documentation");
+    expect(docsCard?.getAttribute("href")).toBe("https://docs.maumau.ai");
+    expect(docsCard?.textContent).toContain("Learn more in the Maumau documentation.");
+    expect(docsCard?.textContent).toContain("Maumau documentation");
   });
 
   it("keeps the collapsed desktop rail compact", async () => {

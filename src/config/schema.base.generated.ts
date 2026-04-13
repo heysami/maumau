@@ -628,6 +628,34 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                         tileY: {
                           type: "number",
                         },
+                        zoneId: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "desk",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting",
+                            },
+                            {
+                              type: "string",
+                              const: "browser",
+                            },
+                            {
+                              type: "string",
+                              const: "break",
+                            },
+                            {
+                              type: "string",
+                              const: "support",
+                            },
+                            {
+                              type: "string",
+                              const: "telephony",
+                            },
+                          ],
+                        },
                         mirrored: {
                           type: "boolean",
                         },
@@ -17231,6 +17259,6 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["security", "auth"],
     },
   },
-  version: "2026.3.28-beta.2",
+  version: "2026.4.14",
   generatedAt: "2026-03-22T21:17:33.302Z",
 } as const satisfies BaseConfigSchemaResponse;

@@ -455,12 +455,21 @@ export const icons = {
         d="M18 64C18 36 35 18 60 18S102 36 102 64C102 90 84 108 60 108S18 90 18 64Z"
         fill="url(#cat-g)"
       />
+      <path d="M34 77C39 91 49 98 60 98S81 91 86 77C79 81 70 83 60 83S41 81 34 77Z" fill="#fff4df" />
       <path
-        d="M34 77C39 91 49 98 60 98S81 91 86 77C79 81 70 83 60 83S41 81 34 77Z"
-        fill="#fff4df"
+        d="M49 23c1 8 4 16 7 24"
+        stroke="#c9782a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.55"
       />
-      <path d="M49 23c1 8 4 16 7 24" stroke="#c9782a" stroke-width="4" stroke-linecap="round" opacity="0.55" />
-      <path d="M68 23c-1 8-3 16-5 24" stroke="#c9782a" stroke-width="4" stroke-linecap="round" opacity="0.5" />
+      <path
+        d="M68 23c-1 8-3 16-5 24"
+        stroke="#c9782a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
       <ellipse cx="41" cy="63" rx="9" ry="5" fill="#ff9c7e" opacity="0.75" />
       <ellipse cx="79" cy="63" rx="9" ry="5" fill="#ff9c7e" opacity="0.75" />
       <circle cx="45" cy="56" r="5.5" fill="#2b1604" />
@@ -470,8 +479,20 @@ export const icons = {
       <path d="M60 67 55 63h10l-5 4Z" fill="#dc6e59" />
       <path d="M60 68c-3 5-8 7-13 5" stroke="#4a2410" stroke-width="3" stroke-linecap="round" />
       <path d="M60 68c3 5 8 7 13 5" stroke="#4a2410" stroke-width="3" stroke-linecap="round" />
-      <path d="M31 66h15M30 75h16M89 66H74M90 75H74" stroke="#8a4a1b" stroke-width="3" stroke-linecap="round" opacity="0.65" />
-      <path d="M44 85 60 95 76 85" stroke="#fffaf1" stroke-width="10" stroke-linecap="round" opacity="0.95" />
+      <path
+        d="M31 66h15M30 75h16M89 66H74M90 75H74"
+        stroke="#8a4a1b"
+        stroke-width="3"
+        stroke-linecap="round"
+        opacity="0.65"
+      />
+      <path
+        d="M44 85 60 95 76 85"
+        stroke="#fffaf1"
+        stroke-width="10"
+        stroke-linecap="round"
+        opacity="0.95"
+      />
       <path d="M46 96 34 90l3 13 9-7Z" fill="#242228" />
       <rect x="55" y="90" width="10" height="12" rx="2.5" fill="#242228" />
       <path d="M74 96 86 90l-3 13-9-7Z" fill="#242228" />

@@ -218,7 +218,7 @@ const mauOfficeSceneValidationCache = new WeakMap<
 >();
 const MAU_OFFICE_EDITOR_HISTORY_SHORTCUT_LABEL = "Cmd/Ctrl+Z";
 const MAU_OFFICE_EDITOR_REDO_SHORTCUT_LABEL = "Shift+Cmd/Ctrl+Z";
-const OPENCLAW_DOCS_URL = "https://docs.openclaw.ai";
+const MAUMAU_DOCS_URL = "https://docs.maumau.ai";
 
 function getCachedCompiledMauOfficeScene(scene: Parameters<typeof compileMauOfficeScene>[0]) {
   const cached = mauOfficeSceneCompileCache.get(scene);
@@ -1601,11 +1601,11 @@ export function renderApp(state: AppViewState) {
               <div class="sidebar-utility-group">
                 <a
                   class="sidebar-utility-link sidebar-docs-card"
-                  href=${OPENCLAW_DOCS_URL}
+                  href=${MAUMAU_DOCS_URL}
                   target=${EXTERNAL_LINK_TARGET}
                   rel=${buildExternalLinkRel()}
-                  title="OpenClaw documentation (opens in new tab)"
-                  aria-label="OpenClaw documentation"
+                  title="Maumau documentation (opens in new tab)"
+                  aria-label="Maumau documentation"
                 >
                   <span class="sidebar-docs-card__header">
                     <span class="sidebar-docs-card__icon" aria-hidden="true">${icons.book}</span>
@@ -1621,11 +1621,8 @@ export function renderApp(state: AppViewState) {
                   ${
                     !navCollapsed
                       ? html`
-                          <span class="sidebar-docs-card__body">
-                            Maumau is based on OpenClaw. To learn more, refer to OpenClaw
-                            documentation.
-                          </span>
-                          <span class="sidebar-docs-card__link">OpenClaw documentation</span>
+                          <span class="sidebar-docs-card__body"> Learn more in the Maumau documentation. </span>
+                          <span class="sidebar-docs-card__link">Maumau documentation</span>
                         `
                       : nothing
                   }

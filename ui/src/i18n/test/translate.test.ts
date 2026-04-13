@@ -216,17 +216,21 @@ describe("i18n", () => {
   });
 
   it("keeps legacy shipped locales loading known dashboard copy during migration", () => {
-    expect(de.common.health).toBeTruthy();
-    expect(es.common.health).toBeTruthy();
+    expect((de.common as { health?: string }).health).toBeTruthy();
+    expect((es.common as { health?: string }).health).toBeTruthy();
     expect((pt_BR.common as { health?: string }).health).toBeTruthy();
-    expect((zh_CN.dashboard?.shell as { eyebrow?: string } | undefined)?.eyebrow).toBeTruthy();
-    expect((zh_TW.dashboard?.shell as { eyebrow?: string } | undefined)?.eyebrow).toBeTruthy();
+    expect(
+      (zh_CN.dashboard as { shell?: { eyebrow?: string } } | undefined)?.shell?.eyebrow,
+    ).toBeTruthy();
+    expect(
+      (zh_TW.dashboard as { shell?: { eyebrow?: string } } | undefined)?.shell?.eyebrow,
+    ).toBeTruthy();
   });
 
   it("keeps Malay distinct from Indonesian on shared dashboard copy", () => {
-    expect(ms.common.refresh).toBe("Muat semula");
-    expect(id.common.refresh).toBe("Muat ulang");
-    expect(ms.nav.settings).toBe("Tetapan");
-    expect(id.nav.settings).toBe("Pengaturan");
+    expect((ms.common as { refresh?: string }).refresh).toBe("Muat semula");
+    expect((id.common as { refresh?: string }).refresh).toBe("Muat ulang");
+    expect((ms.nav as { settings?: string }).settings).toBe("Tetapan");
+    expect((id.nav as { settings?: string }).settings).toBe("Pengaturan");
   });
 });
