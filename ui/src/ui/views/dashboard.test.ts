@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createEmptyMauOfficeState } from "../controllers/mau-office.ts";
 import type {
   DashboardAgentAppItem,
+  DashboardBusinessResult,
   DashboardCalendarFilters,
+  DashboardProjectsResult,
   DashboardSavedWorkshopItem,
   DashboardSnapshot,
   DashboardTask,
@@ -336,6 +338,139 @@ function buildTeamRuns(): DashboardTeamRunsResult {
   };
 }
 
+function buildBusinessResult(
+  overrides: Partial<DashboardBusinessResult> = {},
+): DashboardBusinessResult {
+  return {
+    generatedAtMs: 1,
+    items: [
+      {
+        businessId: "focus-lab",
+        businessName: "Focus Lab",
+        status: "exploring",
+        sourceLabel: "business/focus-lab/BUSINESS.md",
+        updatedAtMs: 10,
+        recordedFieldCount: 5,
+        missingFieldCount: 3,
+        projectCount: 2,
+        activeProjectCount: 2,
+        fields: [
+          {
+            key: "moneyGoal",
+            label: "Money goal",
+            description: "How this business is meant to make money.",
+            value: "Reach the first $5k MRR.",
+            status: "recorded",
+          },
+          {
+            key: "targetCustomer",
+            label: "Target customer",
+            description: "Who this business is for.",
+            value: "Solo founders who need fast launch support.",
+            status: "recorded",
+          },
+          {
+            key: "problem",
+            label: "Problem",
+            description: "What pain or need it solves.",
+            value: "Founders stall between idea and first usable build.",
+            status: "recorded",
+          },
+          {
+            key: "offer",
+            label: "Offer",
+            description: "What gets sold or delivered.",
+            value: "Productized MVP planning and execution support.",
+            status: "recorded",
+          },
+          {
+            key: "channels",
+            label: "Channels",
+            description: "How it reaches customers.",
+            value: "Twitter, founder communities, warm intros.",
+            status: "recorded",
+          },
+          {
+            key: "constraints",
+            label: "Constraints",
+            description: "Current limits on execution.",
+            status: "missing",
+          },
+          {
+            key: "currentAssets",
+            label: "Current assets",
+            description: "What already exists.",
+            status: "missing",
+          },
+          {
+            key: "openQuestions",
+            label: "Open questions",
+            description: "What still needs to be answered.",
+            value: "Should the first offer be service-led or template-led?",
+            status: "recorded",
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function buildProjectsResult(
+  overrides: Partial<DashboardProjectsResult> = {},
+): DashboardProjectsResult {
+  return {
+    generatedAtMs: 1,
+    items: [
+      {
+        businessId: "focus-lab",
+        businessName: "Focus Lab",
+        projectId: "founder-os",
+        projectName: "Founder OS",
+        status: "proposed",
+        projectTag: "founder-os",
+        appNeeded: true,
+        goal: "Turn a founder workflow idea into a scoped product.",
+        scope: "Dashboard, intake, and lightweight execution planner.",
+        teamId: undefined,
+        linkedWorkspace: undefined,
+        linkedWorkspaceLabel: undefined,
+        nextStep: "Approve the versioned blueprint.",
+        proposalSummary: "Bundle a product workflow and ship an MVP through vibe-coder.",
+        updatedAtMs: 12,
+        blueprintVersion: 3,
+        blueprintStatus: "approved",
+        linkedTaskCount: 2,
+        linkedWorkshopCount: 1,
+        linkedAgentAppCount: 1,
+      },
+      {
+        businessId: "focus-lab",
+        businessName: "Focus Lab",
+        projectId: "service-playbook",
+        projectName: "Service Playbook",
+        status: "researching",
+        projectTag: "service-playbook",
+        appNeeded: false,
+        goal: "Validate the first service offer.",
+        scope: "Offer framing and sales workflow.",
+        teamId: undefined,
+        linkedWorkspace: undefined,
+        linkedWorkspaceLabel: undefined,
+        nextStep: "Run competitor and pricing research.",
+        proposalSummary: "Compare positioning and price bands.",
+        updatedAtMs: 11,
+        blueprintVersion: 1,
+        blueprintStatus: "draft",
+        linkedTaskCount: 0,
+        linkedWorkshopCount: 0,
+        linkedAgentAppCount: 0,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function buildProps(
   overrides: Partial<Parameters<typeof renderDashboard>[0]> = {},
 ): Parameters<typeof renderDashboard>[0] {
@@ -359,6 +494,8 @@ function buildProps(
     walletCurrency: "USD",
     calendarResult: null,
     calendarAnchorAtMs: null,
+    businessResult: null,
+    projectsResult: null,
     userChannelsResult: null,
     userChannelId: null,
     userChannelAccountId: null,
@@ -383,10 +520,13 @@ function buildProps(
     calendarView: "month",
     calendarFilters: defaultCalendarFilters,
     routineSelection: null,
+    businessSelection: null,
     profileSelection: null,
+    projectSelection: null,
     teamSelection: "vibe-coder:default",
     memoryAgentId: null,
     agentPanel: "memory",
+    businessManagerAvailable: true,
     agentsList: null,
     configForm: null,
     configLoading: false,
@@ -443,8 +583,12 @@ function buildProps(
     onCalendarJumpToday: vi.fn(),
     onCalendarFiltersChange: vi.fn(),
     onSelectRoutine: vi.fn(),
+    onSelectBusiness: vi.fn(),
     onSelectProfileAgent: vi.fn(),
+    onSelectProject: vi.fn(),
     onCalendarSelectDay: vi.fn(),
+    onOpenBusinessManager: vi.fn(),
+    onApplyProjectBlueprint: vi.fn(),
     onSelectUserChannel: vi.fn(),
     onSelectUserChannelAccount: vi.fn(),
     onOpenUserManagement: vi.fn(),
@@ -1621,6 +1765,56 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain(
       "Scan the QR with the WhatsApp number or linked device the bot will use.",
     );
+  });
+
+  it("renders the business dashboard page with dossier coverage and linked projects", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardBusiness",
+          businessResult: buildBusinessResult(),
+          projectsResult: buildProjectsResult(),
+          businessSelection: "focus-lab",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Focus Lab");
+    expect(container.textContent).toContain("Business Dossier");
+    expect(container.textContent).toContain("Profiling Gaps");
+    expect(container.textContent).toContain("Open Questions");
+    expect(container.textContent).toContain("Linked Projects");
+    expect(container.textContent).toContain("Founder OS");
+    expect(container.textContent).toContain("Continue Research");
+  });
+
+  it("renders the projects dashboard page with blueprint and workspace state", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardProjects",
+          businessResult: buildBusinessResult(),
+          projectsResult: buildProjectsResult(),
+          projectSelection: "founder-os",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    expect(container.textContent).toContain("Founder OS");
+    expect(container.textContent).toContain("Apply Approved Blueprint");
+    expect(container.textContent).toContain("Project Dossier");
+    expect(container.textContent).toContain("Project Wiring");
+    expect(container.textContent).toContain("Joined Artifacts");
+    expect(container.textContent).toContain("Blueprint Approved");
+    expect(container.textContent).toContain("Open Tagged Tasks");
   });
 
   it("renders the life profile dashboard page with field coverage and per-agent needs", async () => {

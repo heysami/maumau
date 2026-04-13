@@ -1,6 +1,7 @@
 import type { MaumauConfig } from "../config/config.js";
 import type { TeamMemberConfig } from "../config/types.teams.js";
 import type { TeamConfig, TeamWorkflowConfig } from "../config/types.teams.js";
+import { BUSINESS_DEVELOPMENT_TEAM_ID } from "./business-development-preset.js";
 import {
   LIFE_IMPROVEMENT_DOMAIN_GROUPS,
   LIFE_IMPROVEMENT_TEAM_ID,
@@ -202,6 +203,12 @@ type SpecialistBinding = {
   member: TeamMemberConfig;
   binding: string;
 };
+
+type PresetFlowBuilder = (params: {
+  team: TeamConfig;
+  specialistBindings: SpecialistBinding[];
+  synthesisPrompt: string;
+}) => string[] | null;
 
 function findSpecialistBindingByRole(
   specialistBindings: SpecialistBinding[],
@@ -1429,6 +1436,70 @@ function buildLifeImprovementFlow(params: {
   return lines;
 }
 
+function buildBusinessDevelopmentFlow(params: {
+  team: TeamConfig;
+  specialistBindings: SpecialistBinding[];
+  synthesisPrompt: string;
+}): string[] | null {
+  const normalizedTeamId = params.team.id.trim().toLowerCase();
+  const presetId = params.team.preset?.id?.trim().toLowerCase();
+  if (
+    normalizedTeamId !== BUSINESS_DEVELOPMENT_TEAM_ID &&
+    presetId !== BUSINESS_DEVELOPMENT_TEAM_ID
+  ) {
+    return null;
+  }
+
+  const linkedTeamsDescription = buildLinkedTeamChoicesDescription(params.team);
+  return [
+    "",
+    "# Step 0: the manager identifies the business and project scope before researching",
+    "let intake = session: manager",
+    '  prompt: "Identify whether this turn is slow intake, brainstorm, research follow-up, or approval follow-through. Cluster the work into one or more businesses and projects. Use the owner-private registry as canonical: business/<business-id>/BUSINESS.md plus business/<business-id>/projects/<project-id>/PROJECT.md and BLUEPRINT.json. Keep the intake conversational and skippable instead of turning it into a rigid questionnaire."',
+    "  context: { task }",
+    "",
+    "# Step 1: the manager performs a thorough research pass",
+    "let research_brief = session: manager",
+    '  prompt: "Research the current opportunity thoroughly using web_search and web_fetch as needed. Update the business dossier and project dossier with the opportunity framing, market shape, customer, offer, channels, constraints, and open questions. Separate raw observations from inference. When multiple businesses or projects are in play, keep them distinct instead of blending them together."',
+    "  context: { task, intake }",
+    "",
+    "# Step 2: the manager turns the research into a concrete proposal",
+    "let proposal_brief = resume: manager",
+    '  prompt: "Turn the intake and research into a proposal. Name the recommended business and project path, what should happen next, what should wait, the likely risks, the money path, and whether this needs a dedicated agent team, app build, design support, external integrations, or downloads. If an app is needed, keep vibe-coder as the implementation owner and treat design-studio as asset-only support. Linked teams available: ' +
+      linkedTeamsDescription.replace(/"/g, '\\"') +
+      '."',
+    "  context: { task, intake, research_brief }",
+    "",
+    "# Step 3: the manager updates or creates the machine-readable project blueprint",
+    "let blueprint_brief = resume: manager",
+    '  prompt: "Create or update BLUEPRINT.json for the chosen project. The blueprint must include scoped agents, team definition, workflow inputs, tool or integration requirements, workspace plan, project tag, proposal summary, and whether vibe-coder or design-studio are required. Do not materialize the project yet. The blueprint is only ready when the proposed team ids, agent ids, project tag, and workspace plan are explicit."',
+    "  context: { task, intake, research_brief, proposal_brief }",
+    "",
+    "# Step 4: approval is explicit and versioned",
+    "let approval_gate = resume: manager",
+    '  prompt: "Decide whether the user has explicitly approved a specific blueprint version. If approval is missing, state exactly what needs confirmation. If approval is present, name the approved business id, project id, and blueprint version. Do not silently create the team or workspace before that explicit approval exists."',
+    "  context: { task, intake, research_brief, proposal_brief, blueprint_brief }",
+    "",
+    "# Step 5: kickoff happens only after approval",
+    "let kickoff_plan = resume: manager",
+    '  prompt: "If approval is explicit, use the business_projects tool to apply the approved blueprint version. Capture the created team, project workspace, project tag, and whether AGENT_APPS.md was updated. If approval is not explicit, explain the blocker instead of materializing anything."',
+    "  context: { task, intake, research_brief, proposal_brief, blueprint_brief, approval_gate }",
+    "",
+    "# Step 6: the manager closes with one business-development brief",
+    "output result = session: manager",
+    `  prompt: "${params.synthesisPrompt.replace(/"/g, '\\"')}"`,
+    "  context: { task, intake, research_brief, proposal_brief, blueprint_brief, approval_gate, kickoff_plan }",
+  ];
+}
+
+const PRESET_FLOW_BUILDERS: readonly PresetFlowBuilder[] = [
+  (params) => buildDesignStudioFlow(params.specialistBindings, params.synthesisPrompt),
+  buildVibeCoderStarterFlow,
+  buildRootOrchestrationFlow,
+  buildLifeImprovementFlow,
+  buildBusinessDevelopmentFlow,
+] as const;
+
 export function generateTeamOpenProsePreview(params: {
   config: MaumauConfig;
   team: TeamConfig;
@@ -1447,22 +1518,10 @@ export function generateTeamOpenProsePreview(params: {
   const synthesisPrompt =
     sanitizePromptLine(workflow.synthesisPrompt ?? "") ||
     "Synthesize the specialist outputs into one practical answer for the user.";
-  const stagedStarterFlow = buildVibeCoderStarterFlow({
-    team,
-    specialistBindings,
-    synthesisPrompt,
-  });
-  const designStudioFlow = buildDesignStudioFlow(specialistBindings, synthesisPrompt);
-  const rootOrchestrationFlow = buildRootOrchestrationFlow({
-    team,
-    specialistBindings,
-    synthesisPrompt,
-  });
-  const lifeImprovementFlow = buildLifeImprovementFlow({
-    team,
-    specialistBindings,
-    synthesisPrompt,
-  });
+  const presetFlow =
+    PRESET_FLOW_BUILDERS.map((builder) =>
+      builder({ team, specialistBindings, synthesisPrompt }),
+    ).find((flow): flow is string[] => Boolean(flow)) ?? null;
 
   const lines: string[] = [
     "# Generated by Maumau Teams. Edit the Team definition instead of this preview.",
@@ -1504,14 +1563,8 @@ export function generateTeamOpenProsePreview(params: {
     );
   }
 
-  if (designStudioFlow) {
-    lines.push(...designStudioFlow);
-  } else if (stagedStarterFlow) {
-    lines.push(...stagedStarterFlow);
-  } else if (rootOrchestrationFlow) {
-    lines.push(...rootOrchestrationFlow);
-  } else if (lifeImprovementFlow) {
-    lines.push(...lifeImprovementFlow);
+  if (presetFlow) {
+    lines.push(...presetFlow);
   } else if (specialists.length > 0) {
     lines.push(
       "",

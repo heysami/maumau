@@ -21,8 +21,12 @@ import type {
   DashboardCalendarFilters,
   DashboardAgentAppItem,
   AttentionItem,
+  DashboardBusinessItem,
+  DashboardBusinessResult,
   DashboardCalendarEvent,
   DashboardLifeProfileNeed,
+  DashboardProjectItem,
+  DashboardProjectsResult,
   DashboardRecentMemoryEntry,
   DashboardRoutine,
   DashboardSnapshot,
@@ -69,6 +73,8 @@ type DashboardProps = {
   walletCurrency: string | null;
   calendarResult: DashboardCalendarResult | null;
   calendarAnchorAtMs: number | null;
+  businessResult: DashboardBusinessResult | null;
+  projectsResult: DashboardProjectsResult | null;
   userChannelsResult: DashboardUserChannelsResult | null;
   userChannelId: string | null;
   userChannelAccountId: string | null;
@@ -93,10 +99,13 @@ type DashboardProps = {
   calendarView: "month" | "week" | "day";
   calendarFilters: DashboardCalendarFilters;
   routineSelection: string | null;
+  businessSelection: string | null;
   profileSelection: string | null;
+  projectSelection: string | null;
   teamSelection: string | null;
   memoryAgentId: string | null;
   agentPanel: "memory" | "scope";
+  businessManagerAvailable: boolean;
   agentsList: AgentsListResult | null;
   configForm: Record<string, unknown> | null;
   configLoading: boolean;
@@ -173,8 +182,16 @@ type DashboardProps = {
   onCalendarJumpToday: () => void;
   onCalendarFiltersChange: (filters: DashboardCalendarFilters) => void;
   onSelectRoutine: (routineId: string) => void;
+  onSelectBusiness: (businessId: string | null) => void;
   onSelectProfileAgent: (agentId: string) => void;
+  onSelectProject: (projectId: string | null) => void;
   onCalendarSelectDay: (anchorAtMs: number, view?: "month" | "week" | "day") => void;
+  onOpenBusinessManager: (params: {
+    mode: "brainstorm" | "research";
+    businessId?: string;
+    projectId?: string;
+  }) => void;
+  onApplyProjectBlueprint: (project: DashboardProjectItem) => void;
   onSelectUserChannel: (channelId: string) => void;
   onSelectUserChannelAccount: (channelId: string, accountId: string) => void;
   onOpenUserManagement: () => void;
@@ -314,6 +331,10 @@ function renderShellPageActions(props: DashboardProps, page: DashboardPage) {
     case "workshop":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "routines":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "business":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "projects":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "profile":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
@@ -812,6 +833,57 @@ function statusDescription(status: DashboardTask["status"]): string {
       return dt("statusDescription.done");
     default:
       return dt("statusDescription.waiting");
+  }
+}
+
+function businessStatusLabel(status: DashboardBusinessItem["status"]): string {
+  switch (status) {
+    case "active":
+      return "Active";
+    case "paused":
+      return "Paused";
+    case "archived":
+      return "Archived";
+    default:
+      return "Exploring";
+  }
+}
+
+function projectStatusLabel(status: DashboardProjectItem["status"]): string {
+  switch (status) {
+    case "researching":
+      return "Researching";
+    case "proposed":
+      return "Proposed";
+    case "approved":
+      return "Approved";
+    case "building":
+      return "Building";
+    case "live":
+      return "Live";
+    case "paused":
+      return "Paused";
+    case "archived":
+      return "Archived";
+    default:
+      return "Brainstorming";
+  }
+}
+
+function blueprintStatusLabel(status: DashboardProjectItem["blueprintStatus"]): string {
+  switch (status) {
+    case "approved":
+      return "Approved";
+    case "applied":
+      return "Applied";
+    case "proposed":
+      return "Proposed";
+    case "draft":
+      return "Draft";
+    case "invalid":
+      return "Invalid";
+    default:
+      return "Missing";
   }
 }
 
@@ -2802,7 +2874,9 @@ function renderWorkshopPage(props: DashboardProps) {
                     ${
                       props.workshopTab === "saved"
                         ? html`<span class="pill">${dt("workshop.savedBadge")}</span>`
-                        : selectedWorkshopItem?.isSaved
+                        : selectedWorkshopItem &&
+                            "isSaved" in selectedWorkshopItem &&
+                            selectedWorkshopItem.isSaved
                           ? html`<span class="pill">${dt("workshop.savedBadge")}</span>`
                           : nothing
                     }
@@ -3337,6 +3411,533 @@ function renderLifeProfileNeedSection(emptyLabel: string, needs: DashboardLifePr
   `;
 }
 
+function renderBusinessPage(props: DashboardProps) {
+  const businesses = props.businessResult?.items ?? [];
+  const projects = props.projectsResult?.items ?? [];
+  const selected =
+    businesses.find((item) => item.businessId === props.businessSelection) ?? businesses[0] ?? null;
+  const selectedProjects = selected
+    ? projects.filter((project) => project.businessId === selected.businessId)
+    : [];
+  const profilingGaps = selected?.fields.filter((field) => field.status === "missing") ?? [];
+  const openQuestions = selected?.fields.find((field) => field.key === "openQuestions")?.value;
+  const activeProposals = selectedProjects.filter(
+    (project) =>
+      project.blueprintStatus === "draft" ||
+      project.blueprintStatus === "proposed" ||
+      project.blueprintStatus === "approved",
+  );
+
+  if (businesses.length === 0) {
+    return html`
+      <section class="dashboard-page">
+        ${
+          !props.businessManagerAvailable
+            ? html`
+                <div class="callout warning">
+                  Business Dev Manager is not configured yet. Add the bundled Business Development Team from Teams
+                  to start a private portfolio workflow.
+                </div>
+              `
+            : nothing
+        }
+        <section class="card">
+          <div class="card-title">No Businesses Yet</div>
+          <div class="card-sub">
+            Track ventures here without forcing a questionnaire. Start with a loose brainstorm or a
+            more structured research pass.
+          </div>
+          <div class="row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+            <button
+              class="btn primary"
+              type="button"
+              @click=${() => props.onOpenBusinessManager({ mode: "brainstorm" })}
+            >
+              Brainstorm with Business Dev Manager
+            </button>
+            <button
+              class="btn"
+              type="button"
+              @click=${() => props.onOpenBusinessManager({ mode: "research" })}
+            >
+              Start a Research Thread
+            </button>
+          </div>
+        </section>
+      </section>
+    `;
+  }
+
+  return html`
+    <section class="dashboard-page">
+      ${
+        !props.businessManagerAvailable
+          ? html`
+              <div class="callout warning">
+                Business Dev Manager is not configured yet. Add the bundled Business Development Team from Teams
+                to continue from these dossiers in chat.
+              </div>
+            `
+          : nothing
+      }
+      <div class="dashboard-team-layout">
+        <aside class="dashboard-team-list">
+          ${businesses.map(
+            (business) => html`
+              <button
+                type="button"
+                class="dashboard-team-list__item ${
+                  selected?.businessId === business.businessId
+                    ? "dashboard-team-list__item--active"
+                    : ""
+                }"
+                @click=${() => props.onSelectBusiness(business.businessId)}
+              >
+                <span>${business.businessName}</span>
+                <span>
+                  ${business.projectCount} projects · ${business.recordedFieldCount}/${
+                    business.recordedFieldCount + business.missingFieldCount
+                  } profiled
+                </span>
+              </button>
+            `,
+          )}
+        </aside>
+        <section class="dashboard-team-detail card">
+          ${
+            selected
+              ? html`
+                  <div class="dashboard-workshop__hero">
+                    <div>
+                      <div class="card-title">${selected.businessName}</div>
+                      <div class="card-sub">
+                        ${selected.sourceLabel} · Updated ${formatDateTime(selected.updatedAtMs)}
+                      </div>
+                    </div>
+                    <div class="dashboard-page__actions">
+                      <button
+                        class="btn btn--sm"
+                        type="button"
+                        @click=${() =>
+                          props.onOpenBusinessManager({
+                            mode: "brainstorm",
+                            businessId: selected.businessId,
+                          })}
+                      >
+                        Continue Brainstorm
+                      </button>
+                      <button
+                        class="btn btn--sm primary"
+                        type="button"
+                        @click=${() =>
+                          props.onOpenBusinessManager({
+                            mode: "research",
+                            businessId: selected.businessId,
+                          })}
+                      >
+                        Continue Research
+                      </button>
+                      <span class="pill">${businessStatusLabel(selected.status)}</span>
+                    </div>
+                  </div>
+
+                  <div class="dashboard-routines__meta-grid">
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Profiling gaps</div>
+                      <strong>${selected.missingFieldCount}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Projects</div>
+                      <strong>${selected.projectCount}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Active projects</div>
+                      <strong>${selected.activeProjectCount}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Active proposals</div>
+                      <strong>${activeProposals.length}</strong>
+                    </article>
+                  </div>
+
+                  <section class="card dashboard-profile__field-map">
+                    <div class="dashboard-page__header">
+                      <div>
+                        <div class="card-title">Business Dossier</div>
+                        <div class="card-sub">
+                          These fields stay owner-private and build up over time.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dashboard-profile__field-grid">
+                      ${selected.fields.map(
+                        (field) => html`
+                          <article
+                            class="dashboard-profile__field dashboard-profile__field--${field.status}"
+                          >
+                            <div class="dashboard-profile__need-header">
+                              <div>
+                                <div class="dashboard-note__title">${field.label}</div>
+                                <div class="dashboard-note__meta">
+                                  <span>${field.description}</span>
+                                </div>
+                              </div>
+                              <span class="pill">
+                                ${field.status === "recorded" ? "Recorded" : "Missing"}
+                              </span>
+                            </div>
+                            ${
+                              field.value
+                                ? html`<div class="dashboard-profile__value">${field.value}</div>`
+                                : nothing
+                            }
+                          </article>
+                        `,
+                      )}
+                    </div>
+                  </section>
+
+                  <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
+                    <section class="card">
+                      <div class="card-title">Profiling Gaps</div>
+                      <div class="card-sub">
+                        Missing fields do not block work, but they show where the manager still
+                        needs clarity.
+                      </div>
+                      ${
+                        profilingGaps.length > 0
+                          ? html`
+                              <div class="dashboard-list" style="margin-top: 16px;">
+                                ${profilingGaps.map(
+                                  (field) => html`
+                                    <article class="dashboard-note">
+                                      <div class="dashboard-note__title">${field.label}</div>
+                                      <div class="dashboard-note__body">${field.description}</div>
+                                    </article>
+                                  `,
+                                )}
+                              </div>
+                            `
+                          : html`
+                              <div class="dashboard-empty" style="margin-top: 16px">
+                                This business dossier is fully profiled for the current schema.
+                              </div>
+                            `
+                      }
+                    </section>
+
+                    <section class="card">
+                      <div class="card-title">Open Questions</div>
+                      <div class="card-sub">
+                        Keep unresolved market, offer, and execution questions visible.
+                      </div>
+                      <div class="dashboard-note__body" style="margin-top: 16px;">
+                        ${openQuestions ?? "No explicit open questions have been recorded yet."}
+                      </div>
+                    </section>
+                  </div>
+
+                  <section class="card" style="margin-top: 18px;">
+                    <div class="dashboard-page__header">
+                      <div>
+                        <div class="card-title">Linked Projects</div>
+                        <div class="card-sub">
+                          Projects stay nested under the business while reusing one project tag
+                          across Workshop, Tasks, and Agent Apps.
+                        </div>
+                      </div>
+                    </div>
+                    ${
+                      selectedProjects.length > 0
+                        ? html`
+                            <div class="dashboard-list" style="margin-top: 16px;">
+                              ${selectedProjects.map(
+                                (project) => html`
+                                  <button
+                                    type="button"
+                                    class="dashboard-team-list__item"
+                                    @click=${() => {
+                                      props.onSelectProject(project.projectId);
+                                      props.onNavigate("projects");
+                                    }}
+                                  >
+                                    <span>${project.projectName}</span>
+                                    <span>
+                                      ${projectStatusLabel(project.status)} ·
+                                      ${blueprintStatusLabel(project.blueprintStatus)} ·
+                                      ${project.projectTag}
+                                    </span>
+                                  </button>
+                                `,
+                              )}
+                            </div>
+                          `
+                        : html`
+                            <div class="dashboard-empty" style="margin-top: 16px">
+                              No projects have been attached to this business yet.
+                            </div>
+                          `
+                    }
+                  </section>
+                `
+              : html`
+                  <div class="dashboard-empty">Choose a business to inspect its dossier.</div>
+                `
+          }
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderProjectsPage(props: DashboardProps) {
+  const projects = props.projectsResult?.items ?? [];
+  const businessesById = new Map(
+    (props.businessResult?.items ?? []).map((business) => [business.businessId, business]),
+  );
+  const selected =
+    projects.find((project) => project.projectId === props.projectSelection) ?? projects[0] ?? null;
+  const selectedBusiness = selected ? (businessesById.get(selected.businessId) ?? null) : null;
+
+  if (projects.length === 0) {
+    return html`
+      <section class="dashboard-page">
+        <section class="card">
+          <div class="card-title">No Projects Yet</div>
+          <div class="card-sub">
+            Approved ideas will show up here with their team, project tag, and linked workspace
+            state.
+          </div>
+          <div class="row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+            <button
+              class="btn primary"
+              type="button"
+              @click=${() => props.onOpenBusinessManager({ mode: "brainstorm" })}
+            >
+              Start a Business Brainstorm
+            </button>
+            <button
+              class="btn"
+              type="button"
+              @click=${() => props.onOpenBusinessManager({ mode: "research" })}
+            >
+              Start a Research Thread
+            </button>
+          </div>
+        </section>
+      </section>
+    `;
+  }
+
+  return html`
+    <section class="dashboard-page">
+      <div class="dashboard-team-layout">
+        <aside class="dashboard-team-list">
+          ${projects.map(
+            (project) => html`
+              <button
+                type="button"
+                class="dashboard-team-list__item ${
+                  selected?.projectId === project.projectId
+                    ? "dashboard-team-list__item--active"
+                    : ""
+                }"
+                @click=${() => props.onSelectProject(project.projectId)}
+              >
+                <span>${project.projectName}</span>
+                <span>${project.businessName} · ${project.projectTag}</span>
+              </button>
+            `,
+          )}
+        </aside>
+        <section class="dashboard-team-detail card">
+          ${
+            selected
+              ? html`
+                  <div class="dashboard-workshop__hero">
+                    <div>
+                      <div class="card-title">${selected.projectName}</div>
+                      <div class="card-sub">
+                        ${selected.businessName} · Updated ${formatDateTime(selected.updatedAtMs)}
+                      </div>
+                    </div>
+                    <div class="dashboard-page__actions">
+                      <button
+                        class="btn btn--sm"
+                        type="button"
+                        @click=${() =>
+                          props.onOpenBusinessManager({
+                            mode: "research",
+                            businessId: selected.businessId,
+                            projectId: selected.projectId,
+                          })}
+                      >
+                        Continue with Business Dev Manager
+                      </button>
+                      ${
+                        selected.blueprintStatus === "approved" &&
+                        typeof selected.blueprintVersion === "number"
+                          ? html`
+                              <button
+                                class="btn btn--sm primary"
+                                type="button"
+                                @click=${() => props.onApplyProjectBlueprint(selected)}
+                              >
+                                Apply Approved Blueprint
+                              </button>
+                            `
+                          : nothing
+                      }
+                      <span class="pill">${projectStatusLabel(selected.status)}</span>
+                      <span class="pill">
+                        Blueprint ${blueprintStatusLabel(selected.blueprintStatus)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="dashboard-routines__meta-grid">
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Project tag</div>
+                      <strong>${selected.projectTag}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Team</div>
+                      <strong>${selected.teamId ?? "Not created yet"}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">Workspace</div>
+                      <strong>${selected.linkedWorkspaceLabel ?? "Pending"}</strong>
+                    </article>
+                    <article class="dashboard-routines__meta-card">
+                      <div class="dashboard-org-chart__label">App needed</div>
+                      <strong>${selected.appNeeded ? "Yes" : "No"}</strong>
+                    </article>
+                  </div>
+
+                  <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
+                    <section class="card">
+                      <div class="card-title">Project Dossier</div>
+                      <div class="dashboard-list" style="margin-top: 16px;">
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Goal</div>
+                          <div class="dashboard-note__body">
+                            ${selected.goal ?? "No goal captured yet."}
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Scope</div>
+                          <div class="dashboard-note__body">
+                            ${selected.scope ?? "No scope captured yet."}
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Proposal Summary</div>
+                          <div class="dashboard-note__body">
+                            ${selected.proposalSummary ?? "No proposal summary captured yet."}
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Next Step</div>
+                          <div class="dashboard-note__body">
+                            ${selected.nextStep ?? "No next step captured yet."}
+                          </div>
+                        </article>
+                      </div>
+                    </section>
+
+                    <section class="card">
+                      <div class="card-title">Project Wiring</div>
+                      <div class="dashboard-list" style="margin-top: 16px;">
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Business</div>
+                          <div class="dashboard-note__body">
+                            ${selectedBusiness?.businessName ?? selected.businessName}
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Linked workspace</div>
+                          <div class="dashboard-note__body">
+                            ${selected.linkedWorkspace ?? "No project workspace has been materialized yet."}
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Blueprint version</div>
+                          <div class="dashboard-note__body">
+                            ${
+                              typeof selected.blueprintVersion === "number"
+                                ? selected.blueprintVersion
+                                : "Not written yet"
+                            }
+                          </div>
+                        </article>
+                        <article class="dashboard-note">
+                          <div class="dashboard-note__title">Blueprint state</div>
+                          <div class="dashboard-note__body">
+                            ${blueprintStatusLabel(selected.blueprintStatus)}
+                          </div>
+                        </article>
+                      </div>
+                    </section>
+                  </div>
+
+                  <section class="card" style="margin-top: 18px;">
+                    <div class="dashboard-page__header">
+                      <div>
+                        <div class="card-title">Joined Artifacts</div>
+                        <div class="card-sub">
+                          Project tags connect Tasks, Workshop artifacts, and Agent Apps into one
+                          operational view.
+                        </div>
+                      </div>
+                      <div class="dashboard-page__actions">
+                        <button
+                          class="btn btn--sm"
+                          type="button"
+                          @click=${() =>
+                            props.onFilterTasks({
+                              kind: "project",
+                              value: selected.projectTag,
+                            })}
+                        >
+                          Open Tagged Tasks
+                        </button>
+                      </div>
+                    </div>
+                    <div class="dashboard-routines__meta-grid" style="margin-top: 16px;">
+                      <article class="dashboard-routines__meta-card">
+                        <div class="dashboard-org-chart__label">Tasks</div>
+                        <strong>${selected.linkedTaskCount}</strong>
+                      </article>
+                      <article class="dashboard-routines__meta-card">
+                        <div class="dashboard-org-chart__label">Workshop items</div>
+                        <strong>${selected.linkedWorkshopCount}</strong>
+                      </article>
+                      <article class="dashboard-routines__meta-card">
+                        <div class="dashboard-org-chart__label">Agent Apps</div>
+                        <strong>${selected.linkedAgentAppCount}</strong>
+                      </article>
+                    </div>
+                    ${
+                      selected.blueprintError
+                        ? html`
+                            <div class="callout warning" style="margin-top: 16px;">
+                              ${selected.blueprintError}
+                            </div>
+                          `
+                        : nothing
+                    }
+                  </section>
+                `
+              : html`
+                  <div class="dashboard-empty">Choose a project to inspect its handoff state.</div>
+                `
+          }
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function renderLifeProfilePage(props: DashboardProps) {
   const profile = props.snapshot?.lifeProfile ?? null;
   const agents = profile?.agents ?? [];
@@ -3556,10 +4157,14 @@ function renderTeamsPage(props: DashboardProps) {
                   edge: DashboardTeamSnapshot["edges"][number];
                   node: DashboardTeamSnapshot["nodes"][number];
                   snapshot: DashboardTeamSnapshot;
-                } =>
-                  Boolean(entry.node) &&
-                  entry.node.kind === "linked_team" &&
-                  nodeTargetsSelectedTeam(entry.node.id, selectedTeamId),
+                } => {
+                  const node = entry.node;
+                  return (
+                    Boolean(node) &&
+                    node.kind === "linked_team" &&
+                    nodeTargetsSelectedTeam(node.id, selectedTeamId)
+                  );
+                },
               ),
           )
       : [];
@@ -4042,27 +4647,31 @@ export function renderDashboard(props: DashboardProps) {
                       ? renderCalendarPage(props)
                       : page === "routines"
                         ? renderRoutinesPage(props)
-                        : page === "profile"
-                          ? renderLifeProfilePage(props)
-                          : page === "user-channels"
-                            ? renderDashboardUserChannelsPage({
-                                result: props.userChannelsResult,
-                                selectedChannelId: props.userChannelId,
-                                selectedAccountId: props.userChannelAccountId,
-                                onSelectChannel: props.onSelectUserChannel,
-                                onSelectAccount: props.onSelectUserChannelAccount,
-                                onOpenUsersPage: props.onOpenUserManagement,
-                                onConnectChannel: props.onConnectUserChannel,
-                                onSaveAllowlist: props.onSaveUserChannelAllowlist,
-                                onSaveChats: props.onSaveUserChannelChats,
-                                whatsappMessage: props.whatsappMessage,
-                                whatsappQrDataUrl: props.whatsappQrDataUrl,
-                                whatsappBusy: props.whatsappBusy,
-                                onStartWhatsApp: props.onStartWhatsApp,
-                              })
-                            : page === "teams"
-                              ? renderTeamsPage(props)
-                              : renderMemoriesPage(props)
+                        : page === "business"
+                          ? renderBusinessPage(props)
+                          : page === "projects"
+                            ? renderProjectsPage(props)
+                            : page === "profile"
+                              ? renderLifeProfilePage(props)
+                              : page === "user-channels"
+                                ? renderDashboardUserChannelsPage({
+                                    result: props.userChannelsResult,
+                                    selectedChannelId: props.userChannelId,
+                                    selectedAccountId: props.userChannelAccountId,
+                                    onSelectChannel: props.onSelectUserChannel,
+                                    onSelectAccount: props.onSelectUserChannelAccount,
+                                    onOpenUsersPage: props.onOpenUserManagement,
+                                    onConnectChannel: props.onConnectUserChannel,
+                                    onSaveAllowlist: props.onSaveUserChannelAllowlist,
+                                    onSaveChats: props.onSaveUserChannelChats,
+                                    whatsappMessage: props.whatsappMessage,
+                                    whatsappQrDataUrl: props.whatsappQrDataUrl,
+                                    whatsappBusy: props.whatsappBusy,
+                                    onStartWhatsApp: props.onStartWhatsApp,
+                                  })
+                                : page === "teams"
+                                  ? renderTeamsPage(props)
+                                  : renderMemoriesPage(props)
         }
       </main>
     </div>

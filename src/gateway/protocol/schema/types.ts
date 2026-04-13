@@ -53,6 +53,10 @@ export type SessionsCompactParams = SchemaType<"SessionsCompactParams">;
 export type SessionsUsageParams = SchemaType<"SessionsUsageParams">;
 export type ConfigGetParams = SchemaType<"ConfigGetParams">;
 export type DashboardTeamsSnapshotParams = SchemaType<"DashboardTeamsSnapshotParams">;
+export type DashboardBusinessParams = SchemaType<"DashboardBusinessParams">;
+export type DashboardProjectsParams = SchemaType<"DashboardProjectsParams">;
+export type DashboardProjectsApplyBlueprintParams =
+  SchemaType<"DashboardProjectsApplyBlueprintParams">;
 export type DashboardWalletParams = SchemaType<"DashboardWalletParams">;
 export type DashboardWorkshopSaveParams = SchemaType<"DashboardWorkshopSaveParams">;
 export type ConfigSetParams = SchemaType<"ConfigSetParams">;

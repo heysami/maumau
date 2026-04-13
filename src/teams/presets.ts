@@ -7,6 +7,13 @@ import type {
 } from "../config/types.teams.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../routing/session-key.js";
 import {
+  BUSINESS_DEVELOPMENT_TEAM_ID,
+  BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+  BUSINESS_DEVELOPMENT_TEAM_PRESET_VERSION,
+  createBusinessDevelopmentTeamAgents,
+  createBusinessDevelopmentTeamConfig,
+} from "./business-development-preset.js";
+import {
   createLifeImprovementTeamAgents,
   createLifeImprovementTeamConfig,
   LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID,
@@ -37,6 +44,13 @@ export const DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID = "design-studio-consist
 export const STARTER_TEAM_PRESET_VERSION = 5;
 export const DESIGN_STUDIO_TEAM_PRESET_VERSION = 1;
 export const MAIN_ORCHESTRATION_TEAM_PRESET_VERSION = 2;
+export {
+  BUSINESS_DEVELOPMENT_TEAM_ID,
+  BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+  BUSINESS_DEVELOPMENT_TEAM_PRESET_VERSION,
+  createBusinessDevelopmentTeamAgents,
+  createBusinessDevelopmentTeamConfig,
+} from "./business-development-preset.js";
 export {
   createLifeImprovementTeamAgents,
   createLifeImprovementTeamConfig,
@@ -86,10 +100,15 @@ const DESIGN_STUDIO_IMAGE_TOOL_ALLOW = [
 
 const DESIGN_STUDIO_QA_TOOL_ALLOW = ["image", "read"] as const;
 
-const ROOT_LINKED_TEAM_IDS = [STARTER_TEAM_ID, DESIGN_STUDIO_TEAM_ID] as const;
+const ROOT_LINKED_TEAM_IDS = [
+  STARTER_TEAM_ID,
+  DESIGN_STUDIO_TEAM_ID,
+  BUSINESS_DEVELOPMENT_TEAM_ID,
+] as const;
 type BundledSpecialistTeamId =
   | typeof STARTER_TEAM_ID
   | typeof DESIGN_STUDIO_TEAM_ID
+  | typeof BUSINESS_DEVELOPMENT_TEAM_ID
   | typeof LIFE_IMPROVEMENT_TEAM_ID;
 
 const ROOT_LINK_DESCRIPTIONS: Record<BundledSpecialistTeamId, string> = {
@@ -97,6 +116,8 @@ const ROOT_LINK_DESCRIPTIONS: Record<BundledSpecialistTeamId, string> = {
     "Use for staged UI/product implementation, architecture, development, and ship-readiness QA.",
   [DESIGN_STUDIO_TEAM_ID]:
     "Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.",
+  [BUSINESS_DEVELOPMENT_TEAM_ID]:
+    "Use for business research, project planning, portfolio dossiers, and approved project-team kickoff.",
   [LIFE_IMPROVEMENT_TEAM_ID]:
     "Use for incremental life-improvement planning, personal check-ins, and document-first coordination across health, identity, relationships, lifestyle, and accountability.",
 };
@@ -104,6 +125,16 @@ const ROOT_LINK_DESCRIPTIONS: Record<BundledSpecialistTeamId, string> = {
 const STARTER_LINK_DESCRIPTIONS: Record<typeof DESIGN_STUDIO_TEAM_ID, string> = {
   [DESIGN_STUDIO_TEAM_ID]:
     "Use for asset-only design exploration, required image manifests, vector/raster asset generation, and consistency-focused QA.",
+};
+
+const BUSINESS_LINK_DESCRIPTIONS: Record<
+  typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID,
+  string
+> = {
+  [STARTER_TEAM_ID]:
+    "Use for product, app, and implementation work once this project is approved and needs a built deliverable.",
+  [DESIGN_STUDIO_TEAM_ID]:
+    "Use for asset-only design work, visual exploration, and generated imagery tied to this project.",
 };
 
 function normalizeOptionalText(value: unknown): string | undefined {
@@ -161,6 +192,21 @@ function buildStarterCrossTeamLinks(
     : [];
 }
 
+function buildBusinessCrossTeamLinks(
+  teamIds: readonly BundledSpecialistTeamId[] = ROOT_LINKED_TEAM_IDS,
+): TeamCrossTeamLinkConfig[] {
+  return teamIds
+    .filter(
+      (teamId): teamId is typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID =>
+        teamId === STARTER_TEAM_ID || teamId === DESIGN_STUDIO_TEAM_ID,
+    )
+    .map((teamId) => ({
+      type: "team" as const,
+      targetId: teamId,
+      description: BUSINESS_LINK_DESCRIPTIONS[teamId],
+    }));
+}
+
 function mergeRequiredCrossTeamLinks(
   existing: TeamCrossTeamLinkConfig[] | undefined,
   required: TeamCrossTeamLinkConfig[],
@@ -186,6 +232,9 @@ function syncBundledCrossTeamLinks(teams: TeamConfig[]): TeamConfig[] {
   if (teams.some((team) => team.id.trim().toLowerCase() === DESIGN_STUDIO_TEAM_ID)) {
     availableTeamIds.push(DESIGN_STUDIO_TEAM_ID);
   }
+  if (teams.some((team) => team.id.trim().toLowerCase() === BUSINESS_DEVELOPMENT_TEAM_ID)) {
+    availableTeamIds.push(BUSINESS_DEVELOPMENT_TEAM_ID);
+  }
   if (teams.some((team) => team.id.trim().toLowerCase() === LIFE_IMPROVEMENT_TEAM_ID)) {
     availableTeamIds.push(LIFE_IMPROVEMENT_TEAM_ID);
   }
@@ -207,6 +256,15 @@ function syncBundledCrossTeamLinks(teams: TeamConfig[]): TeamConfig[] {
         crossTeamLinks: mergeRequiredCrossTeamLinks(
           team.crossTeamLinks,
           buildStarterCrossTeamLinks(availableTeamIds),
+        ),
+      };
+    }
+    if (normalizedId === BUSINESS_DEVELOPMENT_TEAM_ID) {
+      return {
+        ...team,
+        crossTeamLinks: mergeRequiredCrossTeamLinks(
+          team.crossTeamLinks,
+          buildBusinessCrossTeamLinks(availableTeamIds),
         ),
       };
     }
@@ -364,7 +422,11 @@ export function createDesignStudioTeamAgents(): AgentConfig[] {
 }
 
 export function createBundledTeamAgents(): AgentConfig[] {
-  return [...createStarterTeamAgents(), ...createDesignStudioTeamAgents()];
+  return [
+    ...createStarterTeamAgents(),
+    ...createDesignStudioTeamAgents(),
+    ...createBusinessDevelopmentTeamAgents(),
+  ];
 }
 
 export function createStarterTeamConfig(params?: {
@@ -653,6 +715,9 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
   if (!hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)) {
     nextTeams.push(createDesignStudioTeamConfig());
   }
+  if (!hasTeam(baseConfig, BUSINESS_DEVELOPMENT_TEAM_ID)) {
+    nextTeams.push(createBusinessDevelopmentTeamConfig());
+  }
 
   return {
     ...baseConfig,
@@ -676,7 +741,11 @@ export function ensureStarterTeamConfig(baseConfig: MaumauConfig): MaumauConfig 
 
 export function ensureBundledTeamPresetConfig(
   baseConfig: MaumauConfig,
-  presetId: typeof STARTER_TEAM_ID | typeof DESIGN_STUDIO_TEAM_ID | typeof LIFE_IMPROVEMENT_TEAM_ID,
+  presetId:
+    | typeof STARTER_TEAM_ID
+    | typeof DESIGN_STUDIO_TEAM_ID
+    | typeof BUSINESS_DEVELOPMENT_TEAM_ID
+    | typeof LIFE_IMPROVEMENT_TEAM_ID,
 ): MaumauConfig {
   const currentAgents = Array.isArray(baseConfig.agents?.list) ? [...baseConfig.agents.list] : [];
   const hasExplicitDefault = currentAgents.some((entry) => entry?.default);
@@ -699,7 +768,9 @@ export function ensureBundledTeamPresetConfig(
       ? createStarterTeamAgents()
       : presetId === DESIGN_STUDIO_TEAM_ID
         ? createDesignStudioTeamAgents()
-        : createLifeImprovementTeamAgents();
+        : presetId === BUSINESS_DEVELOPMENT_TEAM_ID
+          ? createBusinessDevelopmentTeamAgents()
+          : createLifeImprovementTeamAgents();
   for (const agent of presetAgents) {
     if (!hasAgent(nextAgents, agent.id)) {
       nextAgents.push(agent);
@@ -713,7 +784,9 @@ export function ensureBundledTeamPresetConfig(
         ? ([STARTER_TEAM_ID] as const)
         : presetId === DESIGN_STUDIO_TEAM_ID
           ? ([DESIGN_STUDIO_TEAM_ID] as const)
-          : ([] as const);
+          : presetId === BUSINESS_DEVELOPMENT_TEAM_ID
+            ? ([BUSINESS_DEVELOPMENT_TEAM_ID] as const)
+            : ([] as const);
     nextTeams.unshift(createMainOrchestrationTeamConfig({ linkedTeamIds }));
   }
   if (presetId === STARTER_TEAM_ID && !hasTeam(baseConfig, STARTER_TEAM_ID)) {
@@ -724,6 +797,12 @@ export function ensureBundledTeamPresetConfig(
   }
   if (presetId === DESIGN_STUDIO_TEAM_ID && !hasTeam(baseConfig, DESIGN_STUDIO_TEAM_ID)) {
     nextTeams.push(createDesignStudioTeamConfig());
+  }
+  if (
+    presetId === BUSINESS_DEVELOPMENT_TEAM_ID &&
+    !hasTeam(baseConfig, BUSINESS_DEVELOPMENT_TEAM_ID)
+  ) {
+    nextTeams.push(createBusinessDevelopmentTeamConfig());
   }
   if (presetId === LIFE_IMPROVEMENT_TEAM_ID && !hasTeam(baseConfig, LIFE_IMPROVEMENT_TEAM_ID)) {
     nextTeams.push(createLifeImprovementTeamConfig());
@@ -757,8 +836,8 @@ export function applyStarterTeamOnFreshInstall(
     return baseConfig;
   }
   return ensureBundledTeamPresetConfig(
-    ensureStarterTeamConfig(baseConfig),
-    LIFE_IMPROVEMENT_TEAM_ID,
+    ensureBundledTeamPresetConfig(ensureStarterTeamConfig(baseConfig), LIFE_IMPROVEMENT_TEAM_ID),
+    BUSINESS_DEVELOPMENT_TEAM_ID,
   );
 }
 

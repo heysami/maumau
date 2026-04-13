@@ -2,8 +2,12 @@ export type UpdateAvailable = import("../../../src/infra/update-startup.js").Upd
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
 import type {
   DashboardAgentAppItem as SharedDashboardAgentAppItem,
+  DashboardBusinessItem as SharedDashboardBusinessItem,
+  DashboardBusinessResult as SharedDashboardBusinessResult,
   DashboardCalendarResult as SharedDashboardCalendarResult,
   DashboardCalendarView as SharedDashboardCalendarView,
+  DashboardProjectItem as SharedDashboardProjectItem,
+  DashboardProjectsResult as SharedDashboardProjectsResult,
   DashboardLifeProfileAgent as SharedDashboardLifeProfileAgent,
   DashboardLifeProfileField as SharedDashboardLifeProfileField,
   DashboardLifeProfileNeed as SharedDashboardLifeProfileNeed,
@@ -70,6 +74,10 @@ export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
 export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
 export type DashboardSavedWorkshopItem = SharedDashboardSavedWorkshopItem;
 export type DashboardAgentAppItem = SharedDashboardAgentAppItem;
+export type DashboardBusinessItem = SharedDashboardBusinessItem;
+export type DashboardBusinessResult = SharedDashboardBusinessResult;
+export type DashboardProjectItem = SharedDashboardProjectItem;
+export type DashboardProjectsResult = SharedDashboardProjectsResult;
 export type DashboardWorkshopSaveResult = SharedDashboardWorkshopSaveResult;
 export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
 export type DashboardCalendarResult = SharedDashboardCalendarResult;

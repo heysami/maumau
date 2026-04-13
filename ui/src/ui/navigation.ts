@@ -32,6 +32,8 @@ export const DASHBOARD_PAGE_ORDER = [
   "workshop",
   "calendar",
   "routines",
+  "business",
+  "projects",
   "profile",
   "teams",
   "user-channels",
@@ -56,6 +58,8 @@ export type Tab =
   | "dashboardWorkshop"
   | "dashboardCalendar"
   | "dashboardRoutines"
+  | "dashboardBusiness"
+  | "dashboardProjects"
   | "dashboardProfile"
   | "dashboardTeams"
   | "dashboardUserChannels"
@@ -89,6 +93,8 @@ const TAB_PATHS: Record<Tab, string> = {
   dashboardWorkshop: "/dashboard/workshop",
   dashboardCalendar: "/dashboard/calendar",
   dashboardRoutines: "/dashboard/routines",
+  dashboardBusiness: "/dashboard/business",
+  dashboardProjects: "/dashboard/projects",
   dashboardProfile: "/dashboard/profile",
   dashboardTeams: "/dashboard/teams",
   dashboardUserChannels: "/dashboard/user-channels",
@@ -115,6 +121,8 @@ const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
   workshop: "dashboardWorkshop",
   calendar: "dashboardCalendar",
   routines: "dashboardRoutines",
+  business: "dashboardBusiness",
+  projects: "dashboardProjects",
   profile: "dashboardProfile",
   teams: "dashboardTeams",
   "user-channels": "dashboardUserChannels",
@@ -257,6 +265,10 @@ export function iconForTab(tab: Tab): IconName {
       return "calendarDays";
     case "dashboardRoutines":
       return "repeat2";
+    case "dashboardBusiness":
+      return "briefcase";
+    case "dashboardProjects":
+      return "monitor";
     case "dashboardProfile":
       return "book";
     case "dashboardTeams":

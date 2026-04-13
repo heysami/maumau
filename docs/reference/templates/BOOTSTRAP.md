@@ -90,6 +90,24 @@ Capture only what helps:
 
 Update `USER.md` with a short rolling snapshot that grows over time, not a giant dossier.
 
+## Business Snapshot (Optional)
+
+If the business-development team is available, ask one skippable bootstrap-only question about
+whether they are thinking about starting or growing something to make money.
+
+Keep it warm and lightweight. A good opening is:
+
+> "Are you thinking about starting or growing something to make money? I can help turn rough ideas into a real project, and you can skip this if it is not relevant."
+
+Rules:
+
+- Only ask this during bootstrap.
+- Do not add a later ambient business nudge outside the Business page.
+- If they are interested, let the thread be gradual or brainstorm-y instead of forcing a rigid intake.
+- Cluster ideas into ventures and projects over time; do not pretend it all needs to be solved in one reply.
+- Keep business and project details in the owner-private business dossiers when they are created. Do not treat `USER.md` as the business source of truth.
+- If they skip or say not now, note that choice naturally and move on.
+
 ## Connect (Optional)
 
 Ask how they want to reach you:

@@ -88,6 +88,9 @@ import {
   ConfigApplyParamsSchema,
   type ConfigGetParams,
   ConfigGetParamsSchema,
+  type DashboardBusinessParams,
+  type DashboardProjectsApplyBlueprintParams,
+  type DashboardProjectsParams,
   type DashboardTeamsSnapshotParams,
   type DashboardWalletParams,
   type DashboardWorkshopSaveParams,
@@ -103,6 +106,9 @@ import {
   ConfigSchemaResponseSchema,
   type ConfigSetParams,
   ConfigSetParamsSchema,
+  DashboardBusinessParamsSchema,
+  DashboardProjectsApplyBlueprintParamsSchema,
+  DashboardProjectsParamsSchema,
   DashboardTeamsSnapshotParamsSchema,
   DashboardWalletParamsSchema,
   DashboardWorkshopSaveParamsSchema,
@@ -396,6 +402,12 @@ export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
 export const validateSessionsUsageParams =
   ajv.compile<SessionsUsageParams>(SessionsUsageParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
+export const validateDashboardBusinessParams =
+  ajv.compile<DashboardBusinessParams>(DashboardBusinessParamsSchema);
+export const validateDashboardProjectsParams =
+  ajv.compile<DashboardProjectsParams>(DashboardProjectsParamsSchema);
+export const validateDashboardProjectsApplyBlueprintParams =
+  ajv.compile<DashboardProjectsApplyBlueprintParams>(DashboardProjectsApplyBlueprintParamsSchema);
 export const validateDashboardTeamsSnapshotParams = ajv.compile<DashboardTeamsSnapshotParams>(
   DashboardTeamsSnapshotParamsSchema,
 );
@@ -582,6 +594,9 @@ export {
   SessionsCompactParamsSchema,
   SessionsUsageParamsSchema,
   ConfigGetParamsSchema,
+  DashboardBusinessParamsSchema,
+  DashboardProjectsParamsSchema,
+  DashboardProjectsApplyBlueprintParamsSchema,
   DashboardTeamsSnapshotParamsSchema,
   ConfigSetParamsSchema,
   ConfigApplyParamsSchema,

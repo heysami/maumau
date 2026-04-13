@@ -57,6 +57,9 @@ import {
   WebLoginWaitParamsSchema,
 } from "./channels.js";
 import {
+  DashboardBusinessParamsSchema,
+  DashboardProjectsApplyBlueprintParamsSchema,
+  DashboardProjectsParamsSchema,
   ConfigApplyParamsSchema,
   ConfigGetParamsSchema,
   ConfigPatchParamsSchema,
@@ -241,6 +244,9 @@ export const ProtocolSchemas = {
   SessionsCompactParams: SessionsCompactParamsSchema,
   SessionsUsageParams: SessionsUsageParamsSchema,
   ConfigGetParams: ConfigGetParamsSchema,
+  DashboardBusinessParams: DashboardBusinessParamsSchema,
+  DashboardProjectsParams: DashboardProjectsParamsSchema,
+  DashboardProjectsApplyBlueprintParams: DashboardProjectsApplyBlueprintParamsSchema,
   DashboardTeamsSnapshotParams: DashboardTeamsSnapshotParamsSchema,
   DashboardWalletParams: DashboardWalletParamsSchema,
   DashboardWorkshopSaveParams: DashboardWorkshopSaveParamsSchema,

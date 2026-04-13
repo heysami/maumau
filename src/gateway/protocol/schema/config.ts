@@ -24,6 +24,19 @@ export const DashboardWorkshopSaveParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const DashboardBusinessParamsSchema = Type.Object({}, { additionalProperties: false });
+
+export const DashboardProjectsParamsSchema = Type.Object({}, { additionalProperties: false });
+
+export const DashboardProjectsApplyBlueprintParamsSchema = Type.Object(
+  {
+    businessId: NonEmptyString,
+    projectId: NonEmptyString,
+    expectedVersion: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 export const DashboardWalletParamsSchema = Type.Object(
   {
     startDate: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),

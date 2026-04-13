@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUSINESS_DEVELOPMENT_TEAM_ID,
+  BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
   DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID,
   DESIGN_STUDIO_TEAM_ID,
   DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
@@ -47,6 +49,7 @@ describe("ensureStarterTeamConfig", () => {
       DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
       DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID,
       DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID,
+      BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
     ]);
     expect(result.agents?.list?.find((agent) => agent.id === "main")).toMatchObject({
       default: true,
@@ -98,11 +101,25 @@ describe("ensureStarterTeamConfig", () => {
       )?.tools?.allow,
     ).not.toEqual(expect.arrayContaining(["exec", "write", "edit", "apply_patch"]));
     expect(
+      result.agents?.list?.find((agent) => agent.id === BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID),
+    ).toMatchObject({
+      workspace: expect.stringContaining(".maumau/workspace"),
+      tools: {
+        allow: expect.arrayContaining([
+          "apply_patch",
+          "business_projects",
+          "memory_search",
+          "teams_run",
+          "web_search",
+        ]),
+      },
+    });
+    expect(
       result.agents?.list?.find(
         (agent) => agent.id === DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
       )?.tools?.profile,
     ).toBeUndefined();
-    expect(result.teams?.list).toHaveLength(3);
+    expect(result.teams?.list).toHaveLength(4);
     expect(result.teams?.list?.[0]).toMatchObject({
       id: MAIN_ORCHESTRATION_TEAM_ID,
       managerAgentId: "main",
@@ -111,6 +128,7 @@ describe("ensureStarterTeamConfig", () => {
       crossTeamLinks: expect.arrayContaining([
         expect.objectContaining({ type: "team", targetId: STARTER_TEAM_ID }),
         expect.objectContaining({ type: "team", targetId: DESIGN_STUDIO_TEAM_ID }),
+        expect.objectContaining({ type: "team", targetId: BUSINESS_DEVELOPMENT_TEAM_ID }),
       ]),
       workflows: [
         expect.objectContaining({
@@ -249,6 +267,27 @@ describe("ensureStarterTeamConfig", () => {
         }),
       ],
     });
+    expect(result.teams?.list?.[3]).toMatchObject({
+      id: BUSINESS_DEVELOPMENT_TEAM_ID,
+      managerAgentId: BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+      crossTeamLinks: expect.arrayContaining([
+        expect.objectContaining({ type: "team", targetId: STARTER_TEAM_ID }),
+        expect.objectContaining({ type: "team", targetId: DESIGN_STUDIO_TEAM_ID }),
+      ]),
+      workflows: [
+        expect.objectContaining({
+          id: "default",
+          managerPrompt: expect.stringMatching(
+            /owner-private business development system[\s\S]*BLUEPRINT\.json[\s\S]*Wait for explicit user approval[\s\S]*business_projects tool/u,
+          ),
+          contract: {
+            requiredRoles: [],
+            requiredQaRoles: [],
+            requireDelegation: false,
+          },
+        }),
+      ],
+    });
   });
 
   it("is idempotent when rerun", () => {
@@ -256,8 +295,8 @@ describe("ensureStarterTeamConfig", () => {
     const second = ensureStarterTeamConfig(first);
 
     expect(second).toEqual(first);
-    expect(second.agents?.list).toHaveLength(14);
-    expect(second.teams?.list).toHaveLength(3);
+    expect(second.agents?.list).toHaveLength(15);
+    expect(second.teams?.list).toHaveLength(4);
   });
 
   it("upgrades an existing main agent into the starter orchestrator contract", () => {
@@ -326,6 +365,7 @@ describe("applyStarterTeamOnFreshInstall", () => {
       expect.arrayContaining([
         MAIN_ORCHESTRATION_TEAM_ID,
         STARTER_TEAM_ID,
+        BUSINESS_DEVELOPMENT_TEAM_ID,
         LIFE_IMPROVEMENT_TEAM_ID,
       ]),
     );
@@ -334,7 +374,12 @@ describe("applyStarterTeamOnFreshInstall", () => {
         ?.find((team) => team.id === MAIN_ORCHESTRATION_TEAM_ID)
         ?.crossTeamLinks?.map((link) => link.targetId),
     ).toEqual(
-      expect.arrayContaining([STARTER_TEAM_ID, DESIGN_STUDIO_TEAM_ID, LIFE_IMPROVEMENT_TEAM_ID]),
+      expect.arrayContaining([
+        STARTER_TEAM_ID,
+        DESIGN_STUDIO_TEAM_ID,
+        BUSINESS_DEVELOPMENT_TEAM_ID,
+        LIFE_IMPROVEMENT_TEAM_ID,
+      ]),
     );
   });
 });
@@ -412,6 +457,73 @@ describe("ensureBundledTeamPresetConfig", () => {
             ]),
             requireDelegation: true,
           }),
+        }),
+      ],
+    });
+  });
+
+  it("adds the business-development preset without auto-installing other optional teams", () => {
+    const result = ensureBundledTeamPresetConfig({}, BUSINESS_DEVELOPMENT_TEAM_ID);
+
+    expect(result.agents?.list?.[0]).toMatchObject({
+      id: "main",
+      executionStyle: "orchestrator",
+      executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+    });
+    expect(
+      result.agents?.list?.find((agent) => agent.id === BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID),
+    ).toMatchObject({
+      workspace: expect.stringContaining(".maumau/workspace"),
+      tools: {
+        allow: expect.arrayContaining([
+          "business_projects",
+          "capabilities_list",
+          "memory_get",
+          "memory_search",
+          "web_fetch",
+          "web_search",
+        ]),
+      },
+    });
+    expect(result.agents?.list?.some((agent) => agent.id === STARTER_TEAM_MANAGER_AGENT_ID)).toBe(
+      false,
+    );
+    expect(
+      result.agents?.list?.some((agent) => agent.id === DESIGN_STUDIO_TEAM_MANAGER_AGENT_ID),
+    ).toBe(false);
+
+    expect(result.teams?.list?.map((team) => team.id)).toEqual([
+      MAIN_ORCHESTRATION_TEAM_ID,
+      BUSINESS_DEVELOPMENT_TEAM_ID,
+    ]);
+    expect(result.teams?.list?.[0]).toMatchObject({
+      id: MAIN_ORCHESTRATION_TEAM_ID,
+      crossTeamLinks: [
+        expect.objectContaining({
+          targetId: BUSINESS_DEVELOPMENT_TEAM_ID,
+          type: "team",
+        }),
+      ],
+    });
+    expect(result.teams?.list?.[1]).toMatchObject({
+      id: BUSINESS_DEVELOPMENT_TEAM_ID,
+      name: "Business Development Team",
+      managerAgentId: BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+      preset: {
+        id: BUSINESS_DEVELOPMENT_TEAM_ID,
+        source: "bundled",
+      },
+      workflows: [
+        expect.objectContaining({
+          id: "default",
+          managerPrompt: expect.stringMatching(
+            /business\/<business-id>\/BUSINESS\.md[\s\S]*BLUEPRINT\.json[\s\S]*Wait for explicit user approval/u,
+          ),
+          contract: {
+            requiredRoles: [],
+            requiredQaRoles: [],
+            requireDelegation: false,
+          },
         }),
       ],
     });

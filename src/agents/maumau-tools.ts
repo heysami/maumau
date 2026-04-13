@@ -9,6 +9,7 @@ import type { SpawnedToolContext } from "./spawned-context.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";
 import { createAgentsListTool } from "./tools/agents-list-tool.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
+import { createBusinessProjectsTool } from "./tools/business-projects-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
 import { createCapabilitiesListTool } from "./tools/capabilities-list-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
@@ -224,6 +225,10 @@ export function createMaumauTools(
       agentGroupChannel: options?.agentGroupChannel,
       agentGroupSpace: options?.agentGroupSpace,
       config: resolvedConfig,
+    }),
+    createBusinessProjectsTool({
+      agentSessionKey: options?.agentSessionKey,
+      config: options?.config,
     }),
     createPreviewPublishTool({
       config: resolvedConfig,

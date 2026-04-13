@@ -251,6 +251,8 @@ export type AppViewState = {
   dashboardWalletCurrency: string | null;
   dashboardCalendarResult: DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
+  dashboardBusinessResult: import("./types.ts").DashboardBusinessResult | null;
+  dashboardProjectsResult: import("./types.ts").DashboardProjectsResult | null;
   dashboardUserChannelsResult: DashboardUserChannelsResult | null;
   dashboardUserChannelId: string | null;
   dashboardUserChannelAccountId: string | null;
@@ -271,7 +273,9 @@ export type AppViewState = {
   dashboardWorkshopSaving: boolean;
   dashboardWorkshopSaveError: string | null;
   dashboardCalendarView: "month" | "week" | "day";
+  dashboardBusinessSelection: string | null;
   dashboardProfileSelection: string | null;
+  dashboardProjectSelection: string | null;
   dashboardTeamSelection: string | null;
   dashboardMemoryAgentId: string | null;
   dashboardAgentPanel: "memory" | "scope";

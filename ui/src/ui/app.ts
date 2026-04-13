@@ -374,6 +374,8 @@ export class MaumauApp extends LitElement {
   @state() dashboardWalletCurrency: string | null = null;
   @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
   @state() dashboardCalendarAnchorAtMs: number | null = null;
+  @state() dashboardBusinessResult: import("./types.js").DashboardBusinessResult | null = null;
+  @state() dashboardProjectsResult: import("./types.js").DashboardProjectsResult | null = null;
   @state() dashboardUserChannelsResult: import("./types.js").DashboardUserChannelsResult | null =
     null;
   @state() dashboardUserChannelId: string | null = null;
@@ -408,7 +410,9 @@ export class MaumauApp extends LitElement {
     approvals: true,
   };
   @state() dashboardRoutineSelection: string | null = null;
+  @state() dashboardBusinessSelection: string | null = null;
   @state() dashboardProfileSelection: string | null = null;
+  @state() dashboardProjectSelection: string | null = null;
   @state() dashboardTeamSelection: string | null = null;
   @state() dashboardMemoryAgentId: string | null = null;
   @state() dashboardAgentPanel: "memory" | "scope" = "memory";

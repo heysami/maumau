@@ -27,6 +27,8 @@ function createHost() {
     dashboardWalletEndDate: "2026-03-30",
     dashboardWalletTimeZone: "local" as const,
     dashboardCalendarResult: null,
+    dashboardBusinessResult: null,
+    dashboardProjectsResult: null,
     dashboardUserChannelsResult: null,
     dashboardUserChannelId: null,
     dashboardUserChannelAccountId: null,

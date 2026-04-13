@@ -337,6 +337,80 @@ export type DashboardMemoriesResult = {
   entries: DashboardRecentMemoryEntry[];
 };
 
+export type DashboardBusinessStatus = "exploring" | "active" | "paused" | "archived";
+export type DashboardProjectStatus =
+  | "brainstorming"
+  | "researching"
+  | "proposed"
+  | "approved"
+  | "building"
+  | "live"
+  | "paused"
+  | "archived";
+export type DashboardBusinessFieldStatus = "recorded" | "missing";
+export type DashboardBlueprintStatus =
+  | "missing"
+  | "invalid"
+  | "draft"
+  | "proposed"
+  | "approved"
+  | "applied";
+
+export type DashboardBusinessField = {
+  key: string;
+  label: string;
+  description: string;
+  value?: string;
+  status: DashboardBusinessFieldStatus;
+};
+
+export type DashboardBusinessItem = {
+  businessId: string;
+  businessName: string;
+  status: DashboardBusinessStatus;
+  sourceLabel: string;
+  updatedAtMs?: number;
+  recordedFieldCount: number;
+  missingFieldCount: number;
+  projectCount: number;
+  activeProjectCount: number;
+  fields: DashboardBusinessField[];
+};
+
+export type DashboardProjectItem = {
+  businessId: string;
+  businessName: string;
+  projectId: string;
+  projectName: string;
+  status: DashboardProjectStatus;
+  projectTag: string;
+  appNeeded: boolean;
+  goal?: string;
+  scope?: string;
+  teamId?: string;
+  linkedWorkspace?: string;
+  linkedWorkspaceLabel?: string;
+  nextStep?: string;
+  proposalSummary?: string;
+  updatedAtMs?: number;
+  blueprintVersion?: number;
+  blueprintStatus: DashboardBlueprintStatus;
+  blueprintError?: string;
+  linkedTaskCount: number;
+  linkedWorkshopCount: number;
+  linkedAgentAppCount: number;
+};
+
+export type DashboardBusinessResult = {
+  generatedAtMs: number;
+  items: DashboardBusinessItem[];
+};
+
+export type DashboardProjectsResult = {
+  generatedAtMs: number;
+  items: DashboardProjectItem[];
+};
+
 export type DashboardUserChannelAccessPolicy = "allowlist" | "open" | "disabled";
 
 export type DashboardUserChannelCapabilityFlags = {

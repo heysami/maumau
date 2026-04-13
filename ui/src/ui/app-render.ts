@@ -12,6 +12,8 @@ import {
 import { getUserChannelQuickSetupEntry } from "../../../src/shared/user-channel-quick-setup.js";
 import { resolveDefaultTeamWorkflowId } from "../../../src/teams/model.js";
 import {
+  BUSINESS_DEVELOPMENT_TEAM_ID,
+  BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
   createBlankTeamConfig,
   DESIGN_STUDIO_TEAM_ID,
   ensureBundledTeamPresetConfig,
@@ -920,6 +922,49 @@ export function renderApp(state: AppViewState) {
       }
       await refreshDashboardAgentWorkspace(agentId);
     };
+    const businessManagerAvailable =
+      state.agentsList?.agents.some(
+        (agent) => agent.id === BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+      ) ?? false;
+    const buildBusinessManagerDraft = (params: {
+      mode: "brainstorm" | "research";
+      businessId?: string;
+      projectId?: string;
+    }) => {
+      const parts = [
+        params.mode === "brainstorm"
+          ? "Let's continue the business brainstorm."
+          : "Let's continue the business research pass.",
+      ];
+      if (params.businessId) {
+        parts.push(`Business id: ${params.businessId}.`);
+      }
+      if (params.projectId) {
+        parts.push(`Project id: ${params.projectId}.`);
+      }
+      parts.push(
+        "Please read the owner-private business dossiers in the default workspace first and then guide the next step.",
+      );
+      return parts.join(" ");
+    };
+    const openBusinessManager = (params: {
+      mode: "brainstorm" | "research";
+      businessId?: string;
+      projectId?: string;
+    }) => {
+      if (!businessManagerAvailable) {
+        state.teamsSelectedId = BUSINESS_DEVELOPMENT_TEAM_ID;
+        state.teamsSelectedWorkflowId = null;
+        state.setTab("teams");
+        return;
+      }
+      const sessionKey = buildAgentMainSessionKey({
+        agentId: BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
+      });
+      switchChatSession(state, sessionKey);
+      state.chatMessage = buildBusinessManagerDraft(params);
+      state.setTab("chat");
+    };
     return dashboardView.renderDashboard({
       tab: state.tab,
       loading: dashboardLoading,
@@ -934,6 +979,8 @@ export function renderApp(state: AppViewState) {
       walletCurrency: state.dashboardWalletCurrency,
       calendarResult: state.dashboardCalendarResult,
       calendarAnchorAtMs: state.dashboardCalendarAnchorAtMs,
+      businessResult: state.dashboardBusinessResult,
+      projectsResult: state.dashboardProjectsResult,
       userChannelsResult: state.dashboardUserChannelsResult,
       userChannelId: state.dashboardUserChannelId,
       userChannelAccountId: state.dashboardUserChannelAccountId,
@@ -958,10 +1005,13 @@ export function renderApp(state: AppViewState) {
       calendarView: state.dashboardCalendarView,
       calendarFilters: state.dashboardCalendarFilters,
       routineSelection: state.dashboardRoutineSelection,
+      businessSelection: state.dashboardBusinessSelection,
       profileSelection: state.dashboardProfileSelection,
+      projectSelection: state.dashboardProjectSelection,
       teamSelection: state.dashboardTeamSelection,
       memoryAgentId: state.dashboardMemoryAgentId,
       agentPanel: state.dashboardAgentPanel,
+      businessManagerAvailable,
       agentsList: state.agentsList,
       configForm: state.configForm,
       configLoading: state.configLoading,
@@ -1141,8 +1191,14 @@ export function renderApp(state: AppViewState) {
       onSelectRoutine: (routineId) => {
         state.dashboardRoutineSelection = routineId;
       },
+      onSelectBusiness: (businessId) => {
+        state.dashboardBusinessSelection = businessId;
+      },
       onSelectProfileAgent: (agentId) => {
         state.dashboardProfileSelection = agentId;
+      },
+      onSelectProject: (projectId) => {
+        state.dashboardProjectSelection = projectId;
       },
       onCalendarSelectDay: (anchorAtMs, view) => {
         const withinVisibleWindow =
@@ -1156,6 +1212,27 @@ export function renderApp(state: AppViewState) {
         if (!withinVisibleWindow || Boolean(view)) {
           void loadDashboardData(state);
         }
+      },
+      onOpenBusinessManager: openBusinessManager,
+      onApplyProjectBlueprint: (project) => {
+        if (!state.client || !state.connected || typeof project.blueprintVersion !== "number") {
+          return;
+        }
+        void (async () => {
+          try {
+            state.dashboardError = null;
+            await state.client!.request("dashboard.projects.applyBlueprint", {
+              businessId: project.businessId,
+              projectId: project.projectId,
+              expectedVersion: project.blueprintVersion,
+            });
+            state.dashboardProjectSelection = project.projectId;
+            state.dashboardBusinessSelection = project.businessId;
+            await loadDashboardData(state, { includeTeams: true });
+          } catch (error) {
+            state.dashboardError = String(error);
+          }
+        })();
       },
       onSelectUserChannel: (channelId) => {
         state.dashboardUserChannelId = channelId;
@@ -2705,14 +2782,17 @@ export function renderApp(state: AppViewState) {
                     if (
                       preset === "vibe-coder" ||
                       preset === "design-studio" ||
-                      preset === "life-improvement"
+                      preset === "life-improvement" ||
+                      preset === "business-development"
                     ) {
                       const presetTeamId =
                         preset === "vibe-coder"
                           ? STARTER_TEAM_ID
                           : preset === "design-studio"
                             ? DESIGN_STUDIO_TEAM_ID
-                            : LIFE_IMPROVEMENT_TEAM_ID;
+                            : preset === "life-improvement"
+                              ? LIFE_IMPROVEMENT_TEAM_ID
+                              : BUSINESS_DEVELOPMENT_TEAM_ID;
                       const nextConfig = ensureBundledTeamPresetConfig(
                         (getCurrentConfigValue() ?? {}) as MaumauConfig,
                         presetTeamId,

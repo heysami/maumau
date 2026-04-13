@@ -1,4 +1,10 @@
-import { parseConfigJson5, type MaumauConfig } from "../../config/config.js";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
+import {
+  ensureBusinessRootExists,
+  materializeBusinessProjectBlueprint,
+} from "../../business/materialize.js";
+import { loadConfig, parseConfigJson5, type MaumauConfig } from "../../config/config.js";
+import { collectDashboardBusiness, collectDashboardProjects } from "../dashboard-business.js";
 import type { DashboardCalendarView } from "../dashboard-types.js";
 import {
   collectDashboardUserChannels,
@@ -23,6 +29,11 @@ import {
 import { parseDateRange, resolveDateInterpretation } from "../date-range.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 import { validateConfigGetParams } from "../protocol/index.js";
+import {
+  validateDashboardBusinessParams,
+  validateDashboardProjectsApplyBlueprintParams,
+  validateDashboardProjectsParams,
+} from "../protocol/index.js";
 import { validateDashboardTeamsSnapshotParams } from "../protocol/index.js";
 import { validateDashboardWalletParams } from "../protocol/index.js";
 import { validateDashboardWorkshopSaveParams } from "../protocol/index.js";
@@ -104,6 +115,75 @@ export const dashboardHandlers: GatewayRequestHandlers = {
       execApprovals: context.execApprovalManager?.listPending() ?? [],
     });
     respond(true, result, undefined);
+  },
+  "dashboard.business": async ({ params, respond }) => {
+    if (
+      !assertValidParams(params, validateDashboardBusinessParams, "dashboard.business", respond)
+    ) {
+      return;
+    }
+    const cfg = loadConfig();
+    const result = await collectDashboardBusiness({ cfg });
+    respond(true, result, undefined);
+  },
+  "dashboard.projects": async ({ params, respond, context }) => {
+    if (
+      !assertValidParams(params, validateDashboardProjectsParams, "dashboard.projects", respond)
+    ) {
+      return;
+    }
+    const cfg = loadConfig();
+    const tasks = await collectDashboardTasks({
+      cron: context.cron,
+      cronStorePath: context.cronStorePath,
+      execApprovals: context.execApprovalManager?.listPending() ?? [],
+      cfg,
+    });
+    const workshop = await collectDashboardWorkshop({
+      cron: context.cron,
+      cronStorePath: context.cronStorePath,
+      execApprovals: context.execApprovalManager?.listPending() ?? [],
+      cfg,
+    });
+    const result = await collectDashboardProjects({
+      cfg,
+      tasks: tasks.items,
+      workshopItems: workshop.items,
+      savedWorkshopItems: workshop.savedItems,
+      agentApps: workshop.agentApps,
+    });
+    respond(true, result, undefined);
+  },
+  "dashboard.projects.applyBlueprint": async ({ params, respond }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateDashboardProjectsApplyBlueprintParams,
+        "dashboard.projects.applyBlueprint",
+        respond,
+      )
+    ) {
+      return;
+    }
+    try {
+      const cfg = loadConfig();
+      const workspaceDir = resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
+      await ensureBusinessRootExists(workspaceDir);
+      const payload = params as {
+        businessId: string;
+        projectId: string;
+        expectedVersion: number;
+      };
+      const result = await materializeBusinessProjectBlueprint({
+        workspaceDir,
+        businessId: payload.businessId,
+        projectId: payload.projectId,
+        expectedVersion: payload.expectedVersion,
+      });
+      respond(true, result, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(error)));
+    }
   },
   "dashboard.workshop": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateConfigGetParams, "dashboard.workshop", respond)) {

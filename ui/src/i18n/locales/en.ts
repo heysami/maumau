@@ -44,6 +44,8 @@ export const en: TranslationMap = {
     dashboardWorkshop: "Workshop",
     dashboardCalendar: "Calendar",
     dashboardRoutines: "Routines",
+    dashboardBusiness: "Business",
+    dashboardProjects: "Projects",
     dashboardProfile: "Life Profile",
     dashboardTeams: "Teams",
     dashboardUserChannels: "User Channels",
@@ -77,6 +79,10 @@ export const en: TranslationMap = {
     dashboardWorkshop: "Interactive previews linked back to the tasks that spawned them.",
     dashboardCalendar: "Month, week, and day views for routines, cron, and activity.",
     dashboardRoutines: "People-facing routines projected from existing automation and cron jobs.",
+    dashboardBusiness:
+      "Owner-private venture dossiers, profiling gaps, and brainstorming or research entry points.",
+    dashboardProjects:
+      "Cross-business project blueprints, handoff status, linked teams, and workspace joins.",
     dashboardProfile:
       "Recorded, missing, and later life-improvement context across the default coaching team.",
     dashboardTeams: "Generated org charts and delegation flow from saved team configuration.",

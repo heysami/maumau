@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { generateTeamOpenProsePreview } from "./openprose.js";
 import {
+  createBusinessDevelopmentTeamAgents,
+  createBusinessDevelopmentTeamConfig,
   createDesignStudioTeamAgents,
   createDesignStudioTeamConfig,
   createLifeImprovementTeamAgents,
@@ -318,6 +320,39 @@ describe("generateTeamOpenProsePreview", () => {
     );
   });
 
+  it("encodes the business-development intake, research, proposal, approval, and kickoff flow", () => {
+    const businessDevelopmentPreview = generateTeamOpenProsePreview({
+      config: {
+        agents: {
+          list: createBusinessDevelopmentTeamAgents(),
+        },
+      },
+      team: createBusinessDevelopmentTeamConfig(),
+    });
+
+    expect(businessDevelopmentPreview).toContain(
+      "# Step 0: the manager identifies the business and project scope before researching",
+    );
+    expect(businessDevelopmentPreview).toContain("business/<business-id>/BUSINESS.md");
+    expect(businessDevelopmentPreview).toContain("BLUEPRINT.json");
+    expect(businessDevelopmentPreview).toContain(
+      "# Step 1: the manager performs a thorough research pass",
+    );
+    expect(businessDevelopmentPreview).toContain(
+      "Research the current opportunity thoroughly using web_search and web_fetch as needed.",
+    );
+    expect(businessDevelopmentPreview).toContain(
+      "# Step 3: the manager updates or creates the machine-readable project blueprint",
+    );
+    expect(businessDevelopmentPreview).toContain("# Step 4: approval is explicit and versioned");
+    expect(businessDevelopmentPreview).toContain("business_projects");
+    expect(businessDevelopmentPreview).toContain("vibe-coder as the implementation owner");
+    expect(businessDevelopmentPreview).toContain("design-studio only for asset-only work");
+    expect(businessDevelopmentPreview).toContain(
+      "# Step 6: the manager closes with one business-development brief",
+    );
+  });
+
   it("encodes root orchestration teams as routing flows instead of generic parallel specialists", () => {
     const preview = generateTeamOpenProsePreview({
       config: {
@@ -340,7 +375,7 @@ describe("generateTeamOpenProsePreview", () => {
       "use teams_run with the chosen linked team instead of sessions_spawn.",
     );
     expect(preview).toContain(
-      "Choose the initial linked team or linked-team sequence from: vibe-coder (Use for staged UI/product implementation, architecture, development, and ship-readiness QA.), design-studio (Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.).",
+      "Choose the initial linked team or linked-team sequence from: vibe-coder (Use for staged UI/product implementation, architecture, development, and ship-readiness QA.), design-studio (Use for asset-only design exploration, vector/raster asset generation, and visual consistency QA. Not for full page/app implementation.), business-development (Use for business research, project planning, portfolio dossiers, and approved project-team kickoff.).",
     );
     expect(preview).toContain(
       "If the final deliverable is a built webpage, app, screen, or other implemented UI/product artifact, choose the implementation team first as the initial owner.",

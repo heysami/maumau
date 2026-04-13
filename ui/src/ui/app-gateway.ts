@@ -129,6 +129,8 @@ type GatewayHost = {
   dashboardCalendarResult: import("./types.ts").DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
   dashboardCalendarView: "month" | "week" | "day";
+  dashboardBusinessResult: import("./types.ts").DashboardBusinessResult | null;
+  dashboardProjectsResult: import("./types.ts").DashboardProjectsResult | null;
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;

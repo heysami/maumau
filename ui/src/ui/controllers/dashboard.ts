@@ -2,9 +2,11 @@ import type { GatewayBrowserClient } from "../gateway.ts";
 import type { Tab } from "../navigation.ts";
 import { dashboardPageForTab } from "../navigation.ts";
 import type {
+  DashboardBusinessResult,
   ConfigSnapshot,
   DashboardCalendarResult,
   DashboardMemoriesResult,
+  DashboardProjectsResult,
   DashboardRoutinesResult,
   DashboardSnapshot,
   DashboardTaskFilter,
@@ -35,6 +37,8 @@ type DashboardHost = {
   dashboardWalletEndDate: string;
   dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: DashboardCalendarResult | null;
+  dashboardBusinessResult: DashboardBusinessResult | null;
+  dashboardProjectsResult: DashboardProjectsResult | null;
   dashboardUserChannelsResult: DashboardUserChannelsResult | null;
   dashboardUserChannelId: string | null;
   dashboardUserChannelAccountId: string | null;
@@ -210,7 +214,12 @@ function applyMemories(snapshot: DashboardSnapshot, result: DashboardMemoriesRes
   snapshot.generatedAtMs = Math.max(snapshot.generatedAtMs, result.generatedAtMs);
 }
 
-function synchronizeUserChannelSelection(host: DashboardHost) {
+function synchronizeUserChannelSelection(
+  host: Pick<
+    DashboardHost,
+    "dashboardUserChannelsResult" | "dashboardUserChannelId" | "dashboardUserChannelAccountId"
+  >,
+) {
   const channels = host.dashboardUserChannelsResult?.channels ?? [];
   if (channels.length === 0) {
     host.dashboardUserChannelId = null;
@@ -301,6 +310,28 @@ async function loadDashboardPageData(host: DashboardHost): Promise<void> {
       const snapshot = ensureDashboardSnapshot(host);
       const routines = await host.client.request<DashboardRoutinesResult>("dashboard.routines", {});
       applyRoutines(snapshot, routines);
+      return;
+    }
+    case "business": {
+      host.dashboardBusinessResult = await host.client.request<DashboardBusinessResult>(
+        "dashboard.business",
+        {},
+      );
+      host.dashboardProjectsResult = await host.client.request<DashboardProjectsResult>(
+        "dashboard.projects",
+        {},
+      );
+      return;
+    }
+    case "projects": {
+      host.dashboardBusinessResult = await host.client.request<DashboardBusinessResult>(
+        "dashboard.business",
+        {},
+      );
+      host.dashboardProjectsResult = await host.client.request<DashboardProjectsResult>(
+        "dashboard.projects",
+        {},
+      );
       return;
     }
     case "profile": {
@@ -584,12 +615,14 @@ export function scheduleDashboardReload(
   opts?: { delayMs?: number; includeTeams?: boolean },
 ) {
   clearReloadTimer(host);
-  host.dashboardReloadTimer = globalThis.setTimeout(
-    () => {
-      host.dashboardReloadTimer = null;
-      void loadDashboardData(host, { includeTeams: opts?.includeTeams, quiet: true });
-    },
-    Math.max(0, opts?.delayMs ?? 120),
+  host.dashboardReloadTimer = Number(
+    globalThis.setTimeout(
+      () => {
+        host.dashboardReloadTimer = null;
+        void loadDashboardData(host, { includeTeams: opts?.includeTeams, quiet: true });
+      },
+      Math.max(0, opts?.delayMs ?? 120),
+    ),
   );
 }
 
