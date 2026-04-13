@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 
 import { render } from "lit";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import { createEmptyMauOfficeState } from "../controllers/mau-office.ts";
 import type {
   DashboardAgentAppItem,
@@ -18,6 +19,14 @@ import type {
   DashboardWorkshopItem,
 } from "../types.ts";
 import { renderDashboard } from "./dashboard.ts";
+
+beforeEach(async () => {
+  await i18n.setLocale("en");
+});
+
+afterEach(async () => {
+  await i18n.setLocale("en");
+});
 
 function buildTask(overrides: Partial<DashboardTask> = {}): DashboardTask {
   return {
@@ -2041,5 +2050,226 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain("Daily / weekly rhythm");
     expect(container.textContent).toContain("Why this role needs it");
     expect(container.textContent).toContain("Organization, reminders, and planning.");
+  });
+
+  it("renders key dashboard pages in Indonesian without leaking fallback keys", async () => {
+    await i18n.setLocale("id");
+
+    const snapshotWithRoutine = buildSnapshot([buildTask()]);
+    snapshotWithRoutine.routines = [
+      {
+        id: "routine:check-in",
+        sourceJobId: "cron:check-in",
+        title: "Check-in pagi",
+        description: "Ritual singkat untuk menyelaraskan fokus hari ini.",
+        enabled: true,
+        scheduleKind: "every",
+        scheduleLabel: "Setiap hari kerja pukul 09.00",
+        preview: {
+          view: "week",
+          anchorAtMs: 1,
+          startAtMs: 1,
+          endAtMs: 7,
+          runAtMs: [1, 2],
+        },
+        nextRunAtMs: 2,
+        lastRunAtMs: 1,
+        visibility: "user_facing",
+        visibilitySource: "stored",
+      },
+    ];
+    snapshotWithRoutine.memories = [
+      {
+        id: "memory:1",
+        agentId: "agent-1",
+        title: "Ritme kerja",
+        path: "agents/agent-1/memory.md",
+        updatedAtMs: 5,
+        excerpt: "Lebih fokus setelah check-in singkat setiap pagi.",
+      },
+    ];
+
+    const agentsList = {
+      defaultId: "agent-1",
+      mainKey: "main",
+      scope: "workspace",
+      agents: [{ id: "agent-1", name: "Focus Coach", identity: { name: "Focus Coach" } }],
+    };
+
+    const userChannelsResult = {
+      generatedAtMs: 1,
+      channels: [
+        {
+          channelId: "telegram",
+          label: "Telegram",
+          detailLabel: "Telegram Bot",
+          accounts: [
+            {
+              accountId: "default",
+              name: "Ops Bot",
+              defaultAccount: true,
+              configured: true,
+              linked: true,
+              enabled: true,
+              running: true,
+              connected: true,
+              users: [
+                {
+                  userId: "sam",
+                  userLabel: "Sam",
+                  identityLabel: "@sam_ops",
+                  senderId: "12345",
+                  groupLabels: ["Ops"],
+                  active: true,
+                },
+              ],
+              capabilities: {
+                users: true,
+                dmSenders: true,
+                groupSenders: true,
+                chats: true,
+                overrides: true,
+              },
+              dmSenders: {
+                label: "DM",
+                entries: ["sam"],
+                policy: "allowlist",
+              },
+              groupSenders: {
+                label: "Groups",
+                entries: ["ops-leads"],
+              },
+              chats: {
+                label: "Chats",
+                entries: ["ops-room"],
+                policy: "open",
+              },
+              overrides: [{ label: "Escalations", entries: ["pager"] }],
+            },
+          ],
+        },
+      ],
+      availableChannels: [
+        {
+          channelId: "whatsapp",
+          label: "WhatsApp",
+          detailLabel: "WhatsApp Web",
+          fields: [],
+          guidance: {
+            identity: "fallback identity",
+            requirements: ["fallback requirement"],
+            setupSteps: ["fallback step"],
+            artifacts: ["fallback artifact"],
+          },
+          quickSetup: {
+            kind: "whatsapp",
+            sectionTitle: "fallback",
+            title: "fallback",
+            headline: "fallback",
+            message: "fallback",
+            badge: "fallback",
+            setupNote: "fallback",
+          },
+        },
+      ],
+    };
+
+    const cases: Array<{
+      tab: Parameters<typeof buildProps>[0]["tab"];
+      overrides: Partial<Parameters<typeof renderDashboard>[0]>;
+      expected: string[];
+    }> = [
+      {
+        tab: "dashboardWallet",
+        overrides: { snapshot: null, walletResult: buildWalletResult() },
+        expected: ["Rincian Pengeluaran", "Kelompokkan berdasarkan", "Pisahkan berdasarkan"],
+      },
+      {
+        tab: "dashboardTasks",
+        overrides: { snapshot: buildSnapshot([buildTask()]) },
+        expected: ["Proyek", "Semua proyek", "Tugas Utama"],
+      },
+      {
+        tab: "dashboardCalendar",
+        overrides: {},
+        expected: ["Aktivitas pengguna", "Persetujuan", "Bulan"],
+      },
+      {
+        tab: "dashboardRoutines",
+        overrides: { snapshot: snapshotWithRoutine },
+        expected: ["Jadwal", "Jalankan berikutnya", "Run terakhir"],
+      },
+      {
+        tab: "dashboardProfile",
+        overrides: { profileSelection: "life-improvement-life-mindset-coach" },
+        expected: ["Cakupan Profil", "Peta Profil Kanonis", "Agen Life Improvement"],
+      },
+      {
+        tab: "dashboardBusiness",
+        overrides: {
+          businessResult: buildBusinessResult(),
+          projectsResult: buildProjectsResult(),
+          businessSelection: "focus-lab",
+        },
+        expected: ["Dossier bisnis", "Celah profiling", "Pertanyaan terbuka"],
+      },
+      {
+        tab: "dashboardProjects",
+        overrides: {
+          businessResult: buildBusinessResult(),
+          projectsResult: buildProjectsResult(),
+          projectSelection: "founder-os",
+        },
+        expected: ["Dossier proyek", "Keterkaitan proyek", "Artefak terkait"],
+      },
+      {
+        tab: "dashboardUserChannels",
+        overrides: {
+          snapshot: null,
+          userChannelsResult,
+        },
+        expected: ["Channel terhubung", "Pengirim direct yang diizinkan", "Akun default"],
+      },
+      {
+        tab: "dashboardAgents",
+        overrides: {
+          snapshot: snapshotWithRoutine,
+          agentsList,
+          memoryAgentId: "agent-1",
+          agentPanel: "scope",
+          toolsCatalogError: "offline",
+        },
+        expected: ["Konteks agen", "Model utama", "Filter skill", "Akses tool"],
+      },
+      {
+        tab: "dashboardMemories",
+        overrides: {
+          snapshot: snapshotWithRoutine,
+          agentsList,
+          memoryAgentId: "agent-1",
+        },
+        expected: ["Catatan memori terbaru", "Filter catatan berdasarkan agen."],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const container = document.createElement("div");
+      render(
+        renderDashboard(
+          buildProps({
+            tab: testCase.tab,
+            ...testCase.overrides,
+          }),
+        ),
+        container,
+      );
+      await Promise.resolve();
+
+      const text = container.textContent ?? "";
+      for (const expected of testCase.expected) {
+        expect(text).toContain(expected);
+      }
+      expect(text).not.toContain("dashboard.");
+    }
   });
 });

@@ -159,15 +159,6 @@ const EDITOR_TOOL_ORDER: MauOfficeEditorTool[] = [
   "marker",
 ];
 
-const EDITOR_TOOL_LABELS: Record<MauOfficeEditorTool, string> = {
-  select: "Select",
-  zone: "Floors",
-  wall: "Walls",
-  autotile: "Brushes",
-  prop: "Items",
-  marker: "Markers",
-};
-
 const EDITOR_TOOL_ICONS: Record<MauOfficeEditorTool, keyof typeof icons> = {
   select: "cursor",
   zone: "layoutGrid",
@@ -181,6 +172,26 @@ const EDITOR_BRUSH_MODE_ICONS: Record<MauOfficeEditorBrushMode, keyof typeof ico
   paint: "plus",
   erase: "trash",
 };
+
+function editorT(key: string, params?: Record<string, string>): string {
+  return t(`dashboard.mauOffice.editor.${key}`, params);
+}
+
+function editorToolLabel(tool: MauOfficeEditorTool): string {
+  return editorT(`tools.${tool}`);
+}
+
+function editorBrushModeLabel(mode: MauOfficeEditorBrushMode): string {
+  return editorT(`brushMode.${mode}`);
+}
+
+function editorUndoLabel(shortcut?: string): string {
+  return shortcut ? editorT("controls.undoWithShortcut", { shortcut }) : editorT("controls.undo");
+}
+
+function editorRedoLabel(shortcut?: string): string {
+  return shortcut ? editorT("controls.redoWithShortcut", { shortcut }) : editorT("controls.redo");
+}
 
 export type MauOfficeProps = {
   loading: boolean;
@@ -1953,7 +1964,9 @@ function renderCatalogPicker(params: {
                       />
                     `
                     : html`
-                        <span class="mau-office__editor-picker-empty">No Preview</span>
+                        <span class="mau-office__editor-picker-empty">
+                          ${editorT("picker.noPreview")}
+                        </span>
                       `
                 }
               </span>
@@ -1973,10 +1986,14 @@ function renderZonePicker(editor: NonNullable<MauOfficeProps["editor"]>) {
   return html`
     <div class="mau-office__editor-picker">
       <div>
-        <div class="mau-office__editor-heading">Zone Brush</div>
+        <div class="mau-office__editor-heading">${editorT("picker.zoneBrush")}</div>
         <div class="mau-office__editor-meta">${formatEditorLabel(editor.zoneBrush)}</div>
       </div>
-      <div class="mau-office__editor-picker-list" role="listbox" aria-label="Zone Brush">
+      <div
+        class="mau-office__editor-picker-list"
+        role="listbox"
+        aria-label=${editorT("picker.zoneBrush")}
+      >
         ${ZONE_OPTIONS.map(
           (zone) => html`
             <button
@@ -1993,7 +2010,13 @@ function renderZonePicker(editor: NonNullable<MauOfficeProps["editor"]>) {
               <span class="mau-office__editor-picker-copy">
                 <span class="mau-office__editor-picker-label">${formatEditorLabel(zone)}</span>
                 <span class="mau-office__editor-picker-detail">
-                  ${zone === "outside" ? "Empty space" : zone === "hall" ? "Walkway" : "Room floor"}
+                  ${
+                    zone === "outside"
+                      ? editorT("zoneDetail.outside")
+                      : zone === "hall"
+                        ? editorT("zoneDetail.hall")
+                        : editorT("zoneDetail.default")
+                  }
                 </span>
               </span>
             </button>
@@ -2008,10 +2031,14 @@ function renderMarkerPicker(editor: NonNullable<MauOfficeProps["editor"]>) {
   return html`
     <div class="mau-office__editor-picker">
       <div>
-        <div class="mau-office__editor-heading">Marker Role</div>
+        <div class="mau-office__editor-heading">${editorT("picker.markerRole")}</div>
         <div class="mau-office__editor-meta">${markerRoleDetail(editor.markerRole)}</div>
       </div>
-      <div class="mau-office__editor-picker-list" role="listbox" aria-label="Marker Role">
+      <div
+        class="mau-office__editor-picker-list"
+        role="listbox"
+        aria-label=${editorT("picker.markerRole")}
+      >
         ${MARKER_ROLE_OPTIONS.map(
           (role) => html`
             <button
@@ -2146,7 +2173,11 @@ function renderEditorGrid(props: MauOfficeProps, scene: CompiledMauOfficeScene) 
           type="button"
           data-selection-kind="cell"
           data-selection-id=${`${tileX},${tileY}`}
-          aria-label=${`Tile ${tileX},${tileY} ${hasWall ? "with wall" : "without wall"}`}
+          aria-label=${
+            hasWall
+              ? editorT("cell.withWall", { x: String(tileX), y: String(tileY) })
+              : editorT("cell.withoutWall", { x: String(tileX), y: String(tileY) })
+          }
           @pointerdown=${(event: PointerEvent) => {
             editor.onHoverTileChange?.(tileX, tileY);
             if (editor.tool === "zone" || editor.tool === "wall" || editor.tool === "autotile") {
@@ -2172,33 +2203,35 @@ function renderEditorGrid(props: MauOfficeProps, scene: CompiledMauOfficeScene) 
 
 function currentEditorModeLabel(editor: NonNullable<MauOfficeProps["editor"]>): string {
   if (editor.tool === "select") {
-    return "Selecting scene parts";
+    return editorT("mode.selecting");
   }
-  return `${editor.brushMode === "paint" ? "Editing" : "Erasing"} ${EDITOR_TOOL_LABELS[editor.tool].toLowerCase()}`;
+  return editorT(editor.brushMode === "paint" ? "mode.editing" : "mode.erasing", {
+    tool: editorToolLabel(editor.tool).toLowerCase(),
+  });
 }
 
 function editorHint(editor: NonNullable<MauOfficeProps["editor"]>): string {
   switch (editor.tool) {
     case "select":
       return editor.selection
-        ? "Click to switch selection. Click empty space to clear it. Press and drag the selected prop, brush region, or marker to move it."
-        : "Click a placed item, brush region, or marker to inspect and adjust it.";
+        ? editorT("hints.selectWithSelection")
+        : editorT("hints.selectEmpty");
     case "zone":
-      return "Drag to paint floor zones. Floors no longer create walls automatically.";
+      return editorT("hints.zone");
     case "wall":
-      return "Drag to paint wall tiles anywhere on the grid. Edit mode shows the saved wall art as a translucent preview.";
+      return editorT("hints.wall");
     case "autotile":
       return editor.brushMode === "paint"
-        ? "Drag to paint smart brush cells. Neighboring slices update automatically."
-        : "Drag to carve cells out of the selected smart brush region.";
+        ? editorT("hints.autotilePaint")
+        : editorT("hints.autotileErase");
     case "prop":
       return editor.brushMode === "paint"
-        ? "Click to place the selected catalog item."
-        : "Click an item to remove it.";
+        ? editorT("hints.propPaint")
+        : editorT("hints.propErase");
     case "marker":
       return editor.brushMode === "paint"
-        ? "Click to place a semantic marker."
-        : "Click a marker to remove it.";
+        ? editorT("hints.markerPaint")
+        : editorT("hints.markerErase");
   }
 }
 
@@ -2249,7 +2282,7 @@ function renderEditorToolPalette(editor: NonNullable<MauOfficeProps["editor"]>, 
     <div class="mau-office__editor-panel mau-office__editor-panel--tool">
       <div class="mau-office__editor-panel-header">
         <div>
-          <div class="mau-office__editor-heading">${EDITOR_TOOL_LABELS[editor.tool]}</div>
+          <div class="mau-office__editor-heading">${editorToolLabel(editor.tool)}</div>
           <div class="mau-office__editor-meta">${currentEditorModeLabel(editor)}</div>
         </div>
       </div>
@@ -2257,14 +2290,18 @@ function renderEditorToolPalette(editor: NonNullable<MauOfficeProps["editor"]>, 
       ${
         editor.tool !== "select"
           ? html`
-              <div class="mau-office__editor-mode-switch" role="toolbar" aria-label="Edit action">
+              <div
+                class="mau-office__editor-mode-switch"
+                role="toolbar"
+                aria-label=${editorT("controls.editAction")}
+              >
                 ${(["paint", "erase"] as const).map(
                   (mode) => html`
                     <button
                       class="mau-office__editor-mode-button ${editor.brushMode === mode ? "active" : ""}"
                       type="button"
-                      title=${mode === "paint" ? "Paint" : "Erase"}
-                      aria-label=${mode === "paint" ? "Paint" : "Erase"}
+                      title=${editorBrushModeLabel(mode)}
+                      aria-label=${editorBrushModeLabel(mode)}
                       @click=${() => editor.onBrushModeChange(mode)}
                     >
                       ${icons[EDITOR_BRUSH_MODE_ICONS[mode]]}
@@ -2279,7 +2316,7 @@ function renderEditorToolPalette(editor: NonNullable<MauOfficeProps["editor"]>, 
       ${
         editor.tool === "prop"
           ? renderCatalogPicker({
-              label: "Catalog Item",
+              label: editorT("picker.catalogItem"),
               selectedId: editor.propItemId,
               items: FLOOR_PROP_ITEMS,
               basePath,
@@ -2290,7 +2327,7 @@ function renderEditorToolPalette(editor: NonNullable<MauOfficeProps["editor"]>, 
       ${
         editor.tool === "autotile"
           ? renderCatalogPicker({
-              label: "Smart Brush",
+              label: editorT("picker.smartBrush"),
               selectedId: editor.autotileItemId,
               items: AUTOTILE_ITEMS,
               basePath,
@@ -2329,15 +2366,15 @@ function renderEditorSelectionPanel(
     >
       <div class="mau-office__editor-panel-header">
         <div>
-          <div class="mau-office__editor-heading">Selection</div>
+          <div class="mau-office__editor-heading">${editorT("selection.title")}</div>
           <div class="mau-office__editor-meta">${selectedSummary.label}</div>
         </div>
         <div class="mau-office__editor-panel-actions">
           <button
             class="mau-office__editor-mini-button"
             type="button"
-            title="Clear selection"
-            aria-label="Clear selection"
+            title=${editorT("selection.clear")}
+            aria-label=${editorT("selection.clear")}
             @click=${() => editor.onClearSelection?.()}
           >
             ${icons.x}
@@ -2345,8 +2382,8 @@ function renderEditorSelectionPanel(
           <button
             class="mau-office__editor-mini-button"
             type="button"
-            title="Delete selection"
-            aria-label="Delete selection"
+            title=${editorT("selection.delete")}
+            aria-label=${editorT("selection.delete")}
             @click=${editor.onDeleteSelection}
           >
             ${icons.trash}
@@ -2357,7 +2394,7 @@ function renderEditorSelectionPanel(
         selectedSummary.kind === "prop"
           ? html`
               <label>
-                <span>Mount</span>
+                <span>${editorT("selection.mount")}</span>
                 <select
                   .value=${selectedSummary.prop.mountOverride ?? "auto"}
                   @change=${(event: Event) =>
@@ -2368,14 +2405,14 @@ function renderEditorSelectionPanel(
                           : (event.target as HTMLSelectElement).value,
                     })}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="floor">Floor</option>
-                  <option value="wall">Wall</option>
-                  <option value="underlay">Underlay</option>
+                  <option value="auto">${editorT("selection.auto")}</option>
+                  <option value="floor">${editorT("selection.floor")}</option>
+                  <option value="wall">${editorT("selection.wall")}</option>
+                  <option value="underlay">${editorT("selection.underlay")}</option>
                 </select>
               </label>
               <label>
-                <span>Z Offset</span>
+                <span>${editorT("selection.zOffset")}</span>
                 <input
                   type="number"
                   .value=${
@@ -2392,7 +2429,7 @@ function renderEditorSelectionPanel(
                 />
               </label>
               <label>
-                <span>Collision</span>
+                <span>${editorT("selection.collision")}</span>
                 <select
                   .value=${
                     selectedSummary.prop.collisionOverride == null
@@ -2407,16 +2444,16 @@ function renderEditorSelectionPanel(
                           : (event.target as HTMLSelectElement).value === "true",
                     })}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="true">Blocks</option>
-                  <option value="false">Walkable</option>
+                  <option value="auto">${editorT("selection.auto")}</option>
+                  <option value="true">${editorT("selection.blocks")}</option>
+                  <option value="false">${editorT("selection.walkable")}</option>
                 </select>
               </label>
               ${
                 selectedCatalogItem?.loops
                   ? html`
                       <label>
-                        <span>Loop</span>
+                        <span>${editorT("selection.loop")}</span>
                         <select
                           .value=${selectedSummary.prop.loopId ?? "default"}
                           @change=${(event: Event) =>
@@ -2427,8 +2464,8 @@ function renderEditorSelectionPanel(
                                   : (event.target as HTMLSelectElement).value,
                             })}
                         >
-                          <option value="default">Default</option>
-                          <option value="off">Off</option>
+                          <option value="default">${editorT("selection.default")}</option>
+                          <option value="off">${editorT("selection.off")}</option>
                           ${selectedCatalogItem.loops.values.map(
                             (loop) => html`<option value=${loop.id}>${loop.label}</option>`,
                           )}
@@ -2441,7 +2478,7 @@ function renderEditorSelectionPanel(
           : selectedSummary.kind === "autotile"
             ? html`
                 <label>
-                  <span>Mount</span>
+                  <span>${editorT("selection.mount")}</span>
                   <select
                     .value=${selectedSummary.autotile.mountOverride ?? "auto"}
                     @change=${(event: Event) =>
@@ -2452,14 +2489,14 @@ function renderEditorSelectionPanel(
                             : (event.target as HTMLSelectElement).value,
                       })}
                   >
-                    <option value="auto">Auto</option>
-                    <option value="floor">Floor</option>
-                    <option value="wall">Wall</option>
-                    <option value="underlay">Underlay</option>
+                    <option value="auto">${editorT("selection.auto")}</option>
+                    <option value="floor">${editorT("selection.floor")}</option>
+                    <option value="wall">${editorT("selection.wall")}</option>
+                    <option value="underlay">${editorT("selection.underlay")}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Z Offset</span>
+                  <span>${editorT("selection.zOffset")}</span>
                   <input
                     type="number"
                     .value=${
@@ -2476,7 +2513,7 @@ function renderEditorSelectionPanel(
                   />
                 </label>
                 <label>
-                  <span>Collision</span>
+                  <span>${editorT("selection.collision")}</span>
                   <select
                     .value=${
                       selectedSummary.autotile.collisionOverride == null
@@ -2491,16 +2528,16 @@ function renderEditorSelectionPanel(
                             : (event.target as HTMLSelectElement).value === "true",
                       })}
                   >
-                    <option value="auto">Auto</option>
-                    <option value="true">Blocks</option>
-                    <option value="false">Walkable</option>
+                    <option value="auto">${editorT("selection.auto")}</option>
+                    <option value="true">${editorT("selection.blocks")}</option>
+                    <option value="false">${editorT("selection.walkable")}</option>
                   </select>
                 </label>
                 ${
                   selectedCatalogItem?.loops
                     ? html`
                         <label>
-                          <span>Loop</span>
+                          <span>${editorT("selection.loop")}</span>
                           <select
                             .value=${selectedSummary.autotile.loopId ?? "default"}
                             @change=${(event: Event) =>
@@ -2511,8 +2548,8 @@ function renderEditorSelectionPanel(
                                     : (event.target as HTMLSelectElement).value,
                               })}
                           >
-                            <option value="default">Default</option>
-                            <option value="off">Off</option>
+                            <option value="default">${editorT("selection.default")}</option>
+                            <option value="off">${editorT("selection.off")}</option>
                             ${selectedCatalogItem.loops.values.map(
                               (loop) => html`<option value=${loop.id}>${loop.label}</option>`,
                             )}
@@ -2524,7 +2561,7 @@ function renderEditorSelectionPanel(
               `
             : html`
                 <label>
-                  <span>Role</span>
+                  <span>${editorT("selection.role")}</span>
                   <select
                     .value=${selectedSummary.marker.role}
                     @change=${(event: Event) =>
@@ -2538,7 +2575,7 @@ function renderEditorSelectionPanel(
                   </select>
                 </label>
                 <label>
-                  <span>Pose</span>
+                  <span>${editorT("selection.pose")}</span>
                   <select
                     .value=${selectedSummary.marker.pose}
                     @change=${(event: Event) =>
@@ -2546,12 +2583,12 @@ function renderEditorSelectionPanel(
                         pose: (event.target as HTMLSelectElement).value,
                       })}
                   >
-                    <option value="stand">Stand</option>
-                    <option value="sit">Sit</option>
+                    <option value="stand">${editorT("selection.stand")}</option>
+                    <option value="sit">${editorT("selection.sit")}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Facing</span>
+                  <span>${editorT("selection.facing")}</span>
                   <select
                     .value=${selectedSummary.marker.facingOverride ?? "auto"}
                     @change=${(event: Event) =>
@@ -2562,15 +2599,15 @@ function renderEditorSelectionPanel(
                             : (event.target as HTMLSelectElement).value,
                       })}
                   >
-                    <option value="auto">Auto</option>
-                    <option value="north">North</option>
-                    <option value="east">East</option>
-                    <option value="south">South</option>
-                    <option value="west">West</option>
+                    <option value="auto">${editorT("selection.auto")}</option>
+                    <option value="north">${editorT("selection.north")}</option>
+                    <option value="east">${editorT("selection.east")}</option>
+                    <option value="south">${editorT("selection.south")}</option>
+                    <option value="west">${editorT("selection.west")}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Layer</span>
+                  <span>${editorT("selection.layer")}</span>
                   <input
                     type="number"
                     .value=${String(selectedSummary.marker.layer)}
@@ -2583,8 +2620,7 @@ function renderEditorSelectionPanel(
               `
       }
       <div class="mau-office__editor-meta">
-        Drag the current selection to reposition it. Click empty space or use the close button to
-        clear it.
+        ${editorT("hints.selection")}
       </div>
     </div>
   `;
@@ -2596,13 +2632,15 @@ function renderEditorControls(props: MauOfficeProps) {
     return nothing;
   }
   return html`
-    <section class="mau-office__editor" aria-label="MauOffice editor tools">
-      <div class="mau-office__editor-rail" role="toolbar" aria-label="MauOffice editor tools">
+    <section class="mau-office__editor" aria-label=${editorT("controls.toolbar")}>
+      <div class="mau-office__editor-rail" role="toolbar" aria-label=${editorT("controls.toolbar")}>
         ${EDITOR_TOOL_ORDER.map((tool) => {
           const active = editor.tool === tool;
           const label = active
-            ? `${editor.toolPanelOpen === false ? "Show" : "Hide"} ${EDITOR_TOOL_LABELS[tool]} options`
-            : EDITOR_TOOL_LABELS[tool];
+            ? editorT(editor.toolPanelOpen === false ? "controls.showOptions" : "controls.hideOptions", {
+                tool: editorToolLabel(tool),
+              })
+            : editorToolLabel(tool);
           return html`
               <button
                 class="mau-office__editor-tool-button ${active ? "active" : ""}"
@@ -2620,8 +2658,8 @@ function renderEditorControls(props: MauOfficeProps) {
           class="mau-office__editor-tool-button"
           type="button"
           ?disabled=${!editor.canUndo}
-          title=${editor.undoShortcutLabel ? `Undo (${editor.undoShortcutLabel})` : "Undo"}
-          aria-label=${editor.undoShortcutLabel ? `Undo (${editor.undoShortcutLabel})` : "Undo"}
+          title=${editorUndoLabel(editor.undoShortcutLabel)}
+          aria-label=${editorUndoLabel(editor.undoShortcutLabel)}
           @click=${editor.onUndo}
         >
           ${icons.undo}
@@ -2630,8 +2668,8 @@ function renderEditorControls(props: MauOfficeProps) {
           class="mau-office__editor-tool-button"
           type="button"
           ?disabled=${!editor.canRedo}
-          title=${editor.redoShortcutLabel ? `Redo (${editor.redoShortcutLabel})` : "Redo"}
-          aria-label=${editor.redoShortcutLabel ? `Redo (${editor.redoShortcutLabel})` : "Redo"}
+          title=${editorRedoLabel(editor.redoShortcutLabel)}
+          aria-label=${editorRedoLabel(editor.redoShortcutLabel)}
           @click=${editor.onRedo}
         >
           ${icons.redo}
@@ -2652,13 +2690,11 @@ function renderEditorFooter(
     <div class="mau-office__editor-footer">
       <div class="mau-office__editor-footer-panels">
         <div class="mau-office__editor-dock-status mau-office__editor-dock-status--canvas">
-          <div class="mau-office__editor-heading">Canvas</div>
-          <div class="mau-office__editor-meta">
-            Resize the authored grid. Shrinking clips brush cells and clamps items to fit.
-          </div>
+          <div class="mau-office__editor-heading">${editorT("footer.canvas")}</div>
+          <div class="mau-office__editor-meta">${editorT("footer.canvasHint")}</div>
           <div class="mau-office__editor-canvas-fields">
             <label>
-              <span>Width</span>
+              <span>${editorT("footer.width")}</span>
               <input
                 type="number"
                 min=${String(MAU_OFFICE_SCENE_MIN_TILES_W)}
@@ -2673,7 +2709,7 @@ function renderEditorFooter(
               />
             </label>
             <label>
-              <span>Height</span>
+              <span>${editorT("footer.height")}</span>
               <input
                 type="number"
                 min=${String(MAU_OFFICE_SCENE_MIN_TILES_H)}
@@ -2690,24 +2726,19 @@ function renderEditorFooter(
           </div>
         </div>
         <div class="mau-office__editor-dock-status">
-          <div class="mau-office__editor-heading">Save</div>
+          <div class="mau-office__editor-heading">${editorT("footer.save")}</div>
           ${
             editor.validationErrors.length === 0
               ? html`
-                  <div class="mau-office__editor-ok">Scene is valid.</div>
+                  <div class="mau-office__editor-ok">${editorT("footer.sceneValid")}</div>
                 `
               : html`
                   <div class="mau-office__editor-error">${editor.validationErrors[0]}</div>
-                  <div class="mau-office__editor-meta">
-                    Fix validation errors above to enable Apply and Save & Close.
-                  </div>
+                  <div class="mau-office__editor-meta">${editorT("footer.fixValidation")}</div>
                 `
           }
           ${editor.saveError ? html`<div class="mau-office__editor-error">${editor.saveError}</div>` : nothing}
-          <div class="mau-office__editor-meta">
-            Apply updates the live Control UI preview without writing the config file. Save &
-            Close writes the layout to config and exits edit mode.
-          </div>
+          <div class="mau-office__editor-meta">${editorT("footer.saveHint")}</div>
         </div>
         ${options?.showDockedSelection ? renderEditorSelectionPanel(editor, { docked: true }) : nothing}
       </div>
@@ -2716,22 +2747,27 @@ function renderEditorFooter(
           class="btn btn--ghost"
           type="button"
           ?disabled=${!editor.canUndo}
-          title=${editor.undoShortcutLabel ? `Undo (${editor.undoShortcutLabel})` : "Undo"}
+          title=${editorUndoLabel(editor.undoShortcutLabel)}
           @click=${editor.onUndo}
         >
-          Undo
+          ${editorT("controls.undo")}
         </button>
         <button
           class="btn btn--ghost"
           type="button"
           ?disabled=${!editor.canRedo}
-          title=${editor.redoShortcutLabel ? `Redo (${editor.redoShortcutLabel})` : "Redo"}
+          title=${editorRedoLabel(editor.redoShortcutLabel)}
           @click=${editor.onRedo}
         >
-          Redo
+          ${editorT("controls.redo")}
         </button>
-        <button class="btn btn--ghost" type="button" title="Close the editor." @click=${editor.onCancel}>
-          Close
+        <button
+          class="btn btn--ghost"
+          type="button"
+          title=${editorT("footer.closeTitle")}
+          @click=${editor.onCancel}
+        >
+          ${editorT("footer.close")}
         </button>
         <button
           class="btn btn--ghost"
@@ -2739,12 +2775,12 @@ function renderEditorFooter(
           ?disabled=${editor.validationErrors.length > 0}
           title=${
             editor.validationErrors.length > 0
-              ? "Fix validation errors above to enable apply."
-              : "Update the live Control UI preview without saving the config file."
+              ? editorT("footer.applyDisabledTitle")
+              : editorT("footer.applyTitle")
           }
           @click=${editor.onApply}
         >
-          Apply
+          ${editorT("footer.apply")}
         </button>
         <button
           class="btn"
@@ -2752,14 +2788,14 @@ function renderEditorFooter(
           ?disabled=${editor.validationErrors.length > 0 || editor.saving}
           title=${
             editor.validationErrors.length > 0
-              ? "Fix validation errors above to enable save."
+              ? editorT("footer.saveDisabledTitle")
               : editor.saving
-                ? "Saving..."
-                : "Write the layout to config and close the editor."
+                ? editorT("footer.savingTitle")
+                : editorT("footer.saveTitle")
           }
           @click=${editor.onSave}
         >
-          ${editor.saving ? "Saving..." : "Save & Close"}
+          ${editor.saving ? editorT("footer.saving") : editorT("footer.saveAndClose")}
         </button>
       </div>
     </div>

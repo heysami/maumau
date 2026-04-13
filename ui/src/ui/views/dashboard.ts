@@ -306,6 +306,18 @@ function dt(key: string, params?: Record<string, string>): string {
   return t(`dashboard.${key}`, params);
 }
 
+function businessT(key: string, params?: Record<string, string>): string {
+  return t(`dashboard.business.${key}`, params);
+}
+
+function projectsT(key: string, params?: Record<string, string>): string {
+  return t(`dashboard.projects.${key}`, params);
+}
+
+function agentsT(key: string, params?: Record<string, string>): string {
+  return t(`dashboard.agents.${key}`, params);
+}
+
 function renderPageToolbar(actions: unknown) {
   if (actions === undefined || actions === null || actions === nothing) {
     return nothing;
@@ -1106,51 +1118,51 @@ function statusDescription(status: DashboardTask["status"]): string {
 function businessStatusLabel(status: DashboardBusinessItem["status"]): string {
   switch (status) {
     case "active":
-      return "Active";
+      return businessT("status.active");
     case "paused":
-      return "Paused";
+      return businessT("status.paused");
     case "archived":
-      return "Archived";
+      return businessT("status.archived");
     default:
-      return "Exploring";
+      return businessT("status.exploring");
   }
 }
 
 function projectStatusLabel(status: DashboardProjectItem["status"]): string {
   switch (status) {
     case "researching":
-      return "Researching";
+      return projectsT("status.researching");
     case "proposed":
-      return "Proposed";
+      return projectsT("status.proposed");
     case "approved":
-      return "Approved";
+      return projectsT("status.approved");
     case "building":
-      return "Building";
+      return projectsT("status.building");
     case "live":
-      return "Live";
+      return projectsT("status.live");
     case "paused":
-      return "Paused";
+      return projectsT("status.paused");
     case "archived":
-      return "Archived";
+      return projectsT("status.archived");
     default:
-      return "Brainstorming";
+      return projectsT("status.brainstorming");
   }
 }
 
 function blueprintStatusLabel(status: DashboardProjectItem["blueprintStatus"]): string {
   switch (status) {
     case "approved":
-      return "Approved";
+      return projectsT("blueprintStatus.approved");
     case "applied":
-      return "Applied";
+      return projectsT("blueprintStatus.applied");
     case "proposed":
-      return "Proposed";
+      return projectsT("blueprintStatus.proposed");
     case "draft":
-      return "Draft";
+      return projectsT("blueprintStatus.draft");
     case "invalid":
-      return "Invalid";
+      return projectsT("blueprintStatus.invalid");
     default:
-      return "Missing";
+      return projectsT("blueprintStatus.missing");
   }
 }
 
@@ -1881,8 +1893,8 @@ function renderDashboardAgentTabs(
   onSelect: DashboardProps["onSelectAgentPanel"],
 ) {
   const tabs: Array<{ id: DashboardProps["agentPanel"]; label: string }> = [
-    { id: "memory", label: "Memory" },
-    { id: "scope", label: "Scope" },
+    { id: "memory", label: agentsT("tabs.memory") },
+    { id: "scope", label: agentsT("tabs.scope") },
   ];
   return html`
     <div class="agent-tabs">
@@ -1925,7 +1937,7 @@ function renderDashboardAgentScope(
 ) {
   if (!selectedAgent || !agentId) {
     return html`
-      <div class="dashboard-empty">Select an agent to inspect its scope.</div>
+      <div class="dashboard-empty">${agentsT("scope.empty")}</div>
     `;
   }
   const defaultId = props.agentsList?.defaultId ?? null;
@@ -1957,10 +1969,10 @@ function renderDashboardAgentScope(
       : [];
   const profile = agentTools.profile ?? globalTools.profile ?? "full";
   const profileSource = agentTools.profile
-    ? "agent override"
+    ? agentsT("profileSource.agentOverride")
     : globalTools.profile
-      ? "global default"
-      : "default";
+      ? agentsT("profileSource.globalDefault")
+      : agentsT("profileSource.default");
   const basePolicy = explicitAllowlist
     ? { allow: explicitAllowlist, deny: Array.isArray(agentTools.deny) ? agentTools.deny : [] }
     : (resolveToolProfile(profile) ?? undefined);
@@ -1986,39 +1998,39 @@ function renderDashboardAgentScope(
   return html`
     <div class="dashboard-agent-scope">
       <section class="card">
-        <div class="card-title">Agent Context</div>
-        <div class="card-sub">Workspace, model, identity, and default routing for this agent.</div>
+        <div class="card-title">${agentsT("contextTitle")}</div>
+        <div class="card-sub">${agentsT("contextSubtitle")}</div>
         <div class="agents-overview-grid" style="margin-top: 16px;">
           <div class="agent-kv">
-            <div class="label">Label</div>
+            <div class="label">${agentsT("fields.label")}</div>
             <div>${normalizeAgentLabel(selectedAgent)}</div>
           </div>
           <div class="agent-kv">
-            <div class="label">Workspace</div>
+            <div class="label">${agentsT("fields.workspace")}</div>
             <div class="mono">${context.workspace}</div>
           </div>
           <div class="agent-kv">
-            <div class="label">Primary Model</div>
+            <div class="label">${agentsT("fields.primaryModel")}</div>
             <div class="mono">${context.model}</div>
           </div>
           <div class="agent-kv">
-            <div class="label">Identity</div>
+            <div class="label">${agentsT("fields.identity")}</div>
             <div>${context.identityName}</div>
           </div>
           <div class="agent-kv">
-            <div class="label">Skills</div>
+            <div class="label">${agentsT("fields.skills")}</div>
             <div>${context.skillsLabel}</div>
           </div>
           <div class="agent-kv">
-            <div class="label">Default</div>
-            <div>${context.isDefault ? "yes" : "no"}</div>
+            <div class="label">${agentsT("fields.default")}</div>
+            <div>${context.isDefault ? agentsT("values.yes") : agentsT("values.no")}</div>
           </div>
         </div>
       </section>
 
       <section class="card">
-        <div class="card-title">Skills Filter</div>
-        <div class="card-sub">Per-agent skill allowlist and inherited defaults.</div>
+        <div class="card-title">${agentsT("skillsTitle")}</div>
+        <div class="card-sub">${agentsT("skillsSubtitle")}</div>
         ${
           skillAllowlist && skillAllowlist.length > 0
             ? html`
@@ -2027,7 +2039,7 @@ function renderDashboardAgentScope(
                 </div>
               `
             : html`
-                <div class="muted" style="margin-top: 12px">All skills are enabled for this agent.</div>
+                <div class="muted" style="margin-top: 12px">${agentsT("skillsAll")}</div>
               `
         }
       </section>
@@ -2035,11 +2047,16 @@ function renderDashboardAgentScope(
       <section class="card">
         <div class="row" style="justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <div>
-            <div class="card-title">Tool Access</div>
-            <div class="card-sub">Live tool groups plus config-driven allow and deny rules.</div>
+            <div class="card-title">${agentsT("toolAccessTitle")}</div>
+            <div class="card-sub">${agentsT("toolAccessSubtitle")}</div>
           </div>
           <div class="chip-row">
-            <span class="chip mono">${enabledTools}/${totalTools} enabled</span>
+            <span class="chip mono">
+              ${agentsT("toolAccessEnabledCount", {
+                enabled: String(enabledTools),
+                total: String(totalTools),
+              })}
+            </span>
             <span class="chip mono">profile:${profile}</span>
             <span class="chip">${profileSource}</span>
           </div>
@@ -2047,7 +2064,7 @@ function renderDashboardAgentScope(
         ${
           props.configLoading && !props.configForm
             ? html`
-                <div class="callout info" style="margin-top: 12px">Loading gateway config…</div>
+                <div class="callout info" style="margin-top: 12px">${agentsT("loadingConfig")}</div>
               `
             : nothing
         }
@@ -2055,7 +2072,7 @@ function renderDashboardAgentScope(
           !props.configLoading && !props.configForm
             ? html`
                 <div class="callout info" style="margin-top: 12px">
-                  Gateway config is unavailable, so this scope view is using runtime defaults only.
+                  ${agentsT("unavailableConfig")}
                 </div>
               `
             : nothing
@@ -2063,7 +2080,7 @@ function renderDashboardAgentScope(
         ${
           props.toolsCatalogLoading && !runtimeCatalog
             ? html`
-                <div class="callout info" style="margin-top: 12px">Loading runtime tool catalog…</div>
+                <div class="callout info" style="margin-top: 12px">${agentsT("loadingTools")}</div>
               `
             : nothing
         }
@@ -2071,19 +2088,27 @@ function renderDashboardAgentScope(
           props.toolsCatalogError
             ? html`
                 <div class="callout info" style="margin-top: 12px">
-                  Tool catalog unavailable. Showing the fallback tool groups instead.
+                  ${agentsT("unavailableTools")}
                 </div>
               `
             : nothing
         }
         <div class="dashboard-agent-scope__rules">
           ${renderDashboardAgentRules(
-            "Explicit allowlist",
+            agentsT("rules.explicitAllowlist"),
             explicitAllowlist,
-            "No per-agent tools.allow override.",
+            agentsT("rules.explicitAllowlistEmpty"),
           )}
-          ${renderDashboardAgentRules("Also allow", alsoAllow, "No extra allow rules.")}
-          ${renderDashboardAgentRules("Denied", deny, "No deny rules.")}
+          ${renderDashboardAgentRules(
+            agentsT("rules.alsoAllow"),
+            alsoAllow,
+            agentsT("rules.alsoAllowEmpty"),
+          )}
+          ${renderDashboardAgentRules(
+            agentsT("rules.denied"),
+            deny,
+            agentsT("rules.deniedEmpty"),
+          )}
         </div>
         <div class="dashboard-agent-scope__groups">
           ${toolGroups.map(
@@ -2092,7 +2117,12 @@ function renderDashboardAgentScope(
                 <div class="row" style="justify-content: space-between; gap: 12px; flex-wrap: wrap;">
                   <div>
                     <div class="card-title">${group.label}</div>
-                    <div class="card-sub">${group.enabledCount}/${group.tools.length} enabled</div>
+                    <div class="card-sub">
+                      ${agentsT("groupEnabledCount", {
+                        enabled: String(group.enabledCount),
+                        total: String(group.tools.length),
+                      })}
+                    </div>
                   </div>
                   ${
                     group.pluginId
@@ -3680,32 +3710,28 @@ function renderBusinessPage(props: DashboardProps) {
           !props.businessManagerAvailable
             ? html`
                 <div class="callout warning">
-                  Business Dev Manager is not configured yet. Add the bundled Business Development Team from Teams
-                  to start a private portfolio workflow.
+                  ${businessT("managerMissingEmpty")}
                 </div>
               `
             : nothing
         }
         <section class="card">
-          <div class="card-title">No Businesses Yet</div>
-          <div class="card-sub">
-            Track ventures here without forcing a questionnaire. Start with a loose brainstorm or a
-            more structured research pass.
-          </div>
+          <div class="card-title">${businessT("emptyTitle")}</div>
+          <div class="card-sub">${businessT("emptySubtitle")}</div>
           <div class="row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
             <button
               class="btn primary"
               type="button"
               @click=${() => props.onOpenBusinessManager({ mode: "brainstorm" })}
             >
-              Brainstorm with Business Dev Manager
+              ${businessT("brainstorm")}
             </button>
             <button
               class="btn"
               type="button"
               @click=${() => props.onOpenBusinessManager({ mode: "research" })}
             >
-              Start a Research Thread
+              ${businessT("startResearch")}
             </button>
           </div>
         </section>
@@ -3719,8 +3745,7 @@ function renderBusinessPage(props: DashboardProps) {
         !props.businessManagerAvailable
           ? html`
               <div class="callout warning">
-                Business Dev Manager is not configured yet. Add the bundled Business Development Team from Teams
-                to continue from these dossiers in chat.
+                ${businessT("managerMissingExisting")}
               </div>
             `
           : nothing
@@ -3740,9 +3765,10 @@ function renderBusinessPage(props: DashboardProps) {
               >
                 <span>${business.businessName}</span>
                 <span>
-                  ${business.projectCount} projects · ${business.recordedFieldCount}/${
-                    business.recordedFieldCount + business.missingFieldCount
-                  } profiled
+                  ${businessT("listMeta", {
+                    projects: String(business.projectCount),
+                    profiled: `${business.recordedFieldCount}/${business.recordedFieldCount + business.missingFieldCount}`,
+                  })}
                 </span>
               </button>
             `,
@@ -3756,7 +3782,9 @@ function renderBusinessPage(props: DashboardProps) {
                     <div>
                       <div class="card-title">${selected.businessName}</div>
                       <div class="card-sub">
-                        ${selected.sourceLabel} · Updated ${formatDateTime(selected.updatedAtMs)}
+                        ${selected.sourceLabel} · ${businessT("updated", {
+                          time: formatDateTime(selected.updatedAtMs),
+                        })}
                       </div>
                     </div>
                     <div class="dashboard-page__actions">
@@ -3769,7 +3797,7 @@ function renderBusinessPage(props: DashboardProps) {
                             businessId: selected.businessId,
                           })}
                       >
-                        Continue Brainstorm
+                        ${businessT("continueBrainstorm")}
                       </button>
                       <button
                         class="btn btn--sm primary"
@@ -3780,7 +3808,7 @@ function renderBusinessPage(props: DashboardProps) {
                             businessId: selected.businessId,
                           })}
                       >
-                        Continue Research
+                        ${businessT("continueResearch")}
                       </button>
                       <span class="pill">${businessStatusLabel(selected.status)}</span>
                     </div>
@@ -3788,19 +3816,19 @@ function renderBusinessPage(props: DashboardProps) {
 
                   <div class="dashboard-routines__meta-grid">
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Profiling gaps</div>
+                      <div class="dashboard-org-chart__label">${businessT("profilingGaps")}</div>
                       <strong>${selected.missingFieldCount}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Projects</div>
+                      <div class="dashboard-org-chart__label">${businessT("projects")}</div>
                       <strong>${selected.projectCount}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Active projects</div>
+                      <div class="dashboard-org-chart__label">${businessT("activeProjects")}</div>
                       <strong>${selected.activeProjectCount}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Active proposals</div>
+                      <div class="dashboard-org-chart__label">${businessT("activeProposals")}</div>
                       <strong>${activeProposals.length}</strong>
                     </article>
                   </div>
@@ -3808,10 +3836,8 @@ function renderBusinessPage(props: DashboardProps) {
                   <section class="card dashboard-profile__field-map">
                     <div class="dashboard-page__header">
                       <div>
-                        <div class="card-title">Business Dossier</div>
-                        <div class="card-sub">
-                          These fields stay owner-private and build up over time.
-                        </div>
+                        <div class="card-title">${businessT("dossierTitle")}</div>
+                        <div class="card-sub">${businessT("dossierSubtitle")}</div>
                       </div>
                     </div>
                     <div class="dashboard-profile__field-grid">
@@ -3828,7 +3854,11 @@ function renderBusinessPage(props: DashboardProps) {
                                 </div>
                               </div>
                               <span class="pill">
-                                ${field.status === "recorded" ? "Recorded" : "Missing"}
+                                ${
+                                  field.status === "recorded"
+                                    ? businessT("fieldStatus.recorded")
+                                    : businessT("fieldStatus.missing")
+                                }
                               </span>
                             </div>
                             ${
@@ -3844,11 +3874,8 @@ function renderBusinessPage(props: DashboardProps) {
 
                   <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
                     <section class="card">
-                      <div class="card-title">Profiling Gaps</div>
-                      <div class="card-sub">
-                        Missing fields do not block work, but they show where the manager still
-                        needs clarity.
-                      </div>
+                      <div class="card-title">${businessT("gapsTitle")}</div>
+                      <div class="card-sub">${businessT("gapsSubtitle")}</div>
                       ${
                         profilingGaps.length > 0
                           ? html`
@@ -3865,19 +3892,17 @@ function renderBusinessPage(props: DashboardProps) {
                             `
                           : html`
                               <div class="dashboard-empty" style="margin-top: 16px">
-                                This business dossier is fully profiled for the current schema.
+                                ${businessT("gapsEmpty")}
                               </div>
                             `
                       }
                     </section>
 
                     <section class="card">
-                      <div class="card-title">Open Questions</div>
-                      <div class="card-sub">
-                        Keep unresolved market, offer, and execution questions visible.
-                      </div>
+                      <div class="card-title">${businessT("openQuestionsTitle")}</div>
+                      <div class="card-sub">${businessT("openQuestionsSubtitle")}</div>
                       <div class="dashboard-note__body" style="margin-top: 16px;">
-                        ${openQuestions ?? "No explicit open questions have been recorded yet."}
+                        ${openQuestions ?? businessT("openQuestionsEmpty")}
                       </div>
                     </section>
                   </div>
@@ -3885,11 +3910,8 @@ function renderBusinessPage(props: DashboardProps) {
                   <section class="card" style="margin-top: 18px;">
                     <div class="dashboard-page__header">
                       <div>
-                        <div class="card-title">Linked Projects</div>
-                        <div class="card-sub">
-                          Projects stay nested under the business while reusing one project tag
-                          across Workshop, Tasks, and Agent Apps.
-                        </div>
+                        <div class="card-title">${businessT("linkedProjectsTitle")}</div>
+                        <div class="card-sub">${businessT("linkedProjectsSubtitle")}</div>
                       </div>
                     </div>
                     ${
@@ -3919,14 +3941,14 @@ function renderBusinessPage(props: DashboardProps) {
                           `
                         : html`
                             <div class="dashboard-empty" style="margin-top: 16px">
-                              No projects have been attached to this business yet.
+                              ${businessT("linkedProjectsEmpty")}
                             </div>
                           `
                     }
                   </section>
                 `
               : html`
-                  <div class="dashboard-empty">Choose a business to inspect its dossier.</div>
+                  <div class="dashboard-empty">${businessT("selectBusiness")}</div>
                 `
           }
         </section>
@@ -3948,25 +3970,22 @@ function renderProjectsPage(props: DashboardProps) {
     return html`
       <section class="dashboard-page">
         <section class="card">
-          <div class="card-title">No Projects Yet</div>
-          <div class="card-sub">
-            Approved ideas will show up here with their team, project tag, and linked workspace
-            state.
-          </div>
+          <div class="card-title">${projectsT("emptyTitle")}</div>
+          <div class="card-sub">${projectsT("emptySubtitle")}</div>
           <div class="row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
             <button
               class="btn primary"
               type="button"
               @click=${() => props.onOpenBusinessManager({ mode: "brainstorm" })}
             >
-              Start a Business Brainstorm
+              ${projectsT("startBrainstorm")}
             </button>
             <button
               class="btn"
               type="button"
               @click=${() => props.onOpenBusinessManager({ mode: "research" })}
             >
-              Start a Research Thread
+              ${projectsT("startResearch")}
             </button>
           </div>
         </section>
@@ -4003,7 +4022,9 @@ function renderProjectsPage(props: DashboardProps) {
                     <div>
                       <div class="card-title">${selected.projectName}</div>
                       <div class="card-sub">
-                        ${selected.businessName} · Updated ${formatDateTime(selected.updatedAtMs)}
+                        ${selected.businessName} · ${projectsT("updated", {
+                          time: formatDateTime(selected.updatedAtMs),
+                        })}
                       </div>
                     </div>
                     <div class="dashboard-page__actions">
@@ -4017,7 +4038,7 @@ function renderProjectsPage(props: DashboardProps) {
                             projectId: selected.projectId,
                           })}
                       >
-                        Continue with Business Dev Manager
+                        ${projectsT("continueWithManager")}
                       </button>
                       ${
                         selected.blueprintStatus === "approved" &&
@@ -4028,95 +4049,97 @@ function renderProjectsPage(props: DashboardProps) {
                                 type="button"
                                 @click=${() => props.onApplyProjectBlueprint(selected)}
                               >
-                                Apply Approved Blueprint
+                                ${projectsT("applyBlueprint")}
                               </button>
                             `
                           : nothing
                       }
                       <span class="pill">${projectStatusLabel(selected.status)}</span>
                       <span class="pill">
-                        Blueprint ${blueprintStatusLabel(selected.blueprintStatus)}
+                        ${projectsT("blueprintPill", {
+                          status: blueprintStatusLabel(selected.blueprintStatus),
+                        })}
                       </span>
                     </div>
                   </div>
 
                   <div class="dashboard-routines__meta-grid">
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Project tag</div>
+                      <div class="dashboard-org-chart__label">${projectsT("projectTag")}</div>
                       <strong>${selected.projectTag}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Team</div>
-                      <strong>${selected.teamId ?? "Not created yet"}</strong>
+                      <div class="dashboard-org-chart__label">${projectsT("team")}</div>
+                      <strong>${selected.teamId ?? projectsT("values.notCreatedYet")}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">Workspace</div>
-                      <strong>${selected.linkedWorkspaceLabel ?? "Pending"}</strong>
+                      <div class="dashboard-org-chart__label">${projectsT("workspace")}</div>
+                      <strong>${selected.linkedWorkspaceLabel ?? projectsT("values.pending")}</strong>
                     </article>
                     <article class="dashboard-routines__meta-card">
-                      <div class="dashboard-org-chart__label">App needed</div>
-                      <strong>${selected.appNeeded ? "Yes" : "No"}</strong>
+                      <div class="dashboard-org-chart__label">${projectsT("appNeeded")}</div>
+                      <strong>${selected.appNeeded ? projectsT("values.yes") : projectsT("values.no")}</strong>
                     </article>
                   </div>
 
                   <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
                     <section class="card">
-                      <div class="card-title">Project Dossier</div>
+                      <div class="card-title">${projectsT("dossierTitle")}</div>
                       <div class="dashboard-list" style="margin-top: 16px;">
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Goal</div>
+                          <div class="dashboard-note__title">${projectsT("goal")}</div>
                           <div class="dashboard-note__body">
-                            ${selected.goal ?? "No goal captured yet."}
+                            ${selected.goal ?? projectsT("goalEmpty")}
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Scope</div>
+                          <div class="dashboard-note__title">${projectsT("scope")}</div>
                           <div class="dashboard-note__body">
-                            ${selected.scope ?? "No scope captured yet."}
+                            ${selected.scope ?? projectsT("scopeEmpty")}
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Proposal Summary</div>
+                          <div class="dashboard-note__title">${projectsT("proposalSummary")}</div>
                           <div class="dashboard-note__body">
-                            ${selected.proposalSummary ?? "No proposal summary captured yet."}
+                            ${selected.proposalSummary ?? projectsT("proposalSummaryEmpty")}
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Next Step</div>
+                          <div class="dashboard-note__title">${projectsT("nextStep")}</div>
                           <div class="dashboard-note__body">
-                            ${selected.nextStep ?? "No next step captured yet."}
+                            ${selected.nextStep ?? projectsT("nextStepEmpty")}
                           </div>
                         </article>
                       </div>
                     </section>
 
                     <section class="card">
-                      <div class="card-title">Project Wiring</div>
+                      <div class="card-title">${projectsT("wiringTitle")}</div>
                       <div class="dashboard-list" style="margin-top: 16px;">
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Business</div>
+                          <div class="dashboard-note__title">${projectsT("business")}</div>
                           <div class="dashboard-note__body">
                             ${selectedBusiness?.businessName ?? selected.businessName}
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Linked workspace</div>
+                          <div class="dashboard-note__title">${projectsT("linkedWorkspace")}</div>
                           <div class="dashboard-note__body">
-                            ${selected.linkedWorkspace ?? "No project workspace has been materialized yet."}
+                            ${selected.linkedWorkspace ?? projectsT("linkedWorkspaceEmpty")}
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Blueprint version</div>
+                          <div class="dashboard-note__title">${projectsT("blueprintVersion")}</div>
                           <div class="dashboard-note__body">
                             ${
                               typeof selected.blueprintVersion === "number"
                                 ? selected.blueprintVersion
-                                : "Not written yet"
+                                : projectsT("blueprintVersionEmpty")
                             }
                           </div>
                         </article>
                         <article class="dashboard-note">
-                          <div class="dashboard-note__title">Blueprint state</div>
+                          <div class="dashboard-note__title">${projectsT("blueprintState")}</div>
                           <div class="dashboard-note__body">
                             ${blueprintStatusLabel(selected.blueprintStatus)}
                           </div>
@@ -4128,11 +4151,8 @@ function renderProjectsPage(props: DashboardProps) {
                   <section class="card" style="margin-top: 18px;">
                     <div class="dashboard-page__header">
                       <div>
-                        <div class="card-title">Joined Artifacts</div>
-                        <div class="card-sub">
-                          Project tags connect Tasks, Workshop artifacts, and Agent Apps into one
-                          operational view.
-                        </div>
+                        <div class="card-title">${projectsT("joinedArtifactsTitle")}</div>
+                        <div class="card-sub">${projectsT("joinedArtifactsSubtitle")}</div>
                       </div>
                       <div class="dashboard-page__actions">
                         <button
@@ -4144,21 +4164,21 @@ function renderProjectsPage(props: DashboardProps) {
                               value: selected.projectTag,
                             })}
                         >
-                          Open Tagged Tasks
+                          ${projectsT("openTaggedTasks")}
                         </button>
                       </div>
                     </div>
                     <div class="dashboard-routines__meta-grid" style="margin-top: 16px;">
                       <article class="dashboard-routines__meta-card">
-                        <div class="dashboard-org-chart__label">Tasks</div>
+                        <div class="dashboard-org-chart__label">${projectsT("tasks")}</div>
                         <strong>${selected.linkedTaskCount}</strong>
                       </article>
                       <article class="dashboard-routines__meta-card">
-                        <div class="dashboard-org-chart__label">Workshop items</div>
+                        <div class="dashboard-org-chart__label">${projectsT("workshopItems")}</div>
                         <strong>${selected.linkedWorkshopCount}</strong>
                       </article>
                       <article class="dashboard-routines__meta-card">
-                        <div class="dashboard-org-chart__label">Agent Apps</div>
+                        <div class="dashboard-org-chart__label">${projectsT("agentApps")}</div>
                         <strong>${selected.linkedAgentAppCount}</strong>
                       </article>
                     </div>
@@ -4174,7 +4194,7 @@ function renderProjectsPage(props: DashboardProps) {
                   </section>
                 `
               : html`
-                  <div class="dashboard-empty">Choose a project to inspect its handoff state.</div>
+                  <div class="dashboard-empty">${projectsT("selectProject")}</div>
                 `
           }
         </section>
@@ -4476,7 +4496,7 @@ function renderTeamsPage(props: DashboardProps) {
                           workflowLabel: selected.workflowName ?? selected.workflowId,
                         })}
                     >
-                      Prompt Changes
+                      ${dt("teams.promptChanges")}
                     </button>
                     <span class="pill">${manager?.label ?? dt("teams.noManager")}</span>
                     <span class="pill">${dt("teams.delegateCount", { count: String(delegateCount) })}</span>
@@ -4732,7 +4752,7 @@ function renderAgentsPage(props: DashboardProps) {
                     Object.keys(props.agentFileContents).length === 0 &&
                     Object.keys(props.agentFileDrafts).length === 0
                       ? html`
-                          <div class="callout info">Loading agent memory files…</div>
+                          <div class="callout info">${dt("memories.loadingFiles")}</div>
                         `
                       : nothing
                   }

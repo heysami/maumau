@@ -57,7 +57,8 @@ private struct UserChannelQuickSetupConfig: Decodable {
 }
 
 enum UserChannelQuickSetupRegistry {
-    private static let config = Self.loadConfig()
+    private static let defaultConfig = Self.loadConfig(resourceName: "user-channel-quick-setup")
+    private static let indonesianConfig = Self.loadConfig(resourceName: "user-channel-quick-setup.id")
     private static let fallbackChannelOrder = [
         "whatsapp",
         "telegram",
@@ -68,21 +69,40 @@ enum UserChannelQuickSetupRegistry {
     ]
 
     static var channelOrder: [String] {
-        let ids = self.config?.channelOrder ?? []
+        let ids = self.defaultConfig?.channelOrder ?? []
         return ids.isEmpty ? self.fallbackChannelOrder : ids
     }
 
     static var settingsNote: String {
-        self.config?.settingsNote ?? "More channels and advanced channel settings live in Settings → Channels."
+        self.settingsNote(language: .fallback)
     }
 
-    static func entry(for channelId: String) -> UserChannelQuickSetupEntry? {
-        self.config?.channels[channelId]
+    static func settingsNote(language: OnboardingLanguage = .fallback) -> String {
+        self.config(for: language)?.settingsNote
+            ?? self.defaultConfig?.settingsNote
+            ?? "More channels and advanced channel settings live in Settings → Channels."
     }
 
-    private static func loadConfig() -> UserChannelQuickSetupConfig? {
+    static func entry(
+        for channelId: String,
+        language: OnboardingLanguage = .fallback
+    ) -> UserChannelQuickSetupEntry? {
+        self.config(for: language)?.channels[channelId]
+            ?? self.defaultConfig?.channels[channelId]
+    }
+
+    private static func config(for language: OnboardingLanguage) -> UserChannelQuickSetupConfig? {
+        switch language {
+        case .id:
+            self.indonesianConfig ?? self.defaultConfig
+        case .en:
+            self.defaultConfig
+        }
+    }
+
+    private static func loadConfig(resourceName: String) -> UserChannelQuickSetupConfig? {
         guard let url = MaumauKitResources.bundle.url(
-            forResource: "user-channel-quick-setup",
+            forResource: resourceName,
             withExtension: "json")
         else {
             return nil

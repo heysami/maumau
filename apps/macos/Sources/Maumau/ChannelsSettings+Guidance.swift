@@ -16,7 +16,7 @@ extension ChannelsSettings {
     }
 
     func channelGuidanceCopy(channelId: String) -> ChannelGuidanceCopy {
-        if let shared = UserChannelQuickSetupRegistry.entry(for: channelId) {
+        if let shared = UserChannelQuickSetupRegistry.entry(for: channelId, language: self.language) {
             return self.localizedGuidanceCopy(
                 ChannelGuidanceCopy(
                     identity: shared.guidance.identity,

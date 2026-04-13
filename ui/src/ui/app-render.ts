@@ -9,7 +9,7 @@ import {
   buildAgentMainSessionKey,
   parseAgentSessionKey,
 } from "../../../src/routing/session-key.js";
-import { getUserChannelQuickSetupEntry } from "../../../src/shared/user-channel-quick-setup.js";
+import { getLocalizedUserChannelQuickSetupEntry } from "../../../src/shared/user-channel-quick-setup.js";
 import { resolveDefaultTeamWorkflowId } from "../../../src/teams/model.js";
 import {
   BUSINESS_DEVELOPMENT_TEAM_ID,
@@ -20,7 +20,7 @@ import {
   LIFE_IMPROVEMENT_TEAM_ID,
   STARTER_TEAM_ID,
 } from "../../../src/teams/presets.js";
-import { t } from "../i18n/index.ts";
+import { i18n, t } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "./agent-workspace-constants.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
@@ -1283,7 +1283,8 @@ export function renderApp(state: AppViewState) {
                 fields: {},
               });
               state.whatsappLoginMessage =
-                getUserChannelQuickSetupEntry("whatsapp").quickSetup.successMessage ??
+                getLocalizedUserChannelQuickSetupEntry("whatsapp", i18n.getLocale()).quickSetup
+                  .successMessage ??
                 state.whatsappLoginMessage;
             }
           }

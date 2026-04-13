@@ -27,7 +27,7 @@ extension ChannelsSettings {
     }
 
     private func quickSetupEntry(_ channelId: String) -> UserChannelQuickSetupEntry? {
-        UserChannelQuickSetupRegistry.entry(for: channelId)
+        UserChannelQuickSetupRegistry.entry(for: channelId, language: self.language)
     }
 
     private func quickSetupField(_ channelId: String, key: String) -> UserChannelQuickSetupField? {
@@ -540,32 +540,35 @@ extension ChannelsSettings {
     }
 
     static func whatsAppIdentityBadgeText(linkedIdentity: String?, qrVisible: Bool) -> String {
-        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp")?.quickSetup
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         if linkedIdentity != nil {
             return macLocalized(
                 quickSetup?.linkedBadge ?? "Ready to message",
-                language: AppStateStore.shared.effectiveOnboardingLanguage)
+                language: language)
         }
         return qrVisible
             ? macLocalized(
                 quickSetup?.waitingBadge ?? "Waiting for scan",
-                language: AppStateStore.shared.effectiveOnboardingLanguage)
+                language: language)
             : macLocalized(
                 quickSetup?.emptyBadge ?? "Not linked",
-                language: AppStateStore.shared.effectiveOnboardingLanguage)
+                language: language)
     }
 
     static func whatsAppIdentityHeadline(linkedIdentity: String?) -> String {
-        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp")?.quickSetup
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         return linkedIdentity ?? macLocalized(
             quickSetup?.emptyHeadline ?? "No number linked yet",
-            language: AppStateStore.shared.effectiveOnboardingLanguage)
+            language: language)
     }
 
     static func whatsAppIdentityBodyText(linkedIdentity: String?, qrVisible: Bool) -> String {
-        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp")?.quickSetup
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         if let linkedIdentity {
-            if AppStateStore.shared.effectiveOnboardingLanguage == .id {
+            if language == .id {
                 return "Akun WhatsApp tertaut ini adalah identitas bot. Kirim pesan ke \(linkedIdentity) dari akun WhatsApp biasa untuk berbicara dengan agen."
             }
             return "This linked WhatsApp account is the bot identity. Message \(linkedIdentity) from a normal WhatsApp account to talk to the agent."
@@ -574,12 +577,12 @@ extension ChannelsSettings {
             return macLocalized(
                 quickSetup?.waitingMessage ??
                     "Scan the QR with the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
-                language: AppStateStore.shared.effectiveOnboardingLanguage)
+                language: language)
         }
         return macLocalized(
             quickSetup?.emptyMessage ??
                 "Link the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
-            language: AppStateStore.shared.effectiveOnboardingLanguage)
+            language: language)
     }
 
     private func onboardingSetupOnlyNote(_ message: String) -> some View {

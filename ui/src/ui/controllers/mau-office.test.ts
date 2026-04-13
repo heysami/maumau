@@ -6,6 +6,7 @@ import path from "node:path";
 import { render } from "lit";
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
+import { i18n } from "../../i18n/index.ts";
 import {
   MAU_OFFICE_ASSET_PIXELS_PER_TILE,
   MAU_OFFICE_FOOT_OFFSET_Y,
@@ -7197,6 +7198,68 @@ describe("mau-office view", () => {
       )
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onMarkerRoleChange).toHaveBeenCalledWith("meeting.presenter");
+  });
+
+  it("renders the MauOffice editor in Indonesian", async () => {
+    await i18n.setLocale("id");
+
+    try {
+      installMatchMediaStub(false);
+      installViewportWidthStub(1600);
+      const container = document.createElement("div");
+      const draft = createDefaultMauOfficeSceneConfig();
+
+      render(
+        renderMauOffice({
+          loading: false,
+          error: null,
+          state: createEmptyMauOfficeState(),
+          basePath: "",
+          editor: {
+            open: true,
+            draft,
+            compiled: compileMauOfficeScene(draft),
+            tool: "zone",
+            brushMode: "paint",
+            zoneBrush: "desk",
+            propItemId: "desk-wide",
+            autotileItemId: "meeting-table",
+            markerRole: "desk.workerSeat",
+            selection: null,
+            validationErrors: [],
+            onToggle: () => undefined,
+            onCancel: () => undefined,
+            onApply: () => undefined,
+            onSave: () => undefined,
+            onToolChange: () => undefined,
+            onBrushModeChange: () => undefined,
+            onZoneBrushChange: () => undefined,
+            onPropItemChange: () => undefined,
+            onAutotileItemChange: () => undefined,
+            onMarkerRoleChange: () => undefined,
+            onCellInteract: () => undefined,
+            onSelectionChange: () => undefined,
+            onSelectionPatch: () => undefined,
+            onUndo: () => undefined,
+            onRedo: () => undefined,
+            onDeleteSelection: () => undefined,
+          },
+          onRefresh: () => undefined,
+          onRoomFocus: () => undefined,
+          onActorOpen: () => undefined,
+        }),
+        container,
+      );
+
+      const text = container.textContent ?? "";
+      expect(text).toContain("Brush zona");
+      expect(text).toContain("Kanvas");
+      expect(text).toContain("Scene valid.");
+      expect(text).toContain("Simpan & Tutup");
+      expect(text).not.toContain("dashboard.mauOffice.editor");
+    } finally {
+      await i18n.setLocale("en");
+    }
   });
 
   it("renders visible undo and redo actions in the editor footer", () => {

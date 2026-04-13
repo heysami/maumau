@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { en } from "../locales/en.ts";
 import { id } from "../locales/id.ts";
 import { pt_BR } from "../locales/pt-BR.ts";
 import { zh_CN } from "../locales/zh-CN.ts";
@@ -28,6 +29,22 @@ function createStorageMock(): Storage {
       store.set(key, String(value));
     },
   };
+}
+
+function flattenTranslationKeys(
+  map: Record<string, string | Record<string, unknown>>,
+  prefix = "",
+): string[] {
+  const keys: string[] = [];
+  for (const [key, value] of Object.entries(map)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === "string") {
+      keys.push(path);
+      continue;
+    }
+    keys.push(...flattenTranslationKeys(value as Record<string, string | Record<string, unknown>>, path));
+  }
+  return keys;
 }
 
 describe("i18n", () => {
@@ -129,5 +146,18 @@ describe("i18n", () => {
     expect((pt_BR.common as { version?: string }).version).toBeTruthy();
     expect((zh_CN.common as { version?: string }).version).toBeTruthy();
     expect((zh_TW.common as { version?: string }).version).toBeTruthy();
+  });
+
+  it("keeps Indonesian dashboard translations aligned with English", () => {
+    const englishDashboardKeys = flattenTranslationKeys(en).filter(
+      (key) =>
+        key.startsWith("tabs.dashboard") ||
+        key.startsWith("subtitles.dashboard") ||
+        key.startsWith("dashboard."),
+    );
+    const indonesianKeys = new Set(flattenTranslationKeys(id));
+    const missing = englishDashboardKeys.filter((key) => !indonesianKeys.has(key));
+
+    expect(missing).toEqual([]);
   });
 });

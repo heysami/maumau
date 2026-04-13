@@ -1,10 +1,10 @@
 import { html, nothing, type TemplateResult } from "lit";
 import {
-  getUserChannelQuickSetupEntry,
+  getLocalizedUserChannelQuickSetupEntry,
+  getLocalizedUserChannelQuickSetupSettingsNote,
   isUserChannelInlineQuickSetupId,
-  USER_CHANNEL_QUICK_SETUP_SETTINGS_NOTE,
 } from "../../../../src/shared/user-channel-quick-setup.ts";
-import { t } from "../../i18n/index.ts";
+import { i18n, t } from "../../i18n/index.ts";
 import type {
   DashboardUserChannel,
   DashboardUserChannelAccount,
@@ -46,6 +46,51 @@ type DashboardUserChannelsPageProps = {
 
 function dt(key: string): string {
   return t(`dashboard.userChannels.${key}`);
+}
+
+function localizedQuickSetupEntry(channelId: string) {
+  if (!isUserChannelInlineQuickSetupId(channelId)) {
+    return null;
+  }
+  return getLocalizedUserChannelQuickSetupEntry(channelId, i18n.getLocale());
+}
+
+function localizeConnectSpec(
+  channel: DashboardUserChannelConnectSpec,
+): DashboardUserChannelConnectSpec {
+  const shared = localizedQuickSetupEntry(channel.channelId);
+  if (!shared) {
+    return channel;
+  }
+  const localizedFields = new Map(shared.fields.map((field) => [field.key, field]));
+  return {
+    ...channel,
+    guidance: shared.guidance,
+    quickSetup: {
+      kind: shared.quickSetup.kind,
+      sectionTitle: shared.quickSetup.sectionTitle,
+      title: shared.quickSetup.title,
+      headline: shared.quickSetup.emptyHeadline,
+      message: shared.quickSetup.emptyMessage,
+      badge: shared.quickSetup.emptyBadge,
+      buttonTitle: shared.quickSetup.buttonTitle,
+      existingCredentialNote: shared.quickSetup.existingCredentialNote,
+      setupNote: shared.quickSetup.setupNote,
+    },
+    fields: channel.fields.map((field) => {
+      const localized = localizedFields.get(field.key);
+      return {
+        ...field,
+        label: localized?.label ?? field.label,
+        placeholder: localized?.placeholder ?? field.placeholder,
+        helpLines: localized?.helpLines ?? field.helpLines,
+      };
+    }),
+  };
+}
+
+function localizedAvailableChannels(props: DashboardUserChannelsPageProps) {
+  return (props.result?.availableChannels ?? []).map(localizeConnectSpec);
 }
 
 function policyLabel(policy: string | undefined): string | null {
@@ -165,7 +210,7 @@ function renderDialog(params: {
 }
 
 function renderConnectPickerDialog(props: DashboardUserChannelsPageProps) {
-  const available = props.result?.availableChannels ?? [];
+  const available = localizedAvailableChannels(props);
   return renderDialog({
     id: CONNECT_PICKER_DIALOG_ID,
     title: dt("connectTitle"),
@@ -176,11 +221,8 @@ function renderConnectPickerDialog(props: DashboardUserChannelsPageProps) {
         : html`
             <div style="display: flex; flex-direction: column; gap: 18px;">
               <section style="display: grid; gap: 12px;">
-                <div class="card-title">Quick setup channels</div>
-                <div class="card-sub">
-                  Use the same lightweight channel setup surface as macOS onboarding. For everything
-                  else, go to Settings.
-                </div>
+                <div class="card-title">${dt("quickSetupChannels")}</div>
+                <div class="card-sub">${dt("quickSetupChannelsSubtitle")}</div>
                 <div
                   role="list"
                   aria-label=${dt("connectTabsAriaLabel")}
@@ -202,10 +244,8 @@ function renderConnectPickerDialog(props: DashboardUserChannelsPageProps) {
                             <div style="font-weight: 600;">${channel.label}</div>
                             <div class="muted" style="font-size: 12px;">
                               ${
-                                isUserChannelInlineQuickSetupId(channel.channelId)
-                                  ? getUserChannelQuickSetupEntry(channel.channelId).quickSetup
-                                      .pickerSummary ?? "Not configured"
-                                  : "Not configured"
+                                localizedQuickSetupEntry(channel.channelId)?.quickSetup
+                                  .pickerSummary ?? dt("notConfigured")
                               }
                             </div>
                           </div>
@@ -221,7 +261,7 @@ function renderConnectPickerDialog(props: DashboardUserChannelsPageProps) {
                 class="muted"
                 style="padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px;"
               >
-                ${USER_CHANNEL_QUICK_SETUP_SETTINGS_NOTE}
+                ${getLocalizedUserChannelQuickSetupSettingsNote(i18n.getLocale())}
               </div>
             </div>
           `,
@@ -254,10 +294,10 @@ function renderConnectField(field: DashboardUserChannelConnectSpec["fields"][num
 function renderQuickSetupGuidance(channel: DashboardUserChannelConnectSpec) {
   return html`
     <section style="display: grid; gap: 12px;">
-      ${renderGuidanceCard("Agent identity", [channel.guidance.identity])}
-      ${renderGuidanceCard("What you need first", channel.guidance.requirements)}
-      ${renderGuidanceCard("How to get it", channel.guidance.setupSteps, true)}
-      ${renderGuidanceCard("Bring this back to Maumau", channel.guidance.artifacts)}
+      ${renderGuidanceCard(dt("guidance.agentIdentity"), [channel.guidance.identity])}
+      ${renderGuidanceCard(dt("guidance.requirements"), channel.guidance.requirements)}
+      ${renderGuidanceCard(dt("guidance.setupSteps"), channel.guidance.setupSteps, true)}
+      ${renderGuidanceCard(dt("guidance.artifacts"), channel.guidance.artifacts)}
     </section>
   `;
 }
@@ -357,7 +397,7 @@ function renderQuickSetupForm(
 function renderSetupOnlyNote(message: string) {
   return html`
     <section class="card" style="padding: 14px 16px;">
-      <div class="card-title">Setup for now</div>
+      <div class="card-title">${dt("setupForNow")}</div>
       <div class="muted" style="margin-top: 10px;">${message}</div>
     </section>
   `;
@@ -367,18 +407,18 @@ function renderWhatsAppQuickSetup(
   channel: DashboardUserChannelConnectSpec,
   props: DashboardUserChannelsPageProps,
 ) {
-  const shared = getUserChannelQuickSetupEntry("whatsapp").quickSetup;
-  const primaryTitle = props.whatsappQrDataUrl ? "Refresh QR" : "Link WhatsApp";
+  const shared = localizedQuickSetupEntry("whatsapp")?.quickSetup;
+  const primaryTitle = props.whatsappQrDataUrl ? dt("whatsapp.refreshQr") : dt("whatsapp.link");
   const waitingForScan = Boolean(props.whatsappQrDataUrl);
   return html`
     <section class="card">
       <div class="card-title">${channel.quickSetup.sectionTitle}</div>
       <div style="display: grid; gap: 12px; margin-top: 12px;">
         ${renderQuickSetupIdentityCard(channel, {
-          badge: waitingForScan ? shared.waitingBadge ?? channel.quickSetup.badge : channel.quickSetup.badge,
+          badge: waitingForScan ? shared?.waitingBadge ?? channel.quickSetup.badge : channel.quickSetup.badge,
           headline: channel.quickSetup.headline,
           message: waitingForScan
-            ? shared.waitingMessage ?? channel.quickSetup.message
+            ? shared?.waitingMessage ?? channel.quickSetup.message
             : channel.quickSetup.message,
         })}
         ${
@@ -390,17 +430,14 @@ function renderWhatsAppQuickSetup(
           props.whatsappQrDataUrl
             ? html`
                 <div style="display: grid; gap: 10px;">
-                  <div style="font-weight: 600;">${shared.qrTitle ?? "Scan this QR with the WhatsApp number the bot will use"}</div>
+                  <div style="font-weight: 600;">${shared?.qrTitle ?? dt("whatsapp.qrTitle")}</div>
                   <div class="muted">
-                    ${
-                      shared.qrBody ??
-                      "The WhatsApp number or linked device that scans this QR becomes the bot identity. When people message that number, they are talking to the agent."
-                    }
+                    ${shared?.qrBody ?? dt("whatsapp.qrBody")}
                   </div>
                   <div style="display: flex; justify-content: center;">
                     <img
                       src=${props.whatsappQrDataUrl}
-                      alt="WhatsApp QR"
+                      alt=${dt("whatsapp.qrAlt")}
                       style="width: 220px; height: 220px; image-rendering: pixelated; border-radius: 12px;"
                     />
                   </div>
@@ -415,7 +452,7 @@ function renderWhatsAppQuickSetup(
             ?disabled=${props.whatsappBusy}
             @click=${() => props.onStartWhatsApp(false)}
           >
-            ${props.whatsappBusy ? "Working…" : primaryTitle}
+            ${props.whatsappBusy ? dt("whatsapp.working") : primaryTitle}
           </button>
           <button
             class="btn btn--sm"
@@ -423,7 +460,7 @@ function renderWhatsAppQuickSetup(
             ?disabled=${props.whatsappBusy}
             @click=${() => props.onStartWhatsApp(true)}
           >
-            Relink WhatsApp
+            ${dt("whatsapp.relink")}
           </button>
         </div>
       </div>
@@ -432,7 +469,7 @@ function renderWhatsAppQuickSetup(
 }
 
 function renderConnectDialogs(props: DashboardUserChannelsPageProps) {
-  const available = props.result?.availableChannels ?? [];
+  const available = localizedAvailableChannels(props);
   return available.map((channel) => {
     const dialogId = connectDialogId(channel.channelId);
     return renderDialog({
@@ -755,7 +792,7 @@ export function renderDashboardUserChannelsPage(props: DashboardUserChannelsPage
                 <div><span class="muted">${dt("account")}:</span> <span class="mono">${selectedAccount.accountId}</span></div>
                 ${
                   selectedAccount.name
-                    ? html`<div><span class="muted">Name:</span> ${selectedAccount.name}</div>`
+                    ? html`<div><span class="muted">${dt("nameLabel")}:</span> ${selectedAccount.name}</div>`
                     : nothing
                 }
               </div>
