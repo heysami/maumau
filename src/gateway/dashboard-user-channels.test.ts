@@ -3,13 +3,18 @@ import { telegramSetupPlugin } from "../../extensions/telegram/setup-entry.js";
 import type { MaumauConfig } from "../config/types.js";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
-import { collectDashboardUserChannels, connectDashboardUserChannel } from "./dashboard-user-channels.js";
+import {
+  collectDashboardUserChannels,
+  connectDashboardUserChannel,
+} from "./dashboard-user-channels.js";
 
-const { loadConfigMock, readConfigFileSnapshotForWriteMock, writeConfigFileMock } = vi.hoisted(() => ({
-  loadConfigMock: vi.fn<() => MaumauConfig>(),
-  readConfigFileSnapshotForWriteMock: vi.fn(),
-  writeConfigFileMock: vi.fn(),
-}));
+const { loadConfigMock, readConfigFileSnapshotForWriteMock, writeConfigFileMock } = vi.hoisted(
+  () => ({
+    loadConfigMock: vi.fn<() => MaumauConfig>(),
+    readConfigFileSnapshotForWriteMock: vi.fn(),
+    writeConfigFileMock: vi.fn(),
+  }),
+);
 
 vi.mock("../config/config.js", () => ({
   loadConfig: loadConfigMock,

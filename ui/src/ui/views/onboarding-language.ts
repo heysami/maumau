@@ -1,4 +1,5 @@
 import { html } from "lit";
+import { getLanguageNativeName } from "../../../../src/i18n/languages.ts";
 import { SUPPORTED_LOCALES, t, type Locale } from "../../i18n/index.ts";
 import type { AppViewState } from "../app-view-state.ts";
 import { normalizeBasePath } from "../navigation.ts";
@@ -27,7 +28,6 @@ export function renderOnboardingLanguageGate(params: {
         </div>
         <div style="display: grid; gap: 10px;">
           ${SUPPORTED_LOCALES.map((locale) => {
-            const key = locale.replace(/-([a-zA-Z])/g, (_, char) => char.toUpperCase());
             return html`
               <button
                 type="button"
@@ -35,7 +35,7 @@ export function renderOnboardingLanguageGate(params: {
                 style="justify-content: space-between; width: 100%;"
                 @click=${() => params.onSelect(locale)}
               >
-                <span>${t(`languages.${key}`)}</span>
+                <span>${getLanguageNativeName(locale)}</span>
                 <span class="muted"
                   >${
                     locale === "en"

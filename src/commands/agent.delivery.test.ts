@@ -15,12 +15,16 @@ import type { RuntimeEnv } from "../runtime.js";
 
 const mocks = vi.hoisted(() => ({
   deliverOutboundPayloads: vi.fn<
-    (params: Parameters<typeof deliverOutboundPayloadsFn>[0]) => ReturnType<typeof deliverOutboundPayloadsFn>
+    (
+      params: Parameters<typeof deliverOutboundPayloadsFn>[0],
+    ) => ReturnType<typeof deliverOutboundPayloadsFn>
   >(async () => []),
   getChannelPlugin: vi.fn(() => ({})),
   resolveOutboundTarget: vi.fn(() => ({ ok: true as const, to: "+15551234567" })),
   publishPreviewArtifact: vi.fn<
-    (params: Parameters<typeof publishPreviewArtifactFn>[0]) => ReturnType<typeof publishPreviewArtifactFn>
+    (
+      params: Parameters<typeof publishPreviewArtifactFn>[0],
+    ) => ReturnType<typeof publishPreviewArtifactFn>
   >(async () => ({
     previewId: "preview-123",
     url: "https://preview.example/preview/for-sam-ji/preview-123/",

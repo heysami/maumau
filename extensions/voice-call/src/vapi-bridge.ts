@@ -20,7 +20,9 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 export function buildVapiAutoBridgeUrl(params: { hostname: string; bridgePath: string }): string {
   const hostname = params.hostname.trim().replace(/\.$/, "");
-  const bridgePath = params.bridgePath.startsWith("/") ? params.bridgePath : `/${params.bridgePath}`;
+  const bridgePath = params.bridgePath.startsWith("/")
+    ? params.bridgePath
+    : `/${params.bridgePath}`;
   return `https://${hostname}:${VAPI_AUTO_BRIDGE_HTTPS_PORT}${bridgePath}`;
 }
 

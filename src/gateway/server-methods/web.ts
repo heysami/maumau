@@ -1,5 +1,8 @@
+import {
+  bundledChannelPlugins,
+  bundledChannelSetupPlugins,
+} from "../../channels/plugins/bundled.js";
 import { listChannelPlugins } from "../../channels/plugins/index.js";
-import { bundledChannelPlugins, bundledChannelSetupPlugins } from "../../channels/plugins/bundled.js";
 import { listChannelSetupPlugins } from "../../channels/plugins/setup-registry.js";
 import type { ChannelPlugin } from "../../channels/plugins/types.js";
 import {

@@ -22,10 +22,7 @@ type DashboardUserChannelsPageProps = {
   onSelectChannel: (channelId: string) => void;
   onSelectAccount: (channelId: string, accountId: string) => void;
   onOpenUsersPage: () => void;
-  onConnectChannel: (params: {
-    channelId: string;
-    fields: Record<string, string>;
-  }) => void;
+  onConnectChannel: (params: { channelId: string; fields: Record<string, string> }) => void;
   onSaveAllowlist: (params: {
     channelId: string;
     accountId: string;
@@ -415,10 +412,12 @@ function renderWhatsAppQuickSetup(
       <div class="card-title">${channel.quickSetup.sectionTitle}</div>
       <div style="display: grid; gap: 12px; margin-top: 12px;">
         ${renderQuickSetupIdentityCard(channel, {
-          badge: waitingForScan ? shared?.waitingBadge ?? channel.quickSetup.badge : channel.quickSetup.badge,
+          badge: waitingForScan
+            ? (shared?.waitingBadge ?? channel.quickSetup.badge)
+            : channel.quickSetup.badge,
           headline: channel.quickSetup.headline,
           message: waitingForScan
-            ? shared?.waitingMessage ?? channel.quickSetup.message
+            ? (shared?.waitingMessage ?? channel.quickSetup.message)
             : channel.quickSetup.message,
         })}
         ${

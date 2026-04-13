@@ -26,6 +26,7 @@ import { resolveAgentConfig } from "./agent-scope.js";
 import { resolveExecutionRouteRequirement } from "./execution-routing.js";
 import { AGENT_LANE_SUBAGENT } from "./lanes.js";
 import { resolveSubagentSpawnModelSelection } from "./model-selection.js";
+import { ensureRuntimePluginsLoaded } from "./runtime-plugins.js";
 import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
 import {
   mapToolContextToSpawnedRunMetadata,
@@ -44,7 +45,6 @@ import {
 } from "./subagent-capabilities.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { countActiveRunsForSession, registerSubagentRun } from "./subagent-registry.js";
-import { ensureRuntimePluginsLoaded } from "./runtime-plugins.js";
 import { readStringParam } from "./tools/common.js";
 import {
   resolveDisplaySessionKey,

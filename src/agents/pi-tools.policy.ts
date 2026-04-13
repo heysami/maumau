@@ -284,12 +284,11 @@ export function resolveEffectiveToolPolicy(params: {
     Array.isArray(agentTools?.allow) ? { allow: agentTools.allow } : undefined,
     Array.isArray(agentProviderPolicy?.allow) ? { allow: agentProviderPolicy.allow } : undefined,
   ]);
-  const profileAlsoAllow =
-    mergeToolListSets([
-      explicitProfileAlsoAllow,
-      implicitProfileAlsoAllow,
-      profileCompatibilityAllow,
-    ]);
+  const profileAlsoAllow = mergeToolListSets([
+    explicitProfileAlsoAllow,
+    implicitProfileAlsoAllow,
+    profileCompatibilityAllow,
+  ]);
   const explicitProviderProfileAlsoAllow = mergeOptionalToolLists(
     Array.isArray(providerPolicy?.alsoAllow) ? providerPolicy.alsoAllow : undefined,
     Array.isArray(agentProviderPolicy?.alsoAllow) ? agentProviderPolicy.alsoAllow : undefined,

@@ -14,6 +14,7 @@ struct MaumauChatComposer: View {
     @Bindable var viewModel: MaumauChatViewModel
     let style: MaumauChatView.Style
     let showsSessionSwitcher: Bool
+    let localeID: String?
 
     #if !os(macOS)
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -21,6 +22,10 @@ struct MaumauChatComposer: View {
     #else
     @State private var shouldFocusTextView = false
     #endif
+
+    private var strings: ChatLocalization {
+        ChatLocalization(localeID: self.localeID)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -90,15 +95,15 @@ struct MaumauChatComposer: View {
 
     private var thinkingPicker: some View {
         Picker(
-            "Thinking",
+            self.strings.text("thinkingPickerLabel", fallback: "Thinking"),
             selection: Binding(
                 get: { self.viewModel.thinkingLevel },
                 set: { next in self.viewModel.selectThinkingLevel(next) }))
         {
-            Text("Off").tag("off")
-            Text("Low").tag("low")
-            Text("Medium").tag("medium")
-            Text("High").tag("high")
+            Text(self.strings.text("thinkingOff", fallback: "Off")).tag("off")
+            Text(self.strings.text("thinkingLow", fallback: "Low")).tag("low")
+            Text(self.strings.text("thinkingMedium", fallback: "Medium")).tag("medium")
+            Text(self.strings.text("thinkingHigh", fallback: "High")).tag("high")
             if !Self.menuThinkingLevels.contains(self.viewModel.thinkingLevel) {
                 Text(self.viewModel.thinkingLevel.capitalized).tag(self.viewModel.thinkingLevel)
             }
@@ -111,12 +116,12 @@ struct MaumauChatComposer: View {
 
     private var modelPicker: some View {
         Picker(
-            "Model",
+            self.strings.text("modelPickerLabel", fallback: "Model"),
             selection: Binding(
                 get: { self.viewModel.modelSelectionID },
                 set: { next in self.viewModel.selectModel(next) }))
         {
-            Text(self.viewModel.defaultModelLabel).tag(MaumauChatViewModel.defaultModelSelectionID)
+            Text(self.viewModel.defaultModelLabel(localeID: self.localeID)).tag(MaumauChatViewModel.defaultModelSelectionID)
             ForEach(self.viewModel.modelChoices) { model in
                 Text(model.displayLabel).tag(model.selectionID)
             }
@@ -125,12 +130,12 @@ struct MaumauChatComposer: View {
         .pickerStyle(.menu)
         .controlSize(.small)
         .frame(maxWidth: 240, alignment: .leading)
-        .help("Model")
+        .help(self.strings.text("modelPickerLabel", fallback: "Model"))
     }
 
     private var sessionPicker: some View {
         Picker(
-            "Session",
+            self.strings.text("sessionPickerLabel", fallback: "Session"),
             selection: Binding(
                 get: { self.viewModel.sessionKey },
                 set: { next in self.viewModel.switchSession(to: next) }))
@@ -145,7 +150,7 @@ struct MaumauChatComposer: View {
         .pickerStyle(.menu)
         .controlSize(.small)
         .frame(maxWidth: 160, alignment: .leading)
-        .help("Session")
+        .help(self.strings.text("sessionPickerLabel", fallback: "Session"))
     }
 
     @ViewBuilder
@@ -156,14 +161,14 @@ struct MaumauChatComposer: View {
         } label: {
             Image(systemName: "paperclip")
         }
-        .help("Add Image")
+        .help(self.strings.text("addImageButton", fallback: "Add Image"))
         .buttonStyle(.bordered)
         .controlSize(.small)
         #else
         PhotosPicker(selection: self.$pickerItems, maxSelectionCount: 8, matching: .images) {
             Image(systemName: "paperclip")
         }
-        .help("Add Image")
+        .help(self.strings.text("addImageButton", fallback: "Add Image"))
         .buttonStyle(.bordered)
         .controlSize(.small)
         .onChange(of: self.pickerItems) { _, newItems in
@@ -246,7 +251,10 @@ struct MaumauChatComposer: View {
                 .frame(width: 7, height: 7)
             Text(self.activeSessionLabel)
                 .font(.caption2.weight(.semibold))
-            Text(self.viewModel.healthOK ? "Connected" : "Connecting…")
+            Text(
+                self.viewModel.healthOK
+                    ? self.strings.text("connectionConnected", fallback: "Connected")
+                    : self.strings.text("connectionConnecting", fallback: "Connecting…"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -265,7 +273,7 @@ struct MaumauChatComposer: View {
     private var editorOverlay: some View {
         ZStack(alignment: .topLeading) {
             if self.viewModel.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Message Maumau…")
+                Text(self.strings.text("composerPlaceholder", fallback: "Message Maumau…"))
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)

@@ -2104,11 +2104,7 @@ function renderDashboardAgentScope(
             alsoAllow,
             agentsT("rules.alsoAllowEmpty"),
           )}
-          ${renderDashboardAgentRules(
-            agentsT("rules.denied"),
-            deny,
-            agentsT("rules.deniedEmpty"),
-          )}
+          ${renderDashboardAgentRules(agentsT("rules.denied"), deny, agentsT("rules.deniedEmpty"))}
         </div>
         <div class="dashboard-agent-scope__groups">
           ${toolGroups.map(
@@ -2189,14 +2185,14 @@ const WALLET_SPEND_GRANULARITIES: DashboardWalletSpendGranularity[] = [
 const WALLET_SPEND_BREAKDOWNS: DashboardWalletSpendBreakdown[] = ["category", "merchant"];
 
 const WALLET_SPEND_COLORS = [
-  "#1f9d8b",
-  "#e76f51",
-  "#e9c46a",
-  "#2a9d8f",
-  "#8ab17d",
+  "#f6a53a",
+  "#e48d2f",
+  "#ffd166",
+  "#d97b1e",
+  "#89b86b",
   "#f4a261",
-  "#4d908e",
-  "#f28482",
+  "#4ea8a1",
+  "#c7765e",
 ] as const;
 
 function walletSpendGranularityLabel(value: DashboardWalletSpendGranularity): string {
@@ -3322,7 +3318,10 @@ function renderCalendarPage(props: DashboardProps) {
     layout: resolveCalendarTimegridDayLayout(day, eventsByDay.get(day) ?? []),
   }));
   const calendarGridTemplateColumns = `${calendarAxisWidthPx}px ${dayLayouts
-    .map(({ layout }) => `minmax(${resolveCalendarTimegridColumnMinWidthPx(calendar.view, layout.laneCount)}px, 1fr)`)
+    .map(
+      ({ layout }) =>
+        `minmax(${resolveCalendarTimegridColumnMinWidthPx(calendar.view, layout.laneCount)}px, 1fr)`,
+    )
     .join(" ")}`;
   const calendarGridMinWidthPx =
     calendarAxisWidthPx +

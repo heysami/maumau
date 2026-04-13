@@ -677,6 +677,41 @@ struct OnboardingWizardStepViewTests {
                 """)
     }
 
+    @Test func `wizard localization translates onboarding auth templates in thai`() {
+        #expect(
+            macLocalized("How do you want to connect OpenAI?", language: .th) ==
+                "คุณต้องการเชื่อมต่อ OpenAI แบบไหน?")
+        #expect(
+            macLocalized("OpenAI Codex (ChatGPT OAuth)", language: .th) ==
+                "OpenAI โคเด็กซ์ (ChatGPT OAuth)")
+        #expect(
+            macLocalized(
+                "Best for: The easiest OpenAI setup if you already use ChatGPT.",
+                language: .th) ==
+                "เหมาะสำหรับ: การตั้งค่า OpenAI ที่ง่ายที่สุด หากคุณใช้ ChatGPT อยู่แล้ว")
+        #expect(
+            macLocalized(
+                """
+                Press Continue and Maumau will open your browser for OpenAI authentication.
+                If the callback doesn't auto-complete, Maumau will show a URL you can open manually.
+                OpenAI OAuth uses localhost:1455 for the callback.
+                """,
+                language: .th) ==
+                """
+                กดดำเนินการต่อและ Maumau จะเปิดเบราว์เซอร์ของคุณสำหรับการตรวจสอบสิทธิ์ OpenAI
+                หากการโทรกลับไม่เติมข้อความอัตโนมัติ Maumau จะแสดง URL ที่คุณสามารถเปิดด้วยตนเอง
+                OpenAI OAuth ใช้ localhost:1455 สำหรับการโทรกลับ
+                """)
+        #expect(
+            macLocalized("Included tools", language: .th) ==
+                "เครื่องมือที่รวมมาให้")
+        #expect(
+            macLocalized(
+                "Fresh install: pre-consenting and staging Clawd Cursor for unattended use.",
+                language: .th) ==
+                "การติดตั้งใหม่: ยินยอมล่วงหน้าและเตรียม Clawd Cursor ไว้สำหรับการใช้งานแบบไม่ต้องเฝ้า")
+    }
+
     @Test func `wizard localization translates config refresh errors in indonesian`() {
         let message =
             """

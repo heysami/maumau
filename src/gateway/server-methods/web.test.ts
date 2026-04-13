@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { stopChannelMock, startChannelMock, loginWithQrStartMock, loginWithQrWaitMock } = vi.hoisted(
   () => ({
-  stopChannelMock: vi.fn(),
-  startChannelMock: vi.fn(),
-  loginWithQrStartMock: vi.fn(async () => ({
-    message: "Scan the QR code in WhatsApp.",
-    qrDataUrl: "data:image/png;base64,ZmFrZQ==",
-  })),
-  loginWithQrWaitMock: vi.fn(async () => ({
-    connected: true,
-    message: "WhatsApp linked.",
-  })),
-}),
+    stopChannelMock: vi.fn(),
+    startChannelMock: vi.fn(),
+    loginWithQrStartMock: vi.fn(async () => ({
+      message: "Scan the QR code in WhatsApp.",
+      qrDataUrl: "data:image/png;base64,ZmFrZQ==",
+    })),
+    loginWithQrWaitMock: vi.fn(async () => ({
+      connected: true,
+      message: "WhatsApp linked.",
+    })),
+  }),
 );
 
 vi.mock("../../channels/plugins/index.js", () => ({

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MaumauKit
 import MaumauProtocol
 
 struct RootCanvas: View {
@@ -245,9 +246,12 @@ struct RootCanvas: View {
     }
 
     private func makeHomeCanvasPayload() -> HomeCanvasPayload {
+        let localeID = self.homeCanvasLocaleID
         let gatewayName = self.normalized(self.appModel.gatewayServerName)
         let gatewayAddress = self.normalized(self.appModel.gatewayRemoteAddress)
-        let gatewayLabel = gatewayName ?? gatewayAddress ?? "Gateway"
+        let gatewayLabel = gatewayName
+            ?? gatewayAddress
+            ?? self.homeCanvasText("gatewayLabel", localeID: localeID, fallback: "Gateway")
         let activeAgentID = self.resolveActiveAgentID()
         let agents = self.homeCanvasAgents(activeAgentID: activeAgentID)
 
@@ -255,49 +259,96 @@ struct RootCanvas: View {
         case .connected:
             return HomeCanvasPayload(
                 gatewayState: "connected",
-                eyebrow: "Connected to \(gatewayLabel)",
-                title: "Your agents are ready",
-                subtitle:
-                    "This phone stays dormant until the gateway needs it, then wakes, syncs, and goes back to sleep.",
+                eyebrow: self.homeCanvasText(
+                    "connectedEyebrow",
+                    localeID: localeID,
+                    fallback: "Connected to {gatewayLabel}",
+                    parameters: ["gatewayLabel": gatewayLabel]),
+                title: self.homeCanvasText(
+                    "connectedTitle",
+                    localeID: localeID,
+                    fallback: "Your agents are ready"),
+                subtitle: self.homeCanvasText(
+                    "connectedSubtitle",
+                    localeID: localeID,
+                    fallback:
+                        "This phone stays dormant until the gateway needs it, then wakes, syncs, and goes back to sleep."),
                 gatewayLabel: gatewayLabel,
                 activeAgentName: self.appModel.activeAgentName,
                 activeAgentBadge: agents.first(where: { $0.isActive })?.badge ?? "OC",
-                activeAgentCaption: "Selected on this phone",
+                activeAgentCaption: self.homeCanvasText(
+                    "connectedActiveCaption",
+                    localeID: localeID,
+                    fallback: "Selected on this phone"),
                 agentCount: agents.count,
                 agents: Array(agents.prefix(6)),
-                footer: "The overview refreshes on reconnect and when the app returns to foreground.")
+                footer: self.homeCanvasText(
+                    "connectedFooter",
+                    localeID: localeID,
+                    fallback:
+                        "The overview refreshes on reconnect and when the app returns to foreground."))
         case .connecting:
             return HomeCanvasPayload(
                 gatewayState: "connecting",
-                eyebrow: "Reconnecting",
-                title: "Maumau is syncing back up",
-                subtitle:
-                    "The gateway session is coming back online. "
-                    + "Agent shortcuts should settle automatically in a moment.",
+                eyebrow: self.homeCanvasText(
+                    "connectingEyebrow",
+                    localeID: localeID,
+                    fallback: "Reconnecting"),
+                title: self.homeCanvasText(
+                    "connectingTitle",
+                    localeID: localeID,
+                    fallback: "Maumau is syncing back up"),
+                subtitle: self.homeCanvasText(
+                    "connectingSubtitle",
+                    localeID: localeID,
+                    fallback:
+                        "The gateway session is coming back online. Agent shortcuts should settle automatically in a moment."),
                 gatewayLabel: gatewayLabel,
                 activeAgentName: self.appModel.activeAgentName,
                 activeAgentBadge: "OC",
-                activeAgentCaption: "Gateway session in progress",
+                activeAgentCaption: self.homeCanvasText(
+                    "connectingActiveCaption",
+                    localeID: localeID,
+                    fallback: "Gateway session in progress"),
                 agentCount: agents.count,
                 agents: Array(agents.prefix(4)),
-                footer: "If the gateway is reachable, reconnect should complete without intervention.")
+                footer: self.homeCanvasText(
+                    "connectingFooter",
+                    localeID: localeID,
+                    fallback: "If the gateway is reachable, reconnect should complete without intervention."))
         case .error, .disconnected:
             return HomeCanvasPayload(
                 gatewayState: self.gatewayStatus == .error ? "error" : "offline",
-                eyebrow: "Welcome to Maumau",
-                title: "Your phone stays quiet until it is needed",
-                subtitle:
-                    "Pair this device to your gateway to wake it only for real work, "
-                    + "keep a live agent overview handy, and avoid battery-draining background loops.",
+                eyebrow: self.homeCanvasText(
+                    "welcomeEyebrow",
+                    localeID: localeID,
+                    fallback: "Welcome to Maumau"),
+                title: self.homeCanvasText(
+                    "offlineTitle",
+                    localeID: localeID,
+                    fallback: "Your phone stays quiet until it is needed"),
+                subtitle: self.homeCanvasText(
+                    "offlineSubtitle",
+                    localeID: localeID,
+                    fallback:
+                        "Pair this device to your gateway to wake it only for real work, keep a live agent overview handy, and avoid battery-draining background loops."),
                 gatewayLabel: gatewayLabel,
-                activeAgentName: "Main",
+                activeAgentName: self.homeCanvasText(
+                    "activeAgentName",
+                    localeID: localeID,
+                    fallback: "Main"),
                 activeAgentBadge: "OC",
-                activeAgentCaption: "Connect to load your agents",
+                activeAgentCaption: self.homeCanvasText(
+                    "connectToLoadAgents",
+                    localeID: localeID,
+                    fallback: "Connect to load your agents"),
                 agentCount: agents.count,
                 agents: Array(agents.prefix(4)),
-                footer:
-                    "When connected, the gateway can wake the phone with a silent push "
-                    + "instead of holding an always-on session.")
+                footer: self.homeCanvasText(
+                    "offlineFooter",
+                    localeID: localeID,
+                    fallback:
+                        "When connected, the gateway can wake the phone with a silent push instead of holding an always-on session."))
         }
     }
 
@@ -314,6 +365,7 @@ struct RootCanvas: View {
     }
 
     private func homeCanvasAgents(activeAgentID: String) -> [HomeCanvasAgentCard] {
+        let localeID = self.homeCanvasLocaleID
         let defaultAgentID = self.resolveDefaultAgentID()
         let cards = self.appModel.gatewayAgents.map { agent -> HomeCanvasAgentCard in
             let isActive = !activeAgentID.isEmpty && agent.id == activeAgentID
@@ -322,7 +374,21 @@ struct RootCanvas: View {
                 id: agent.id,
                 name: self.homeCanvasName(for: agent),
                 badge: self.homeCanvasBadge(for: agent),
-                caption: isActive ? "Active on this phone" : (isDefault ? "Default agent" : "Ready"),
+                caption: isActive
+                    ? self.homeCanvasText(
+                        "agentActiveOnPhone",
+                        localeID: localeID,
+                        fallback: "Active on this phone")
+                    : (
+                        isDefault
+                            ? self.homeCanvasText(
+                                "agentDefault",
+                                localeID: localeID,
+                                fallback: "Default agent")
+                            : self.homeCanvasText(
+                                "agentReady",
+                                localeID: localeID,
+                                fallback: "Ready")),
                 isActive: isActive)
         }
 
@@ -359,6 +425,24 @@ struct RootCanvas: View {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var homeCanvasLocaleID: String {
+        Locale.preferredLanguages.first ?? Locale.current.identifier
+    }
+
+    private func homeCanvasText(
+        _ key: String,
+        localeID: String,
+        fallback: String,
+        parameters: [String: String] = [:])
+        -> String
+    {
+        MaumauSharedLocalization.fallbackString(
+            path: ["shared", "canvasHome", key],
+            localeID: localeID,
+            fallback: fallback,
+            parameters: parameters)
     }
 
     private func evaluateOnboardingPresentation(force: Bool) {

@@ -103,12 +103,12 @@ describe("sortLocaleStrings", () => {
 
 describe("agentLogoUrl", () => {
   it("keeps base-mounted control UI logo paths absolute to the mount", () => {
-    expect(agentLogoUrl("/ui")).toBe("/ui/favicon.svg");
-    expect(agentLogoUrl("/apps/maumau/")).toBe("/apps/maumau/favicon.svg");
+    expect(agentLogoUrl("/ui")).toBe("/ui/apple-touch-icon.png");
+    expect(agentLogoUrl("/apps/maumau/")).toBe("/apps/maumau/apple-touch-icon.png");
   });
 
   it("uses a route-relative fallback before basePath bootstrap finishes", () => {
-    expect(agentLogoUrl("")).toBe("favicon.svg");
+    expect(agentLogoUrl("")).toBe("apple-touch-icon.png");
   });
 });
 

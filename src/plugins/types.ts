@@ -129,12 +129,7 @@ export type MaumauPluginToolContext = {
 
 export type MemoryStoreDurability = "daily" | "durable";
 
-export type MemoryStoreTarget =
-  | "active-user"
-  | "workspace"
-  | "group"
-  | "global"
-  | "provisional";
+export type MemoryStoreTarget = "active-user" | "workspace" | "group" | "global" | "provisional";
 
 export type MemoryOverlayContext = MaumauPluginToolContext;
 
@@ -215,9 +210,9 @@ export type MemoryOverlay = {
   buildPromptContext?: (
     params: MemoryOverlayPromptParams,
   ) => string | string[] | null | undefined | Promise<string | string[] | null | undefined>;
-  listCollections?: (
-    params: { context: MemoryOverlayContext },
-  ) =>
+  listCollections?: (params: {
+    context: MemoryOverlayContext;
+  }) =>
     | MemoryOverlayCollection[]
     | null
     | undefined

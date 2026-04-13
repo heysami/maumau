@@ -198,20 +198,18 @@ function listPendingProvisionalUsers(
 function readRecordedMemoryPrincipal(params: {
   api: MaumauPluginApi;
   toolCtx: Pick<MaumauPluginToolContext, "agentId" | "sessionKey">;
-}):
-  | {
-      resolvedUserId?: string;
-      provisionalUserId?: string;
-      channelId?: string;
-      accountId?: string;
-      conversationId?: string;
-      requesterSenderId?: string;
-      requesterSenderName?: string;
-      requesterSenderUsername?: string;
-      effectiveLanguage?: string;
-      capturedAt: number;
-    }
-  | null {
+}): {
+  resolvedUserId?: string;
+  provisionalUserId?: string;
+  channelId?: string;
+  accountId?: string;
+  conversationId?: string;
+  requesterSenderId?: string;
+  requesterSenderName?: string;
+  requesterSenderUsername?: string;
+  effectiveLanguage?: string;
+  capturedAt: number;
+} | null {
   const sessionKey = params.toolCtx.sessionKey?.trim();
   const agentId = params.toolCtx.agentId?.trim();
   if (!sessionKey || !agentId) {
@@ -994,7 +992,10 @@ async function readScopedFile(params: {
   if (params.from || params.lines) {
     const start = Math.max(1, params.from ?? 1);
     const count = Math.max(1, params.lines ?? Number.MAX_SAFE_INTEGER);
-    const slice = text.split(/\r?\n/).slice(start - 1, start - 1 + count).join("\n");
+    const slice = text
+      .split(/\r?\n/)
+      .slice(start - 1, start - 1 + count)
+      .join("\n");
     return { path: params.relPath, text: slice };
   }
   return { path: params.relPath, text };
@@ -1599,9 +1600,8 @@ export default definePluginEntry({
           pluginConfig,
           toolCtx: context,
         });
-        const collections: Array<{ rootPath: string; kind: "scoped" | "internal"; label: string }> = [
-          { rootPath: "corpus", kind: "scoped", label: "Scoped memory" },
-        ];
+        const collections: Array<{ rootPath: string; kind: "scoped" | "internal"; label: string }> =
+          [{ rootPath: "corpus", kind: "scoped", label: "Scoped memory" }];
         if (
           isInternalMemoryAccessAllowed({
             pluginConfig,

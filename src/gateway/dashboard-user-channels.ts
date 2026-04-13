@@ -1,6 +1,6 @@
+import { bundledChannelPlugins, bundledChannelSetupPlugins } from "../channels/plugins/bundled.js";
 import { resolveChannelDefaultAccountId } from "../channels/plugins/helpers.js";
 import { getChannelPlugin, listChannelPlugins, type ChannelId } from "../channels/plugins/index.js";
-import { bundledChannelPlugins, bundledChannelSetupPlugins } from "../channels/plugins/bundled.js";
 import type { ChannelAccessPolicy } from "../channels/plugins/setup-group-access.js";
 import { listChannelSetupPlugins } from "../channels/plugins/setup-registry.js";
 import {
@@ -11,8 +11,8 @@ import type { ChannelSetupWizard } from "../channels/plugins/setup-wizard.js";
 import { buildChannelAccountSnapshot } from "../channels/plugins/status.js";
 import type { ChannelAccountSnapshot } from "../channels/plugins/types.core.js";
 import type { ChannelPlugin } from "../channels/plugins/types.js";
-import { loadConfig, readConfigFileSnapshotForWrite, writeConfigFile } from "../config/config.js";
 import { getConfigValueAtPath, setConfigValueAtPath } from "../config/config-paths.js";
+import { loadConfig, readConfigFileSnapshotForWrite, writeConfigFile } from "../config/config.js";
 import type { DmPolicy, MaumauConfig } from "../config/types.js";
 import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
 import {
@@ -234,10 +234,17 @@ function mergedQuickSetupUpdates(
   const dmPolicyPath = ["channels", channelId, "dmPolicy"];
   const allowFromPath = ["channels", channelId, "allowFrom"];
   const updatesDmPolicy = updates.some((entry) => entry.path.join(".") === dmPolicyPath.join("."));
-  const updatesAllowFrom = updates.some((entry) => entry.path.join(".") === allowFromPath.join("."));
+  const updatesAllowFrom = updates.some(
+    (entry) => entry.path.join(".") === allowFromPath.join("."),
+  );
   const existingDmPolicy = getConfigValueAtPath(cfg as Record<string, unknown>, dmPolicyPath);
   const existingAllowFrom = getConfigValueAtPath(cfg as Record<string, unknown>, allowFromPath);
-  if (updatesDmPolicy || updatesAllowFrom || existingDmPolicy != null || existingAllowFrom != null) {
+  if (
+    updatesDmPolicy ||
+    updatesAllowFrom ||
+    existingDmPolicy != null ||
+    existingAllowFrom != null
+  ) {
     return updates;
   }
   return updates.concat([
@@ -246,7 +253,10 @@ function mergedQuickSetupUpdates(
   ]);
 }
 
-function enableBundledChannelPluginForQuickSetup(cfg: MaumauConfig, channelId: string): string | null {
+function enableBundledChannelPluginForQuickSetup(
+  cfg: MaumauConfig,
+  channelId: string,
+): string | null {
   const trimmedChannelId = normalizeText(channelId);
   if (!trimmedChannelId) {
     return "missing channel id";
@@ -258,23 +268,26 @@ function enableBundledChannelPluginForQuickSetup(cfg: MaumauConfig, channelId: s
   if (deniedPluginIds.includes(trimmedChannelId)) {
     return "blocked by denylist";
   }
-  setConfigValueAtPath(cfg as Record<string, unknown>, [
-    "plugins",
-    "entries",
-    trimmedChannelId,
-    "enabled",
-  ], true);
+  setConfigValueAtPath(
+    cfg as Record<string, unknown>,
+    ["plugins", "entries", trimmedChannelId, "enabled"],
+    true,
+  );
   const allowed = readSavedStringArray(cfg, ["plugins", "allow"]);
   if (allowed.length > 0 && !allowed.includes(trimmedChannelId)) {
-    setConfigValueAtPath(cfg as Record<string, unknown>, ["plugins", "allow"], [
-      ...allowed,
-      trimmedChannelId,
-    ]);
+    setConfigValueAtPath(
+      cfg as Record<string, unknown>,
+      ["plugins", "allow"],
+      [...allowed, trimmedChannelId],
+    );
   }
   return null;
 }
 
-function buildQuickSetupFields(channelId: string, cfg: MaumauConfig): DashboardUserChannelConnectField[] {
+function buildQuickSetupFields(
+  channelId: string,
+  cfg: MaumauConfig,
+): DashboardUserChannelConnectField[] {
   if (!isUserChannelInlineQuickSetupId(channelId)) {
     return [];
   }
@@ -282,12 +295,15 @@ function buildQuickSetupFields(channelId: string, cfg: MaumauConfig): DashboardU
     ...field,
     currentValue:
       field.key === "cliPath"
-        ? readSavedString(cfg, ["channels", "imessage", "cliPath"]) ?? field.placeholder ?? "imsg"
+        ? (readSavedString(cfg, ["channels", "imessage", "cliPath"]) ?? field.placeholder ?? "imsg")
         : undefined,
   }));
 }
 
-function buildQuickSetupSpec(plugin: ChannelPlugin, cfg: MaumauConfig): DashboardUserChannelConnectSpec | null {
+function buildQuickSetupSpec(
+  plugin: ChannelPlugin,
+  cfg: MaumauConfig,
+): DashboardUserChannelConnectSpec | null {
   if (!isUserChannelInlineQuickSetupId(plugin.id)) {
     return null;
   }
@@ -817,9 +833,9 @@ export async function connectDashboardUserChannel(params: {
     await applyDashboardQuickSetupChannel({
       channelId,
       fields: Object.fromEntries(
-        Object.entries(requirePlainRecord(params.fields ?? {}, "dashboard.userChannels.connect fields")).map(
-          ([key, value]) => [key, String(value ?? "")],
-        ),
+        Object.entries(
+          requirePlainRecord(params.fields ?? {}, "dashboard.userChannels.connect fields"),
+        ).map(([key, value]) => [key, String(value ?? "")]),
       ),
     });
     return;

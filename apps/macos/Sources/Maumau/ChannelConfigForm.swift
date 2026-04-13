@@ -92,10 +92,11 @@ func configSchemaDynamicEntriesEmptyText(
         return macLocalized("No extra entries yet.", language: language)
     }
     let translatedLabel = macLocalized(parentLabel, language: language).lowercased()
-    if language == .id {
-        return "Belum ada \(translatedLabel)."
-    }
-    return "No \(translatedLabel) yet."
+    return macLocalizedHelper(
+        "dynamicEntries.none",
+        language: language,
+        parameters: ["label": translatedLabel],
+        fallback: "No {label} yet.")
 }
 
 func configSchemaDynamicEntriesAddButtonTitle(
@@ -107,10 +108,11 @@ func configSchemaDynamicEntriesAddButtonTitle(
         return macLocalized("Add", language: language)
     }
     let singular = singularConfigSchemaLabel(parentLabel)
-    if language == .id {
-        return "Tambah \(macLocalized(singular, language: language).lowercased())"
-    }
-    return "Add \(singular)"
+    return macLocalizedHelper(
+        "dynamicEntries.add",
+        language: language,
+        parameters: ["label": macLocalized(singular, language: language).lowercased()],
+        fallback: "Add {label}")
 }
 
 struct ConfigSchemaForm: View {

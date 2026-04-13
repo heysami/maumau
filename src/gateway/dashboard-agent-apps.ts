@@ -192,44 +192,42 @@ function parseAgentAppsMarkdown(params: {
   content: string;
   updatedAtMs?: number;
 }): ParsedAgentAppDraft[] {
-  return splitMarkdownSections(params.content)
-    .flatMap((section) => {
-      const owner = readMarkdownField(section.body, "Owner");
-      const projectName =
-        readMarkdownField(section.body, "Project") ??
-        readMarkdownField(section.body, "Project name");
-      const project = normalizeDashboardProjectName(projectName);
-      const { ownerLabel, ownerAgentId } = resolveAgentAppOwner(owner);
-      const howItHelps =
-        readMarkdownField(section.body, "How it helps") ??
-        readMarkdownField(section.body, "How this helps");
-      const whyNow = readMarkdownField(section.body, "Why now");
-      const suggestedScope =
-        readMarkdownField(section.body, "Suggested scope") ??
-        readMarkdownField(section.body, "Scope");
-      const taskTitle =
-        readMarkdownField(section.body, "Task title") ?? readMarkdownField(section.body, "Task");
-      const summary = normalizeText(howItHelps || whyNow);
-      if (!section.title.trim()) {
-        return [];
-      }
-      return [
-        {
-          title: section.title.trim(),
-          ownerLabel,
-          ownerAgentId,
-          status: parseAgentAppStatus(readMarkdownField(section.body, "Status")),
-          summary: summary || undefined,
-          whyNow,
-          howItHelps,
-          suggestedScope,
-          projectName: project.name || undefined,
-          projectKey: project.key || undefined,
-          taskTitle,
-          updatedAtMs: params.updatedAtMs,
-        } satisfies ParsedAgentAppDraft,
-      ];
-    });
+  return splitMarkdownSections(params.content).flatMap((section) => {
+    const owner = readMarkdownField(section.body, "Owner");
+    const projectName =
+      readMarkdownField(section.body, "Project") ?? readMarkdownField(section.body, "Project name");
+    const project = normalizeDashboardProjectName(projectName);
+    const { ownerLabel, ownerAgentId } = resolveAgentAppOwner(owner);
+    const howItHelps =
+      readMarkdownField(section.body, "How it helps") ??
+      readMarkdownField(section.body, "How this helps");
+    const whyNow = readMarkdownField(section.body, "Why now");
+    const suggestedScope =
+      readMarkdownField(section.body, "Suggested scope") ??
+      readMarkdownField(section.body, "Scope");
+    const taskTitle =
+      readMarkdownField(section.body, "Task title") ?? readMarkdownField(section.body, "Task");
+    const summary = normalizeText(howItHelps || whyNow);
+    if (!section.title.trim()) {
+      return [];
+    }
+    return [
+      {
+        title: section.title.trim(),
+        ownerLabel,
+        ownerAgentId,
+        status: parseAgentAppStatus(readMarkdownField(section.body, "Status")),
+        summary: summary || undefined,
+        whyNow,
+        howItHelps,
+        suggestedScope,
+        projectName: project.name || undefined,
+        projectKey: project.key || undefined,
+        taskTitle,
+        updatedAtMs: params.updatedAtMs,
+      } satisfies ParsedAgentAppDraft,
+    ];
+  });
 }
 
 async function readOptionalFile(filePath: string): Promise<string | undefined> {

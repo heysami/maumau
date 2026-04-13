@@ -83,7 +83,6 @@ extension ChannelsSettings {
     }
 
     private func localizedGuidanceCopy(_ copy: ChannelGuidanceCopy) -> ChannelGuidanceCopy {
-        guard self.language == .id else { return copy }
         return ChannelGuidanceCopy(
             identity: self.loc(copy.identity),
             requirements: copy.requirements.map(self.loc),

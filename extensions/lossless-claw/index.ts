@@ -1,7 +1,7 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { definePluginEntry, delegateCompactionToRuntime } from "./api.js";
 import type { ContextEngine } from "./api.js";
 

@@ -648,7 +648,9 @@ struct PhoneCallsSettings: View {
                                 .tag(option)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 280, alignment: .leading)
                 }
 
                 self.infoRow(

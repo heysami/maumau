@@ -1,28 +1,22 @@
 import fs from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { type VoiceCallConfig } from "./config.js";
-import type { CoreAgentDeps, CoreConfig } from "./core-bridge.js";
-import { generateVoiceResponse } from "./response-generator.js";
-import { resolveUserPath } from "./utils.js";
-import { persistCallRecord, loadActiveCallsFromStore } from "./manager/store.js";
-import { findCall, getCallByProviderCallId } from "./manager/lookup.js";
-import type {
-  CallId,
-  CallRecord,
-  CallState,
-  EndReason,
-  OutboundCallOptions,
-} from "./types.js";
-import { TerminalStates } from "./types.js";
-import { VapiBridgeManager } from "./vapi-bridge.js";
-import { VapiClient, type VapiAssistant, type VapiCall } from "./vapi-client.js";
 import {
   isRequestBodyLimitError,
   readRequestBodyWithLimit,
   requestBodyErrorToText,
 } from "../api.js";
+import { type VoiceCallConfig } from "./config.js";
+import type { CoreAgentDeps, CoreConfig } from "./core-bridge.js";
+import { findCall, getCallByProviderCallId } from "./manager/lookup.js";
+import { persistCallRecord, loadActiveCallsFromStore } from "./manager/store.js";
+import { generateVoiceResponse } from "./response-generator.js";
+import type { CallId, CallRecord, CallState, EndReason, OutboundCallOptions } from "./types.js";
+import { TerminalStates } from "./types.js";
+import { resolveUserPath } from "./utils.js";
+import { VapiBridgeManager } from "./vapi-bridge.js";
+import { VapiClient, type VapiAssistant, type VapiCall } from "./vapi-client.js";
 
 type Logger = {
   info?: (message: string) => void;
@@ -114,7 +108,10 @@ function buildSystemInstruction(params: {
   return instructions.join(" ");
 }
 
-function mapVapiStatusToState(status: string | undefined, endedReason: string | undefined): CallState {
+function mapVapiStatusToState(
+  status: string | undefined,
+  endedReason: string | undefined,
+): CallState {
   const normalizedStatus = status?.trim().toLowerCase();
   switch (normalizedStatus) {
     case "queued":
@@ -242,7 +239,9 @@ function buildTransientAssistant(params: {
   };
 }
 
-function extractToolCallParameters(toolCall: Record<string, unknown>): Record<string, unknown> | undefined {
+function extractToolCallParameters(
+  toolCall: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const directParameters = asObject(toolCall.parameters);
   if (directParameters) {
     return directParameters;
@@ -270,7 +269,9 @@ function extractToolCalls(message: Record<string, unknown>): VapiToolCall[] {
       const object = asObject(entry);
       const id = asString(object?.id);
       const name = asString(object?.name) ?? asString(asObject(object?.function)?.name);
-      return id && name ? buildVapiToolCall(id, name, extractToolCallParameters(object ?? {})) : null;
+      return id && name
+        ? buildVapiToolCall(id, name, extractToolCallParameters(object ?? {}))
+        : null;
     })
     .filter((value): value is VapiToolCall => Boolean(value));
   if (direct.length > 0) {
@@ -305,7 +306,9 @@ function extractToolCalls(message: Record<string, unknown>): VapiToolCall[] {
     .filter((value): value is VapiToolCall => Boolean(value));
 }
 
-function buildTranscriptFromArtifact(message: Record<string, unknown>): Array<{ speaker: "user" | "bot"; text: string }> {
+function buildTranscriptFromArtifact(
+  message: Record<string, unknown>,
+): Array<{ speaker: "user" | "bot"; text: string }> {
   const artifact = asObject(message.artifact);
   const messages = Array.isArray(artifact?.messages) ? artifact.messages : [];
   return messages
@@ -313,9 +316,7 @@ function buildTranscriptFromArtifact(message: Record<string, unknown>): Array<{ 
       const object = asObject(entry);
       const role = asString(object?.role)?.toLowerCase();
       const text =
-        asString(object?.message) ??
-        asString(object?.content) ??
-        asString(object?.transcript);
+        asString(object?.message) ?? asString(object?.content) ?? asString(object?.transcript);
       if (!text) {
         return null;
       }
@@ -347,9 +348,7 @@ function isGatewayDrainingVoiceError(error: string | undefined): boolean {
     return false;
   }
   const normalized = error.toLowerCase();
-  return (
-    normalized.includes("gatewaydrainingerror") || normalized.includes("draining for restart")
-  );
+  return normalized.includes("gatewaydrainingerror") || normalized.includes("draining for restart");
 }
 
 export class VapiCallController {
@@ -435,7 +434,7 @@ export class VapiCallController {
       startedAt: existing?.startedAt ?? now,
       answeredAt:
         existing?.answeredAt ?? (state === "active" || TerminalStates.has(state) ? now : undefined),
-      endedAt: TerminalStates.has(state) ? existing?.endedAt ?? now : undefined,
+      endedAt: TerminalStates.has(state) ? (existing?.endedAt ?? now) : undefined,
       endReason: TerminalStates.has(state) ? mapStateToEndReason(state) : existing?.endReason,
       transcript,
       processedEventIds: existing?.processedEventIds ?? [],
@@ -539,7 +538,9 @@ export class VapiCallController {
       );
     } catch (err) {
       if (local) {
-        this.logger?.debug?.(`[voice-call] Returning cached Vapi call after lookup failure: ${String(err)}`);
+        this.logger?.debug?.(
+          `[voice-call] Returning cached Vapi call after lookup failure: ${String(err)}`,
+        );
         return local;
       }
       return undefined;

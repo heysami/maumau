@@ -132,7 +132,9 @@ export class VapiClient {
 
   async getAssistant(id: string): Promise<VapiAssistant> {
     try {
-      const payload = await this.requestJson<unknown>({ path: `/assistant/${encodeURIComponent(id)}` });
+      const payload = await this.requestJson<unknown>({
+        path: `/assistant/${encodeURIComponent(id)}`,
+      });
       const object = asObject(payload);
       const resolvedId = asString(object?.id);
       if (resolvedId) {

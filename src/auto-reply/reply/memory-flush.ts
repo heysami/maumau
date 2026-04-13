@@ -28,7 +28,7 @@ export const DEFAULT_MEMORY_FLUSH_PROMPT = [
   MEMORY_FLUSH_TARGET_HINT,
   MEMORY_FLUSH_READ_ONLY_HINT,
   MEMORY_FLUSH_APPEND_ONLY_HINT,
-  'Do NOT write directly to group or global memory. Use `memory_store` and let overlays decide the correct scope.',
+  "Do NOT write directly to group or global memory. Use `memory_store` and let overlays decide the correct scope.",
   "Do NOT create timestamped variant files (e.g., YYYY-MM-DD-HHMM.md); if you must use the file fallback, always use the canonical YYYY-MM-DD.md filename.",
   `If nothing to store, reply with ${SILENT_REPLY_TOKEN}.`,
 ].join(" ");
@@ -39,7 +39,7 @@ export const DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT = [
   MEMORY_FLUSH_TARGET_HINT,
   MEMORY_FLUSH_READ_ONLY_HINT,
   MEMORY_FLUSH_APPEND_ONLY_HINT,
-  'Prefer `memory_store` over direct file writes so principal-scoped memory survives compaction and new agents.',
+  "Prefer `memory_store` over direct file writes so principal-scoped memory survives compaction and new agents.",
   `You may reply, but usually ${SILENT_REPLY_TOKEN} is correct.`,
 ].join(" ");
 

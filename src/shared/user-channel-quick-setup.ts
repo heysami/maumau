@@ -1,5 +1,5 @@
-import USER_CHANNEL_QUICK_SETUP_JSON from "../../apps/shared/MaumauKit/Sources/MaumauKit/Resources/user-channel-quick-setup.json" with { type: "json" };
 import USER_CHANNEL_QUICK_SETUP_ID_JSON from "../../apps/shared/MaumauKit/Sources/MaumauKit/Resources/user-channel-quick-setup.id.json" with { type: "json" };
+import USER_CHANNEL_QUICK_SETUP_JSON from "../../apps/shared/MaumauKit/Sources/MaumauKit/Resources/user-channel-quick-setup.json" with { type: "json" };
 
 export type UserChannelInlineQuickSetupId =
   | "whatsapp"
@@ -76,9 +76,9 @@ const USER_CHANNEL_QUICK_SETUP_CONFIG_BY_LOCALE = {
   id: USER_CHANNEL_QUICK_SETUP_ID_CONFIG,
 } as const satisfies Record<UserChannelQuickSetupLocale, UserChannelQuickSetupConfig>;
 
-export const USER_CHANNEL_INLINE_QUICK_SETUP_IDS = Object.freeze(
-  [...USER_CHANNEL_QUICK_SETUP_CONFIG.channelOrder],
-) as readonly UserChannelInlineQuickSetupId[];
+export const USER_CHANNEL_INLINE_QUICK_SETUP_IDS = Object.freeze([
+  ...USER_CHANNEL_QUICK_SETUP_CONFIG.channelOrder,
+]) as readonly UserChannelInlineQuickSetupId[];
 
 export function isUserChannelInlineQuickSetupId(
   value: string,
@@ -130,8 +130,9 @@ export function getLocalizedUserChannelQuickSetupEntry(
 }
 
 export function getLocalizedUserChannelQuickSetupSettingsNote(locale?: string | null): string {
-  return quickSetupConfigForLocale(locale).settingsNote ?? USER_CHANNEL_QUICK_SETUP_CONFIG.settingsNote;
+  return (
+    quickSetupConfigForLocale(locale).settingsNote ?? USER_CHANNEL_QUICK_SETUP_CONFIG.settingsNote
+  );
 }
 
-export const USER_CHANNEL_QUICK_SETUP_SETTINGS_NOTE =
-  USER_CHANNEL_QUICK_SETUP_CONFIG.settingsNote;
+export const USER_CHANNEL_QUICK_SETUP_SETTINGS_NOTE = USER_CHANNEL_QUICK_SETUP_CONFIG.settingsNote;

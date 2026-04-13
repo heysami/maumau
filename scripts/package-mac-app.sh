@@ -41,6 +41,37 @@ if [[ "$BUNDLE_ID" == *.debug ]]; then
   AUTO_CHECKS=false
 fi
 
+normalize_repo_url() {
+  local remote="$1"
+  remote="${remote#git+}"
+  case "$remote" in
+    git@github.com:*)
+      remote="https://github.com/${remote#git@github.com:}"
+      ;;
+    ssh://git@github.com/*)
+      remote="https://github.com/${remote#ssh://git@github.com/}"
+      ;;
+    http://github.com/*)
+      remote="https://${remote#http://}"
+      ;;
+  esac
+  remote="${remote%.git}"
+  printf '%s\n' "$remote"
+}
+
+resolve_repo_url() {
+  local remote
+  remote="$(cd "$ROOT_DIR" && git remote get-url origin 2>/dev/null || true)"
+  remote="$(normalize_repo_url "$remote")"
+  if [[ -n "$remote" ]]; then
+    printf '%s\n' "$remote"
+  else
+    printf '%s\n' "https://github.com/maumau/maumau"
+  fi
+}
+
+GIT_REPO_URL="${MAUMAU_GITHUB_URL:-$(resolve_repo_url)}"
+
 current_macos_sdk_major() {
   local version
   version="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)"
@@ -376,6 +407,7 @@ cp "$INFO_PLIST_SRC" "$APP_ROOT/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${APP_BUILD}" "$APP_ROOT/Contents/Info.plist" || true
 /usr/libexec/PlistBuddy -c "Set :MaumauBuildTimestamp ${BUILD_TS}" "$APP_ROOT/Contents/Info.plist" || true
 /usr/libexec/PlistBuddy -c "Set :MaumauGitCommit ${GIT_COMMIT}" "$APP_ROOT/Contents/Info.plist" || true
+/usr/libexec/PlistBuddy -c "Set :MaumauGitHubURL ${GIT_REPO_URL}" "$APP_ROOT/Contents/Info.plist" || true
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL ${SPARKLE_FEED_URL}" "$APP_ROOT/Contents/Info.plist" \
   || /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL}" "$APP_ROOT/Contents/Info.plist" || true
 /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey ${SPARKLE_PUBLIC_ED_KEY}" "$APP_ROOT/Contents/Info.plist" \

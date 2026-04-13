@@ -757,7 +757,8 @@ describe("dashboard aggregations", () => {
           sessionKey,
           title: "Fit Tee Landing Preview",
           status: "blocked",
-          summary: "Private preview publish needs the artifact inspected before manager confirmation.",
+          summary:
+            "Private preview publish needs the artifact inspected before manager confirmation.",
           blockerLinks: [],
         }),
       ]),

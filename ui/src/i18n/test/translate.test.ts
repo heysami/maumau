@@ -1,11 +1,27 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DASHBOARD_LOCALE_IDS, MAC_LANGUAGE_IDS } from "../../../../src/i18n/languages.ts";
+import { de } from "../locales/de.ts";
 import { en } from "../locales/en.ts";
+import { es } from "../locales/es.ts";
 import { id } from "../locales/id.ts";
+import { ms } from "../locales/ms.ts";
 import { pt_BR } from "../locales/pt-BR.ts";
 import { zh_CN } from "../locales/zh-CN.ts";
 import { zh_TW } from "../locales/zh-TW.ts";
 
 type TranslateModule = typeof import("../lib/translate.ts");
+type SharedLocaleFile = {
+  dashboard?: Record<string, string | Record<string, unknown>>;
+  mac?: Record<string, string | Record<string, unknown> | unknown[]>;
+  shared?: Record<string, string | Record<string, unknown> | unknown[]>;
+};
+
+const SHARED_LOCALE_BASE = resolve(
+  process.cwd(),
+  "../apps/shared/MaumauKit/Sources/MaumauKit/Resources/localization",
+);
 
 function createStorageMock(): Storage {
   const store = new Map<string, string>();
@@ -42,9 +58,30 @@ function flattenTranslationKeys(
       keys.push(path);
       continue;
     }
-    keys.push(...flattenTranslationKeys(value as Record<string, string | Record<string, unknown>>, path));
+    keys.push(
+      ...flattenTranslationKeys(value as Record<string, string | Record<string, unknown>>, path),
+    );
   }
   return keys;
+}
+
+function loadSharedLocale(localeId: string): SharedLocaleFile {
+  return JSON.parse(readFileSync(resolve(SHARED_LOCALE_BASE, `${localeId}.json`), "utf8"));
+}
+
+function flattenJsonKeys(value: unknown, prefix = ""): string[] {
+  if (typeof value === "string") {
+    return prefix ? [prefix] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => flattenJsonKeys(item, `${prefix}[${index}]`));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, nested]) =>
+      flattenJsonKeys(nested, prefix ? `${prefix}.${key}` : key),
+    );
+  }
+  return [];
 }
 
 describe("i18n", () => {
@@ -143,21 +180,53 @@ describe("i18n", () => {
 
   it("keeps the version label available in shipped locales", () => {
     expect((id.common as { version?: string }).version).toBeTruthy();
+    expect((ms.common as { version?: string }).version).toBeTruthy();
     expect((pt_BR.common as { version?: string }).version).toBeTruthy();
     expect((zh_CN.common as { version?: string }).version).toBeTruthy();
     expect((zh_TW.common as { version?: string }).version).toBeTruthy();
   });
 
-  it("keeps Indonesian dashboard translations aligned with English", () => {
-    const englishDashboardKeys = flattenTranslationKeys(en).filter(
-      (key) =>
-        key.startsWith("tabs.dashboard") ||
-        key.startsWith("subtitles.dashboard") ||
-        key.startsWith("dashboard."),
-    );
-    const indonesianKeys = new Set(flattenTranslationKeys(id));
-    const missing = englishDashboardKeys.filter((key) => !indonesianKeys.has(key));
+  it("keeps shared locale namespaces aligned with the English source", () => {
+    const englishShared = loadSharedLocale("en");
+    const englishDashboardKeys = new Set(flattenJsonKeys(englishShared.dashboard));
+    const englishMacKeys = new Set(flattenJsonKeys(englishShared.mac));
+    const englishSurfaceKeys = new Set(flattenJsonKeys(englishShared.shared));
+    const sharedSurfaceLocales = [...new Set([...DASHBOARD_LOCALE_IDS, ...MAC_LANGUAGE_IDS])];
 
-    expect(missing).toEqual([]);
+    for (const locale of DASHBOARD_LOCALE_IDS) {
+      const localeShared = loadSharedLocale(locale);
+      const localeKeys = new Set(flattenJsonKeys(localeShared.dashboard));
+      const missing = [...englishDashboardKeys].filter((key) => !localeKeys.has(key));
+      expect(missing, `${locale} is missing dashboard keys`).toEqual([]);
+    }
+
+    for (const locale of MAC_LANGUAGE_IDS) {
+      const localeShared = loadSharedLocale(locale);
+      const localeKeys = new Set(flattenJsonKeys(localeShared.mac));
+      const missing = [...englishMacKeys].filter((key) => !localeKeys.has(key));
+      expect(missing, `${locale} is missing mac keys`).toEqual([]);
+    }
+
+    for (const locale of sharedSurfaceLocales) {
+      const localeShared = loadSharedLocale(locale);
+      const localeKeys = new Set(flattenJsonKeys(localeShared.shared));
+      const missing = [...englishSurfaceKeys].filter((key) => !localeKeys.has(key));
+      expect(missing, `${locale} is missing shared surface keys`).toEqual([]);
+    }
+  });
+
+  it("keeps legacy shipped locales loading known dashboard copy during migration", () => {
+    expect(de.common.health).toBeTruthy();
+    expect(es.common.health).toBeTruthy();
+    expect((pt_BR.common as { health?: string }).health).toBeTruthy();
+    expect((zh_CN.dashboard?.shell as { eyebrow?: string } | undefined)?.eyebrow).toBeTruthy();
+    expect((zh_TW.dashboard?.shell as { eyebrow?: string } | undefined)?.eyebrow).toBeTruthy();
+  });
+
+  it("keeps Malay distinct from Indonesian on shared dashboard copy", () => {
+    expect(ms.common.refresh).toBe("Muat semula");
+    expect(id.common.refresh).toBe("Muat ulang");
+    expect(ms.nav.settings).toBe("Tetapan");
+    expect(id.nav.settings).toBe("Pengaturan");
   });
 });

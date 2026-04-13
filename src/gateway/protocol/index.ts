@@ -402,10 +402,12 @@ export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
 export const validateSessionsUsageParams =
   ajv.compile<SessionsUsageParams>(SessionsUsageParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
-export const validateDashboardBusinessParams =
-  ajv.compile<DashboardBusinessParams>(DashboardBusinessParamsSchema);
-export const validateDashboardProjectsParams =
-  ajv.compile<DashboardProjectsParams>(DashboardProjectsParamsSchema);
+export const validateDashboardBusinessParams = ajv.compile<DashboardBusinessParams>(
+  DashboardBusinessParamsSchema,
+);
+export const validateDashboardProjectsParams = ajv.compile<DashboardProjectsParams>(
+  DashboardProjectsParamsSchema,
+);
 export const validateDashboardProjectsApplyBlueprintParams =
   ajv.compile<DashboardProjectsApplyBlueprintParams>(DashboardProjectsApplyBlueprintParamsSchema);
 export const validateDashboardTeamsSnapshotParams = ajv.compile<DashboardTeamsSnapshotParams>(

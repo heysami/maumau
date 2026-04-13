@@ -81,6 +81,7 @@ extension OnboardingView {
                         self.pageView(for: pageIndex)
                             .frame(width: viewportWidth)
                             .frame(maxHeight: .infinity, alignment: .top)
+                            .clipped()
                     }
                 }
                 .offset(x: CGFloat(-self.currentPage) * viewportWidth)
@@ -342,6 +343,7 @@ extension OnboardingView {
         .padding(.horizontal, 28)
         .frame(width: self.pageWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
+        .clipped()
         .id("onboarding-scroll-\(pageID)")
     }
 

@@ -267,6 +267,12 @@ final class CanvasWindowController: NSWindowController, WKNavigationDelegate, NS
             subtitle: self.debugStatusSubtitle)
     }
 
+    func applyHomeCanvasLocalizationIfNeeded() {
+        WebViewJavaScriptSupport.applyHomeCanvasLocalization(
+            webView: self.webView,
+            localeID: AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID)
+    }
+
     private func loadFile(_ url: URL) {
         let fileURL = url.isFileURL ? url : URL(fileURLWithPath: url.path)
         let accessDir = fileURL.deletingLastPathComponent()

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -22,6 +23,7 @@ public struct MaumauChatView: View {
     private let markdownVariant: ChatMarkdownVariant
     private let userAccent: Color?
     private let showsAssistantTrace: Bool
+    private let localeID: String?
 
     private enum Layout {
         #if os(macOS)
@@ -51,7 +53,8 @@ public struct MaumauChatView: View {
         style: Style = .standard,
         markdownVariant: ChatMarkdownVariant = .standard,
         userAccent: Color? = nil,
-        showsAssistantTrace: Bool = false)
+        showsAssistantTrace: Bool = false,
+        localeID: String? = Locale.preferredLanguages.first ?? Locale.current.identifier)
     {
         self._viewModel = State(initialValue: viewModel)
         self.showsSessionSwitcher = showsSessionSwitcher
@@ -59,6 +62,7 @@ public struct MaumauChatView: View {
         self.markdownVariant = markdownVariant
         self.userAccent = userAccent
         self.showsAssistantTrace = showsAssistantTrace
+        self.localeID = localeID
     }
 
     public var body: some View {
@@ -74,7 +78,8 @@ public struct MaumauChatView: View {
                 MaumauChatComposer(
                     viewModel: self.viewModel,
                     style: self.style,
-                    showsSessionSwitcher: self.showsSessionSwitcher)
+                    showsSessionSwitcher: self.showsSessionSwitcher,
+                    localeID: self.localeID)
                     .padding(.horizontal, Layout.composerPaddingHorizontal)
             }
             .padding(.vertical, Layout.outerPaddingVertical)
@@ -85,11 +90,15 @@ public struct MaumauChatView: View {
         .onAppear { self.viewModel.load() }
         .sheet(isPresented: self.$showSessions) {
             if self.showsSessionSwitcher {
-                ChatSessionsSheet(viewModel: self.viewModel)
+                ChatSessionsSheet(viewModel: self.viewModel, localeID: self.localeID)
             } else {
                 EmptyView()
             }
         }
+    }
+
+    private var strings: ChatLocalization {
+        ChatLocalization(localeID: self.localeID)
     }
 
     private var messageList: some View {
@@ -320,29 +329,31 @@ public struct MaumauChatView: View {
 
     private var emptyStateTitle: String {
         #if os(macOS)
-        "Web Chat"
+        self.strings.text("titleMac", fallback: "Web Chat")
         #else
-        "Chat"
+        self.strings.text("titleDefault", fallback: "Chat")
         #endif
     }
 
     private var emptyStateMessage: String {
         #if os(macOS)
-        "Type a message below to start.\nReturn sends • Shift-Return adds a line break."
+        self.strings.text(
+            "emptyStateMessageMac",
+            fallback: "Type a message below to start.\nReturn sends • Shift-Return adds a line break.")
         #else
-        "Type a message below to start."
+        self.strings.text("emptyStateMessageDefault", fallback: "Type a message below to start.")
         #endif
     }
 
     private func errorPresentation(for error: String) -> (title: String, systemImage: String, tint: Color) {
         let lower = error.lowercased()
         if lower.contains("not connected") || lower.contains("socket") {
-            return ("Disconnected", "wifi.slash", .orange)
+            return (self.strings.text("errorDisconnected", fallback: "Disconnected"), "wifi.slash", .orange)
         }
         if lower.contains("timed out") {
-            return ("Timed out", "clock.badge.exclamationmark", .orange)
+            return (self.strings.text("errorTimedOut", fallback: "Timed out"), "clock.badge.exclamationmark", .orange)
         }
-        return ("Error", "exclamationmark.triangle.fill", .orange)
+        return (self.strings.text("errorGeneric", fallback: "Error"), "exclamationmark.triangle.fill", .orange)
     }
 
     private func mergeToolResults(in messages: [MaumauChatMessage]) -> [MaumauChatMessage] {

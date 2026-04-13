@@ -95,7 +95,7 @@ enum UserChannelQuickSetupRegistry {
         switch language {
         case .id:
             self.indonesianConfig ?? self.defaultConfig
-        case .en:
+        default:
             self.defaultConfig
         }
     }

@@ -171,7 +171,7 @@ function buildLifeSnapshotNudgeSection(params: {
     "If they engage, use later turns to move naturally into hobbies, exercise, and the shape of their work or study life.",
     "Only later, if it feels welcome and useful, ask about family context such as siblings, parents, partner, or other important people.",
     "Reflect back what you learned before moving to the next step, and keep it to one focused step at a time.",
-    'When they give real profile facts, update USER.md in the same turn before you claim it is locked in, saved, or remembered.',
+    "When they give real profile facts, update USER.md in the same turn before you claim it is locked in, saved, or remembered.",
     "Do not interrupt an urgent concrete task just to do this; finish the current help first.",
     'If they skip or say "not now," respect that and move on.',
     "",

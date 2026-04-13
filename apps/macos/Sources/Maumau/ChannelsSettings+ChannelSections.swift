@@ -360,9 +360,11 @@ extension ChannelsSettings {
             ? self.loc("Messages on this Mac")
             : self.loc(quickSetup?.emptyHeadline ?? "No Messages bridge saved yet")
         let body = configured
-            ? (self.language == .id
-                ? "Maumau memakai identitas Messages yang sudah login di Mac ini. Jika Anda memasang imsg di lokasi khusus, path yang tersimpan adalah \(savedCliPath)."
-                : "Maumau uses the Messages identity already signed into this Mac. If you installed imsg somewhere custom, the saved path is \(savedCliPath).")
+            ? macLocalizedHelper(
+                "imessageConfiguredBody",
+                language: self.language,
+                parameters: ["path": savedCliPath],
+                fallback: "Maumau uses the Messages identity already signed into this Mac. If you installed imsg somewhere custom, the saved path is {path}.")
             : self.loc(
                 quickSetup?.emptyMessage ??
                     "Use the Messages identity already signed into this Mac. If you installed imsg somewhere custom, change the CLI path before saving.")
@@ -568,10 +570,11 @@ extension ChannelsSettings {
         let language = AppStateStore.shared.effectiveOnboardingLanguage
         let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         if let linkedIdentity {
-            if language == .id {
-                return "Akun WhatsApp tertaut ini adalah identitas bot. Kirim pesan ke \(linkedIdentity) dari akun WhatsApp biasa untuk berbicara dengan agen."
-            }
-            return "This linked WhatsApp account is the bot identity. Message \(linkedIdentity) from a normal WhatsApp account to talk to the agent."
+            return macLocalizedHelper(
+                "whatsAppLinkedIdentityBody",
+                language: language,
+                parameters: ["identity": linkedIdentity],
+                fallback: "This linked WhatsApp account is the bot identity. Message {identity} from a normal WhatsApp account to talk to the agent.")
         }
         if qrVisible {
             return macLocalized(

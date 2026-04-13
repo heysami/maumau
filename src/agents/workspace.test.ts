@@ -87,7 +87,7 @@ describe("ensureAgentWorkspace", () => {
     ).resolves.toContain("walk me through what your days usually look like");
     await expect(
       fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
-    ).resolves.toContain("Do not tell the user something is \"locked in\"");
+    ).resolves.toContain('Do not tell the user something is "locked in"');
     await expect(
       fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
     ).resolves.toContain("Do not close bootstrap without handling that choice.");

@@ -454,9 +454,11 @@ struct SettingsViewSmokeTests {
         }
     }
 
-    @Test func `about settings builds body`() {
-        let view = AboutSettings(updater: nil)
-        _ = view.body
+    @Test func `about settings mounts in window`() {
+        let controller = NSHostingController(rootView: AboutSettings(updater: nil))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
     }
 
     @Test func `voice wake settings builds body`() {

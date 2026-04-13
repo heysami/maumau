@@ -365,9 +365,9 @@ export class MultiUserMemoryStore {
   }
 
   private ensureMemoryItemColumn(column: string, definition: string): void {
-    const rows = this.db
-      .prepare("PRAGMA table_info(memory_items)")
-      .all() as Array<{ name?: string }>;
+    const rows = this.db.prepare("PRAGMA table_info(memory_items)").all() as Array<{
+      name?: string;
+    }>;
     if (rows.some((row) => row.name === column)) {
       return;
     }

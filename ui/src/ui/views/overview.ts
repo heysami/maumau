@@ -10,6 +10,7 @@ import {
 import type { ConversationAutomationPresetState } from "../../../../src/commands/conversation-automation-preset.js";
 import {
   getLanguageEnglishName,
+  getLanguageNativeName,
   LANGUAGE_CATALOG,
   type LanguageId,
 } from "../../../../src/i18n/languages.js";
@@ -516,9 +517,8 @@ export function renderOverview(props: OverviewProps) {
               }}
             >
               ${SUPPORTED_LOCALES.map((loc) => {
-                const key = loc.replace(/-([a-zA-Z])/g, (_, c) => c.toUpperCase());
                 return html`<option value=${loc} ?selected=${currentLocale === loc}>
-                  ${t(`languages.${key}`)}
+                  ${getLanguageNativeName(loc)}
                 </option>`;
               })}
             </select>

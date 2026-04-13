@@ -82,9 +82,7 @@ async function handleCollectionAdd(state, args) {
   if (!targetPath || !name) {
     fail("collection add requires <path> --name <name>");
   }
-  const existing = state.db
-    .prepare("SELECT name FROM collections WHERE name = ?")
-    .get(name);
+  const existing = state.db.prepare("SELECT name FROM collections WHERE name = ?").get(name);
   if (existing) {
     fail(`collection already exists: ${name}`);
   }

@@ -1,6 +1,14 @@
 import SwiftUI
 
 struct AboutSettings: View {
+    private enum AboutLinks {
+        static let defaultMaumauGitHub = "https://github.com/maumau/maumau"
+        static let website = "https://maumau.ai"
+        static let threads = "https://www.threads.net/@ohhh.sami"
+        static let email = "mailto:samiadji.fr@gmail.com"
+        static let peterX = "https://x.com/steipete"
+    }
+
     weak var updater: UpdaterProviding?
     @State private var iconHover = false
     @AppStorage("autoUpdateEnabled") private var autoCheckEnabled = true
@@ -10,11 +18,21 @@ struct AboutSettings: View {
         AppStateStore.shared.effectiveOnboardingLanguage
     }
 
+    private var maumauGitHubURL: String {
+        let packagedURL = (Bundle.main.object(forInfoDictionaryKey: "MaumauGitHubURL") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return if let packagedURL, !packagedURL.isEmpty {
+            packagedURL
+        } else {
+            AboutLinks.defaultMaumauGitHub
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             let appIcon = NSApplication.shared.applicationIconImage ?? CritterIconRenderer.makeIcon(blink: 0)
             Button {
-                if let url = URL(string: "https://github.com/maumau/maumau") {
+                if let url = URL(string: self.maumauGitHubURL) {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
@@ -50,16 +68,24 @@ struct AboutSettings: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 18)
+
+                VStack(spacing: 2) {
+                    Text("Maumau is based on OpenClaw.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Link("Peter Steinberger on X", destination: URL(string: AboutLinks.peterX)!)
+                        .font(.footnote)
+                }
             }
 
             VStack(alignment: .center, spacing: 6) {
                 AboutLinkRow(
                     icon: "chevron.left.slash.chevron.right",
                     title: "GitHub",
-                    url: "https://github.com/maumau/maumau")
-                AboutLinkRow(icon: "globe", title: macLocalized("Website", language: self.language), url: "https://maumau.ai")
-                AboutLinkRow(icon: "bird", title: "Twitter", url: "https://twitter.com/steipete")
-                AboutLinkRow(icon: "envelope", title: "Email", url: "mailto:peter@steipete.me")
+                    url: self.maumauGitHubURL)
+                AboutLinkRow(icon: "globe", title: macLocalized("Website", language: self.language), url: AboutLinks.website)
+                AboutLinkRow(icon: "bubble.left.and.bubble.right", title: "Threads", url: AboutLinks.threads)
+                AboutLinkRow(icon: "envelope", title: "Email", url: AboutLinks.email)
             }
             .frame(maxWidth: .infinity)
             .multilineTextAlignment(.center)
@@ -84,7 +110,7 @@ struct AboutSettings: View {
                 }
             }
 
-            Text("© 2025 Peter Steinberger — MIT License.")
+            Text("OpenClaw © 2025 Peter Steinberger — MIT License.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)

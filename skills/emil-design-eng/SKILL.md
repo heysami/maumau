@@ -45,7 +45,7 @@ Before changing motion, answer these in order:
 When reviewing UI code, use a markdown table with these columns:
 
 | Before | After | Why |
-| --- | --- | --- |
+| ------ | ----- | --- |
 
 One row per issue. Keep the "Why" column short and specific.
 

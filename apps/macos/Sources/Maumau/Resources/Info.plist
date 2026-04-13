@@ -40,6 +40,8 @@
     <string></string>
     <key>MaumauGitCommit</key>
     <string></string>
+    <key>MaumauGitHubURL</key>
+    <string></string>
 
     <key>NSUserNotificationUsageDescription</key>
     <string>Maumau needs notification permission to show alerts for agent actions.</string>

@@ -289,10 +289,7 @@ function countByStatus<T extends { status: DashboardLifeProfileStatus }>(
 
 function resolveFieldKeysForRole(spec: LifeImprovementRoleSpec): string[] {
   return Array.from(
-    new Set([
-      ...LIFE_PROFILE_BASE_FIELDS,
-      ...(LIFE_PROFILE_FIELDS_BY_DOMAIN[spec.domainId] ?? []),
-    ]),
+    new Set([...LIFE_PROFILE_BASE_FIELDS, ...(LIFE_PROFILE_FIELDS_BY_DOMAIN[spec.domainId] ?? [])]),
   );
 }
 
@@ -357,25 +354,24 @@ export async function collectDashboardLifeProfile(params: {
   );
 
   const agents: DashboardLifeProfileAgent[] = LIFE_IMPROVEMENT_ROLE_SPECS.map((spec) => {
-    const needs: DashboardLifeProfileNeed[] = resolveFieldKeysForRole(spec)
-      .flatMap((fieldKey) => {
-        const field = fieldByKey.get(fieldKey);
-        const fieldSpec = specByKey.get(fieldKey);
-        if (!field || !fieldSpec) {
-          return [];
-        }
-        return [
-          {
-            fieldKey: field.key,
-            label: field.label,
-            description: field.description,
-            stage: field.stage,
-            status: field.status,
-            value: field.value,
-            why: buildNeedWhy(spec, fieldSpec),
-          } satisfies DashboardLifeProfileNeed,
-        ];
-      });
+    const needs: DashboardLifeProfileNeed[] = resolveFieldKeysForRole(spec).flatMap((fieldKey) => {
+      const field = fieldByKey.get(fieldKey);
+      const fieldSpec = specByKey.get(fieldKey);
+      if (!field || !fieldSpec) {
+        return [];
+      }
+      return [
+        {
+          fieldKey: field.key,
+          label: field.label,
+          description: field.description,
+          stage: field.stage,
+          status: field.status,
+          value: field.value,
+          why: buildNeedWhy(spec, fieldSpec),
+        } satisfies DashboardLifeProfileNeed,
+      ];
+    });
 
     return {
       agentId: spec.agentId,

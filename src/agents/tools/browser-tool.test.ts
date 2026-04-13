@@ -1,5 +1,5 @@
-import type { BrowserActResponse } from "../../browser/client-actions.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BrowserActResponse } from "../../browser/client-actions.js";
 
 const browserClientMocks = vi.hoisted(() => ({
   browserCloseTab: vi.fn(async (..._args: unknown[]) => ({})),
@@ -532,8 +532,8 @@ describe("browser tool explicit routing", () => {
         result: {
           state: "ready",
           items: [],
-      },
-    });
+        },
+      });
     const tool = createBrowserTool({ senderIsOwner: true, config: cfg });
 
     await tool.execute?.("call-1", { action: "receipt_digest" });

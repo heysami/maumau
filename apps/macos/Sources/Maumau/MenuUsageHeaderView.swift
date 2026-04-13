@@ -9,14 +9,18 @@ struct MenuUsageHeaderView: View {
 
     var body: some View {
         MenuHeaderCard(
-            title: self.language == .id ? "Penggunaan" : "Usage",
+            title: macLocalized("Usage", language: self.language),
             subtitle: self.subtitle)
     }
 
     private var subtitle: String {
-        if self.language == .id {
-            return self.count == 1 ? "1 penyedia" : "\(self.count) penyedia"
+        if self.count == 1 {
+            return macLocalizedHelper("usageHeader.provider.one", language: self.language, fallback: "1 provider")
         }
-        return self.count == 1 ? "1 provider" : "\(self.count) providers"
+        return macLocalizedHelper(
+            "usageHeader.provider.other",
+            language: self.language,
+            parameters: ["count": String(self.count)],
+            fallback: "{count} providers")
     }
 }

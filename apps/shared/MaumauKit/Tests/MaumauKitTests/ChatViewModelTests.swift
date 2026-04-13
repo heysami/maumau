@@ -1108,7 +1108,7 @@ extension TestChatTransportState {
 
         #expect(await MainActor.run { vm.showsModelPicker })
         #expect(await MainActor.run { vm.modelSelectionID } == "anthropic/claude-opus-4-6")
-        #expect(await MainActor.run { vm.defaultModelLabel } == "Default: openai/gpt-4.1-mini")
+        #expect(await MainActor.run { vm.defaultModelLabel(localeID: "en") } == "Default: openai/gpt-4.1-mini")
     }
 
     @Test func selectingDefaultModelPatchesNilAndUpdatesSelection() async throws {

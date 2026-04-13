@@ -65,7 +65,8 @@ vi.mock("./subagent-registry.js", async (importOriginal) => {
 });
 
 vi.mock("./runtime-plugins.js", () => ({
-  ensureRuntimePluginsLoaded: (...args: unknown[]) => hoisted.ensureRuntimePluginsLoadedMock(...args),
+  ensureRuntimePluginsLoaded: (...args: unknown[]) =>
+    hoisted.ensureRuntimePluginsLoadedMock(...args),
 }));
 
 vi.mock("../context-engine/init.js", () => ({

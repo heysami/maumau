@@ -1,14 +1,14 @@
 import fs from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createVoiceCallBackend } from "./backend.js";
 import type { VapiBridgeMode, VoiceCallConfig } from "./config.js";
+import { generateVoiceResponse } from "./response-generator.js";
 import { createVoiceCallBaseConfig } from "./test-fixtures.js";
 import { VapiCallController } from "./vapi-runtime.js";
-import { generateVoiceResponse } from "./response-generator.js";
 
 vi.mock("./response-generator.js", () => ({
   generateVoiceResponse: vi.fn(),
@@ -123,37 +123,36 @@ describe("VapiCallController", () => {
 
   it("creates outbound calls with a transient assistant overlay and Bahasa Indonesia defaults", async () => {
     const { config, tempStorePath } = createVapiConfig();
-    globalThis.fetch = vi
-      .fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "https://api.vapi.ai/assistant/assistant-1") {
-          return jsonResponse({
-            id: "assistant-1",
-            orgId: "org-1",
-            createdAt: "2026-04-10T00:00:00.000Z",
-            updatedAt: "2026-04-10T00:00:00.000Z",
-            isServerUrlSecretSet: true,
-            firstMessage: "Hi",
-            model: {
-              tools: [{ type: "function", function: { name: "existing_tool" } }],
-            },
-            transcriber: {
-              provider: "deepgram",
-            },
-          });
-        }
-        if (url === "https://api.vapi.ai/call") {
-          return jsonResponse({
-            id: "call-1",
-            status: "queued",
-            phoneCallProviderId: "provider-call-1",
-            phoneNumberId: "phone-1",
-            customer: { number: "+628123456789" },
-            monitor: { controlUrl: "https://control.example/call-1" },
-          });
-        }
-        throw new Error(`Unexpected fetch: ${url} ${init?.method ?? "GET"}`);
-      }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://api.vapi.ai/assistant/assistant-1") {
+        return jsonResponse({
+          id: "assistant-1",
+          orgId: "org-1",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+          isServerUrlSecretSet: true,
+          firstMessage: "Hi",
+          model: {
+            tools: [{ type: "function", function: { name: "existing_tool" } }],
+          },
+          transcriber: {
+            provider: "deepgram",
+          },
+        });
+      }
+      if (url === "https://api.vapi.ai/call") {
+        return jsonResponse({
+          id: "call-1",
+          status: "queued",
+          phoneCallProviderId: "provider-call-1",
+          phoneNumberId: "phone-1",
+          customer: { number: "+628123456789" },
+          monitor: { controlUrl: "https://control.example/call-1" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url} ${init?.method ?? "GET"}`);
+    }) as unknown as typeof fetch;
 
     const controller = new VapiCallController({
       config,
@@ -194,38 +193,37 @@ describe("VapiCallController", () => {
 
   it("maps remote Vapi call status and ends calls through the control URL", async () => {
     const { config, tempStorePath } = createVapiConfig();
-    globalThis.fetch = vi
-      .fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "https://api.vapi.ai/assistant/assistant-1") {
-          return jsonResponse({ id: "assistant-1" });
-        }
-        if (url === "https://api.vapi.ai/call") {
-          return jsonResponse({
-            id: "call-1",
-            status: "queued",
-            phoneCallProviderId: "provider-call-1",
-            customer: { number: "+628123456789" },
-            monitor: { controlUrl: "https://control.example/call-1" },
-          });
-        }
-        if (url === "https://api.vapi.ai/call/call-1") {
-          return jsonResponse({
-            id: "call-1",
-            status: "ended",
-            endedReason: "busy",
-            phoneCallProviderId: "provider-call-1",
-            customer: { number: "+628123456789" },
-            monitor: { controlUrl: "https://control.example/call-1" },
-          });
-        }
-        if (url === "https://control.example/call-1") {
-          expect(init?.method).toBe("POST");
-          expect(JSON.parse(String(init?.body))).toEqual({ type: "end-call" });
-          return new Response("", { status: 200 });
-        }
-        throw new Error(`Unexpected fetch: ${url} ${init?.method ?? "GET"}`);
-      }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://api.vapi.ai/assistant/assistant-1") {
+        return jsonResponse({ id: "assistant-1" });
+      }
+      if (url === "https://api.vapi.ai/call") {
+        return jsonResponse({
+          id: "call-1",
+          status: "queued",
+          phoneCallProviderId: "provider-call-1",
+          customer: { number: "+628123456789" },
+          monitor: { controlUrl: "https://control.example/call-1" },
+        });
+      }
+      if (url === "https://api.vapi.ai/call/call-1") {
+        return jsonResponse({
+          id: "call-1",
+          status: "ended",
+          endedReason: "busy",
+          phoneCallProviderId: "provider-call-1",
+          customer: { number: "+628123456789" },
+          monitor: { controlUrl: "https://control.example/call-1" },
+        });
+      }
+      if (url === "https://control.example/call-1") {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({ type: "end-call" });
+        return new Response("", { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url} ${init?.method ?? "GET"}`);
+    }) as unknown as typeof fetch;
 
     const controller = new VapiCallController({
       config,
@@ -254,22 +252,21 @@ describe("VapiCallController", () => {
       stop: stopTunnel,
     });
 
-    globalThis.fetch = vi
-      .fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "https://api.vapi.ai/assistant/assistant-1") {
-          return jsonResponse({ id: "assistant-1" });
-        }
-        if (url === "https://api.vapi.ai/call") {
-          return jsonResponse({
-            id: "call-1",
-            status: "queued",
-            phoneCallProviderId: "provider-call-1",
-            customer: { number: "+628123456789" },
-          });
-        }
-        throw new Error(`Unexpected fetch: ${url}`);
-      }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === "https://api.vapi.ai/assistant/assistant-1") {
+        return jsonResponse({ id: "assistant-1" });
+      }
+      if (url === "https://api.vapi.ai/call") {
+        return jsonResponse({
+          id: "call-1",
+          status: "queued",
+          phoneCallProviderId: "provider-call-1",
+          customer: { number: "+628123456789" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
 
     const controller = new VapiCallController({
       config,

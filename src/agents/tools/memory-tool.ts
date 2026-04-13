@@ -566,10 +566,11 @@ async function appendWorkspaceMemory(params: {
   durability: MemoryStoreDurability;
   dateStamp: string;
 }): Promise<string> {
-  const workspaceDir =
-    params.workspaceDir || resolveAgentWorkspaceDir(params.cfg, params.agentId);
+  const workspaceDir = params.workspaceDir || resolveAgentWorkspaceDir(params.cfg, params.agentId);
   const relativePath =
-    params.durability === "durable" ? "MEMORY.md" : path.posix.join("memory", `${params.dateStamp}.md`);
+    params.durability === "durable"
+      ? "MEMORY.md"
+      : path.posix.join("memory", `${params.dateStamp}.md`);
   const absolutePath = path.join(workspaceDir, relativePath);
   await fs.mkdir(path.dirname(absolutePath), { recursive: true });
   const now = new Date().toISOString();

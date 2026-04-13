@@ -113,9 +113,9 @@ export async function readMemoryOverlayPath(
   return null;
 }
 
-export async function listMemoryOverlayCollections(
-  params: { context: MemoryOverlayPrincipalParams["context"] },
-): Promise<MemoryOverlayCollection[]> {
+export async function listMemoryOverlayCollections(params: {
+  context: MemoryOverlayPrincipalParams["context"];
+}): Promise<MemoryOverlayCollection[]> {
   const collections: MemoryOverlayCollection[] = [];
   for (const overlay of listMemoryOverlays()) {
     const next = await overlay.listCollections?.(params);

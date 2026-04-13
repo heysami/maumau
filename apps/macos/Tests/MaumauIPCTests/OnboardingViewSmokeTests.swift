@@ -159,7 +159,35 @@ struct OnboardingViewSmokeTests {
     @Test func `language catalog defaults to english and supports indonesian`() {
         #expect(OnboardingLanguage.loadSelection(from: nil) == nil)
         #expect(OnboardingLanguage.loadSelection(from: "id") == .id)
+        #expect(OnboardingLanguage.loadSelection(from: " ID ") == .id)
+        #expect(OnboardingLanguage.loadSelection(from: " zh-cn ") == .zhCN)
+        #expect(OnboardingLanguage.loadSelection(from: " MS ") == .ms)
         #expect(AppState(preview: true).effectiveOnboardingLanguage == .en)
+    }
+
+    @Test func `mac onboarding languages use the shared localization catalog`() {
+        #expect(OnboardingLanguage.allCases.map { $0.rawValue } == SharedLocalizationCatalog.visibleMacLanguageIDs)
+        #expect(!OnboardingLanguage.allCases.contains(.bug))
+        #expect(!OnboardingLanguage.allCases.contains(.minahasa))
+        #expect(OnboardingLanguage.en.displayName == "English")
+        #expect(OnboardingLanguage.en.nativeName == "English")
+        #expect(OnboardingLanguage.id.displayName == "Indonesian")
+        #expect(OnboardingLanguage.id.nativeName == "Bahasa Indonesia")
+        #expect(OnboardingLanguage.id.replyLanguageID == "id")
+        #expect(OnboardingLanguage.id.controlUILocaleID == "id")
+        #expect(OnboardingLanguage.zhCN.displayName == "Chinese")
+        #expect(OnboardingLanguage.zhCN.nativeName == "中文")
+        #expect(OnboardingLanguage.ms.replyLanguageID == "ms")
+        #expect(OnboardingLanguage.minahasa.controlUILocaleID == "minahasa")
+    }
+
+    @Test func `app state loads persisted onboarding language ids from the shared catalog`() async {
+        await TestIsolation.withUserDefaultsValues([onboardingLanguageKey: "zh-CN"]) {
+            let state = AppState()
+            #expect(state.onboardingLanguage == .zhCN)
+            #expect(state.effectiveOnboardingLanguage.replyLanguageID == "zh-CN")
+            #expect(state.effectiveOnboardingLanguage.controlUILocaleID == "zh-CN")
+        }
     }
 
     @Test func `memory onboarding copy explains private and shared users model`() {
@@ -167,6 +195,10 @@ struct OnboardingViewSmokeTests {
         #expect(OnboardingStrings(language: .en).memorySubtitle.contains("Open Users later"))
         #expect(OnboardingStrings(language: .id).memorySubtitle.contains("privat untuk tiap pengguna"))
         #expect(OnboardingStrings(language: .id).memorySubtitle.contains("Buka Users nanti"))
+    }
+
+    @Test func `language page greeting keeps the friendly welcome copy`() {
+        #expect(OnboardingStrings(language: .en).languagePageGreeting == "Hi! Welcome to Maumau!")
     }
 
     @Test func `managed browser sign-in appears for local onboarding flows`() {
@@ -504,13 +536,14 @@ struct OnboardingViewSmokeTests {
     }
 
     @Test func `conversation automation advanced self-hosted draft writes telephony defaults`() {
+        let replyLanguageCode = OnboardingLanguage.ms.replyLanguageID
         let deepgramUpdates = OnboardingView.conversationAutomationVoiceDraftUpdates(
             mode: .advancedSelfHosted,
             phoneAllowFrom: ["+15551234567"],
             phoneProvider: .twilio,
             selectedSttProvider: .deepgramRealtime,
             webhookMode: .tailscaleFunnel,
-            replyLanguageCode: "id",
+            replyLanguageCode: replyLanguageCode,
             fromNumber: "+15557654321",
             twilioAccountSID: "AC123",
             twilioAuthToken: "twilio-token",
@@ -528,7 +561,7 @@ struct OnboardingViewSmokeTests {
             vapiAssistantID: "",
             vapiPhoneNumberID: "",
             vapiFromNumber: "",
-            vapiPreferredLanguageCode: "id",
+            vapiPreferredLanguageCode: replyLanguageCode,
             vapiBridgeMode: .autoBridge,
             vapiManualBridgeURL: "",
             vapiBridgeAuthToken: "")
@@ -557,7 +590,7 @@ struct OnboardingViewSmokeTests {
             at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram-realtime")
         #expect(updateValue(
             in: deepgramUpdates,
-            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("languageCode")]) as? String == "id")
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("languageCode")]) as? String == replyLanguageCode)
         #expect(updateValue(
             in: deepgramUpdates,
             at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")]) as? String == "nova-3")
@@ -569,7 +602,7 @@ struct OnboardingViewSmokeTests {
             at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("modelId")]) as? String == "eleven_multilingual_v2")
         #expect(updateValue(
             in: deepgramUpdates,
-            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")]) as? String == "id")
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")]) as? String == replyLanguageCode)
         #expect(updateValue(
             in: deepgramUpdates,
             at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")]) as? Bool == false)
@@ -580,7 +613,7 @@ struct OnboardingViewSmokeTests {
             phoneProvider: .twilio,
             selectedSttProvider: .openaiRealtime,
             webhookMode: .tailscaleFunnel,
-            replyLanguageCode: "id",
+            replyLanguageCode: replyLanguageCode,
             fromNumber: "+15557654321",
             twilioAccountSID: "AC123",
             twilioAuthToken: "twilio-token",
@@ -598,7 +631,7 @@ struct OnboardingViewSmokeTests {
             vapiAssistantID: "",
             vapiPhoneNumberID: "",
             vapiFromNumber: "",
-            vapiPreferredLanguageCode: "id",
+            vapiPreferredLanguageCode: replyLanguageCode,
             vapiBridgeMode: .autoBridge,
             vapiManualBridgeURL: "",
             vapiBridgeAuthToken: "")
@@ -617,7 +650,7 @@ struct OnboardingViewSmokeTests {
             hasSavedSelfHostedVoiceConfig: false) == .simpleVapi)
         #expect(OnboardingView.resolveConversationAutomationVapiPreferredLanguage(
             configuredLanguage: nil,
-            onboardingLanguage: .id) == .id)
+            onboardingLanguage: .th) == .th)
     }
 
     @Test func `conversation automation preloads advanced self-hosted mode from existing config`() {
@@ -630,13 +663,14 @@ struct OnboardingViewSmokeTests {
     }
 
     @Test func `conversation automation simple vapi draft writes vapi config and clears self-hosted fields`() {
+        let replyLanguageCode = OnboardingLanguage.zhCN.replyLanguageID
         let updates = OnboardingView.conversationAutomationVoiceDraftUpdates(
             mode: .simpleVapi,
             phoneAllowFrom: [],
             phoneProvider: .twilio,
             selectedSttProvider: .deepgramRealtime,
             webhookMode: .tailscaleFunnel,
-            replyLanguageCode: "id",
+            replyLanguageCode: replyLanguageCode,
             fromNumber: "",
             twilioAccountSID: "AC123",
             twilioAuthToken: "twilio-token",
@@ -654,7 +688,7 @@ struct OnboardingViewSmokeTests {
             vapiAssistantID: "assistant-1",
             vapiPhoneNumberID: "phone-1",
             vapiFromNumber: "+628123456789",
-            vapiPreferredLanguageCode: "id",
+            vapiPreferredLanguageCode: replyLanguageCode,
             vapiBridgeMode: .autoBridge,
             vapiManualBridgeURL: "",
             vapiBridgeAuthToken: "bridge-secret")
@@ -672,6 +706,7 @@ struct OnboardingViewSmokeTests {
         #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) == nil)
         #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")]) == nil)
         #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("enabled")]) == nil)
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("preferredLanguage")]) as? String == replyLanguageCode)
     }
 
     @Test func `conversation automation voice setup writes provider credentials and callback route`() {

@@ -218,6 +218,7 @@ const mauOfficeSceneValidationCache = new WeakMap<
 >();
 const MAU_OFFICE_EDITOR_HISTORY_SHORTCUT_LABEL = "Cmd/Ctrl+Z";
 const MAU_OFFICE_EDITOR_REDO_SHORTCUT_LABEL = "Shift+Cmd/Ctrl+Z";
+const OPENCLAW_DOCS_URL = "https://docs.openclaw.ai";
 
 function getCachedCompiledMauOfficeScene(scene: Parameters<typeof compileMauOfficeScene>[0]) {
   const cached = mauOfficeSceneCompileCache.get(scene);
@@ -1082,9 +1083,9 @@ export function renderApp(state: AppViewState) {
           ? refreshDashboardAgentsPage()
           : state.tab === "dashboardMemories"
             ? refreshDashboardMemoriesPage()
-          : loadDashboardData(state, {
-              includeTeams: state.tab === "dashboardTeams",
-            })),
+            : loadDashboardData(state, {
+                includeTeams: state.tab === "dashboardTeams",
+              })),
       onRefreshTeams: () => void loadDashboardData(state, { includeTeams: true }),
       onOpenTask: (task) => {
         switchChatSession(state, task.sessionKey);
@@ -1284,8 +1285,7 @@ export function renderApp(state: AppViewState) {
               });
               state.whatsappLoginMessage =
                 getLocalizedUserChannelQuickSetupEntry("whatsapp", i18n.getLocale()).quickSetup
-                  .successMessage ??
-                state.whatsappLoginMessage;
+                  .successMessage ?? state.whatsappLoginMessage;
             }
           }
           await loadDashboardData(state);
@@ -1600,18 +1600,32 @@ export function renderApp(state: AppViewState) {
             <div class="sidebar-shell__footer">
               <div class="sidebar-utility-group">
                 <a
-                  class="nav-item nav-item--external sidebar-utility-link"
-                  href="https://docs.maumau.ai"
+                  class="sidebar-utility-link sidebar-docs-card"
+                  href=${OPENCLAW_DOCS_URL}
                   target=${EXTERNAL_LINK_TARGET}
                   rel=${buildExternalLinkRel()}
-                  title="${t("common.docs")} (opens in new tab)"
+                  title="OpenClaw documentation (opens in new tab)"
+                  aria-label="OpenClaw documentation"
                 >
-                  <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
+                  <span class="sidebar-docs-card__header">
+                    <span class="sidebar-docs-card__icon" aria-hidden="true">${icons.book}</span>
+                    ${
+                      !navCollapsed
+                        ? html`
+                            <span class="sidebar-docs-card__title">${t("common.docs")}</span>
+                            <span class="sidebar-docs-card__external" aria-hidden="true">${icons.externalLink}</span>
+                          `
+                        : nothing
+                    }
+                  </span>
                   ${
                     !navCollapsed
                       ? html`
-                          <span class="nav-item__text">${t("common.docs")}</span>
-                          <span class="nav-item__external-icon">${icons.externalLink}</span>
+                          <span class="sidebar-docs-card__body">
+                            Maumau is based on OpenClaw. To learn more, refer to OpenClaw
+                            documentation.
+                          </span>
+                          <span class="sidebar-docs-card__link">OpenClaw documentation</span>
                         `
                       : nothing
                   }

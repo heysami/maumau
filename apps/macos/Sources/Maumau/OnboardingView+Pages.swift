@@ -34,6 +34,10 @@ private enum VoiceSetupExternalURL {
 }
 
 extension OnboardingView {
+    private var onboardingAppIcon: NSImage {
+        NSApplication.shared.applicationIconImage ?? CritterIconRenderer.makeIcon(blink: 0)
+    }
+
     @ViewBuilder
     func pageView(for pageIndex: Int) -> some View {
         Group {
@@ -74,7 +78,14 @@ extension OnboardingView {
     func languagePage() -> some View {
         self.onboardingPage(pageID: self.languagePageIndex) {
             VStack(spacing: 22) {
-                Text(self.strings.languagePageTitle)
+                Image(nsImage: self.onboardingAppIcon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 104, height: 104)
+                    .cornerRadius(24)
+                    .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+
+                Text(self.strings.languagePageGreeting)
                     .font(.largeTitle.weight(.semibold))
 
                 Text(self.strings.languagePageSubtitle)
@@ -85,6 +96,10 @@ extension OnboardingView {
                     .fixedSize(horizontal: false, vertical: true)
 
                 self.onboardingCard(spacing: 12, padding: 16) {
+                    Text(self.strings.languagePageTitle)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     ForEach(OnboardingLanguage.allCases, id: \.rawValue) { language in
                         Button {
                             self.state.onboardingLanguage = language
@@ -115,7 +130,7 @@ extension OnboardingView {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }
-            .padding(.top, 24)
+            .padding(.top, 12)
         }
     }
 
@@ -1114,7 +1129,10 @@ extension OnboardingView {
                 .fixedSize(horizontal: false, vertical: true)
 
             self.onboardingGlassCard(padding: 8) {
-                MaumauChatView(viewModel: self.onboardingChatModel, style: .onboarding)
+                MaumauChatView(
+                    viewModel: self.onboardingChatModel,
+                    style: .onboarding,
+                    localeID: self.state.effectiveOnboardingLanguage.replyLanguageID)
                     .frame(maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
@@ -1457,7 +1475,9 @@ extension OnboardingView {
                                                 .tag(language)
                                         }
                                     }
-                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: 280, alignment: .leading)
                                 }
 
                                 Divider()
@@ -2425,10 +2445,7 @@ private struct OnboardingChannelsSetupView: View {
             }
 
             if let lastError = self.store.lastError, !lastError.isEmpty {
-                Text(
-                    self.language == .en
-                        ? "Gateway status warning: \(lastError)"
-                        : "Peringatan status Gateway: \(lastError)")
+                Text(self.strings.gatewayStatusWarning(lastError))
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2480,58 +2497,20 @@ private struct OnboardingChannelsSetupView: View {
         for channel: ChannelsSettings.ChannelItem,
         alreadyConnected: Bool) -> String
     {
-        if channel.id == "whatsapp" {
-            switch (self.language, alreadyConnected) {
-            case (.en, true):
-                return "WhatsApp is ready. Maumau is already using the recommended defaults, and you can change advanced routing or access rules later in full Settings → Channels."
-            case (.en, false):
-                return "If you want to change approved numbers, routing, or other advanced WhatsApp behavior later, use full Settings → Channels. Maumau keeps the recommended defaults unless you change them."
-            case (.id, true):
-                return "WhatsApp sudah siap. Maumau sudah menggunakan default yang direkomendasikan, dan Anda bisa mengubah routing lanjutan atau aturan akses nanti di Pengaturan lengkap → Channel."
-            case (.id, false):
-                return "Jika nanti Anda ingin mengubah nomor yang diizinkan, routing, atau perilaku WhatsApp lanjutan lainnya, gunakan Pengaturan lengkap → Channel. Maumau akan tetap memakai default yang direkomendasikan sampai Anda mengubahnya."
-            }
-        }
-
-        if alreadyConnected {
-            return self.language == .en
-                ? "\(channel.title) is already connected. Maumau is using the recommended defaults, and you can review or override them later in full Settings → Channels."
-                : "\(channel.title) sudah terhubung. Maumau menggunakan default yang direkomendasikan, dan Anda bisa meninjaunya atau menggantinya nanti di Pengaturan lengkap → Channel."
-        }
-
-        return self.language == .en
-            ? "Onboarding is only showing the key setup details for \(channel.title). When you are ready, open full Settings → Channels to paste the token or finish the account/device connection. Maumau will use the recommended defaults automatically for the rest."
-            : "Onboarding hanya menampilkan detail pengaturan utama untuk \(channel.title). Saat Anda siap, buka Pengaturan lengkap → Channel untuk menempelkan token atau menyelesaikan koneksi akun/perangkat. Maumau akan memakai default yang direkomendasikan secara otomatis untuk sisanya."
+        self.strings.settingsHandoffMessage(
+            forChannelTitle: channel.title,
+            channelID: channel.id,
+            alreadyConnected: alreadyConnected)
     }
 
     private func settingsHandoffButtonTitle(
         for channel: ChannelsSettings.ChannelItem,
         alreadyConnected: Bool) -> String
     {
-        if alreadyConnected {
-            return self.language == .en
-                ? "Review \(channel.title) in Settings"
-                : "Tinjau \(channel.title) di Pengaturan"
-        }
-
-        switch channel.id {
-        case "discord":
-            return self.language == .en ? "Open Settings for Discord bot" : "Buka Pengaturan untuk bot Discord"
-        case "googlechat":
-            return self.language == .en ? "Open Settings for Google Chat" : "Buka Pengaturan untuk Google Chat"
-        case "imessage":
-            return self.language == .en ? "Open Settings for Messages" : "Buka Pengaturan untuk Messages"
-        case "line":
-            return self.language == .en ? "Open Settings for LINE bot" : "Buka Pengaturan untuk bot LINE"
-        case "slack":
-            return self.language == .en ? "Open Settings for Slack app" : "Buka Pengaturan untuk aplikasi Slack"
-        case "telegram":
-            return self.language == .en ? "Open Settings for Telegram bot" : "Buka Pengaturan untuk bot Telegram"
-        case "whatsapp":
-            return self.language == .en ? "Open full WhatsApp settings" : "Buka pengaturan WhatsApp lengkap"
-        default:
-            return self.language == .en ? "Open Settings → Channels" : "Buka Pengaturan → Channel"
-        }
+        self.strings.settingsHandoffButtonTitle(
+            forChannelTitle: channel.title,
+            channelID: channel.id,
+            alreadyConnected: alreadyConnected)
     }
 
     private func updatePollingState() {

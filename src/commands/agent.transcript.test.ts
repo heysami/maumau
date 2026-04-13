@@ -181,7 +181,10 @@ describe("agentCommand transcript hygiene", () => {
       if (latestUserEntry?.type !== "message") {
         return;
       }
-      if (!("content" in latestUserEntry.message) || !Array.isArray(latestUserEntry.message.content)) {
+      if (
+        !("content" in latestUserEntry.message) ||
+        !Array.isArray(latestUserEntry.message.content)
+      ) {
         return;
       }
       expect(latestUserEntry.message.content[0]).toMatchObject({

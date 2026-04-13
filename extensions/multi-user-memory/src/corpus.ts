@@ -8,7 +8,12 @@ export function resolveCorpusRelativePathForItem(item: ScopedMemoryItem): string
   switch (item.scopeType) {
     case "private":
       return item.durability === "daily"
-        ? path.posix.join("users", sanitizePathSegment(item.scopeId), "memory", resolveEntryDate(item))
+        ? path.posix.join(
+            "users",
+            sanitizePathSegment(item.scopeId),
+            "memory",
+            resolveEntryDate(item),
+          )
         : path.posix.join("users", sanitizePathSegment(item.scopeId), "MEMORY.md");
     case "provisional":
       return item.durability === "daily"

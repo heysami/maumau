@@ -1160,7 +1160,9 @@ describe("dashboard view", () => {
     );
     await Promise.resolve();
 
-    const events = Array.from(container.querySelectorAll<HTMLElement>(".dashboard-timegrid__event"));
+    const events = Array.from(
+      container.querySelectorAll<HTMLElement>(".dashboard-timegrid__event"),
+    );
     const wakeEvent = events.find((event) => event.textContent?.includes("Wake up"));
     const workEvent = events.find((event) => event.textContent?.includes("Work"));
     const checkInEvent = events.find((event) =>
@@ -1258,7 +1260,9 @@ describe("dashboard view", () => {
     );
     await Promise.resolve();
 
-    const navItems = Array.from(container.querySelectorAll<HTMLButtonElement>(".dashboard-rail__item"));
+    const navItems = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dashboard-rail__item"),
+    );
     expect(navItems.length).toBeGreaterThan(0);
     for (const item of navItems) {
       expect(item.hasAttribute("title")).toBe(false);
@@ -1633,10 +1637,16 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain("Saved playground");
     expect(container.textContent).toContain("Saved");
     expect(container.textContent).toContain("Alpha");
-    expect(container.querySelector(".dashboard-workshop__preview > .dashboard-workshop__meta-grid")).toBeNull();
+    expect(
+      container.querySelector(".dashboard-workshop__preview > .dashboard-workshop__meta-grid"),
+    ).toBeNull();
     expect(container.querySelector(".dashboard-workshop__meta-details")).not.toBeNull();
-    expect(container.querySelector(".dashboard-workshop__meta-panel .dashboard-workshop__meta-grid")).not.toBeNull();
-    expect(container.querySelector(".dashboard-workshop__meta-trigger")?.textContent?.trim()).toBe("");
+    expect(
+      container.querySelector(".dashboard-workshop__meta-panel .dashboard-workshop__meta-grid"),
+    ).not.toBeNull();
+    expect(container.querySelector(".dashboard-workshop__meta-trigger")?.textContent?.trim()).toBe(
+      "",
+    );
   });
 
   it("renders agent apps with owner and proposal context", async () => {
@@ -2271,5 +2281,70 @@ describe("dashboard view", () => {
       }
       expect(text).not.toContain("dashboard.");
     }
+  });
+
+  it("renders dashboard shell copy in Chinese without leaking fallback keys", async () => {
+    await i18n.setLocale("zh-CN");
+
+    const container = document.createElement("div");
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+          snapshot: buildSnapshot([buildTask()]),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("运营仪表板");
+    expect(text).toContain("进行中");
+    expect(text).toContain("今日安排");
+    expect(text).not.toContain("dashboard.");
+  });
+
+  it("renders dashboard shell copy in Malay without aliasing Indonesian wording", async () => {
+    await i18n.setLocale("ms");
+
+    const container = document.createElement("div");
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+          snapshot: buildSnapshot([buildTask()]),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("Dashboard Operasi");
+    expect(text).not.toContain("Dashboard Operasional");
+    expect(text).not.toContain("dashboard.");
+  });
+
+  it("loads a later shared locale through the dashboard registry path", async () => {
+    await i18n.setLocale("th");
+
+    const container = document.createElement("div");
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardToday",
+          snapshot: buildSnapshot([buildTask()]),
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("แดชบอร์ดการดำเนินงาน");
+    expect(text).toContain("อยู่ระหว่างดำเนินการ");
+    expect(text).toContain("กำหนดการวันนี้");
+    expect(text).not.toContain("dashboard.");
   });
 });

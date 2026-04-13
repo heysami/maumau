@@ -727,33 +727,21 @@ struct OnboardingView: View {
     func preparationNote(for pageID: Int) -> String? {
         switch pageID {
         case self.wizardPageIndex:
-            switch self.state.effectiveOnboardingLanguage {
-            case .en:
-                return "Needs a provider account, sign-in, or API key from the AI service you choose."
-            case .id:
-                return "Perlu akun penyedia, login, atau API key dari layanan AI yang Anda pilih."
-            }
+            return macLocalized(
+                "Needs a provider account, sign-in, or API key from the AI service you choose.",
+                language: self.state.effectiveOnboardingLanguage)
         case self.channelsSetupPageIndex:
-            switch self.state.effectiveOnboardingLanguage {
-            case .en:
-                return "Needs setup in the chat app you choose, like signing in, connecting a bot, or pairing a bridge."
-            case .id:
-                return "Perlu pengaturan di aplikasi chat yang Anda pilih, seperti login, menghubungkan bot, atau memasangkan bridge."
-            }
+            return macLocalized(
+                "Needs setup in the chat app you choose, like signing in, connecting a bot, or pairing a bridge.",
+                language: self.state.effectiveOnboardingLanguage)
         case self.privateAccessPageIndex:
-            switch self.state.effectiveOnboardingLanguage {
-            case .en:
-                return "Needs Tailscale on this Mac now, and on any other phone or laptop later if you want to open Maumau there."
-            case .id:
-                return "Perlu Tailscale di Mac ini sekarang, dan di ponsel atau laptop lain nanti jika Anda ingin membuka Maumau di sana."
-            }
+            return macLocalized(
+                "Needs Tailscale on this Mac now, and on any other phone or laptop later if you want to open Maumau there.",
+                language: self.state.effectiveOnboardingLanguage)
         case self.conversationAutomationPageIndex:
-            switch self.state.effectiveOnboardingLanguage {
-            case .en:
-                return "Needs either Vapi plus an imported Twilio number, or the full self-hosted phone, speech, and callback setup."
-            case .id:
-                return "Perlu Vapi plus nomor Twilio yang diimpor, atau setup self-hosted lengkap untuk telepon, speech, dan callback."
-            }
+            return macLocalized(
+                "Needs either Vapi plus an imported Twilio number, or the full self-hosted phone, speech, and callback setup.",
+                language: self.state.effectiveOnboardingLanguage)
         default:
             return nil
         }

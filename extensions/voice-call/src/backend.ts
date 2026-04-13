@@ -2,10 +2,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { VoiceCallConfig } from "./config.js";
 import type { CoreAgentDeps, CoreConfig } from "./core-bridge.js";
 import { createVoiceCallRuntime, type VoiceCallRuntime } from "./runtime.js";
+import type { TelephonyTtsRuntime } from "./telephony-tts.js";
+import type { CallRecord, CallId, OutboundCallOptions } from "./types.js";
 import { VapiBridgeManager } from "./vapi-bridge.js";
 import { VapiCallController } from "./vapi-runtime.js";
-import type { CallRecord, CallId, OutboundCallOptions } from "./types.js";
-import type { TelephonyTtsRuntime } from "./telephony-tts.js";
 
 type Logger = {
   info: (message: string) => void;
@@ -15,13 +15,11 @@ type Logger = {
 };
 
 export type VoiceCallHttpHandlerFactory = {
-  handler: (
-    params: {
-      req: IncomingMessage;
-      res: ServerResponse;
-      logger?: Logger;
-    },
-  ) => Promise<boolean>;
+  handler: (params: {
+    req: IncomingMessage;
+    res: ServerResponse;
+    logger?: Logger;
+  }) => Promise<boolean>;
 };
 
 export type VoiceCallActions = {
@@ -63,7 +61,8 @@ function createSelfHostedBackend(runtime: VoiceCallRuntime): VoiceCallBackend {
     kind: "self-hosted",
     config: runtime.config,
     actions: {
-      initiateCall: (to, sessionKey, options) => runtime.manager.initiateCall(to, sessionKey, options),
+      initiateCall: (to, sessionKey, options) =>
+        runtime.manager.initiateCall(to, sessionKey, options),
       continueCall: (callId, message) => runtime.manager.continueCall(callId, message),
       speak: (callId, message) => runtime.manager.speak(callId, message),
       endCall: (callId) => runtime.manager.endCall(callId),
@@ -103,7 +102,8 @@ function createVapiBackend(params: {
       speak: async () => createUnsupportedActionError("speak"),
       endCall: (callId) => controller.endCall(callId),
       getCall: (callId) => controller.getCall(callId),
-      getCallByProviderCallId: (providerCallId) => controller.getCallByProviderCallId(providerCallId),
+      getCallByProviderCallId: (providerCallId) =>
+        controller.getCallByProviderCallId(providerCallId),
     },
     httpHandlers: [
       {

@@ -1,10 +1,13 @@
 /* @vitest-environment jsdom */
 
 import { describe, expect, it } from "vitest";
-import type { AppViewState } from "./app-view-state.ts";
+import { mountApp, registerAppMountHooks } from "./test-helpers/app-mount.ts";
 import { normalizeMauOfficeEditorDraft, renderApp } from "./app-render.ts";
+import type { AppViewState } from "./app-view-state.ts";
 import { MaumauApp } from "./app.ts";
 import { createDefaultMauOfficeSceneConfig } from "./mau-office-scene.ts";
+
+registerAppMountHooks();
 
 describe("renderApp", () => {
   it("renders connected state without throwing when the MauOffice editor draft is unset", () => {
@@ -28,5 +31,16 @@ describe("renderApp", () => {
 
     expect(normalized.wallRows).toHaveLength(createDefaultMauOfficeSceneConfig().zoneRows.length);
     expect("previewGhost" in (normalized as Record<string, unknown>)).toBe(false);
+  });
+
+  it("shows OpenClaw documentation copy in the sidebar footer", async () => {
+    const app = mountApp("/chat");
+    await app.updateComplete;
+
+    const docsCard = app.querySelector<HTMLAnchorElement>(".sidebar-docs-card");
+    expect(docsCard).not.toBeNull();
+    expect(docsCard?.getAttribute("href")).toBe("https://docs.openclaw.ai");
+    expect(docsCard?.textContent).toContain("Maumau is based on OpenClaw.");
+    expect(docsCard?.textContent).toContain("OpenClaw documentation");
   });
 });

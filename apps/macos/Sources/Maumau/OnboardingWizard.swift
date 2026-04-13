@@ -1369,74 +1369,68 @@ struct OnboardingWizardStepView: View {
         let title = step.title?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let message = step.message?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let combined = "\(title)\n\(message)"
+        let strings = OnboardingStrings(language: language)
 
         if combined.contains("setup mode") {
+            let copy = strings.wizardExplanation(.setupMode)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Simple or custom" : "Sederhana atau khusus",
-                bodyText: language == .en
-                    ? "This is Maumau asking how much of the setup work you want it to handle for you."
-                    : "Di sini Maumau menanyakan seberapa banyak pekerjaan pengaturan yang ingin Anda serahkan kepadanya.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("existing setup") || combined.contains("existing config") {
+            let copy = strings.wizardExplanation(.existingSetup)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Keep or reset" : "Pakai atau reset",
-                bodyText: language == .en
-                    ? "Maumau found an older home setup and wants to know whether to reuse it or start fresh."
-                    : "Maumau menemukan pengaturan lama dan ingin tahu apakah harus memakainya lagi atau mulai dari awal.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("default model") || combined.contains("choose a default model") ||
             combined.contains("ai service")
         {
+            let copy = strings.wizardExplanation(.pickBrain)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Pick the brain" : "Pilih brain",
-                bodyText: language == .en
-                    ? "You are choosing which AI service or model does the thinking for Maumau."
-                    : "Anda sedang memilih layanan AI atau model mana yang akan berpikir untuk Maumau.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("web search") || combined.contains("search provider") ||
             combined.contains("look things up online")
         {
+            let copy = strings.wizardExplanation(.liveSearch)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Add live search" : "Tambah pencarian live",
-                bodyText: language == .en
-                    ? "This optional step lets Maumau look up current information on the web when it needs it."
-                    : "Langkah opsional ini memungkinkan Maumau mencari informasi terbaru di web saat membutuhkannya.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("api key") || combined.contains("oauth") || combined.contains("sign in") ||
             combined.contains("signed in") || combined.contains("auth")
         {
+            let copy = strings.wizardExplanation(.connectBrain)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Connect the brain" : "Hubungkan brain",
-                bodyText: language == .en
-                    ? "This is the sign-in step so Maumau can actually talk to the AI service you picked."
-                    : "Ini adalah langkah masuk agar Maumau benar-benar bisa berbicara dengan layanan AI yang Anda pilih.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("workspace") {
+            let copy = strings.wizardExplanation(.workspace)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Pick Maumau’s room" : "Pilih ruang Maumau",
-                bodyText: language == .en
-                    ? "This is the folder where Maumau keeps notes, reads instructions, and makes files."
-                    : "Ini adalah folder tempat Maumau menyimpan catatan, membaca instruksi, dan membuat file.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("preparing setup") || combined.contains("starting wizard") {
+            let copy = strings.wizardExplanation(.preparingSetup)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "A quick setup moment" : "Sebentar menyiapkan",
-                bodyText: language == .en
-                    ? "Maumau is just getting the next brain setup step ready for you."
-                    : "Maumau sedang menyiapkan langkah pengaturan brain berikutnya untuk Anda.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         return nil

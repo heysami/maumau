@@ -501,6 +501,20 @@ struct GatewayEndpointStoreTests {
         #expect(url.absoluteString == "http://127.0.0.1:18789/control/dashboard/today?locale=id#token=abc123")
     }
 
+    @Test func `dashboard URL accepts locale ids from onboarding language metadata`() throws {
+        let config: GatewayConnection.Config = try (
+            url: #require(URL(string: "ws://127.0.0.1:18789")),
+            token: nil,
+            password: nil)
+
+        let url = try GatewayEndpointStore.dashboardURL(
+            for: config,
+            mode: .local,
+            localBasePath: "/control",
+            locale: OnboardingLanguage.zhCN.controlUILocaleID)
+        #expect(url.absoluteString == "http://127.0.0.1:18789/control/dashboard/today?locale=zh-CN")
+    }
+
     @Test func `secure dashboard URL appends the current gateway token when available`() throws {
         let root: [String: Any] = [
             "gateway": [

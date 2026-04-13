@@ -1558,7 +1558,10 @@
   display: grid;
   grid-template-columns:
     var(--dashboard-timegrid-axis-width, 76px)
-    repeat(var(--dashboard-timegrid-columns, 1), minmax(var(--dashboard-timegrid-column-min, 150px), 1fr));
+    repeat(
+      var(--dashboard-timegrid-columns, 1),
+      minmax(var(--dashboard-timegrid-column-min, 150px), 1fr)
+    );
 }
 
 .dashboard-timegrid__body {
@@ -1669,9 +1672,7 @@
   margin-inline-start: calc(
     var(--dashboard-timegrid-event-lane, 0) *
       (
-        (
-            100% - (var(--dashboard-timegrid-event-lanes, 1) - 1) * 8px
-          ) /
+        (100% - (var(--dashboard-timegrid-event-lanes, 1) - 1) * 8px) /
           var(--dashboard-timegrid-event-lanes, 1) + 8px
       )
   );

@@ -9,12 +9,10 @@ type MockRegistryToolEntry = {
 
 const loadMaumauPluginsMock = vi.fn();
 const getActivePluginRegistryMock = vi.fn<
-  () =>
-    | {
-        tools: unknown[];
-        diagnostics: unknown[];
-      }
-    | null
+  () => {
+    tools: unknown[];
+    diagnostics: unknown[];
+  } | null
 >(() => null);
 const getActivePluginRegistryKeyMock = vi.fn<() => string | null>(() => null);
 

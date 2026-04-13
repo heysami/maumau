@@ -96,10 +96,18 @@ struct SessionRow: Identifiable {
         let language = macCurrentLanguage()
         var flags: [String] = []
         if let thinkingLevel {
-            flags.append(language == .id ? "pikir \(thinkingLevel)" : "think \(thinkingLevel)")
+            flags.append(macLocalizedHelper(
+                "thinkingFlag",
+                language: language,
+                parameters: ["value": thinkingLevel],
+                fallback: "think {value}"))
         }
         if let verboseLevel {
-            flags.append(language == .id ? "verbose \(verboseLevel)" : "verbose \(verboseLevel)")
+            flags.append(macLocalizedHelper(
+                "verboseFlag",
+                language: language,
+                parameters: ["value": verboseLevel],
+                fallback: "verbose {value}"))
         }
         if self.systemSent { flags.append(macLocalized("system sent", language: language)) }
         if self.abortedLastRun { flags.append(macLocalized("aborted", language: language)) }

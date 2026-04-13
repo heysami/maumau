@@ -378,7 +378,7 @@ export async function launchMaumauChrome(
         name: profile.name,
         color: profile.color,
       });
-      log.info(`🦞 maumau browser profile decorated (${profile.color})`);
+      log.info(`😼 maumau browser profile decorated (${profile.color})`);
     } catch (err) {
       log.warn(`maumau browser profile decoration failed: ${String(err)}`);
     }
@@ -435,7 +435,7 @@ export async function launchMaumauChrome(
 
   const pid = proc.pid ?? -1;
   log.info(
-    `🦞 maumau browser started (${exe.kind}) profile "${profile.name}" on 127.0.0.1:${profile.cdpPort} (pid ${pid})`,
+    `😼 maumau browser started (${exe.kind}) profile "${profile.name}" on 127.0.0.1:${profile.cdpPort} (pid ${pid})`,
   );
 
   return {

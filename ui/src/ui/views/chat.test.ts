@@ -409,7 +409,7 @@ describe("chat view", () => {
     );
     expect(welcomeImage).toBeNull();
     expect(logoImage).not.toBeNull();
-    expect(logoImage?.getAttribute("src")).toBe("favicon.svg");
+    expect(logoImage?.getAttribute("src")).toBe("apple-touch-icon.png");
   });
 
   it("keeps the welcome logo fallback under the mounted base path", () => {
@@ -430,7 +430,7 @@ describe("chat view", () => {
       ".agent-chat__welcome .agent-chat__avatar--logo img",
     );
     expect(logoImage).not.toBeNull();
-    expect(logoImage?.getAttribute("src")).toBe("/maumau/favicon.svg");
+    expect(logoImage?.getAttribute("src")).toBe("/maumau/apple-touch-icon.png");
   });
 
   it("shows the secure dashboard URL during onboarding chat", () => {
@@ -484,7 +484,7 @@ describe("chat view", () => {
       ".chat-group.assistant .chat-avatar--logo",
     );
     expect(groupedLogo).not.toBeNull();
-    expect(groupedLogo?.getAttribute("src")).toBe("/maumau/favicon.svg");
+    expect(groupedLogo?.getAttribute("src")).toBe("/maumau/apple-touch-icon.png");
   });
 
   it("keeps the persisted overview locale selected before i18n hydration finishes", async () => {

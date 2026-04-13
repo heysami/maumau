@@ -217,8 +217,7 @@ export class VoiceCallWebhookServer {
               ? sessionEntry.endedAt
               : null;
           const durationMs =
-            typeof sessionEntry.durationMs === "number" &&
-            Number.isFinite(sessionEntry.durationMs)
+            typeof sessionEntry.durationMs === "number" && Number.isFinite(sessionEntry.durationMs)
               ? sessionEntry.durationMs
               : null;
           if (!streamSid || startedAt === null || endedAt === null || durationMs === null) {

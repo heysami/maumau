@@ -4,7 +4,12 @@ import SwiftUI
 @MainActor
 struct ChatSessionsSheet: View {
     @Bindable var viewModel: MaumauChatViewModel
+    let localeID: String?
     @Environment(\.dismiss) private var dismiss
+
+    private var strings: ChatLocalization {
+        ChatLocalization(localeID: self.localeID)
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,7 +32,7 @@ struct ChatSessionsSheet: View {
                     }
                 }
             }
-            .navigationTitle("Sessions")
+            .navigationTitle(self.strings.text("sessionsTitle", fallback: "Sessions"))
             .toolbar {
                 #if os(macOS)
                 ToolbarItem(placement: .automatic) {

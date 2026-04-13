@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { i18n } from "../i18n/index.ts";
-import { de } from "../i18n/locales/de.ts";
-import { es } from "../i18n/locales/es.ts";
-import { id } from "../i18n/locales/id.ts";
-import { pt_BR } from "../i18n/locales/pt-BR.ts";
-import { zh_CN } from "../i18n/locales/zh-CN.ts";
-import { zh_TW } from "../i18n/locales/zh-TW.ts";
+import { loadLazyLocaleTranslation, SUPPORTED_LOCALES } from "../i18n/lib/registry.ts";
 import {
   TAB_GROUPS,
   dashboardPageForTab,
@@ -130,9 +125,13 @@ describe("subtitleForTab", () => {
 });
 
 describe("dashboard locale inventory", () => {
-  it("ships dashboard labels for supported lazy locales", () => {
-    const locales = [id, de, es, pt_BR, zh_CN, zh_TW];
-    for (const locale of locales) {
+  it("ships dashboard labels for supported lazy locales", async () => {
+    for (const localeId of SUPPORTED_LOCALES.filter((locale) => locale !== "en")) {
+      const locale = await loadLazyLocaleTranslation(localeId);
+      expect(locale, `${localeId} should load from the lazy registry`).toBeTruthy();
+      if (!locale) {
+        continue;
+      }
       expect((locale.tabs as { dashboardToday?: string }).dashboardToday).toBeTruthy();
       expect((locale.tabs as { dashboardWallet?: string }).dashboardWallet).toBeTruthy();
       expect((locale.tabs as { dashboardAgents?: string }).dashboardAgents).toBeTruthy();

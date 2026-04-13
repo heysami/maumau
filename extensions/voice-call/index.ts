@@ -4,8 +4,8 @@ import {
   type GatewayRequestHandlerOptions,
   type MaumauPluginApi,
 } from "./api.js";
-import { registerVoiceCallCli } from "./src/cli.js";
 import { createVoiceCallBackend, type VoiceCallBackend } from "./src/backend.js";
+import { registerVoiceCallCli } from "./src/cli.js";
 import {
   VoiceCallConfigSchema,
   normalizeVoiceCallConfig,
@@ -76,9 +76,7 @@ const voiceCallConfigSchema = {
     const providerRaw = raw.provider === "log" ? "mock" : raw.provider;
     const provider = providerRaw ?? (enabled ? "mock" : undefined);
     const modeRaw =
-      typeof raw.mode === "string" && raw.mode.trim()
-        ? raw.mode.trim().toLowerCase()
-        : undefined;
+      typeof raw.mode === "string" && raw.mode.trim() ? raw.mode.trim().toLowerCase() : undefined;
     const mode = modeRaw === "vapi" ? "vapi" : "self-hosted";
     const streamingRaw =
       raw.streaming && typeof raw.streaming === "object" && !Array.isArray(raw.streaming)
@@ -411,12 +409,12 @@ export default definePluginEntry({
       requestParams: GatewayRequestHandlerOptions["params"];
       respond: GatewayRequestHandlerOptions["respond"];
       action: (
-            request: Exclude<Awaited<ReturnType<typeof resolveCallMessageRequest>>, { error: string }>,
-          ) => Promise<{
-            success: boolean;
-            error?: string;
-            transcript?: string;
-          }>;
+        request: Exclude<Awaited<ReturnType<typeof resolveCallMessageRequest>>, { error: string }>,
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        transcript?: string;
+      }>;
       failure: string;
       includeTranscript?: boolean;
     }) => {
