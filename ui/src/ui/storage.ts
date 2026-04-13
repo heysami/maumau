@@ -18,12 +18,18 @@ type PersistedUiSettings = Omit<UiSettings, "token" | "sessionKey" | "lastActive
   sessionKey?: string;
   lastActiveSessionKey?: string;
   sessionsByGateway?: Record<string, ScopedSessionSelection>;
+  themePreferenceVersion?: number;
 };
 
 import { isSupportedLocale } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { inferBasePathFromPathname, normalizeBasePath } from "./navigation.ts";
-import { parseThemeSelection, type ThemeMode, type ThemeName } from "./theme.ts";
+import {
+  normalizeStoredThemeSelection,
+  THEME_PREFERENCE_VERSION,
+  type ThemeMode,
+  type ThemeName,
+} from "./theme.ts";
 
 export const BORDER_RADIUS_STOPS = [0, 25, 50, 75, 100] as const;
 export type BorderRadiusStop = (typeof BORDER_RADIUS_STOPS)[number];
@@ -207,8 +213,8 @@ export function loadSettings(): UiSettings {
     token: loadSessionToken(defaultUrl),
     sessionKey: "main",
     lastActiveSessionKey: "main",
-    theme: "claw",
-    themeMode: "system",
+    theme: "dash",
+    themeMode: "light",
     chatFocusMode: false,
     chatShowThinking: true,
     chatShowToolCalls: true,
@@ -236,9 +242,10 @@ export function loadSettings(): UiSettings {
         : defaults.gatewayUrl;
     const gatewayUrl = parsedGatewayUrl === pageDerivedUrl ? defaultUrl : parsedGatewayUrl;
     const scopedSessionSelection = resolveScopedSessionSelection(gatewayUrl, parsed, defaults);
-    const { theme, mode } = parseThemeSelection(
+    const { theme, mode, migrated } = normalizeStoredThemeSelection(
       (parsed as { theme?: unknown }).theme,
       (parsed as { themeMode?: unknown }).themeMode,
+      (parsed as { themePreferenceVersion?: unknown }).themePreferenceVersion,
     );
     const persistedLocale = isSupportedLocale(parsed.locale) ? parsed.locale : undefined;
     const settings = {
@@ -287,7 +294,7 @@ export function loadSettings(): UiSettings {
       // silently override it.
       locale: queryLocaleOverride ?? persistedLocale,
     };
-    if ("token" in parsed) {
+    if ("token" in parsed || migrated) {
       persistSettings(settings);
     }
     return settings;
@@ -337,6 +344,7 @@ function persistSettings(next: UiSettings) {
     gatewayUrl: next.gatewayUrl,
     theme: next.theme,
     themeMode: next.themeMode,
+    themePreferenceVersion: THEME_PREFERENCE_VERSION,
     chatFocusMode: next.chatFocusMode,
     chatShowThinking: next.chatShowThinking,
     chatShowToolCalls: next.chatShowToolCalls,

@@ -49,10 +49,10 @@ enum CritterIconRenderer {
         init(canvas: Canvas, legWiggle: CGFloat, earWiggle: CGFloat, earScale: CGFloat) {
             let ux = canvas.w / 18
             let uy = canvas.h / 18
-            let artScaleX: CGFloat = 1.42
-            let artScaleY: CGFloat = 1.32
+            let artScaleX: CGFloat = 1.32
+            let artScaleY: CGFloat = 1.46
             let artCenterX: CGFloat = 9
-            let artCenterY: CGFloat = 9.15
+            let artCenterY: CGFloat = 9.05
 
             let tx: (CGFloat) -> CGFloat = { artCenterX + ($0 - artCenterX) * artScaleX }
             let ty: (CGFloat) -> CGFloat = { artCenterY + ($0 - artCenterY) * artScaleY }
@@ -92,11 +92,13 @@ enum CritterIconRenderer {
                     controlRight: controlRight)
             }
 
-            self.headRect = artRect(x: 3.5, y: 5.5, w: 11, h: 7.5)
+            let faceLift = 0.24 * legWiggle
+
+            self.headRect = artRect(x: 3.55, y: 5.3 - faceLift * 0.2, w: 10.9, h: 7.8 + faceLift * 0.25)
             self.headCorner = sx(1.5)
 
-            let earDrift = earWiggle * 0.16
-            let tipLift = max(0, earScale - 1) * 3.2 + abs(earWiggle) * 0.12
+            let earDrift = earWiggle * 0.28
+            let tipLift = max(0, earScale - 1) * 3.2 + abs(earWiggle) * 0.26
             let leftTipY = max(0.6, 3.1 - tipLift)
             let rightTipY = max(0.6, 3.1 - tipLift)
             self.leftEar = makeEar(
@@ -127,29 +129,30 @@ enum CritterIconRenderer {
             self.eyeW = canvas.snapX((tx(2) - tx(0)) * ux)
             self.eyeH = canvas.snapY((ty(1) - ty(0)) * uy)
 
-            self.noseRect = artRect(x: 8.25, y: 10, w: 1.5, h: 1.25)
+            self.noseRect = artRect(x: 8.2, y: 9.95 - faceLift, w: 1.6, h: 1.35)
             self.noseCorner = sx(0.625)
 
-            let philtrumHeight = 1.75 + legWiggle * 0.18
-            self.philtrumRect = artRect(x: 8.5, y: 11.25, w: 1, h: philtrumHeight)
+            let philtrumHeight = 1.75 + legWiggle * 0.6
+            self.philtrumRect = artRect(x: 8.5, y: 11.1 - faceLift * 0.45, w: 1, h: philtrumHeight)
             self.philtrumCorner = sx(0.5)
 
             self.mouthRects = [
-                artRect(x: 7.25, y: 12.5, w: 1.75, h: 0.75),
-                artRect(x: 9.0, y: 12.5, w: 1.75, h: 0.75),
+                artRect(x: 7.05, y: 12.45 + legWiggle * 0.08, w: 1.95, h: 0.75),
+                artRect(x: 9.0, y: 12.45 + legWiggle * 0.08, w: 1.95, h: 0.75),
             ]
             self.mouthCorner = sx(0.375)
 
-            let whiskerSpread = 0.45 * legWiggle
-            let whiskerShortW = 3.0 + 0.25 * legWiggle
-            let whiskerLongW = 3.25 + 0.3 * legWiggle
+            let whiskerSpread = 0.95 * legWiggle
+            let whiskerShortW = 3.1 + 0.75 * legWiggle
+            let whiskerLongW = 3.35 + 0.95 * legWiggle
+            let whiskerOutset = 0.32 * legWiggle
             self.whiskerRects = [
-                artRect(x: 3.5, y: 9.5 - whiskerSpread, w: whiskerShortW, h: 0.75),
-                artRect(x: 3.25, y: 11, w: whiskerLongW, h: 0.75),
-                artRect(x: 3.5, y: 12.5 + whiskerSpread, w: whiskerShortW, h: 0.75),
-                artRect(x: 11.5, y: 9.5 - whiskerSpread, w: whiskerShortW, h: 0.75),
-                artRect(x: 11.5, y: 11, w: whiskerLongW, h: 0.75),
-                artRect(x: 11.5, y: 12.5 + whiskerSpread, w: whiskerShortW, h: 0.75),
+                artRect(x: 3.45 - whiskerOutset, y: 9.4 - whiskerSpread, w: whiskerShortW, h: 0.75),
+                artRect(x: 3.1 - whiskerOutset, y: 10.95, w: whiskerLongW, h: 0.75),
+                artRect(x: 3.45 - whiskerOutset, y: 12.5 + whiskerSpread, w: whiskerShortW, h: 0.75),
+                artRect(x: 11.45, y: 9.4 - whiskerSpread, w: whiskerShortW + whiskerOutset, h: 0.75),
+                artRect(x: 11.45, y: 10.95, w: whiskerLongW + whiskerOutset, h: 0.75),
+                artRect(x: 11.45, y: 12.5 + whiskerSpread, w: whiskerShortW + whiskerOutset, h: 0.75),
             ]
             self.whiskerCorner = sx(0.375)
         }

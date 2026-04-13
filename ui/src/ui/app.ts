@@ -82,7 +82,13 @@ import type {
 } from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
-import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
+import {
+  resolveTheme,
+  VALID_THEME_NAMES,
+  type ResolvedTheme,
+  type ThemeMode,
+  type ThemeName,
+} from "./theme.ts";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
@@ -174,9 +180,9 @@ export class MaumauApp extends LitElement {
   @state() tab: Tab = "chat";
   @state() onboarding = resolveOnboardingMode();
   @state() connected = false;
-  @state() theme: ThemeName = this.settings.theme ?? "claw";
-  @state() themeMode: ThemeMode = this.settings.themeMode ?? "system";
-  @state() themeResolved: ResolvedTheme = "dark";
+  @state() theme: ThemeName = this.settings.theme ?? "dash";
+  @state() themeMode: ThemeMode = this.settings.themeMode ?? "light";
+  @state() themeResolved: ResolvedTheme = resolveTheme(this.theme, this.themeMode);
   @state() themeOrder: ThemeName[] = this.buildThemeOrder(this.theme);
   @state() hello: GatewayHelloOk | null = null;
   @state() lastError: string | null = null;

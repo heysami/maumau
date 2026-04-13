@@ -124,8 +124,9 @@ describe("loadSettings default gateway URL derivation", () => {
     const scopedKey = "maumau.control.settings.v1:wss://gateway.example:8443/maumau";
     expect(JSON.parse(localStorage.getItem(scopedKey) ?? "{}")).toEqual({
       gatewayUrl: "wss://gateway.example:8443/maumau",
-      theme: "claw",
-      themeMode: "system",
+      theme: "dash",
+      themeMode: "light",
+      themePreferenceVersion: 2,
       chatFocusMode: false,
       chatShowThinking: true,
       chatShowToolCalls: true,
@@ -261,6 +262,7 @@ describe("loadSettings default gateway URL derivation", () => {
       gatewayUrl: gwUrl,
       theme: "claw",
       themeMode: "system",
+      themePreferenceVersion: 2,
       chatFocusMode: false,
       chatShowThinking: true,
       chatShowToolCalls: true,
@@ -323,6 +325,51 @@ describe("loadSettings default gateway URL derivation", () => {
 
     expect(loadSettings().token).toBe("");
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("migrates persisted claw/system defaults to dash/light on load", async () => {
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/",
+    });
+
+    const gwUrl = expectedGatewayUrl("");
+    localStorage.setItem(
+      `maumau.control.settings.v1:${gwUrl}`,
+      JSON.stringify({
+        gatewayUrl: gwUrl,
+        theme: "claw",
+        themeMode: "system",
+        chatFocusMode: false,
+        chatShowThinking: true,
+        chatShowToolCalls: true,
+        splitRatio: 0.6,
+        navCollapsed: false,
+        navWidth: 220,
+        navGroupsCollapsed: {},
+        borderRadius: 50,
+        sessionsByGateway: {
+          [gwUrl]: {
+            sessionKey: "main",
+            lastActiveSessionKey: "main",
+          },
+        },
+      }),
+    );
+
+    const { loadSettings } = await import("./storage.ts");
+    expect(loadSettings()).toMatchObject({
+      gatewayUrl: gwUrl,
+      theme: "dash",
+      themeMode: "light",
+    });
+    expect(JSON.parse(localStorage.getItem(`maumau.control.settings.v1:${gwUrl}`) ?? "{}"))
+      .toMatchObject({
+        theme: "dash",
+        themeMode: "light",
+        themePreferenceVersion: 2,
+      });
   });
 
   it("persists themeMode and navWidth alongside the selected theme", async () => {

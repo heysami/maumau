@@ -406,8 +406,8 @@ export function inferBasePath() {
 }
 
 export function syncThemeWithSettings(host: SettingsHost) {
-  host.theme = host.settings.theme ?? "claw";
-  host.themeMode = host.settings.themeMode ?? "system";
+  host.theme = host.settings.theme ?? "dash";
+  host.themeMode = host.settings.themeMode ?? "light";
   applyResolvedTheme(host, resolveTheme(host.theme, host.themeMode));
   applyBorderRadius(host.settings.borderRadius ?? 50);
   syncSystemThemeListener(host);
