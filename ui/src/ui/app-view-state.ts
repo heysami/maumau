@@ -272,7 +272,10 @@ export type AppViewState = {
   dashboardWorkshopProjectDraft: string;
   dashboardWorkshopSaving: boolean;
   dashboardWorkshopSaveError: string | null;
+  dashboardReloadTimer: number | null;
   dashboardCalendarView: "month" | "week" | "day";
+  dashboardCalendarFilters: import("./types.ts").DashboardCalendarFilters;
+  dashboardRoutineSelection: string | null;
   dashboardBusinessSelection: string | null;
   dashboardProfileSelection: string | null;
   dashboardProjectSelection: string | null;

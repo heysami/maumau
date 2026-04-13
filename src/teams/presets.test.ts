@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_AGENT_WORKSPACE_ALIAS } from "../agents/workspace-alias.js";
 import {
   BUSINESS_DEVELOPMENT_TEAM_ID,
   BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
@@ -103,7 +104,7 @@ describe("ensureStarterTeamConfig", () => {
     expect(
       result.agents?.list?.find((agent) => agent.id === BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID),
     ).toMatchObject({
-      workspace: expect.stringContaining(".maumau/workspace"),
+      workspace: DEFAULT_AGENT_WORKSPACE_ALIAS,
       tools: {
         allow: expect.arrayContaining([
           "apply_patch",
@@ -119,6 +120,41 @@ describe("ensureStarterTeamConfig", () => {
         (agent) => agent.id === DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID,
       )?.tools?.profile,
     ).toBeUndefined();
+    expect(
+      result.agents?.list?.find((agent) => agent.id === STARTER_TEAM_UI_UX_DESIGNER_AGENT_ID),
+    ).toMatchObject({
+      skills: [
+        "emil-design-eng",
+        "impeccable",
+        "adapt",
+        "animate",
+        "audit",
+        "bolder",
+        "clarify",
+        "colorize",
+        "critique",
+        "delight",
+        "distill",
+        "harden",
+        "layout",
+        "optimize",
+        "overdrive",
+        "polish",
+        "quieter",
+        "shape",
+        "typeset",
+        "taste-skill",
+        "brutalist-skill",
+        "minimalist-skill",
+        "output-skill",
+        "redesign-skill",
+        "soft-skill",
+        "stitch-skill",
+      ],
+      tools: {
+        profile: "coding",
+      },
+    });
     expect(result.teams?.list).toHaveLength(4);
     expect(result.teams?.list?.[0]).toMatchObject({
       id: MAIN_ORCHESTRATION_TEAM_ID,
@@ -473,7 +509,7 @@ describe("ensureBundledTeamPresetConfig", () => {
     expect(
       result.agents?.list?.find((agent) => agent.id === BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID),
     ).toMatchObject({
-      workspace: expect.stringContaining(".maumau/workspace"),
+      workspace: DEFAULT_AGENT_WORKSPACE_ALIAS,
       tools: {
         allow: expect.arrayContaining([
           "business_projects",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TeamWorkflowConfig } from "../config/types.teams.js";
 import {
   findLifecycleStageById,
   findLifecycleStageByRole,
@@ -11,9 +12,9 @@ describe("team workflow lifecycle helpers", () => {
     const workflow = {
       lifecycle: {
         stages: [
-          { id: " Planning ", name: " Planning ", status: "idle", roles: ["Planner"] },
-          { id: "", status: "review", roles: ["Developer", "developer"] },
-          { id: "planning", status: "blocked" },
+          { id: " Planning ", name: " Planning ", status: "idle" as const, roles: ["Planner"] },
+          { id: "", status: "review" as const, roles: ["Developer", "developer"] },
+          { id: "planning", status: "blocked" as const },
         ],
       },
     };
@@ -50,11 +51,11 @@ describe("team workflow lifecycle helpers", () => {
       id: "default",
       lifecycle: {
         stages: [
-          { id: "architecture", status: "in_progress", roles: ["system architect"] },
-          { id: "qa", status: "review", roles: ["technical qa"] },
+          { id: "architecture", status: "in_progress" as const, roles: ["system architect"] },
+          { id: "qa", status: "review" as const, roles: ["technical qa"] },
         ],
       },
-    };
+    } satisfies Pick<TeamWorkflowConfig, "id" | "lifecycle">;
 
     expect(findLifecycleStageById(workflow, "QA")).toMatchObject({ id: "qa", status: "review" });
     expect(findLifecycleStageByRole(workflow, "system architect")).toMatchObject({

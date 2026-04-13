@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { MaumauConfig } from "../config/types.maumau.js";
+import type { TeamConfig } from "../config/types.teams.js";
 import {
   canTeamUseAgent,
   canTeamUseTeam,
@@ -16,8 +18,8 @@ const TEST_CONFIG = {
         managerAgentId: "alpha-manager",
         members: [{ agentId: "alpha-coder", role: "coder" }],
         crossTeamLinks: [
-          { type: "team", targetId: "beta" },
-          { type: "agent", targetId: "shared-reviewer" },
+          { type: "team" as const, targetId: "beta" },
+          { type: "agent" as const, targetId: "shared-reviewer" },
         ],
       },
       {
@@ -32,7 +34,7 @@ const TEST_CONFIG = {
       },
     ],
   },
-};
+} satisfies MaumauConfig;
 
 describe("team model access rules", () => {
   it("allows intra-team agents and explicit linked agents only", () => {
@@ -120,18 +122,18 @@ describe("team model access rules", () => {
           id: "feature-build",
           lifecycle: {
             stages: [
-              { id: " Planning ", name: "Planning", status: "in_progress" },
+              { id: " Planning ", name: "Planning", status: "in_progress" as const },
               {
                 id: "Execution",
-                status: "review",
+                status: "review" as const,
                 roles: ["Coder", "Coder", "  "],
               },
-              { id: "Execution", status: "blocked" },
+              { id: "Execution", status: "blocked" as const },
             ],
           },
         },
       ],
-    };
+    } satisfies TeamConfig;
 
     expect(listTeamWorkflows(team)[0]).toMatchObject({
       id: "feature-build",

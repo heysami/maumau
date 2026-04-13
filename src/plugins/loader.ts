@@ -9,6 +9,11 @@ import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
+  clearMemoryOverlays,
+  getMemoryOverlaySnapshot,
+  restoreMemoryOverlaySnapshot,
+} from "../memory/overlay-registry.js";
+import {
   clearMemoryPromptSection,
   getMemoryPromptSectionBuilder,
   restoreMemoryPromptSection,
@@ -98,6 +103,7 @@ export class PluginLoadFailureError extends Error {
 type CachedPluginState = {
   registry: PluginRegistry;
   memoryPromptBuilder: ReturnType<typeof getMemoryPromptSectionBuilder>;
+  memoryOverlays: ReturnType<typeof getMemoryOverlaySnapshot>;
 };
 
 const MAX_PLUGIN_REGISTRY_CACHE_ENTRIES = 128;
@@ -125,6 +131,7 @@ export function clearPluginLoaderCache(): void {
   registryCache.clear();
   openAllowlistWarningCache.clear();
   clearMemoryPromptSection();
+  clearMemoryOverlays();
 }
 
 const defaultLogger = () => createSubsystemLogger("plugins");
@@ -706,6 +713,7 @@ export function loadMaumauPlugins(options: PluginLoadOptions = {}): PluginRegist
     const cached = getCachedPluginRegistry(cacheKey);
     if (cached) {
       restoreMemoryPromptSection(cached.memoryPromptBuilder);
+      restoreMemoryOverlaySnapshot(cached.memoryOverlays);
       if (shouldActivate) {
         activatePluginRegistry(cached.registry, cacheKey);
       }
@@ -719,6 +727,7 @@ export function loadMaumauPlugins(options: PluginLoadOptions = {}): PluginRegist
     clearPluginCommands();
     clearPluginInteractiveHandlers();
     clearMemoryPromptSection();
+    clearMemoryOverlays();
   }
 
   // Lazy: avoid creating the Jiti loader when all plugins are disabled (common in unit tests).
@@ -1215,6 +1224,7 @@ export function loadMaumauPlugins(options: PluginLoadOptions = {}): PluginRegist
       registrationMode,
     });
     const previousMemoryPromptBuilder = getMemoryPromptSectionBuilder();
+    const previousMemoryOverlays = getMemoryOverlaySnapshot();
 
     try {
       const result = register(api);
@@ -1229,11 +1239,13 @@ export function loadMaumauPlugins(options: PluginLoadOptions = {}): PluginRegist
       // Snapshot loads should not replace process-global runtime prompt state.
       if (!shouldActivate) {
         restoreMemoryPromptSection(previousMemoryPromptBuilder);
+        restoreMemoryOverlaySnapshot(previousMemoryOverlays);
       }
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
     } catch (err) {
       restoreMemoryPromptSection(previousMemoryPromptBuilder);
+      restoreMemoryOverlaySnapshot(previousMemoryOverlays);
       recordPluginError({
         logger,
         registry,
@@ -1270,6 +1282,7 @@ export function loadMaumauPlugins(options: PluginLoadOptions = {}): PluginRegist
     setCachedPluginRegistry(cacheKey, {
       registry,
       memoryPromptBuilder: getMemoryPromptSectionBuilder(),
+      memoryOverlays: getMemoryOverlaySnapshot(),
     });
   }
   if (shouldActivate) {

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { MaumauConfig } from "../config/types.maumau.js";
 import { createJob } from "../cron/service/jobs.js";
 import { createCronServiceState } from "../cron/service/state.js";
@@ -98,8 +99,8 @@ function buildLifeImprovementRoutineCreate(config: MaumauConfig): CronJobCreate 
 
 function buildLifeImprovementRoutinePatch(config: MaumauConfig): CronJobPatch {
   return {
-    agentId: null,
-    sessionKey: null,
+    agentId: undefined,
+    sessionKey: undefined,
     description: LIFE_IMPROVEMENT_ROUTINE_DESCRIPTION,
     enabled: true,
     schedule: {
@@ -149,7 +150,7 @@ function buildLifeImprovementFinanceSyncCreate(config: MaumauConfig): CronJobCre
 function buildLifeImprovementFinanceSyncPatch(config: MaumauConfig): CronJobPatch {
   return {
     agentId: LIFE_IMPROVEMENT_FINANCIAL_COACH_AGENT_ID,
-    sessionKey: null,
+    sessionKey: undefined,
     description: LIFE_IMPROVEMENT_FINANCE_SYNC_DESCRIPTION,
     enabled: true,
     schedule: {
@@ -256,7 +257,7 @@ function createQuietCronState(config: MaumauConfig, storePath: string) {
     },
     storePath,
     cronEnabled: true,
-    defaultAgentId: config.agents?.default?.trim() || "main",
+    defaultAgentId: resolveDefaultAgentId(config),
     enqueueSystemEvent() {},
     requestHeartbeatNow() {},
     async runIsolatedAgentJob() {
@@ -407,7 +408,7 @@ export async function ensureLifeImprovementRoutineArtifacts(params: {
       typeof params.cronStorePath === "string" &&
       path.resolve(params.cronStorePath) === expectedStorePath;
 
-    if (canUseLiveCron) {
+    if (canUseLiveCron && params.cron) {
       await syncLifeImprovementRoutineViaCron({
         config: params.config,
         cron: params.cron,

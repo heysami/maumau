@@ -44,12 +44,14 @@ function buildCronJob(params: {
   id: string;
   name: string;
   nowMs: number;
+  description?: string;
   schedule?: CronJob["schedule"];
   nextRunAtMs?: number;
 }): CronJob {
   return {
     id: params.id,
     name: params.name,
+    description: params.description,
     enabled: true,
     createdAtMs: params.nowMs - 60_000,
     updatedAtMs: params.nowMs - 5_000,
@@ -66,6 +68,15 @@ function buildCronJob(params: {
       lastRunAtMs: params.nowMs - 7_200_000,
       lastStatus: "ok",
     },
+  };
+}
+
+function buildCronStatus() {
+  return {
+    enabled: true,
+    storePath: "/tmp/cron-store.json",
+    jobs: 0,
+    nextWakeAtMs: null,
   };
 }
 
@@ -225,7 +236,7 @@ describe("dashboard aggregations", () => {
             nextRunAtMs: nowMs + 3_600_000,
           }),
         ],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -316,7 +327,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -420,7 +431,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -516,7 +527,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -577,7 +588,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -676,7 +687,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -693,6 +704,61 @@ describe("dashboard aggregations", () => {
                 "Next options: make you a Mistborn design brief instead; try again once the implementation lane is available for webpage building; or just give you the full page content + structure here so it's ready to turn into a site fast.",
             }),
           ]),
+        }),
+      ]),
+    );
+  });
+
+  it("ignores work-item control payloads when extracting transcript blockers", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-dashboard-work-item-"));
+    tempDirs.push(tempRoot);
+    const nowMs = Date.UTC(2026, 3, 13, 9, 0, 0);
+    const storePath = path.join(tempRoot, "sessions.json");
+    const sessionKey = `agent:${STARTER_TEAM_MANAGER_AGENT_ID}:main`;
+
+    await writeSessionStore(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-manager-work-item-blocked",
+        sessionFile: "sess-manager-work-item-blocked.jsonl",
+        updatedAt: nowMs - 1_000,
+        startedAt: nowMs - 60_000,
+        status: "running",
+        teamId: "vibe-coder",
+        teamRole: "manager",
+      },
+    });
+    await writeTranscriptMessages(storePath, "sess-manager-work-item-blocked.jsonl", [
+      {
+        role: "assistant",
+        text: 'WORK_ITEM:{"title":"Fit Tee Landing Preview","summary":"Private preview publish needs the artifact inspected before manager confirmation.","teamRun":{"kind":"team_run","teamId":"vibe-coder","workflowId":"default","event":"blocked","currentStageId":"manager_confirmation","currentStageName":"Manager Confirmation","completedStageIds":["planning","architecture","execution","qa"],"status":"blocked"}}',
+      },
+    ]);
+
+    const cfg = ensureStarterTeamConfig({
+      session: {
+        store: storePath,
+      },
+    } as MaumauConfig);
+
+    const tasks = await collectDashboardTasks({
+      cfg,
+      nowMs,
+      stateDir: tempRoot,
+      cronStorePath: path.join(tempRoot, "cron-store.json"),
+      cron: {
+        list: async () => [],
+        status: async () => buildCronStatus(),
+      },
+    });
+
+    expect(tasks.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionKey,
+          title: "Fit Tee Landing Preview",
+          status: "blocked",
+          summary: "Private preview publish needs the artifact inspected before manager confirmation.",
+          blockerLinks: [],
         }),
       ]),
     );
@@ -744,7 +810,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -825,7 +891,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -917,7 +983,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -967,7 +1033,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     expect(firstTasks.items.map((item) => item.sessionKey)).toContain(
@@ -983,7 +1049,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     expect(retainedTasks.items.map((item) => item.sessionKey)).toContain(
@@ -1013,7 +1079,7 @@ describe("dashboard aggregations", () => {
             nextRunAtMs: Date.UTC(2026, 3, 6, 8, 0, 0),
           }),
         ],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1058,7 +1124,7 @@ describe("dashboard aggregations", () => {
             nextRunAtMs: Date.UTC(2026, 3, 13, 9, 0, 0),
           }),
         ],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1122,7 +1188,7 @@ describe("dashboard aggregations", () => {
             nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
           }),
         ],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1205,7 +1271,7 @@ describe("dashboard aggregations", () => {
             nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
           }),
         ],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1293,7 +1359,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1379,7 +1445,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1631,7 +1697,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     const teamRuns = await collectDashboardTeamRuns({
@@ -1641,7 +1707,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1771,7 +1837,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1835,7 +1901,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -1946,7 +2012,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -2249,7 +2315,7 @@ describe("dashboard aggregations", () => {
       projectName: "Alpha Project",
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -2272,7 +2338,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
 
@@ -2293,7 +2359,7 @@ describe("dashboard aggregations", () => {
       projectName: "Beta Project",
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     expect(resaved.savedCount).toBe(0);
@@ -2400,7 +2466,7 @@ describe("dashboard aggregations", () => {
       projectName: "Alpha Project",
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     const savedPreviewUrl = saveResult.workshop.savedItems[0]?.previewUrl;
@@ -2441,7 +2507,7 @@ describe("dashboard aggregations", () => {
       cronStorePath: path.join(tempRoot, "cron-store.json"),
       cron: {
         list: async () => [],
-        status: async () => ({ enabled: true }),
+        status: async () => buildCronStatus(),
       },
     });
     expect(workshop.savedItems[0]).toEqual(

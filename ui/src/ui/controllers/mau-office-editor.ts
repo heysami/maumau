@@ -140,10 +140,14 @@ function markerPrefix(role: MauOfficeMarkerRole): string {
       return "desk_worker";
     case "meeting.seat":
       return "meeting_seat";
+    case "browser.workerSeat":
+      return "browser_worker";
     case "support.staff":
       return "support_staff";
     case "support.customer":
       return "support_customer";
+    case "telephony.staff":
+      return "telephony_staff";
     case "break.arcade":
       return "break_arcade";
     case "break.snack":

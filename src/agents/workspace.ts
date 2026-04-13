@@ -307,6 +307,44 @@ async function isGitAvailable(): Promise<boolean> {
   return gitAvailabilityPromise;
 }
 
+async function directoryHasEntries(dir: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(dir);
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function hasWorkspaceUserContent(dir: string): Promise<boolean> {
+  if (await directoryHasEntries(path.join(dir, "memory"))) {
+    return true;
+  }
+  for (const fileName of [DEFAULT_MEMORY_FILENAME, DEFAULT_MEMORY_ALT_FILENAME, ".git"] as const) {
+    try {
+      await fs.access(path.join(dir, fileName));
+      return true;
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
+
+async function hasWorkspaceScaffolding(dir: string): Promise<boolean> {
+  for (const name of ["memory", "corpus", "reviews"] as const) {
+    try {
+      const stat = await fs.stat(path.join(dir, name));
+      if (stat.isDirectory()) {
+        return true;
+      }
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
+
 async function ensureGitRepo(dir: string, isBrandNewWorkspace: boolean) {
   if (!isBrandNewWorkspace) {
     return;
@@ -356,12 +394,7 @@ export async function ensureAgentWorkspace(params?: {
 
   const isBrandNewWorkspace = await (async () => {
     const templatePaths = [agentsPath, soulPath, toolsPath, identityPath, userPath, heartbeatPath];
-    const userContentPaths = [
-      path.join(dir, "memory"),
-      path.join(dir, DEFAULT_MEMORY_FILENAME),
-      path.join(dir, ".git"),
-    ];
-    const paths = [...templatePaths, ...userContentPaths];
+    const paths = [...templatePaths, path.join(dir, ".git")];
     const existing = await Promise.all(
       paths.map(async (p) => {
         try {
@@ -372,7 +405,7 @@ export async function ensureAgentWorkspace(params?: {
         }
       }),
     );
-    return existing.every((v) => !v);
+    return existing.every((v) => !v) && !(await hasWorkspaceUserContent(dir));
   })();
 
   const agentsTemplate = await loadTemplate(DEFAULT_AGENTS_FILENAME);
@@ -405,6 +438,22 @@ export async function ensureAgentWorkspace(params?: {
     markState({ setupCompletedAt: nowIso() });
   }
 
+  if (state.setupCompletedAt && !state.bootstrapSeededAt && !bootstrapExists) {
+    const [identityContent, userContent] = await Promise.all([
+      fs.readFile(identityPath, "utf-8"),
+      fs.readFile(userPath, "utf-8"),
+    ]);
+    const hasScaffolding = await hasWorkspaceScaffolding(dir);
+    const shouldRepairFalseCompletion =
+      hasScaffolding &&
+      identityContent === identityTemplate &&
+      userContent === userTemplate &&
+      !(await hasWorkspaceUserContent(dir));
+    if (shouldRepairFalseCompletion) {
+      markState({ setupCompletedAt: undefined });
+    }
+  }
+
   if (!state.bootstrapSeededAt && !state.setupCompletedAt && !bootstrapExists) {
     // Legacy migration path: if USER/IDENTITY diverged from templates, or if user-content
     // indicators exist, treat setup as complete and avoid recreating BOOTSTRAP for
@@ -413,22 +462,7 @@ export async function ensureAgentWorkspace(params?: {
       fs.readFile(identityPath, "utf-8"),
       fs.readFile(userPath, "utf-8"),
     ]);
-    const hasUserContent = await (async () => {
-      const indicators = [
-        path.join(dir, "memory"),
-        path.join(dir, DEFAULT_MEMORY_FILENAME),
-        path.join(dir, ".git"),
-      ];
-      for (const indicator of indicators) {
-        try {
-          await fs.access(indicator);
-          return true;
-        } catch {
-          // continue
-        }
-      }
-      return false;
-    })();
+    const hasUserContent = await hasWorkspaceUserContent(dir);
     const legacySetupCompleted =
       identityContent !== identityTemplate || userContent !== userTemplate || hasUserContent;
     if (legacySetupCompleted) {

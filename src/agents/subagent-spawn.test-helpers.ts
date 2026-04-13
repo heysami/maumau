@@ -60,8 +60,12 @@ export function createDefaultSessionHelperMocks() {
 export async function loadSubagentSpawnModuleForTest(params: {
   callGatewayMock: MockFn;
   loadConfig?: () => Record<string, unknown>;
+  loadSessionStoreMock?: MockFn;
   updateSessionStoreMock?: MockFn;
   pruneLegacyStoreKeysMock?: MockFn;
+  ensureRuntimePluginsLoadedMock?: MockFn;
+  ensureContextEnginesInitializedMock?: MockFn;
+  resolveContextEngineMock?: MockFn;
   workspaceDir?: string;
   sessionStorePath?: string;
 }) {
@@ -80,11 +84,16 @@ export async function loadSubagentSpawnModuleForTest(params: {
     };
   });
 
-  if (params.updateSessionStoreMock) {
+  if (params.updateSessionStoreMock || params.loadSessionStoreMock) {
     vi.doMock("../config/sessions.js", async (importOriginal) => {
       const actual = await importOriginal<typeof import("../config/sessions.js")>();
       return {
         ...actual,
+        ...(params.loadSessionStoreMock
+          ? {
+              loadSessionStore: (...args: unknown[]) => params.loadSessionStoreMock?.(...args),
+            }
+          : {}),
         updateSessionStore: (...args: unknown[]) => params.updateSessionStoreMock?.(...args),
       };
     });
@@ -138,6 +147,25 @@ export async function loadSubagentSpawnModuleForTest(params: {
   vi.doMock("../plugins/hook-runner-global.js", () => ({
     getGlobalHookRunner: () => ({ hasHooks: () => false }),
   }));
+
+  vi.doMock("./runtime-plugins.js", () => ({
+    ensureRuntimePluginsLoaded: (...args: unknown[]) =>
+      params.ensureRuntimePluginsLoadedMock?.(...args),
+  }));
+
+  vi.doMock("../context-engine/init.js", () => ({
+    ensureContextEnginesInitialized: (...args: unknown[]) =>
+      params.ensureContextEnginesInitializedMock?.(...args),
+  }));
+
+  vi.doMock("../context-engine/registry.js", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../context-engine/registry.js")>();
+    return {
+      ...actual,
+      resolveContextEngine: (...args: unknown[]) =>
+        params.resolveContextEngineMock?.(...args) ?? Promise.resolve({}),
+    };
+  });
 
   vi.doMock("../utils/delivery-context.js", () => ({
     normalizeDeliveryContext: identityDeliveryContext,

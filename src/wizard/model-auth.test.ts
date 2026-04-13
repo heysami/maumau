@@ -49,8 +49,7 @@ vi.mock("../commands/auth-choice-prompt.js", () => ({
 }));
 
 vi.mock("../agents/workspace.js", () => ({
-  resolveDefaultAgentWorkspaceDir: (...args: unknown[]) =>
-    mocks.resolveDefaultAgentWorkspaceDir(...args),
+  resolveDefaultAgentWorkspaceDir: () => mocks.resolveDefaultAgentWorkspaceDir(),
 }));
 
 vi.mock("../agents/auth-profiles.js", () => ({

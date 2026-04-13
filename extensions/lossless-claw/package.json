@@ -1,0 +1,23 @@
+{
+  "name": "@maumau/lossless-claw",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "Maumau lossless transcript continuity context engine plugin",
+  "type": "module",
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

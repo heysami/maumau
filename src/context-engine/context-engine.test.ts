@@ -593,6 +593,21 @@ describe("Default engine selection", () => {
   beforeEach(() => {
     // Registration is idempotent (Map.set), so calling again is safe.
     registerLegacyContextEngine();
+    registerContextEngine("lossless-claw", () => {
+      const engine: ContextEngine = {
+        info: { id: "lossless-claw", name: "Lossless Claw", version: "1.0.0" },
+        async ingest() {
+          return { ingested: false };
+        },
+        async assemble({ messages }) {
+          return { messages, estimatedTokens: 0 };
+        },
+        async compact() {
+          return { ok: true, compacted: false };
+        },
+      };
+      return engine;
+    });
     // Register a lightweight custom stub so we don't need external resources.
     registerContextEngine("test-engine", () => {
       const engine: ContextEngine = {
@@ -611,12 +626,12 @@ describe("Default engine selection", () => {
     });
   });
 
-  it("resolveContextEngine() with no config returns the default ('legacy') engine", async () => {
+  it("resolveContextEngine() with no config returns the default slot engine", async () => {
     const engine = await resolveContextEngine();
-    expect(engine.info.id).toBe("legacy");
+    expect(engine.info.id).toBe("lossless-claw");
   });
 
-  it("resolveContextEngine() with config contextEngine='legacy' returns legacy engine", async () => {
+  it("resolveContextEngine() with config contextEngine='legacy' returns the legacy escape hatch", async () => {
     const engine = await resolveContextEngine(configWithSlot("legacy"));
     expect(engine.info.id).toBe("legacy");
   });

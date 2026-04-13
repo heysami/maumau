@@ -23,6 +23,7 @@ export function createTestPluginApi(api: TestPluginApiInput): MaumauPluginApi {
     onConversationBindingResolved() {},
     registerCommand() {},
     registerContextEngine() {},
+    registerMemoryOverlay() {},
     registerMemoryPromptSection() {},
     resolvePath(input: string) {
       return input;

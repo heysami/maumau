@@ -91,6 +91,12 @@ export function createMaumauTools(
     senderUsername?: string | null;
     /** Whether the requesting sender is an owner. */
     senderIsOwner?: boolean;
+    /** Conversation id for the inbound turn when available. */
+    conversationId?: string;
+    /** Whether the inbound turn came from a group or channel context. */
+    isGroup?: boolean;
+    /** What initiated the current run (for example "user", "memory", or "cron"). */
+    trigger?: string;
     /** Verified requester Tailscale login when available. */
     requesterTailscaleLogin?: string | null;
     /** Ephemeral session UUID — regenerated on /new and /reset. */
@@ -331,7 +337,12 @@ export function createMaumauTools(
       messageChannel: options?.agentChannel,
       agentAccountId: options?.agentAccountId,
       requesterSenderId: options?.requesterSenderId ?? undefined,
+      requesterSenderName: options?.senderName ?? undefined,
+      requesterSenderUsername: options?.senderUsername ?? undefined,
       senderIsOwner: options?.senderIsOwner ?? undefined,
+      conversationId: options?.conversationId ?? undefined,
+      isGroup: options?.isGroup,
+      trigger: options?.trigger,
       sandboxed: options?.sandboxed,
     },
     existingToolNames: new Set(tools.map((tool) => tool.name)),

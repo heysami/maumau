@@ -66,14 +66,17 @@ describe("life improvement routine artifacts", () => {
       },
     });
     expect(checkInJobs[0]?.payload.kind).toBe("systemEvent");
-    expect(checkInJobs[0]?.payload.text).toContain("HEARTBEAT_OK");
-    expect(checkInJobs[0]?.payload.text).toContain("one focused, skippable prompt");
-    expect(checkInJobs[0]?.payload.text).toContain("Treat the profile as incremental");
-    expect(checkInJobs[0]?.payload.text).toContain("start with day-to-day life and routines");
-    expect(checkInJobs[0]?.payload.text).toContain("AGENT_APPS.md");
-    expect(checkInJobs[0]?.payload.text).toContain("Do not force app ideas");
-    expect(checkInJobs[0]?.payload.text).toContain("review any existing app ideas");
-    expect(checkInJobs[0]?.payload.text).toContain(
+    if (checkInJobs[0]?.payload.kind !== "systemEvent") {
+      throw new Error("expected systemEvent payload");
+    }
+    expect(checkInJobs[0].payload.text).toContain("HEARTBEAT_OK");
+    expect(checkInJobs[0].payload.text).toContain("one focused, skippable prompt");
+    expect(checkInJobs[0].payload.text).toContain("Treat the profile as incremental");
+    expect(checkInJobs[0].payload.text).toContain("start with day-to-day life and routines");
+    expect(checkInJobs[0].payload.text).toContain("AGENT_APPS.md");
+    expect(checkInJobs[0].payload.text).toContain("Do not force app ideas");
+    expect(checkInJobs[0].payload.text).toContain("review any existing app ideas");
+    expect(checkInJobs[0].payload.text).toContain(
       "update its current section instead of adding a duplicate",
     );
 
@@ -99,9 +102,12 @@ describe("life improvement routine artifacts", () => {
       },
     });
     expect(financeJobs[0]?.payload.kind).toBe("agentTurn");
-    expect(financeJobs[0]?.payload.message).toContain("Financial Coach & Assistant");
-    expect(financeJobs[0]?.payload.message).toContain("receipt_digest");
-    expect(financeJobs[0]?.payload.message).toContain("HEARTBEAT_OK");
+    if (financeJobs[0]?.payload.kind !== "agentTurn") {
+      throw new Error("expected agentTurn payload");
+    }
+    expect(financeJobs[0].payload.message).toContain("Financial Coach & Assistant");
+    expect(financeJobs[0].payload.message).toContain("receipt_digest");
+    expect(financeJobs[0].payload.message).toContain("HEARTBEAT_OK");
   });
 
   it("removes the managed routine when the life-improvement team is no longer configured", async () => {

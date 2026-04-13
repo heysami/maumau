@@ -188,25 +188,38 @@ export class VoiceCallWebhookServer {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       return { sessions: [] };
     }
+    const walletMetadata = raw as {
+      sessions?: unknown;
+      activeSession?: unknown;
+    };
 
-    const sessions = Array.isArray(raw.sessions)
-      ? raw.sessions.flatMap((entry): WalletRealtimeSession[] => {
+    const sessions = Array.isArray(walletMetadata.sessions)
+      ? walletMetadata.sessions.flatMap((entry: unknown): WalletRealtimeSession[] => {
           if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
             return [];
           }
+          const sessionEntry = entry as {
+            streamSid?: unknown;
+            startedAt?: unknown;
+            endedAt?: unknown;
+            durationMs?: unknown;
+          };
           const streamSid =
-            typeof entry.streamSid === "string" && entry.streamSid.trim() ? entry.streamSid : null;
+            typeof sessionEntry.streamSid === "string" && sessionEntry.streamSid.trim()
+              ? sessionEntry.streamSid
+              : null;
           const startedAt =
-            typeof entry.startedAt === "number" && Number.isFinite(entry.startedAt)
-              ? entry.startedAt
+            typeof sessionEntry.startedAt === "number" && Number.isFinite(sessionEntry.startedAt)
+              ? sessionEntry.startedAt
               : null;
           const endedAt =
-            typeof entry.endedAt === "number" && Number.isFinite(entry.endedAt)
-              ? entry.endedAt
+            typeof sessionEntry.endedAt === "number" && Number.isFinite(sessionEntry.endedAt)
+              ? sessionEntry.endedAt
               : null;
           const durationMs =
-            typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)
-              ? entry.durationMs
+            typeof sessionEntry.durationMs === "number" &&
+            Number.isFinite(sessionEntry.durationMs)
+              ? sessionEntry.durationMs
               : null;
           if (!streamSid || startedAt === null || endedAt === null || durationMs === null) {
             return [];
@@ -223,17 +236,21 @@ export class VoiceCallWebhookServer {
         })
       : [];
 
-    const activeRaw = raw.activeSession;
+    const activeRaw = walletMetadata.activeSession;
     if (!activeRaw || typeof activeRaw !== "object" || Array.isArray(activeRaw)) {
       return { sessions };
     }
+    const activeSession = activeRaw as {
+      streamSid?: unknown;
+      startedAt?: unknown;
+    };
     const streamSid =
-      typeof activeRaw.streamSid === "string" && activeRaw.streamSid.trim()
-        ? activeRaw.streamSid
+      typeof activeSession.streamSid === "string" && activeSession.streamSid.trim()
+        ? activeSession.streamSid
         : null;
     const startedAt =
-      typeof activeRaw.startedAt === "number" && Number.isFinite(activeRaw.startedAt)
-        ? activeRaw.startedAt
+      typeof activeSession.startedAt === "number" && Number.isFinite(activeSession.startedAt)
+        ? activeSession.startedAt
         : null;
     if (!streamSid || startedAt === null) {
       return { sessions };
@@ -249,22 +266,23 @@ export class VoiceCallWebhookServer {
   }
 
   private persistRealtimeWalletState(call: CallRecord, state: WalletRealtimeSttState): void {
+    const metadata: Record<string, unknown> = {
+      ...(call.metadata ?? {}),
+      walletRealtimeStt:
+        state.activeSession || state.sessions.length > 0
+          ? {
+              sessions: state.sessions,
+              ...(state.activeSession ? { activeSession: state.activeSession } : {}),
+            }
+          : undefined,
+    };
+    if (metadata.walletRealtimeStt === undefined) {
+      delete metadata.walletRealtimeStt;
+    }
     const nextCall: CallRecord = {
       ...call,
-      metadata: {
-        ...(call.metadata ?? {}),
-        walletRealtimeStt:
-          state.activeSession || state.sessions.length > 0
-            ? {
-                sessions: state.sessions,
-                ...(state.activeSession ? { activeSession: state.activeSession } : {}),
-              }
-            : undefined,
-      },
+      metadata,
     };
-    if (nextCall.metadata?.walletRealtimeStt === undefined) {
-      delete nextCall.metadata.walletRealtimeStt;
-    }
     this.manager.persistCall(nextCall);
   }
 

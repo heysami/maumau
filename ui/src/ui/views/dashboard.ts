@@ -340,6 +340,8 @@ function renderShellPageActions(props: DashboardProps, page: DashboardPage) {
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "user-channels":
       return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
+    case "agents":
+      return html`<button class="btn btn--sm" @click=${props.onRefresh}>${t("common.refresh")}</button>`;
     case "teams":
       return html`
         ${props.teamsLoading ? html`<span class="pill">${dt("shell.refreshing")}</span>` : nothing}
@@ -406,6 +408,13 @@ function formatTimeLabel(value: number): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(value);
+}
+
+function formatCalendarEventTimeLabel(event: DashboardCalendarEvent): string {
+  if (typeof event.endAtMs === "number" && event.endAtMs > event.startAtMs) {
+    return `${formatTimeLabel(event.startAtMs)} - ${formatTimeLabel(event.endAtMs)}`;
+  }
+  return formatTimeLabel(event.startAtMs);
 }
 
 function formatHourLabel(hour: number): string {
@@ -510,6 +519,115 @@ function groupCalendarEventsByDay(events: DashboardCalendarEvent[]) {
   return grouped;
 }
 
+const CALENDAR_TIMEGRID_STEP_MINUTES = 15;
+const CALENDAR_TIMEGRID_STEPS_PER_HOUR = 60 / CALENDAR_TIMEGRID_STEP_MINUTES;
+const CALENDAR_TIMEGRID_TOTAL_STEPS = 24 * CALENDAR_TIMEGRID_STEPS_PER_HOUR;
+const CALENDAR_TIMEGRID_DEFAULT_DURATION_MS = 60 * 60 * 1_000;
+const CALENDAR_DAY_MS = 24 * 60 * 60 * 1_000;
+const ROUTINE_TIMELINE_HOUR_MARKERS = [0, 6, 12, 18, 24] as const;
+
+type CalendarTimegridEventLayout = {
+  event: DashboardCalendarEvent;
+  lane: number;
+  laneCount: number;
+  startRow: number;
+  rowSpan: number;
+};
+
+function clampCalendarTimegridMinute(value: number): number {
+  return Math.max(0, Math.min(24 * 60, value));
+}
+
+function resolveCalendarTimegridDayLayout(
+  dayStartAtMs: number,
+  events: DashboardCalendarEvent[],
+): { laneCount: number; events: CalendarTimegridEventLayout[] } {
+  const dayEndAtMs = dayStartAtMs + CALENDAR_DAY_MS;
+  const positionedEvents = events
+    .map((event) => {
+      const clampedStartAtMs = Math.max(dayStartAtMs, Math.min(dayEndAtMs, event.startAtMs));
+      const rawEndAtMs =
+        typeof event.endAtMs === "number" && event.endAtMs > event.startAtMs
+          ? event.endAtMs
+          : event.startAtMs + CALENDAR_TIMEGRID_DEFAULT_DURATION_MS;
+      const clampedEndAtMs = Math.max(
+        clampedStartAtMs + CALENDAR_TIMEGRID_STEP_MINUTES * 60_000,
+        Math.min(dayEndAtMs, rawEndAtMs),
+      );
+      const startMinutes = clampCalendarTimegridMinute((clampedStartAtMs - dayStartAtMs) / 60_000);
+      const endMinutes = clampCalendarTimegridMinute((clampedEndAtMs - dayStartAtMs) / 60_000);
+      const startStep = Math.min(
+        CALENDAR_TIMEGRID_TOTAL_STEPS - 1,
+        Math.floor(startMinutes / CALENDAR_TIMEGRID_STEP_MINUTES),
+      );
+      const endStep = Math.max(
+        startStep + 1,
+        Math.min(
+          CALENDAR_TIMEGRID_TOTAL_STEPS,
+          Math.ceil(endMinutes / CALENDAR_TIMEGRID_STEP_MINUTES),
+        ),
+      );
+      return {
+        event,
+        startStep,
+        endStep,
+      };
+    })
+    .toSorted((left, right) => left.startStep - right.startStep);
+
+  const clusters: Array<typeof positionedEvents> = [];
+  let activeCluster: typeof positionedEvents = [];
+  let activeClusterEndStep = -1;
+  for (const positioned of positionedEvents) {
+    if (activeCluster.length === 0 || positioned.startStep < activeClusterEndStep) {
+      activeCluster.push(positioned);
+      activeClusterEndStep = Math.max(activeClusterEndStep, positioned.endStep);
+      continue;
+    }
+    clusters.push(activeCluster);
+    activeCluster = [positioned];
+    activeClusterEndStep = positioned.endStep;
+  }
+  if (activeCluster.length > 0) {
+    clusters.push(activeCluster);
+  }
+
+  const layouts: CalendarTimegridEventLayout[] = [];
+  let dayLaneCount = 0;
+  for (const cluster of clusters) {
+    const laneEndSteps: number[] = [];
+    const clusterLayouts: CalendarTimegridEventLayout[] = [];
+    let clusterLaneCount = 0;
+    for (const positioned of cluster) {
+      let lane = laneEndSteps.findIndex((endStep) => endStep <= positioned.startStep);
+      if (lane < 0) {
+        lane = laneEndSteps.length;
+        laneEndSteps.push(positioned.endStep);
+      } else {
+        laneEndSteps[lane] = positioned.endStep;
+      }
+      clusterLaneCount = Math.max(clusterLaneCount, lane + 1);
+      clusterLayouts.push({
+        event: positioned.event,
+        lane,
+        laneCount: 1,
+        startRow: positioned.startStep + 1,
+        rowSpan: Math.max(1, positioned.endStep - positioned.startStep),
+      });
+    }
+    const resolvedLaneCount = Math.max(1, clusterLaneCount);
+    dayLaneCount = Math.max(dayLaneCount, resolvedLaneCount);
+    layouts.push(
+      ...clusterLayouts.map((layout) => ({
+        ...layout,
+        laneCount: resolvedLaneCount,
+      })),
+    );
+  }
+
+  return { laneCount: Math.max(1, dayLaneCount), events: layouts };
+}
+
 function isCronCalendarEvent(event: DashboardCalendarEvent): boolean {
   return event.kind === "routine_occurrence" || event.kind === "reminder";
 }
@@ -576,55 +694,62 @@ function routineScheduleKindLabel(kind: DashboardRoutine["scheduleKind"]): strin
   }
 }
 
+function formatRoutineTimelineHourLabel(hour: number): string {
+  return formatHourLabel(hour === 24 ? 0 : hour);
+}
+
+function resolveRoutineTimelineOffsetPercent(timestamp: number): number {
+  const date = new Date(timestamp);
+  const minutes = date.getHours() * 60 + date.getMinutes();
+  return (minutes / (24 * 60)) * 100;
+}
+
 function renderRoutinePreviewTimeline(routine: DashboardRoutine) {
   const preview = routine.preview;
   const visibleDays = Array.from(
     {
-      length: Math.max(1, Math.round((preview.endAtMs - preview.startAtMs) / 86_400_000)),
+      length: Math.max(1, Math.round((preview.endAtMs - preview.startAtMs) / CALENDAR_DAY_MS)),
     },
-    (_, index) => preview.startAtMs + index * 86_400_000,
+    (_, index) => preview.startAtMs + index * CALENDAR_DAY_MS,
   );
   const runsByDay = groupTimestampsByDay(preview.runAtMs);
   const todayStart = startOfDay(Date.now());
   if (preview.view === "month") {
     return html`
       <div class="dashboard-routines__schedule">
-        <div class="dashboard-calendar-month">
-          <div class="dashboard-calendar-month__weekdays">
+        <div class="dashboard-routine-monthline">
+          <div class="dashboard-routine-monthline__weekdays">
             ${visibleDays
               .slice(0, 7)
               .map(
                 (day) =>
-                  html`<div class="dashboard-calendar-month__weekday">${formatWeekdayLabel(day)}</div>`,
+                  html`<div class="dashboard-routine-monthline__weekday">${formatWeekdayLabel(day)}</div>`,
               )}
           </div>
-          <div class="dashboard-calendar-month__grid">
+          <div class="dashboard-routine-monthline__grid">
             ${visibleDays.map((day) => {
               const dayRuns = runsByDay.get(day) ?? [];
               return html`
                 <div
-                  class="dashboard-calendar-month__cell ${!isSameMonth(day, preview.anchorAtMs) ? "dashboard-calendar-month__cell--outside" : ""} ${isSameDay(day, todayStart) ? "dashboard-calendar-month__cell--today" : ""}"
+                  class="dashboard-routine-monthline__day ${!isSameMonth(day, preview.anchorAtMs) ? "dashboard-routine-monthline__day--outside" : ""} ${isSameDay(day, todayStart) ? "dashboard-routine-monthline__day--today" : ""}"
                 >
-                  <div class="dashboard-calendar-month__cell-header">
-                    <span class="dashboard-calendar-month__date">${formatDayNumber(day)}</span>
-                    ${
-                      dayRuns.length > 0
-                        ? html`<span class="dashboard-calendar-month__count">${dayRuns.length}</span>`
-                        : nothing
-                    }
-                  </div>
-                  <div class="dashboard-calendar-month__items">
+                  <span class="dashboard-routine-monthline__date">${formatDayNumber(day)}</span>
+                  <div class="dashboard-routine-monthline__markers">
                     ${dayRuns.slice(0, 3).map(
                       (timestamp) => html`
-                        <div class="dashboard-calendar-month__item">
-                          <span class="dashboard-calendar-month__item-time">${formatTimeLabel(timestamp)}</span>
-                          <span class="dashboard-calendar-month__item-title">${dt("routines.run")}</span>
-                        </div>
+                        <span
+                          class="dashboard-routine-monthline__marker"
+                          title=${`${dt("routines.run")} ${formatTimeLabel(timestamp)}`}
+                        ></span>
                       `,
                     )}
                     ${
                       dayRuns.length > 3
-                        ? html`<div class="dashboard-calendar-month__more">${dt("calendar.moreItems", { count: String(dayRuns.length - 3) })}</div>`
+                        ? html`
+                            <span class="dashboard-routine-monthline__more">
+                              +${dayRuns.length - 3}
+                            </span>
+                          `
                         : nothing
                     }
                   </div>
@@ -636,48 +761,54 @@ function renderRoutinePreviewTimeline(routine: DashboardRoutine) {
       </div>
     `;
   }
-  const hourSlots = Array.from({ length: 24 }, (_, hour) => hour);
   return html`
     <div class="dashboard-routines__schedule">
-      <div class="dashboard-timegrid-wrap">
-        <div
-          class="dashboard-timegrid dashboard-timegrid--${preview.view}"
-          style=${
-            preview.view === "week"
-              ? "grid-template-columns: 76px repeat(7, minmax(128px, 1fr));"
-              : "grid-template-columns: 76px minmax(0, 1fr);"
-          }
-        >
-          <div class="dashboard-timegrid__corner"></div>
+      <div class="dashboard-routine-timeline">
+        <div class="dashboard-routine-timeline__axis" aria-hidden="true">
+          <div></div>
+          <div class="dashboard-routine-timeline__hours">
+            ${ROUTINE_TIMELINE_HOUR_MARKERS.map(
+              (hour) => html`
+                <span
+                  class="dashboard-routine-timeline__hour"
+                  style=${`left:${(hour / 24) * 100}%;`}
+                >
+                  ${formatRoutineTimelineHourLabel(hour)}
+                </span>
+              `,
+            )}
+          </div>
+        </div>
+        <div class="dashboard-routine-timeline__rows">
           ${visibleDays.map(
             (day) => html`
-              <div class="dashboard-timegrid__day ${isSameDay(day, todayStart) ? "dashboard-timegrid__day--today" : ""}">
-                <span class="dashboard-timegrid__day-main">${formatWeekdayLabel(day)}</span>
-                <span class="dashboard-timegrid__day-sub">${formatDayLabel(day)}</span>
+              <div class="dashboard-routine-timeline__row">
+                <div class="dashboard-routine-timeline__label">
+                  <span class="dashboard-routine-timeline__day-main">${formatWeekdayLabel(day)}</span>
+                  <span class="dashboard-routine-timeline__day-sub">${formatDayLabel(day)}</span>
+                </div>
+                <div
+                  class="dashboard-routine-timeline__track ${isSameDay(day, todayStart) ? "dashboard-routine-timeline__track--today" : ""}"
+                >
+                  ${ROUTINE_TIMELINE_HOUR_MARKERS.slice(1, -1).map(
+                    (hour) => html`
+                      <span
+                        class="dashboard-routine-timeline__tick"
+                        style=${`left:${(hour / 24) * 100}%;`}
+                      ></span>
+                    `,
+                  )}
+                  ${(runsByDay.get(day) ?? []).map(
+                    (timestamp) => html`
+                      <span
+                        class="dashboard-routine-timeline__marker"
+                        style=${`left:${resolveRoutineTimelineOffsetPercent(timestamp)}%;`}
+                        title=${`${dt("routines.run")} ${formatTimeLabel(timestamp)}`}
+                      ></span>
+                    `,
+                  )}
+                </div>
               </div>
-            `,
-          )}
-          ${hourSlots.map(
-            (hour) => html`
-              <div class="dashboard-timegrid__time">${formatHourLabel(hour)}</div>
-              ${visibleDays.map((day) => {
-                const dayRuns = (runsByDay.get(day) ?? []).filter(
-                  (timestamp) => new Date(timestamp).getHours() === hour,
-                );
-                return html`
-                  <div class="dashboard-timegrid__slot ${isSameDay(day, todayStart) ? "dashboard-timegrid__slot--today" : ""}">
-                    ${dayRuns.map(
-                      (timestamp) => html`
-                        <article class="dashboard-timegrid__event dashboard-timegrid__event--scheduled">
-                          <div class="dashboard-timegrid__event-time">${formatTimeLabel(timestamp)}</div>
-                          <div class="dashboard-timegrid__event-title">${dt("routines.run")}</div>
-                          <div class="dashboard-timegrid__event-meta">${routine.scheduleLabel}</div>
-                        </article>
-                      `,
-                    )}
-                  </div>
-                `;
-              })}
             `,
           )}
         </div>
@@ -796,6 +927,142 @@ function workshopSelectionLabel(tab: DashboardProps["workshopTab"]): string {
     default:
       return dt("workshop.chooseItem");
   }
+}
+
+function renderWorkshopMetaCards(params: {
+  selected: DashboardWorkshopRenderableItem;
+  selectedAgentApp: DashboardAgentAppItem | null;
+  selectedWorkshopItem: DashboardWorkshopItem | DashboardSavedWorkshopItem | null;
+  artifactDetail: string | null;
+  frameUrl: string | null;
+}) {
+  const { selected, selectedAgentApp, selectedWorkshopItem, artifactDetail, frameUrl } = params;
+  if (selectedAgentApp) {
+    return html`
+      <div class="dashboard-workshop__meta-grid">
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.agentAppOwner")}</div>
+          <strong>${selectedAgentApp.ownerLabel ?? dt("workshop.agentAppOwnerUnassigned")}</strong>
+        </div>
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.agentAppWhyNow")}</div>
+          <strong>${selectedAgentApp.whyNow ?? dt("workshop.agentAppMissingContext")}</strong>
+        </div>
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.agentAppHowItHelps")}</div>
+          <strong>${selectedAgentApp.howItHelps ?? dt("workshop.agentAppsDefaultSummary")}</strong>
+        </div>
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.agentAppScope")}</div>
+          <strong>${selectedAgentApp.suggestedScope ?? dt("workshop.agentAppMissingContext")}</strong>
+        </div>
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
+          <strong>${selectedAgentApp.projectName ?? dt("workshop.notTagged")}</strong>
+          ${
+            selectedAgentApp.workspaceLabel
+              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.workspaceLabel}</span></div>`
+              : nothing
+          }
+        </div>
+        ${
+          selectedAgentApp.taskTitle
+            ? html`
+                <div class="dashboard-workshop__meta-card">
+                  <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
+                  <strong>${selectedAgentApp.taskTitle}</strong>
+                </div>
+              `
+            : nothing
+        }
+        <div class="dashboard-workshop__meta-card">
+          <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
+          <strong>${previewLocationLabel(selectedAgentApp.previewUrl) ?? dt("workshop.notPublished")}</strong>
+          ${
+            selectedAgentApp.previewUrl
+              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.previewUrl}</span></div>`
+              : nothing
+          }
+        </div>
+      </div>
+    `;
+  }
+  return html`
+    <div class="dashboard-workshop__meta-grid">
+      <div class="dashboard-workshop__meta-card">
+        <div class="dashboard-org-chart__label">${dt("workshop.artifact")}</div>
+        <strong>${selectedWorkshopItem?.title ?? selected.title}</strong>
+        ${artifactDetail ? html`<div class="dashboard-note__meta"><span>${artifactDetail}</span></div>` : nothing}
+        <div class="dashboard-note__meta">
+          <span>${
+            frameUrl
+              ? dt("workshop.livePreviewInDashboard")
+              : selected.previewUrl
+                ? dt("workshop.livePreviewAvailable")
+                : dt("workshop.noLivePreviewYet")
+          }</span>
+        </div>
+      </div>
+      <div class="dashboard-workshop__meta-card">
+        <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
+        <strong>${previewLocationLabel(selected.previewUrl) ?? dt("workshop.notPublished")}</strong>
+        ${
+          selected.previewUrl
+            ? html`<div class="dashboard-note__meta"><span>${selected.previewUrl}</span></div>`
+            : nothing
+        }
+      </div>
+      <div class="dashboard-workshop__meta-card">
+        <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
+        <strong>${selected.projectName ?? dt("workshop.notTagged")}</strong>
+        ${
+          selected.workspaceLabel
+            ? html`<div class="dashboard-note__meta"><span>${selected.workspaceLabel}</span></div>`
+            : nothing
+        }
+      </div>
+      ${
+        selectedWorkshopItem?.taskTitle
+          ? html`
+              <div class="dashboard-workshop__meta-card">
+                <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
+                <strong>${selectedWorkshopItem.taskTitle}</strong>
+                ${
+                  selectedWorkshopItem.taskAssigneeLabel
+                    ? html`<div class="dashboard-note__meta"><span>${selectedWorkshopItem.taskAssigneeLabel}</span></div>`
+                    : nothing
+                }
+              </div>
+            `
+          : nothing
+      }
+    </div>
+  `;
+}
+
+function renderWorkshopMetaDetails(params: {
+  selected: DashboardWorkshopRenderableItem;
+  selectedAgentApp: DashboardAgentAppItem | null;
+  selectedWorkshopItem: DashboardWorkshopItem | DashboardSavedWorkshopItem | null;
+  artifactDetail: string | null;
+  frameUrl: string | null;
+}) {
+  return html`
+    <details class="dashboard-workshop__meta-details">
+      <summary
+        class="btn btn--sm dashboard-workshop__meta-trigger"
+        aria-label=${dt("workshop.detailsToggle")}
+        title=${dt("workshop.detailsToggle")}
+      >
+        <span class="dashboard-workshop__meta-trigger-icon" aria-hidden="true">
+          ${icons.moreHorizontal}
+        </span>
+      </summary>
+      <div class="dashboard-workshop__meta-panel">
+        ${renderWorkshopMetaCards(params)}
+      </div>
+    </details>
+  `;
 }
 
 function renderProjectBadge(projectName: string | undefined) {
@@ -1065,6 +1332,25 @@ function groupTasks(tasks: DashboardTask[], doneFromDate: string, doneToDate: st
 
 function resolveMemoryAgentList(agentsList: AgentsListResult | null) {
   return agentsList?.agents ?? [];
+}
+
+function resolveDashboardAgentMemorySelection(props: DashboardProps) {
+  const agents = resolveMemoryAgentList(props.agentsList);
+  const selectedAgentExists = Boolean(
+    props.memoryAgentId && agents.some((agent) => agent.id === props.memoryAgentId),
+  );
+  const resolvedAgentId =
+    (selectedAgentExists ? props.memoryAgentId : null) ??
+    props.agentsList?.defaultId ??
+    agents[0]?.id ??
+    null;
+  const selectedAgent = resolvedAgentId
+    ? (agents.find((agent) => agent.id === resolvedAgentId) ?? null)
+    : null;
+  const recentActivity = (props.snapshot?.memories ?? []).filter(
+    (entry) => !resolvedAgentId || entry.agentId === resolvedAgentId,
+  );
+  return { agents, resolvedAgentId, selectedAgent, recentActivity };
 }
 
 function selectionKeyForTeam(snapshot: DashboardTeamSnapshot): string {
@@ -1450,7 +1736,6 @@ function renderDashboardNav(props: DashboardProps, page: DashboardPage) {
               class="dashboard-rail__item ${active ? "dashboard-rail__item--active" : ""}"
               @click=${() => props.onNavigate(entry)}
               aria-current=${active ? "page" : "false"}
-              title=${titleForTab(tab)}
             >
               <span class="dashboard-rail__icon" aria-hidden="true">${icons[iconForTab(tab)]}</span>
               <span class="dashboard-rail__label">${titleForTab(tab)}</span>
@@ -2914,113 +3199,14 @@ function renderWorkshopPage(props: DashboardProps) {
                       `
                       : nothing
                   }
+                  ${renderWorkshopMetaDetails({
+                    selected,
+                    selectedAgentApp,
+                    selectedWorkshopItem,
+                    artifactDetail,
+                    frameUrl,
+                  })}
                 </div>
-                ${
-                  selectedAgentApp
-                    ? html`
-                      <div class="dashboard-workshop__meta-grid">
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppOwner")}</div>
-                          <strong>${selectedAgentApp.ownerLabel ?? dt("workshop.agentAppOwnerUnassigned")}</strong>
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppWhyNow")}</div>
-                          <strong>${selectedAgentApp.whyNow ?? dt("workshop.agentAppMissingContext")}</strong>
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppHowItHelps")}</div>
-                          <strong>${selectedAgentApp.howItHelps ?? dt("workshop.agentAppsDefaultSummary")}</strong>
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.agentAppScope")}</div>
-                          <strong>${selectedAgentApp.suggestedScope ?? dt("workshop.agentAppMissingContext")}</strong>
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
-                          <strong>${selectedAgentApp.projectName ?? dt("workshop.notTagged")}</strong>
-                          ${
-                            selectedAgentApp.workspaceLabel
-                              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.workspaceLabel}</span></div>`
-                              : nothing
-                          }
-                        </div>
-                        ${
-                          selectedAgentApp.taskTitle
-                            ? html`
-                              <div class="dashboard-workshop__meta-card">
-                                <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
-                                <strong>${selectedAgentApp.taskTitle}</strong>
-                              </div>
-                            `
-                            : nothing
-                        }
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
-                          <strong>${previewLocationLabel(selectedAgentApp.previewUrl) ?? dt("workshop.notPublished")}</strong>
-                          ${
-                            selectedAgentApp.previewUrl
-                              ? html`<div class="dashboard-note__meta"><span>${selectedAgentApp.previewUrl}</span></div>`
-                              : nothing
-                          }
-                        </div>
-                      </div>
-                    `
-                    : html`
-                      <div class="dashboard-workshop__meta-grid">
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.artifact")}</div>
-                          <strong>${selectedWorkshopItem?.title ?? selected.title}</strong>
-                          ${
-                            artifactDetail
-                              ? html`<div class="dashboard-note__meta"><span>${artifactDetail}</span></div>`
-                              : nothing
-                          }
-                          <div class="dashboard-note__meta">
-                            <span>${
-                              frameUrl
-                                ? dt("workshop.livePreviewInDashboard")
-                                : selected.previewUrl
-                                  ? dt("workshop.livePreviewAvailable")
-                                  : dt("workshop.noLivePreviewYet")
-                            }</span>
-                          </div>
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.previewLink")}</div>
-                          <strong>${previewLocationLabel(selected.previewUrl) ?? dt("workshop.notPublished")}</strong>
-                          ${
-                            selected.previewUrl
-                              ? html`<div class="dashboard-note__meta"><span>${selected.previewUrl}</span></div>`
-                              : nothing
-                          }
-                        </div>
-                        <div class="dashboard-workshop__meta-card">
-                          <div class="dashboard-org-chart__label">${dt("workshop.currentProject")}</div>
-                          <strong>${selected.projectName ?? dt("workshop.notTagged")}</strong>
-                          ${
-                            selected.workspaceLabel
-                              ? html`<div class="dashboard-note__meta"><span>${selected.workspaceLabel}</span></div>`
-                              : nothing
-                          }
-                        </div>
-                        ${
-                          selectedWorkshopItem?.taskTitle
-                            ? html`
-                              <div class="dashboard-workshop__meta-card">
-                                <div class="dashboard-org-chart__label">${dt("workshop.sourceTask")}</div>
-                                <strong>${selectedWorkshopItem.taskTitle}</strong>
-                                ${
-                                  selectedWorkshopItem.taskAssigneeLabel
-                                    ? html`<div class="dashboard-note__meta"><span>${selectedWorkshopItem.taskAssigneeLabel}</span></div>`
-                                    : nothing
-                                }
-                              </div>
-                            `
-                            : nothing
-                        }
-                      </div>
-                    `
-                }
                 ${
                   frameUrl
                     ? html`
@@ -3064,6 +3250,27 @@ function startOfDay(value: number) {
   return date.getTime();
 }
 
+function resolveCalendarTimegridColumnMinWidthPx(
+  view: DashboardProps["calendarView"],
+  laneCount: number,
+): number {
+  const overlapGapPx = 8;
+  const normalizedLaneCount = Math.max(1, laneCount);
+  if (view === "day") {
+    return Math.max(
+      380,
+      normalizedLaneCount * 240 + Math.max(0, normalizedLaneCount - 1) * overlapGapPx + 28,
+    );
+  }
+  if (view === "week") {
+    return Math.max(
+      292,
+      normalizedLaneCount * 220 + Math.max(0, normalizedLaneCount - 1) * overlapGapPx + 28,
+    );
+  }
+  return 320;
+}
+
 function renderCalendarPage(props: DashboardProps) {
   const calendar = resolveCalendarResult(props);
   const anchorAtMs = props.calendarAnchorAtMs ?? calendar.anchorAtMs;
@@ -3079,6 +3286,21 @@ function renderCalendarPage(props: DashboardProps) {
   );
   const eventsByDay = groupCalendarEventsByDay(filteredEvents);
   const hourSlots = Array.from({ length: 24 }, (_, hour) => hour);
+  const calendarAxisWidthPx = 72;
+  const dayLayouts = visibleDays.map((day) => ({
+    day,
+    layout: resolveCalendarTimegridDayLayout(day, eventsByDay.get(day) ?? []),
+  }));
+  const calendarGridTemplateColumns = `${calendarAxisWidthPx}px ${dayLayouts
+    .map(({ layout }) => `minmax(${resolveCalendarTimegridColumnMinWidthPx(calendar.view, layout.laneCount)}px, 1fr)`)
+    .join(" ")}`;
+  const calendarGridMinWidthPx =
+    calendarAxisWidthPx +
+    dayLayouts.reduce(
+      (total, { layout }) =>
+        total + resolveCalendarTimegridColumnMinWidthPx(calendar.view, layout.laneCount),
+      0,
+    );
   return html`
     <section class="dashboard-page">
       <div class="dashboard-calendar__header">
@@ -3186,7 +3408,7 @@ function renderCalendarPage(props: DashboardProps) {
                             ${visibleListedEvents.map(
                               (event) => html`
                                 <div class="dashboard-calendar-month__item">
-                                  <span class="dashboard-calendar-month__item-time">${formatTimeLabel(event.startAtMs)}</span>
+                                  <span class="dashboard-calendar-month__item-time">${formatCalendarEventTimeLabel(event)}</span>
                                   <span class="dashboard-calendar-month__item-title">${event.title}</span>
                                 </div>
                               `,
@@ -3207,52 +3429,75 @@ function renderCalendarPage(props: DashboardProps) {
           : html`
               <div class="dashboard-timegrid-wrap card">
                 <div
-                  class="dashboard-timegrid dashboard-timegrid--${calendar.view}"
-                  style=${
-                    calendar.view === "week"
-                      ? "grid-template-columns: 76px repeat(7, minmax(150px, 1fr));"
-                      : "grid-template-columns: 76px minmax(0, 1fr);"
-                  }
+                  class="dashboard-timegrid dashboard-timegrid--${calendar.view} dashboard-timegrid--calendar"
+                  style=${`min-width:${calendarGridMinWidthPx}px;`}
                 >
-                  <div class="dashboard-timegrid__corner"></div>
-                  ${visibleDays.map(
-                    (day) => html`
-                      <button
-                        type="button"
-                        class="dashboard-timegrid__day ${isSameDay(day, todayStart) ? "dashboard-timegrid__day--today" : ""}"
-                        @click=${() =>
-                          calendar.view === "week"
-                            ? props.onCalendarSelectDay(day, "day")
-                            : props.onCalendarSelectDay(day)}
-                      >
-                        <span class="dashboard-timegrid__day-main">${formatWeekdayLabel(day)}</span>
-                        <span class="dashboard-timegrid__day-sub">${formatDayLabel(day)}</span>
-                      </button>
-                    `,
-                  )}
-                  ${hourSlots.map(
-                    (hour) => html`
-                      <div class="dashboard-timegrid__time">${formatHourLabel(hour)}</div>
-                      ${visibleDays.map((day) => {
-                        const dayEvents = (eventsByDay.get(day) ?? []).filter(
-                          (event) => new Date(event.startAtMs).getHours() === hour,
-                        );
-                        return html`
-                          <div class="dashboard-timegrid__slot ${isSameDay(day, todayStart) ? "dashboard-timegrid__slot--today" : ""}">
-                            ${dayEvents.map(
-                              (event) => html`
-                                <article class="dashboard-timegrid__event dashboard-timegrid__event--${event.status}">
-                                  <div class="dashboard-timegrid__event-time">${formatTimeLabel(event.startAtMs)}</div>
-                                  <div class="dashboard-timegrid__event-title">${event.title}</div>
-                                  <div class="dashboard-timegrid__event-meta">${calendarKindLabel(event.kind)}</div>
-                                </article>
-                              `,
-                            )}
+                  <div
+                    class="dashboard-timegrid__head"
+                    style=${`grid-template-columns:${calendarGridTemplateColumns};`}
+                  >
+                    <div class="dashboard-timegrid__corner"></div>
+                    ${dayLayouts.map(
+                      ({ day }) => html`
+                        <button
+                          type="button"
+                          class="dashboard-timegrid__day ${isSameDay(day, todayStart) ? "dashboard-timegrid__day--today" : ""}"
+                          @click=${() =>
+                            calendar.view === "week"
+                              ? props.onCalendarSelectDay(day, "day")
+                              : props.onCalendarSelectDay(day)}
+                        >
+                          <span class="dashboard-timegrid__day-main">${formatWeekdayLabel(day)}</span>
+                          <span class="dashboard-timegrid__day-sub">${formatDayLabel(day)}</span>
+                        </button>
+                      `,
+                    )}
+                  </div>
+                  <div
+                    class="dashboard-timegrid__body"
+                    style=${`grid-template-columns:${calendarGridTemplateColumns};`}
+                  >
+                    <div class="dashboard-timegrid__time-axis">
+                      ${hourSlots.map(
+                        (hour) => html`
+                          <div
+                            class="dashboard-timegrid__time-label"
+                            style=${`grid-row:${hour * CALENDAR_TIMEGRID_STEPS_PER_HOUR + 1} / span ${CALENDAR_TIMEGRID_STEPS_PER_HOUR};`}
+                          >
+                            ${formatHourLabel(hour)}
                           </div>
-                        `;
-                      })}
-                    `,
-                  )}
+                        `,
+                      )}
+                    </div>
+                    ${dayLayouts.map(({ day, layout: dayLayout }) => {
+                      return html`
+                        <div
+                          class="dashboard-timegrid__day-column ${isSameDay(day, todayStart) ? "dashboard-timegrid__day-column--today" : ""}"
+                        >
+                          ${hourSlots.map(
+                            (hour) => html`
+                              <div
+                                class="dashboard-timegrid__hour-slot"
+                                style=${`grid-row:${hour * CALENDAR_TIMEGRID_STEPS_PER_HOUR + 1} / span ${CALENDAR_TIMEGRID_STEPS_PER_HOUR};`}
+                              ></div>
+                            `,
+                          )}
+                          ${dayLayout.events.map(
+                            (layout) => html`
+                              <article
+                                class="dashboard-timegrid__event dashboard-timegrid__event--${layout.event.status}"
+                                style=${`grid-column:1 / -1;grid-row:${layout.startRow} / span ${layout.rowSpan};--dashboard-timegrid-event-lane:${layout.lane};--dashboard-timegrid-event-lanes:${layout.laneCount};`}
+                              >
+                                <div class="dashboard-timegrid__event-time">${formatCalendarEventTimeLabel(layout.event)}</div>
+                                <div class="dashboard-timegrid__event-title">${layout.event.title}</div>
+                                <div class="dashboard-timegrid__event-meta">${calendarKindLabel(layout.event.kind)}</div>
+                              </article>
+                            `,
+                          )}
+                        </div>
+                      `;
+                    })}
+                  </div>
                 </div>
               </div>
             `
@@ -4159,10 +4404,11 @@ function renderTeamsPage(props: DashboardProps) {
                   snapshot: DashboardTeamSnapshot;
                 } => {
                   const node = entry.node;
+                  if (!node) {
+                    return false;
+                  }
                   return (
-                    Boolean(node) &&
-                    node.kind === "linked_team" &&
-                    nodeTargetsSelectedTeam(node.id, selectedTeamId)
+                    node.kind === "linked_team" && nodeTargetsSelectedTeam(node.id, selectedTeamId)
                   );
                 },
               ),
@@ -4451,22 +4697,8 @@ function renderTeamsPage(props: DashboardProps) {
   `;
 }
 
-function renderMemoriesPage(props: DashboardProps) {
-  const agents = resolveMemoryAgentList(props.agentsList);
-  const selectedAgentExists = Boolean(
-    props.memoryAgentId && agents.some((agent) => agent.id === props.memoryAgentId),
-  );
-  const resolvedAgentId =
-    (selectedAgentExists ? props.memoryAgentId : null) ??
-    props.agentsList?.defaultId ??
-    agents[0]?.id ??
-    null;
-  const selectedAgent = resolvedAgentId
-    ? (agents.find((agent) => agent.id === resolvedAgentId) ?? null)
-    : null;
-  const recentActivity = (props.snapshot?.memories ?? []).filter(
-    (entry) => !resolvedAgentId || entry.agentId === resolvedAgentId,
-  );
+function renderAgentsPage(props: DashboardProps) {
+  const { agents, resolvedAgentId, selectedAgent } = resolveDashboardAgentMemorySelection(props);
   const editableFiles = [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME];
   return html`
     <section class="dashboard-page">
@@ -4489,10 +4721,6 @@ function renderMemoriesPage(props: DashboardProps) {
             )}
           </div>
           ${props.agentFilesError ? html`<div class="callout danger" style="margin-top: 16px;">${props.agentFilesError}</div>` : nothing}
-          <div class="dashboard-memory__activity">
-            <div class="dashboard-org-chart__label">${dt("memories.recentNotes")}</div>
-            ${renderMemoryActivity(recentActivity)}
-          </div>
         </section>
         <section class="dashboard-memory__editors">
           ${renderDashboardAgentTabs(props.agentPanel, props.onSelectAgentPanel)}
@@ -4546,6 +4774,39 @@ function renderMemoriesPage(props: DashboardProps) {
                 `
               : renderDashboardAgentScope(props, selectedAgent, resolvedAgentId)
           }
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderMemoriesPage(props: DashboardProps) {
+  const { agents, resolvedAgentId, recentActivity } = resolveDashboardAgentMemorySelection(props);
+  return html`
+    <section class="dashboard-page">
+      <div class="dashboard-memory-layout">
+        <section class="card">
+          <div class="card-title">${dt("memories.agents")}</div>
+          <div class="card-sub">${dt("memories.filterSubtitle")}</div>
+          <div class="dashboard-memory__agent-list">
+            ${agents.map(
+              (agent) => html`
+                <button
+                  type="button"
+                  class="dashboard-memory__agent-item ${resolvedAgentId === agent.id ? "dashboard-memory__agent-item--active" : ""}"
+                  @click=${() => props.onSelectMemoryAgent(agent.id)}
+                >
+                  <span>${normalizeAgentLabel(agent)}</span>
+                  <span>${agent.id}</span>
+                </button>
+              `,
+            )}
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-title">${dt("memories.recentNotes")}</div>
+          <div class="card-sub">${dt("memories.recentNotesSubtitle")}</div>
+          ${renderMemoryActivity(recentActivity)}
         </section>
       </div>
     </section>
@@ -4671,7 +4932,9 @@ export function renderDashboard(props: DashboardProps) {
                                   })
                                 : page === "teams"
                                   ? renderTeamsPage(props)
-                                  : renderMemoriesPage(props)
+                                  : page === "agents"
+                                    ? renderAgentsPage(props)
+                                    : renderMemoriesPage(props)
         }
       </main>
     </div>

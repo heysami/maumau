@@ -112,9 +112,122 @@ export type MaumauPluginToolContext = {
   agentAccountId?: string;
   /** Trusted sender id from inbound context (runtime-provided, not tool args). */
   requesterSenderId?: string;
+  /** Trusted sender display name from inbound context (runtime-provided, not tool args). */
+  requesterSenderName?: string;
+  /** Trusted sender username/handle from inbound context (runtime-provided, not tool args). */
+  requesterSenderUsername?: string;
   /** Whether the trusted sender is an owner. */
   senderIsOwner?: boolean;
+  /** Conversation identifier for the inbound turn when available. */
+  conversationId?: string;
+  /** Whether the inbound turn came from a group or channel context. */
+  isGroup?: boolean;
+  /** What initiated the current run (for example "user", "memory", or "cron"). */
+  trigger?: string;
   sandboxed?: boolean;
+};
+
+export type MemoryStoreDurability = "daily" | "durable";
+
+export type MemoryStoreTarget =
+  | "active-user"
+  | "workspace"
+  | "group"
+  | "global"
+  | "provisional";
+
+export type MemoryOverlayContext = MaumauPluginToolContext;
+
+export type MemoryOverlayPrincipal = {
+  resolvedUserId?: string;
+  provisionalUserId?: string;
+  channelId?: string;
+  accountId?: string;
+  conversationId?: string;
+  requesterSenderId?: string;
+  requesterSenderName?: string;
+  requesterSenderUsername?: string;
+  effectiveLanguage?: string;
+  capturedAt: number;
+};
+
+export type MemoryOverlayPrincipalParams = {
+  context: MemoryOverlayContext;
+  prompt?: string;
+};
+
+export type MemoryOverlayPromptParams = {
+  context: MemoryOverlayContext;
+  prompt: string;
+};
+
+export type MemoryOverlayCollection = {
+  rootPath: string;
+  kind: "scoped" | "internal";
+  label?: string;
+};
+
+export type MemoryOverlayPathParams = {
+  context: MemoryOverlayContext;
+  relPath: string;
+  from?: number;
+  lines?: number;
+  authorizeOnly?: boolean;
+};
+
+export type MemoryOverlayReadResult = {
+  handled: boolean;
+  result?: {
+    path: string;
+    text: string;
+    disabled?: true;
+    error?: string;
+  };
+};
+
+export type MemoryOverlayStoreParams = {
+  context: MemoryOverlayContext;
+  text: string;
+  summary?: string;
+  kind?: string;
+  durability: MemoryStoreDurability;
+  target: MemoryStoreTarget;
+  targetId?: string;
+  dateStamp?: string;
+};
+
+export type MemoryOverlayStoreResult = {
+  handled: boolean;
+  path?: string;
+  stored?: boolean;
+  disabled?: true;
+  error?: string;
+  details?: Record<string, unknown>;
+};
+
+export type MemoryOverlayRegistrationResult = { ok: true } | { ok: false; existingOwner: string };
+
+export type MemoryOverlay = {
+  id: string;
+  resolvePrincipal?: (
+    params: MemoryOverlayPrincipalParams,
+  ) => MemoryOverlayPrincipal | null | Promise<MemoryOverlayPrincipal | null>;
+  buildPromptContext?: (
+    params: MemoryOverlayPromptParams,
+  ) => string | string[] | null | undefined | Promise<string | string[] | null | undefined>;
+  listCollections?: (
+    params: { context: MemoryOverlayContext },
+  ) =>
+    | MemoryOverlayCollection[]
+    | null
+    | undefined
+    | Promise<MemoryOverlayCollection[] | null | undefined>;
+  readPath?: (
+    params: MemoryOverlayPathParams,
+  ) => MemoryOverlayReadResult | Promise<MemoryOverlayReadResult>;
+  store?: (
+    params: MemoryOverlayStoreParams,
+  ) => MemoryOverlayStoreResult | Promise<MemoryOverlayStoreResult>;
 };
 
 export type MaumauPluginToolFactory = (
@@ -1373,6 +1486,8 @@ export type MaumauPluginApi = {
   registerMemoryPromptSection: (
     builder: import("../memory/prompt-section.js").MemoryPromptSectionBuilder,
   ) => void;
+  /** Register a non-exclusive memory overlay that augments the core memory surfaces. */
+  registerMemoryOverlay: (overlay: MemoryOverlay) => void;
   resolvePath: (input: string) => string;
   /** Register a lifecycle hook handler */
   on: <K extends PluginHookName>(

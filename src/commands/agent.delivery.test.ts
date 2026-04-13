@@ -6,13 +6,22 @@ import type { ReplyPayload } from "../auto-reply/types.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
+import type {
+  PreviewPublishResult,
+  publishPreviewArtifact as publishPreviewArtifactFn,
+} from "../gateway/previews.js";
+import type { deliverOutboundPayloads as deliverOutboundPayloadsFn } from "../infra/outbound/deliver.js";
 import type { RuntimeEnv } from "../runtime.js";
 
 const mocks = vi.hoisted(() => ({
-  deliverOutboundPayloads: vi.fn(async () => []),
+  deliverOutboundPayloads: vi.fn<
+    (params: Parameters<typeof deliverOutboundPayloadsFn>[0]) => ReturnType<typeof deliverOutboundPayloadsFn>
+  >(async () => []),
   getChannelPlugin: vi.fn(() => ({})),
   resolveOutboundTarget: vi.fn(() => ({ ok: true as const, to: "+15551234567" })),
-  publishPreviewArtifact: vi.fn(async () => ({
+  publishPreviewArtifact: vi.fn<
+    (params: Parameters<typeof publishPreviewArtifactFn>[0]) => ReturnType<typeof publishPreviewArtifactFn>
+  >(async () => ({
     previewId: "preview-123",
     url: "https://preview.example/preview/for-sam-ji/preview-123/",
     expiresAt: "2026-04-01T12:00:00.000Z",

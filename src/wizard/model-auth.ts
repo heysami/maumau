@@ -112,21 +112,22 @@ export async function runModelAuthWizard(
     workspaceDir,
     env: process.env,
   });
-  const authChoice =
-    requestedChoice ??
-    (await import("../commands/auth-choice-prompt.js")).then(({ promptAuthChoiceGrouped }) =>
-      promptAuthChoiceGrouped({
-        prompter,
-        store: ensureAuthProfileStore(undefined, {
-          allowKeychainPrompt: false,
-        }),
-        includeSkip: false,
-        embedded: true,
-        includeRuntimeFallbackProviders: true,
-        config: nextConfig,
-        workspaceDir,
-      }),
-    );
+  const authChoice = requestedChoice
+    ? requestedChoice
+    : await (async () => {
+        const { promptAuthChoiceGrouped } = await import("../commands/auth-choice-prompt.js");
+        return promptAuthChoiceGrouped({
+          prompter,
+          store: ensureAuthProfileStore(undefined, {
+            allowKeychainPrompt: false,
+          }),
+          includeSkip: false,
+          embedded: true,
+          includeRuntimeFallbackProviders: true,
+          config: nextConfig,
+          workspaceDir,
+        });
+      })();
 
   if (authChoice === "custom-api-key") {
     const { promptCustomApiConfig } = await import("../commands/onboard-custom.js");

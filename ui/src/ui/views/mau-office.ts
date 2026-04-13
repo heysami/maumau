@@ -385,10 +385,18 @@ function resolveOfficeChatMessageText(message: unknown): string {
   if (text) {
     return text;
   }
-  const normalized = normalizeMessage(message);
-  if (normalized.content.some((item) => item.type === "image")) {
+  const rawContent = (message as { content?: unknown } | null | undefined)?.content;
+  if (
+    Array.isArray(rawContent) &&
+    rawContent.some(
+      (item) =>
+        typeof (item as { type?: unknown } | null | undefined)?.type === "string" &&
+        (item as { type: string }).type === "image",
+    )
+  ) {
     return t("dashboard.mauOffice.chat.image");
   }
+  const normalized = normalizeMessage(message);
   const role = normalizeRoleForGrouping(normalized.role);
   if (role === "tool") {
     return t("dashboard.mauOffice.chat.toolOutput");
@@ -1751,7 +1759,7 @@ function renderEditorHoverPreview(props: MauOfficeProps, scene: CompiledMauOffic
 
 function editorSupportsDirectSelection(
   editor: NonNullable<MauOfficeProps["editor"]>,
-  kind: MauOfficeEditorSelection extends { kind: infer SelectionKind } ? SelectionKind : never,
+  kind: Exclude<MauOfficeEditorSelection, null>["kind"],
 ): boolean {
   if (editor.tool === "select") {
     return true;

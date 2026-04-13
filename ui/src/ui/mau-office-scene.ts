@@ -3770,91 +3770,93 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
     ? record.props
         .map((entry) => entry as Record<string, unknown>)
         .filter((entry) => typeof entry?.id === "string" && typeof entry?.itemId === "string")
-        .map(
-          (entry) =>
-            ({
-              id: entry.id,
-              itemId: entry.itemId,
-              tileX: typeof entry.tileX === "number" ? entry.tileX : 0,
-              tileY: typeof entry.tileY === "number" ? entry.tileY : 0,
-              mirrored: entry.mirrored === true,
-              mountOverride:
-                entry.mountOverride === "floor" ||
-                entry.mountOverride === "wall" ||
-                entry.mountOverride === "underlay"
-                  ? entry.mountOverride
-                  : undefined,
-              zOffsetOverride:
-                typeof entry.zOffsetOverride === "number" ? entry.zOffsetOverride : undefined,
-              collisionOverride:
-                typeof entry.collisionOverride === "boolean" ? entry.collisionOverride : undefined,
-              loopId: typeof entry.loopId === "string" ? entry.loopId : undefined,
-            }) satisfies MauOfficeScenePropPlacement,
-        )
+        .map((entry) => {
+          const id = entry.id as string;
+          const itemId = entry.itemId as string;
+          return {
+            id,
+            itemId,
+            tileX: typeof entry.tileX === "number" ? entry.tileX : 0,
+            tileY: typeof entry.tileY === "number" ? entry.tileY : 0,
+            mirrored: entry.mirrored === true,
+            mountOverride:
+              entry.mountOverride === "floor" ||
+              entry.mountOverride === "wall" ||
+              entry.mountOverride === "underlay"
+                ? entry.mountOverride
+                : undefined,
+            zOffsetOverride:
+              typeof entry.zOffsetOverride === "number" ? entry.zOffsetOverride : undefined,
+            collisionOverride:
+              typeof entry.collisionOverride === "boolean" ? entry.collisionOverride : undefined,
+            loopId: typeof entry.loopId === "string" ? entry.loopId : undefined,
+          } satisfies MauOfficeScenePropPlacement;
+        })
     : fallback.props;
   const autotiles = Array.isArray(record.autotiles)
     ? record.autotiles
         .map((entry) => entry as Record<string, unknown>)
         .filter((entry) => typeof entry?.id === "string" && typeof entry?.itemId === "string")
-        .map(
-          (entry) =>
-            ({
-              id: entry.id,
-              itemId: entry.itemId,
-              cells: Array.isArray(entry.cells)
-                ? entry.cells
-                    .map((cell) => cell as Record<string, unknown>)
-                    .filter(
-                      (cell) => typeof cell.tileX === "number" && typeof cell.tileY === "number",
-                    )
-                    .map((cell) => ({ tileX: cell.tileX as number, tileY: cell.tileY as number }))
-                : [],
-              mountOverride:
-                entry.mountOverride === "floor" ||
-                entry.mountOverride === "wall" ||
-                entry.mountOverride === "underlay"
-                  ? entry.mountOverride
-                  : undefined,
-              zOffsetOverride:
-                typeof entry.zOffsetOverride === "number" ? entry.zOffsetOverride : undefined,
-              collisionOverride:
-                typeof entry.collisionOverride === "boolean" ? entry.collisionOverride : undefined,
-              loopId: typeof entry.loopId === "string" ? entry.loopId : undefined,
-            }) satisfies MauOfficeSceneAutotilePlacement,
-        )
+        .map((entry) => {
+          const id = entry.id as string;
+          const itemId = entry.itemId as string;
+          return {
+            id,
+            itemId,
+            cells: Array.isArray(entry.cells)
+              ? entry.cells
+                  .map((cell) => cell as Record<string, unknown>)
+                  .filter(
+                    (cell) => typeof cell.tileX === "number" && typeof cell.tileY === "number",
+                  )
+                  .map((cell) => ({ tileX: cell.tileX as number, tileY: cell.tileY as number }))
+              : [],
+            mountOverride:
+              entry.mountOverride === "floor" ||
+              entry.mountOverride === "wall" ||
+              entry.mountOverride === "underlay"
+                ? entry.mountOverride
+                : undefined,
+            zOffsetOverride:
+              typeof entry.zOffsetOverride === "number" ? entry.zOffsetOverride : undefined,
+            collisionOverride:
+              typeof entry.collisionOverride === "boolean" ? entry.collisionOverride : undefined,
+            loopId: typeof entry.loopId === "string" ? entry.loopId : undefined,
+          } satisfies MauOfficeSceneAutotilePlacement;
+        })
     : fallback.autotiles;
   const markers = Array.isArray(record.markers)
     ? record.markers
         .map((entry) => entry as Record<string, unknown>)
         .filter((entry) => typeof entry.id === "string" && typeof entry.role === "string")
-        .map(
-          (entry) =>
-            ({
-              id: entry.id,
-              role: entry.role as MauOfficeMarkerRole,
-              tileX: typeof entry.tileX === "number" ? entry.tileX : 0,
-              tileY: typeof entry.tileY === "number" ? entry.tileY : 0,
-              pose: entry.pose === "sit" ? "sit" : "stand",
-              layer: typeof entry.layer === "number" ? entry.layer : 0,
-              facingOverride:
-                entry.facingOverride === "north" ||
-                entry.facingOverride === "east" ||
-                entry.facingOverride === "south" ||
-                entry.facingOverride === "west"
-                  ? entry.facingOverride
-                  : undefined,
-              footprintTiles:
-                entry.footprintTiles &&
-                typeof entry.footprintTiles === "object" &&
-                typeof (entry.footprintTiles as Record<string, unknown>).width === "number" &&
-                typeof (entry.footprintTiles as Record<string, unknown>).height === "number"
-                  ? {
-                      width: (entry.footprintTiles as Record<string, number>).width,
-                      height: (entry.footprintTiles as Record<string, number>).height,
-                    }
-                  : undefined,
-            }) satisfies MauOfficeSceneMarker,
-        )
+        .map((entry) => {
+          const id = entry.id as string;
+          return {
+            id,
+            role: entry.role as MauOfficeMarkerRole,
+            tileX: typeof entry.tileX === "number" ? entry.tileX : 0,
+            tileY: typeof entry.tileY === "number" ? entry.tileY : 0,
+            pose: entry.pose === "sit" ? "sit" : "stand",
+            layer: typeof entry.layer === "number" ? entry.layer : 0,
+            facingOverride:
+              entry.facingOverride === "north" ||
+              entry.facingOverride === "east" ||
+              entry.facingOverride === "south" ||
+              entry.facingOverride === "west"
+                ? entry.facingOverride
+                : undefined,
+            footprintTiles:
+              entry.footprintTiles &&
+              typeof entry.footprintTiles === "object" &&
+              typeof (entry.footprintTiles as Record<string, unknown>).width === "number" &&
+              typeof (entry.footprintTiles as Record<string, unknown>).height === "number"
+                ? {
+                    width: (entry.footprintTiles as Record<string, number>).width,
+                    height: (entry.footprintTiles as Record<string, number>).height,
+                  }
+                : undefined,
+          } satisfies MauOfficeSceneMarker;
+        })
     : fallback.markers;
   const wallRows = Array.isArray(record.wallRows)
     ? record.wallRows.map((row) =>
@@ -3870,7 +3872,7 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
     ),
   );
   const sanitized = {
-    version: 1,
+    version: 1 as const,
     zoneRows: normalizedRows,
     wallRows: normalizedWallRows,
     props: sanitizeScenePropPlacements(props, dimensions.width, dimensions.height),
@@ -3890,7 +3892,7 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
   const upgradedWidth = getMauOfficeSceneTileWidth(upgraded);
   const upgradedHeight = getMauOfficeSceneTileHeight(upgraded);
   return {
-    version: 1,
+    version: 1 as const,
     zoneRows: upgraded.zoneRows,
     wallRows: upgraded.wallRows,
     props: sanitizeScenePropPlacements(upgraded.props, upgradedWidth, upgradedHeight),

@@ -261,10 +261,12 @@ export async function refreshActiveTab(host: SettingsHost) {
       await loadConfig(host as unknown as MaumauApp);
       await loadMauOffice(host as unknown as MaumauApp);
     }
-    if (host.tab === "dashboardMemories") {
+    if (host.tab === "dashboardAgents" || host.tab === "dashboardMemories") {
       await Promise.allSettled([
         loadAgents(host as unknown as MaumauApp),
-        loadConfig(host as unknown as MaumauApp),
+        host.tab === "dashboardAgents"
+          ? loadConfig(host as unknown as MaumauApp)
+          : Promise.resolve(),
       ]);
       const knownAgentIds = new Set((host.agentsList?.agents ?? []).map((entry) => entry.id));
       const dashboardMemoryAgentId =
@@ -276,27 +278,31 @@ export async function refreshActiveTab(host: SettingsHost) {
         null;
       if (dashboardMemoryAgentId) {
         host.dashboardMemoryAgentId = dashboardMemoryAgentId;
-        await Promise.allSettled([
-          loadPinnedAgentFiles(
-            host as unknown as MaumauApp,
-            dashboardMemoryAgentId,
-            [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME],
-            { preserveDraft: true },
-          ),
-          loadToolsCatalog(host as unknown as MaumauApp, dashboardMemoryAgentId),
-        ]);
+        if (host.tab === "dashboardAgents") {
+          await Promise.allSettled([
+            loadPinnedAgentFiles(
+              host as unknown as MaumauApp,
+              dashboardMemoryAgentId,
+              [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME],
+              { preserveDraft: true },
+            ),
+            loadToolsCatalog(host as unknown as MaumauApp, dashboardMemoryAgentId),
+          ]);
+        }
       } else {
         host.dashboardMemoryAgentId = null;
-        host.agentFilesTargetId = null;
-        host.agentFilesList = null;
-        host.agentFilesError = null;
-        host.agentFilesLoading = false;
-        host.agentFileContents = {};
-        host.agentFileDrafts = {};
-        host.toolsCatalogResult = null;
-        host.toolsCatalogError = null;
-        host.toolsCatalogLoading = false;
-        host.dashboardAgentPanel = "memory";
+        if (host.tab === "dashboardAgents") {
+          host.agentFilesTargetId = null;
+          host.agentFilesList = null;
+          host.agentFilesError = null;
+          host.agentFilesLoading = false;
+          host.agentFileContents = {};
+          host.agentFileDrafts = {};
+          host.toolsCatalogResult = null;
+          host.toolsCatalogError = null;
+          host.toolsCatalogLoading = false;
+          host.dashboardAgentPanel = "memory";
+        }
       }
     }
     return;

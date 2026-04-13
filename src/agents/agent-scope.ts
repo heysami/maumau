@@ -12,6 +12,7 @@ import {
 } from "../routing/session-key.js";
 import { resolveUserPath } from "../utils.js";
 import { normalizeSkillFilter } from "./skills/filter.js";
+import { isDefaultAgentWorkspaceAlias } from "./workspace-alias.js";
 import { resolveDefaultAgentWorkspaceDir } from "./workspace.js";
 
 let log: ReturnType<typeof createSubsystemLogger> | null = null;
@@ -286,6 +287,13 @@ export function resolveAgentWorkspaceDir(cfg: MaumauConfig, agentId: string) {
   const id = normalizeAgentId(agentId);
   const configured = resolveAgentConfig(cfg, id)?.workspace?.trim();
   if (configured) {
+    if (isDefaultAgentWorkspaceAlias(configured)) {
+      const fallback = cfg.agents?.defaults?.workspace?.trim();
+      if (fallback) {
+        return stripNullBytes(resolveUserPath(fallback));
+      }
+      return stripNullBytes(resolveDefaultAgentWorkspaceDir(process.env));
+    }
     return stripNullBytes(resolveUserPath(configured));
   }
   const defaultAgentId = resolveDefaultAgentId(cfg);

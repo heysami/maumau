@@ -1,18 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { GatewayBrowserClient } from "../gateway.ts";
 import {
   loadDashboardData,
   loadDashboardTeamSnapshots,
   saveDashboardWorkshopSelection,
 } from "./dashboard.ts";
 
-function createHost() {
+type DashboardTestHost = Parameters<typeof loadDashboardData>[0] & {
+  client: GatewayBrowserClient & {
+    request: ReturnType<typeof vi.fn>;
+  };
+};
+
+function setClientRequest(
+  host: DashboardTestHost,
+  implementation: (...args: unknown[]) => Promise<unknown>,
+) {
+  host.client.request = vi.fn(implementation) as DashboardTestHost["client"]["request"];
+}
+
+function createHost(): DashboardTestHost {
   return {
     client: {
       request: vi.fn().mockResolvedValue({
         generatedAtMs: 123,
         snapshots: [],
       }),
-    },
+    } as unknown as DashboardTestHost["client"],
     connected: true,
     tab: "dashboardTeams",
     dashboardCalendarView: "month" as const,
@@ -25,7 +39,7 @@ function createHost() {
     dashboardWalletResult: null,
     dashboardWalletStartDate: "2026-03-01",
     dashboardWalletEndDate: "2026-03-30",
-    dashboardWalletTimeZone: "local" as const,
+    dashboardWalletTimeZone: "local",
     dashboardCalendarResult: null,
     dashboardBusinessResult: null,
     dashboardProjectsResult: null,
@@ -40,7 +54,7 @@ function createHost() {
     dashboardTeamRuns: null,
     dashboardTaskFilter: null,
     dashboardWorkshopSelectedId: null,
-    dashboardWorkshopTab: "recent" as const,
+    dashboardWorkshopTab: "recent",
     dashboardWorkshopSelectedIds: new Set<string>(),
     dashboardWorkshopProjectDraft: "",
     dashboardWorkshopSaving: false,
@@ -49,7 +63,7 @@ function createHost() {
     configForm: null,
     configSnapshot: null,
     configFormDirty: false,
-    configFormMode: "form" as const,
+    configFormMode: "form",
     configRaw: "",
   };
 }
@@ -147,7 +161,7 @@ describe("dashboard workshop controller state", () => {
     const host = createHost();
     host.tab = "dashboardWallet";
     vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(-480);
-    host.client.request = vi.fn().mockResolvedValue({
+    setClientRequest(host, async () => ({
       generatedAtMs: 123,
       startDate: "2026-03-01",
       endDate: "2026-03-30",
@@ -157,7 +171,7 @@ describe("dashboard workshop controller state", () => {
         currencies: [],
         charts: [],
       },
-    });
+    }));
 
     await loadDashboardData(host);
 
@@ -175,7 +189,7 @@ describe("dashboard workshop controller state", () => {
     const host = createHost();
     host.tab = "dashboardWallet";
     host.dashboardWalletTimeZone = "utc";
-    host.client.request = vi.fn().mockResolvedValue({
+    setClientRequest(host, async () => ({
       generatedAtMs: 123,
       startDate: "2026-03-01",
       endDate: "2026-03-30",
@@ -185,7 +199,7 @@ describe("dashboard workshop controller state", () => {
         currencies: [],
         charts: [],
       },
-    });
+    }));
 
     await loadDashboardData(host);
 
@@ -199,7 +213,7 @@ describe("dashboard workshop controller state", () => {
   it("loads user channel data and chooses the first configured account", async () => {
     const host = createHost();
     host.tab = "dashboardUserChannels";
-    host.client.request = vi.fn().mockResolvedValue({
+    setClientRequest(host, async () => ({
       generatedAtMs: 123,
       channels: [
         {
@@ -229,7 +243,7 @@ describe("dashboard workshop controller state", () => {
         },
       ],
       availableChannels: [],
-    });
+    }));
 
     await loadDashboardData(host);
 
@@ -241,7 +255,7 @@ describe("dashboard workshop controller state", () => {
   it("defaults workshop to saved when saved items are available", async () => {
     const host = createHost();
     host.tab = "dashboardWorkshop";
-    host.client.request = vi.fn(async (method: string) => {
+    setClientRequest(host, async (method) => {
       if (method === "dashboard.workshop") {
         return {
           generatedAtMs: 123,
@@ -270,7 +284,7 @@ describe("dashboard workshop controller state", () => {
   it("keeps workshop on recent when there are no saved items", async () => {
     const host = createHost();
     host.tab = "dashboardWorkshop";
-    host.client.request = vi.fn(async (method: string) => {
+    setClientRequest(host, async (method) => {
       if (method === "dashboard.workshop") {
         return {
           generatedAtMs: 123,
@@ -333,7 +347,7 @@ describe("dashboard workshop controller state", () => {
     };
     host.dashboardWorkshopSelectedIds = new Set(["workshop:1"]);
     host.dashboardWorkshopProjectDraft = "Alpha";
-    host.client.request = vi.fn(async (method: string, params?: unknown) => {
+    setClientRequest(host, async (method, params) => {
       if (method === "dashboard.workshop.save") {
         expect(params).toEqual({
           itemIds: ["workshop:1"],
@@ -376,7 +390,7 @@ describe("dashboard workshop controller state", () => {
   it("uses the agent apps tab when there are no saved or recent workshop items", async () => {
     const host = createHost();
     host.tab = "dashboardWorkshop";
-    host.client.request = vi.fn(async (method: string) => {
+    setClientRequest(host, async (method) => {
       if (method === "dashboard.workshop") {
         return {
           generatedAtMs: 123,

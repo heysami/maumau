@@ -870,10 +870,12 @@ export function renderApp(state: AppViewState) {
       if (state.dashboardWalletDateDebounceTimer != null) {
         clearTimeout(state.dashboardWalletDateDebounceTimer);
       }
-      state.dashboardWalletDateDebounceTimer = globalThis.setTimeout(() => {
-        state.dashboardWalletDateDebounceTimer = null;
-        void loadDashboardData(state);
-      }, 160);
+      state.dashboardWalletDateDebounceTimer = Number(
+        globalThis.setTimeout(() => {
+          state.dashboardWalletDateDebounceTimer = null;
+          void loadDashboardData(state);
+        }, 160),
+      );
     };
     const resolveDashboardAgentId = () => {
       const knownAgentIds = new Set((state.agentsList?.agents ?? []).map((agent) => agent.id));
@@ -921,6 +923,10 @@ export function renderApp(state: AppViewState) {
         return;
       }
       await refreshDashboardAgentWorkspace(agentId);
+    };
+    const refreshDashboardMemoriesPage = async () => {
+      await Promise.allSettled([loadDashboardData(state), loadAgents(state)]);
+      state.dashboardMemoryAgentId = resolveDashboardAgentId();
     };
     const businessManagerAvailable =
       state.agentsList?.agents.some(
@@ -1072,8 +1078,10 @@ export function renderApp(state: AppViewState) {
       onNavigate: (page) => state.setTab(tabForDashboardPage(page)),
       onBackToControl: () => state.setTab("overview"),
       onRefresh: () =>
-        void (state.tab === "dashboardMemories"
+        void (state.tab === "dashboardAgents"
           ? refreshDashboardAgentsPage()
+          : state.tab === "dashboardMemories"
+            ? refreshDashboardMemoriesPage()
           : loadDashboardData(state, {
               includeTeams: state.tab === "dashboardTeams",
             })),
@@ -1297,7 +1305,11 @@ export function renderApp(state: AppViewState) {
         });
       },
       onSelectMemoryAgent: (agentId) => {
-        void refreshDashboardAgentWorkspace(agentId);
+        if (state.tab === "dashboardAgents") {
+          void refreshDashboardAgentWorkspace(agentId);
+          return;
+        }
+        state.dashboardMemoryAgentId = agentId;
       },
       onSelectAgentPanel: (panel) => {
         state.dashboardAgentPanel = panel;

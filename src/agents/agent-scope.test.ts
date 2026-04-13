@@ -18,6 +18,7 @@ import {
   resolveAgentIdByWorkspacePath,
   resolveAgentIdsByWorkspacePath,
 } from "./agent-scope.js";
+import { DEFAULT_AGENT_WORKSPACE_ALIAS } from "./workspace-alias.js";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -463,6 +464,36 @@ describe("resolveAgentConfig", () => {
     vi.stubEnv("MAUMAU_HOME", home);
 
     const workspace = resolveAgentWorkspaceDir({} as MaumauConfig, "main");
+    expect(workspace).toBe(path.join(path.resolve(home), ".maumau", "workspace"));
+  });
+
+  it("resolves the default-workspace alias through agents.defaults.workspace", () => {
+    const workspace = resolveAgentWorkspaceDir(
+      {
+        agents: {
+          defaults: { workspace: "/tmp/default-owner-workspace" },
+          list: [{ id: "business-development-manager", workspace: DEFAULT_AGENT_WORKSPACE_ALIAS }],
+        },
+      } as MaumauConfig,
+      "business-development-manager",
+    );
+
+    expect(workspace).toBe("/tmp/default-owner-workspace");
+  });
+
+  it("resolves the default-workspace alias through the runtime fallback when defaults are absent", () => {
+    const home = path.join(path.sep, "srv", "alias-home");
+    vi.stubEnv("MAUMAU_HOME", home);
+
+    const workspace = resolveAgentWorkspaceDir(
+      {
+        agents: {
+          list: [{ id: "business-development-manager", workspace: DEFAULT_AGENT_WORKSPACE_ALIAS }],
+        },
+      } as MaumauConfig,
+      "business-development-manager",
+    );
+
     expect(workspace).toBe(path.join(path.resolve(home), ".maumau", "workspace"));
   });
 

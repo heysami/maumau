@@ -289,7 +289,10 @@ function countByStatus<T extends { status: DashboardLifeProfileStatus }>(
 
 function resolveFieldKeysForRole(spec: LifeImprovementRoleSpec): string[] {
   return Array.from(
-    new Set([...LIFE_PROFILE_BASE_FIELDS, ...(LIFE_PROFILE_FIELDS_BY_DOMAIN[spec.domainId] ?? [])]),
+    new Set([
+      ...LIFE_PROFILE_BASE_FIELDS,
+      ...(LIFE_PROFILE_FIELDS_BY_DOMAIN[spec.domainId] ?? []),
+    ]),
   );
 }
 
@@ -346,28 +349,33 @@ export async function collectDashboardLifeProfile(params: {
       value,
     };
   });
-  const fieldByKey = new Map(fields.map((field) => [field.key, field]));
-  const specByKey = new Map(LIFE_PROFILE_FIELD_SPECS.map((spec) => [spec.key, spec]));
+  const fieldByKey = new Map<string, DashboardLifeProfileField>(
+    fields.map((field) => [field.key, field]),
+  );
+  const specByKey = new Map<string, LifeProfileFieldSpec>(
+    LIFE_PROFILE_FIELD_SPECS.map((spec) => [spec.key, spec]),
+  );
 
   const agents: DashboardLifeProfileAgent[] = LIFE_IMPROVEMENT_ROLE_SPECS.map((spec) => {
     const needs: DashboardLifeProfileNeed[] = resolveFieldKeysForRole(spec)
-      .map((fieldKey) => {
+      .flatMap((fieldKey) => {
         const field = fieldByKey.get(fieldKey);
         const fieldSpec = specByKey.get(fieldKey);
         if (!field || !fieldSpec) {
-          return null;
+          return [];
         }
-        return {
-          fieldKey: field.key,
-          label: field.label,
-          description: field.description,
-          stage: field.stage,
-          status: field.status,
-          value: field.value,
-          why: buildNeedWhy(spec, fieldSpec),
-        } satisfies DashboardLifeProfileNeed;
-      })
-      .filter((need): need is DashboardLifeProfileNeed => Boolean(need));
+        return [
+          {
+            fieldKey: field.key,
+            label: field.label,
+            description: field.description,
+            stage: field.stage,
+            status: field.status,
+            value: field.value,
+            why: buildNeedWhy(spec, fieldSpec),
+          } satisfies DashboardLifeProfileNeed,
+        ];
+      });
 
     return {
       agentId: spec.agentId,

@@ -1,12 +1,12 @@
 {
   "id": "multi-user-memory",
-  "kind": "memory",
   "name": "Multi-User Memory",
   "description": "Scoped memory with curated users, shared groups, approvals, and per-user language defaults.",
+  "enabledByDefault": true,
   "uiHints": {
     "enabled": {
       "label": "Enable Multi-User Memory",
-      "help": "Turns on scoped user and group memory resolution for the active memory slot."
+      "help": "Turns on scoped user and group memory overlays for the default memory stack."
     },
     "autoDiscover": {
       "label": "Auto-Discover New Senders",

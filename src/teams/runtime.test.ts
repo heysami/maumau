@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MaumauConfig } from "../config/types.maumau.js";
 import {
   createDesignStudioTeamConfig,
   createMainOrchestrationTeamConfig,
@@ -30,7 +31,7 @@ const TEST_CONFIG = {
       createDesignStudioTeamConfig(),
     ],
   },
-};
+} satisfies MaumauConfig;
 
 describe("resolveSessionTeamContext", () => {
   beforeEach(async () => {
@@ -112,7 +113,7 @@ describe("resolveSessionTeamContext", () => {
         list: [
           {
             ...createMainOrchestrationTeamConfig(),
-            crossTeamLinks: [{ type: "team", targetId: "product-studio" }],
+            crossTeamLinks: [{ type: "team" as const, targetId: "product-studio" }],
           },
           {
             ...createStarterTeamConfig(),
@@ -125,7 +126,7 @@ describe("resolveSessionTeamContext", () => {
           },
         ],
       },
-    };
+    } satisfies MaumauConfig;
 
     const result = resolvePreferredTeamRunTarget({
       cfg,

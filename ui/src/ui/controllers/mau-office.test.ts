@@ -128,24 +128,25 @@ function makeBubble(text: string): OfficeBubbleEntry {
 function makeActor(
   overrides: Partial<OfficeActor> & Pick<OfficeActor, "id" | "anchorId" | "nodeId">,
 ): OfficeActor {
-  const anchor = MAU_OFFICE_LAYOUT.anchors[overrides.anchorId];
+  const { id, anchorId, nodeId, ...rest } = overrides;
+  const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors];
   return {
-    id: overrides.id,
+    id,
     kind: "worker",
     label: "Mau Worker",
     shortLabel: "MW",
     agentId: "agent-1",
     sessionKey: "agent:main:test",
     roleHint: "desk",
-    homeAnchorId: overrides.anchorId,
+    homeAnchorId: anchorId,
     currentRoomId: anchor.roomId === "outside" ? "outside" : anchor.roomId,
-    anchorId: overrides.anchorId,
-    nodeId: overrides.nodeId,
+    anchorId,
+    nodeId,
     x: anchor.x,
     y: anchor.y,
     facing: "south",
     rigId: "cat",
-    currentActivity: makeActivity("desk", "desk_work", "desk", overrides.anchorId, "Working"),
+    currentActivity: makeActivity("desk", "desk_work", "desk", anchorId, "Working"),
     snapshotActivity: null,
     queuedActivity: null,
     pendingActivity: null,
@@ -154,7 +155,7 @@ function makeActor(
     bubbles: [],
     latestSupportDialogue: null,
     lastSeenAtMs: 0,
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -232,7 +233,7 @@ function expectWithinRange(value: number, range: MauOfficePxRange, label: string
   ).toBeLessThanOrEqual(range.max);
 }
 
-function normalizeStyle(style: string | null): string {
+function normalizeStyle(style: string | null | undefined): string {
   return (style ?? "").replace(/\s+/g, "");
 }
 
@@ -4339,7 +4340,7 @@ describe("mau-office contract", () => {
     ] as const;
 
     for (const [index, anchorId] of deskSeatPairs) {
-      const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId];
+      const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors];
       const chair = deskChairs.get(index);
       expect(anchor, `missing anchor ${anchorId}`).toBeDefined();
       expect(chair, `missing chair for ${anchorId}`).toBeDefined();
@@ -5194,7 +5195,8 @@ describe("mau-office view", () => {
     const actors = Object.fromEntries(
       actorIds.map((actorId, index) => {
         const anchorId = ballAssignment.slotAnchorIds[index]!;
-        const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId]!;
+        const anchor =
+          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors]!;
         return [
           actorId,
           makeActor({
@@ -5352,7 +5354,8 @@ describe("mau-office view", () => {
     const actors = Object.fromEntries(
       actorIds.map((actorId, index) => {
         const anchorId = chaseAssignment.slotAnchorIds[index]!;
-        const anchor = MAU_OFFICE_LAYOUT.anchors[anchorId]!;
+        const anchor =
+          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors]!;
         return [
           actorId,
           makeActor({

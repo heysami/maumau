@@ -255,6 +255,14 @@ function extractToolCallParameters(toolCall: Record<string, unknown>): Record<st
   return asObject(functionPayload?.parameters) ?? asObject(functionPayload?.arguments) ?? undefined;
 }
 
+function buildVapiToolCall(
+  id: string,
+  name: string,
+  parameters?: Record<string, unknown>,
+): VapiToolCall {
+  return parameters ? { id, name, parameters } : { id, name };
+}
+
 function extractToolCalls(message: Record<string, unknown>): VapiToolCall[] {
   const directToolCalls = Array.isArray(message.toolCallList) ? message.toolCallList : [];
   const direct = directToolCalls
@@ -262,13 +270,7 @@ function extractToolCalls(message: Record<string, unknown>): VapiToolCall[] {
       const object = asObject(entry);
       const id = asString(object?.id);
       const name = asString(object?.name) ?? asString(asObject(object?.function)?.name);
-      return id && name
-        ? {
-            id,
-            name,
-            parameters: extractToolCallParameters(object ?? {}),
-          }
-        : null;
+      return id && name ? buildVapiToolCall(id, name, extractToolCallParameters(object ?? {})) : null;
     })
     .filter((value): value is VapiToolCall => Boolean(value));
   if (direct.length > 0) {
@@ -292,13 +294,12 @@ function extractToolCalls(message: Record<string, unknown>): VapiToolCall[] {
         asString(asObject(object?.function)?.name) ??
         asString(functionPayload?.name);
       return id && name
-        ? {
+        ? buildVapiToolCall(
             id,
             name,
-            parameters:
-              extractToolCallParameters(asObject(object?.toolCall) ?? {}) ??
+            extractToolCallParameters(asObject(object?.toolCall) ?? {}) ??
               extractToolCallParameters(functionPayload ?? {}),
-          }
+          )
         : null;
     })
     .filter((value): value is VapiToolCall => Boolean(value));

@@ -49,6 +49,7 @@ export default definePluginEntry({
     api.registerTool(
       (ctx) =>
         api.runtime.tools.createMemorySearchTool({
+          ...ctx,
           config: ctx.config,
           agentSessionKey: ctx.sessionKey,
         }),
@@ -58,10 +59,21 @@ export default definePluginEntry({
     api.registerTool(
       (ctx) =>
         api.runtime.tools.createMemoryGetTool({
+          ...ctx,
           config: ctx.config,
           agentSessionKey: ctx.sessionKey,
         }),
       { names: ["memory_get"] },
+    );
+
+    api.registerTool(
+      (ctx) =>
+        api.runtime.tools.createMemoryStoreTool({
+          ...ctx,
+          config: ctx.config,
+          agentSessionKey: ctx.sessionKey,
+        }),
+      { names: ["memory_store"] },
     );
 
     api.registerCli(

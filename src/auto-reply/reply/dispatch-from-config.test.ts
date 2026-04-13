@@ -104,10 +104,12 @@ const ttsMocks = vi.hoisted(() => {
   };
 });
 const previewDeliveryMocks = vi.hoisted(() => ({
-  maybeBuildPreviewReceiptPayloads: vi.fn(async () => [] as ReplyPayload[]),
+  maybeBuildPreviewReceiptPayloads: vi.fn(async (_params: unknown) => [] as ReplyPayload[]),
 }));
 const subagentRegistryMocks = vi.hoisted(() => ({
-  hasRequesterCompletionDeliveryRunStartedSince: vi.fn(() => false),
+  hasRequesterCompletionDeliveryRunStartedSince: vi.fn(
+    (_sessionKey: string, _sinceMs: number) => false,
+  ),
 }));
 
 vi.mock("./route-reply.runtime.js", () => ({

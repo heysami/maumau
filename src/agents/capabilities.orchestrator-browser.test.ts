@@ -148,11 +148,13 @@ describe("listSessionCapabilities", () => {
             user: {
               driver: "existing-session",
               userDataDir: "/tmp/maumau-user-browser",
+              color: "#1f8b4c",
             },
             maumau: {
               driver: "maumau",
               cdpPort: 18792,
               cdpUrl: "http://127.0.0.1:18792",
+              color: "#4455aa",
             },
           },
         },

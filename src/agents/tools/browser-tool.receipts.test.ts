@@ -2,16 +2,39 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { BrowserActionTabResult, BrowserActResponse } from "../../browser/client-actions.js";
+import type { BrowserStatus, BrowserTab } from "../../browser/client.js";
 import { readWalletEvents } from "../../infra/wallet-events.js";
 import { runGmailReceiptDigest } from "./browser-tool.receipts.js";
 
-function createBrowserDeps() {
+function createBrowserDeps(): Parameters<typeof runGmailReceiptDigest>[0]["deps"] {
   return {
-    browserAct: vi.fn(async () => ({ ok: true })),
-    browserNavigate: vi.fn(async () => ({ ok: true })),
-    browserOpenTab: vi.fn(async () => ({ targetId: "tab-1" })),
-    browserStart: vi.fn(async () => ({ ok: true })),
-    browserStatus: vi.fn(async () => ({ running: true })),
+    browserAct: vi.fn(async (): Promise<BrowserActResponse> => ({ ok: true, targetId: "tab-1" })),
+    browserNavigate: vi.fn(
+      async (): Promise<BrowserActionTabResult> => ({ ok: true, targetId: "tab-1" }),
+    ),
+    browserOpenTab: vi.fn(
+      async (): Promise<BrowserTab> => ({
+        targetId: "tab-1",
+        title: "Gmail",
+        url: "https://mail.google.com",
+      }),
+    ),
+    browserStart: vi.fn(async (): Promise<void> => {}),
+    browserStatus: vi.fn(
+      async (): Promise<BrowserStatus> => ({
+        enabled: true,
+        running: true,
+        pid: 1,
+        cdpPort: 9333,
+        cdpUrl: "http://127.0.0.1:9333",
+        chosenBrowser: "Chrome",
+        userDataDir: "/tmp/maumau-browser",
+        color: "#336699",
+        headless: false,
+        attachOnly: false,
+      }),
+    ),
     browserTabs: vi.fn(async () => []),
   };
 }
@@ -47,19 +70,23 @@ function createBrowserConfigWithRemoteProfile() {
 describe("runGmailReceiptDigest", () => {
   it("uses the configured default local profile when profile is omitted", async () => {
     const deps = createBrowserDeps();
-    deps.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      result: {
-        state: "ready",
-        items: [
-          {
-            merchant: "Netflix",
-            amount: "US$12.99",
-            subject: "Netflix receipt",
-            snippet: "Monthly subscription",
-          },
-        ],
-      },
-    });
+    vi.mocked(deps.browserAct)
+      .mockResolvedValueOnce({ ok: true, targetId: "tab-1" })
+      .mockResolvedValueOnce({
+        ok: true,
+        targetId: "tab-1",
+        result: {
+          state: "ready",
+          items: [
+            {
+              merchant: "Netflix",
+              amount: "US$12.99",
+              subject: "Netflix receipt",
+              snippet: "Monthly subscription",
+            },
+          ],
+        },
+      });
 
     const result = await runGmailReceiptDigest({
       cfg: {},
@@ -88,19 +115,23 @@ describe("runGmailReceiptDigest", () => {
 
   it("uses an explicitly requested existing-session profile", async () => {
     const deps = createBrowserDeps();
-    deps.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      result: {
-        state: "ready",
-        items: [
-          {
-            merchant: "Apple",
-            amount: "$9.99",
-            subject: "Apple receipt",
-            snippet: "Subscription renewal",
-          },
-        ],
-      },
-    });
+    vi.mocked(deps.browserAct)
+      .mockResolvedValueOnce({ ok: true, targetId: "tab-1" })
+      .mockResolvedValueOnce({
+        ok: true,
+        targetId: "tab-1",
+        result: {
+          state: "ready",
+          items: [
+            {
+              merchant: "Apple",
+              amount: "$9.99",
+              subject: "Apple receipt",
+              snippet: "Subscription renewal",
+            },
+          ],
+        },
+      });
 
     const result = await runGmailReceiptDigest({
       cfg: {},
@@ -121,19 +152,23 @@ describe("runGmailReceiptDigest", () => {
 
   it("uses an explicitly requested configured local profile", async () => {
     const deps = createBrowserDeps();
-    deps.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      result: {
-        state: "ready",
-        items: [
-          {
-            merchant: "Amazon",
-            amount: "$42.50",
-            subject: "Your Amazon.com order",
-            snippet: "Order total",
-          },
-        ],
-      },
-    });
+    vi.mocked(deps.browserAct)
+      .mockResolvedValueOnce({ ok: true, targetId: "tab-1" })
+      .mockResolvedValueOnce({
+        ok: true,
+        targetId: "tab-1",
+        result: {
+          state: "ready",
+          items: [
+            {
+              merchant: "Amazon",
+              amount: "$42.50",
+              subject: "Your Amazon.com order",
+              snippet: "Order total",
+            },
+          ],
+        },
+      });
 
     const result = await runGmailReceiptDigest({
       cfg: createBrowserConfigWithDesktopProfile(),
@@ -155,7 +190,7 @@ describe("runGmailReceiptDigest", () => {
 
   it("fails with the selected profile error when that profile is unavailable", async () => {
     const deps = createBrowserDeps();
-    deps.browserStatus.mockRejectedValueOnce(new Error("Chrome MCP unavailable"));
+    vi.mocked(deps.browserStatus).mockRejectedValueOnce(new Error("Chrome MCP unavailable"));
 
     await expect(
       runGmailReceiptDigest({
@@ -187,24 +222,28 @@ describe("runGmailReceiptDigest", () => {
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "maumau-wallet-events-"));
     const originalStateDir = process.env.MAUMAU_STATE_DIR;
     const deps = createBrowserDeps();
-    deps.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      result: {
-        state: "ready",
-        items: [
-          {
-            merchant: "Netflix",
-            amount: "US$12.99",
-            subject: "Netflix receipt",
-            snippet: "Monthly subscription",
-            dateText: "Apr 10",
-          },
-          {
-            merchant: "Unknown",
-            subject: "Missing amount",
-          },
-        ],
-      },
-    });
+    vi.mocked(deps.browserAct)
+      .mockResolvedValueOnce({ ok: true, targetId: "tab-1" })
+      .mockResolvedValueOnce({
+        ok: true,
+        targetId: "tab-1",
+        result: {
+          state: "ready",
+          items: [
+            {
+              merchant: "Netflix",
+              amount: "US$12.99",
+              subject: "Netflix receipt",
+              snippet: "Monthly subscription",
+              dateText: "Apr 10",
+            },
+            {
+              merchant: "Unknown",
+              subject: "Missing amount",
+            },
+          ],
+        },
+      });
 
     process.env.MAUMAU_STATE_DIR = stateDir;
 

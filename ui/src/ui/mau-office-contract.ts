@@ -1507,7 +1507,16 @@ const MAU_OFFICE_NODES = {
   outside_support: makeNode("outside_support", 20, 20, "outside", ["support_entry"]),
 } satisfies Record<string, MauOfficeNode>;
 
-function makeDeskAnchors(): Record<string, MauOfficeAnchor> {
+type DeskAnchorMap = {
+  desk_worker_1: MauOfficeAnchor;
+  desk_worker_2: MauOfficeAnchor;
+  desk_worker_3: MauOfficeAnchor;
+  desk_worker_4: MauOfficeAnchor;
+  desk_worker_5: MauOfficeAnchor;
+  desk_worker_6: MauOfficeAnchor;
+};
+
+function makeDeskAnchors(): DeskAnchorMap {
   const deskClusterTileX = resolveDeskClusterTileX();
   return {
     desk_worker_1: makeAnchor({

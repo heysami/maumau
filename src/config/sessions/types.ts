@@ -65,6 +65,19 @@ export type AcpSessionRuntimeOptions = {
   backendExtras?: Record<string, string>;
 };
 
+export type SessionMemoryPrincipal = {
+  resolvedUserId?: string;
+  provisionalUserId?: string;
+  channelId?: string;
+  accountId?: string;
+  conversationId?: string;
+  requesterSenderId?: string;
+  requesterSenderName?: string;
+  requesterSenderUsername?: string;
+  effectiveLanguage?: string;
+  capturedAt: number;
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -128,6 +141,7 @@ export type SessionEntry = {
   reasoningLevel?: string;
   elevatedLevel?: string;
   replyLanguage?: string;
+  memoryPrincipal?: SessionMemoryPrincipal;
   ttsAuto?: TtsAutoMode;
   execHost?: string;
   execSecurity?: string;

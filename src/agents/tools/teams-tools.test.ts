@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MaumauConfig } from "../../config/types.maumau.js";
 import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
 
 const hoisted = vi.hoisted(() => {
@@ -123,7 +124,7 @@ const TEST_CONFIG = {
       },
     ],
   },
-};
+} satisfies MaumauConfig;
 
 describe("teams tools", () => {
   beforeEach(async () => {
@@ -392,13 +393,13 @@ describe("teams tools", () => {
             managerAgentId: "main",
             implicitForManagerSessions: true,
             members: [],
-            crossTeamLinks: [{ type: "team", targetId: "alpha" }],
+            crossTeamLinks: [{ type: "team" as const, targetId: "alpha" }],
             workflows: [{ id: "default", default: true }],
           },
           ...TEST_CONFIG.teams.list,
         ],
       },
-    };
+    } satisfies MaumauConfig;
     hoisted.resolveSessionTeamContextMock.mockReturnValue({
       teamId: "main",
       teamRole: "manager",

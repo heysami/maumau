@@ -40,7 +40,11 @@ const sendConfigApply = async (ws: WebSocket, id: string, params: Record<string,
       params,
     }),
   );
-  return onceMessage<{ ok: boolean; payload?: unknown; error?: { message?: string } }>(ws, (o) => {
+  return onceMessage<{
+    ok: boolean;
+    payload?: Record<string, unknown> | null;
+    error?: { message?: string };
+  }>(ws, (o) => {
     const msg = o as { type?: string; id?: string };
     return msg.type === "res" && msg.id === id;
   });

@@ -592,7 +592,7 @@ describe("gateway e2e", () => {
         expect(start.step?.type).toBe("progress");
         expect(start.step?.title).toBe("Preparing setup");
       } finally {
-        await client.close();
+        client.stop();
         await server.close({ reason: "wizard warmup blocked" });
         await fs.rm(tempHome, { recursive: true, force: true });
         envSnapshot.restore();

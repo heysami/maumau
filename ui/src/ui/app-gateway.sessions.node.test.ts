@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import type { MauOfficeState } from "./controllers/mau-office.ts";
 
 const loadSessionsMock = vi.fn();
-const applyMauOfficeAgentEventMock = vi.fn((state) => state);
-const applyMauOfficePresenceMock = vi.fn((state) => state);
-const applyMauOfficeSessionMessageEventMock = vi.fn((state) => state);
-const applyMauOfficeSessionToolEventMock = vi.fn((state) => state);
+const applyMauOfficeAgentEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficePresenceMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficeSessionMessageEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficeSessionToolEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
 const scheduleMauOfficeReloadMock = vi.fn();
 
 vi.mock("./app-chat.ts", () => ({

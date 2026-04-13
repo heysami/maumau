@@ -363,7 +363,11 @@ function collectVapiCard(params: {
       params.endMs,
     );
     const exactCostUsd = extractVapiCallCostUsd(call);
-    if (exactCostUsd !== undefined) {
+    if (
+      exactCostUsd !== undefined &&
+      billableStartMs !== undefined &&
+      billableEndMs !== undefined
+    ) {
       const billableDurationMs = clipDurationMs(
         billableStartMs,
         billableEndMs,

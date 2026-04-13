@@ -156,7 +156,7 @@ function applyAgentPatches(config: Record<string, unknown>, result: TeamPromptEd
   if (!Array.isArray(result.agentPatches) || result.agentPatches.length === 0) {
     return;
   }
-  const agentsRecord = ((config.agents ?? {}) as { list?: AgentConfig[] }) ?? {};
+  const agentsRecord = (config.agents ?? {}) as { list?: AgentConfig[] };
   const list = Array.isArray(agentsRecord.list) ? cloneConfigObject(agentsRecord.list) : [];
   for (const patch of result.agentPatches) {
     const existingIndex = list.findIndex((entry) => entry.id === patch.agentId);
@@ -234,7 +234,7 @@ function applyPromptEditResult(
     list: teamsList,
   };
   applyAgentPatches(nextRoot, result);
-  replaceConfigFormRoot(host as ConfigState, nextRoot);
+  replaceConfigFormRoot(host as unknown as ConfigState, nextRoot);
 }
 
 export function openTeamPromptDialog(host: TeamPromptHost, target: TeamPromptTarget) {
@@ -298,7 +298,12 @@ export async function submitTeamPromptDialog(host: TeamPromptHost) {
       },
       result,
     );
-    await loadDashboardTeamSnapshots(host, { quiet: true });
+    await loadDashboardTeamSnapshots(
+      host as unknown as Parameters<typeof loadDashboardTeamSnapshots>[0],
+      {
+        quiet: true,
+      },
+    );
     host.teamPromptSummary =
       result.summary ?? (result.noop ? "No draft changes were applied." : "Draft updated.");
     host.teamPromptWarnings = result.warnings ?? [];

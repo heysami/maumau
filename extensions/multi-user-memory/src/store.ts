@@ -48,7 +48,10 @@ export type ScopedMemoryItem = {
   summary?: string;
   itemKind?: string;
   sourceUserId?: string;
+  provenance?: string;
   provenanceItemId?: string;
+  durability: "daily" | "durable";
+  entryDate?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -93,7 +96,10 @@ type StoredMemoryRow = {
   summary: string | null;
   item_kind: string | null;
   source_user_id: string | null;
+  provenance: string | null;
   provenance_item_id: string | null;
+  durability: string | null;
+  entry_date: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -232,7 +238,10 @@ function rowToMemoryItem(row: StoredMemoryRow): ScopedMemoryItem {
     summary: row.summary ?? undefined,
     itemKind: row.item_kind ?? undefined,
     sourceUserId: row.source_user_id ?? undefined,
+    provenance: row.provenance ?? undefined,
     provenanceItemId: row.provenance_item_id ?? undefined,
+    durability: row.durability === "daily" ? "daily" : "durable",
+    entryDate: row.entry_date ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -312,7 +321,10 @@ export class MultiUserMemoryStore {
         summary TEXT,
         item_kind TEXT,
         source_user_id TEXT,
+        provenance TEXT,
         provenance_item_id TEXT,
+        durability TEXT NOT NULL DEFAULT 'durable',
+        entry_date TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'active'
@@ -347,6 +359,19 @@ export class MultiUserMemoryStore {
         created_at INTEGER NOT NULL
       );
     `);
+    this.ensureMemoryItemColumn("provenance", "TEXT");
+    this.ensureMemoryItemColumn("durability", "TEXT NOT NULL DEFAULT 'durable'");
+    this.ensureMemoryItemColumn("entry_date", "TEXT");
+  }
+
+  private ensureMemoryItemColumn(column: string, definition: string): void {
+    const rows = this.db
+      .prepare("PRAGMA table_info(memory_items)")
+      .all() as Array<{ name?: string }>;
+    if (rows.some((row) => row.name === column)) {
+      return;
+    }
+    this.db.exec(`ALTER TABLE memory_items ADD COLUMN ${column} ${definition}`);
   }
 
   close(): void {
@@ -614,7 +639,10 @@ export class MultiUserMemoryStore {
     summary?: string;
     itemKind?: string;
     sourceUserId?: string;
+    provenance?: string;
     provenanceItemId?: string;
+    durability?: "daily" | "durable";
+    entryDate?: string;
   }): ScopedMemoryItem {
     const now = Date.now();
     const itemId = randomUUID();
@@ -629,11 +657,14 @@ export class MultiUserMemoryStore {
             summary,
             item_kind,
             source_user_id,
+            provenance,
             provenance_item_id,
+            durability,
+            entry_date,
             created_at,
             updated_at,
             status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
         `,
       )
       .run(
@@ -644,7 +675,10 @@ export class MultiUserMemoryStore {
         normalizeOptionalString(params.summary) ?? null,
         normalizeOptionalString(params.itemKind) ?? null,
         normalizeOptionalString(params.sourceUserId) ?? null,
+        normalizeOptionalString(params.provenance) ?? null,
         normalizeOptionalString(params.provenanceItemId) ?? null,
+        params.durability === "daily" ? "daily" : "durable",
+        normalizeOptionalString(params.entryDate) ?? null,
         now,
         now,
       );
@@ -656,7 +690,10 @@ export class MultiUserMemoryStore {
       summary: normalizeOptionalString(params.summary),
       itemKind: normalizeOptionalString(params.itemKind),
       sourceUserId: normalizeOptionalString(params.sourceUserId),
+      provenance: normalizeOptionalString(params.provenance),
       provenanceItemId: normalizeOptionalString(params.provenanceItemId),
+      durability: params.durability === "daily" ? "daily" : "durable",
+      entryDate: normalizeOptionalString(params.entryDate),
       createdAt: now,
       updatedAt: now,
     };
@@ -696,7 +733,10 @@ export class MultiUserMemoryStore {
             summary,
             item_kind,
             source_user_id,
+            provenance,
             provenance_item_id,
+            durability,
+            entry_date,
             created_at,
             updated_at
           FROM memory_items
@@ -870,7 +910,10 @@ export class MultiUserMemoryStore {
             summary,
             item_kind,
             source_user_id,
+            provenance,
             provenance_item_id,
+            durability,
+            entry_date,
             created_at,
             updated_at
           FROM memory_items
@@ -879,6 +922,33 @@ export class MultiUserMemoryStore {
       )
       .get(itemId) as StoredMemoryRow | undefined;
     return row ? rowToMemoryItem(row) : null;
+  }
+
+  listActiveMemoryItems(): ScopedMemoryItem[] {
+    const rows = this.db
+      .prepare(
+        `
+          SELECT
+            item_id,
+            scope_type,
+            scope_id,
+            body,
+            summary,
+            item_kind,
+            source_user_id,
+            provenance,
+            provenance_item_id,
+            durability,
+            entry_date,
+            created_at,
+            updated_at
+          FROM memory_items
+          WHERE status = 'active'
+          ORDER BY scope_type, scope_id, created_at ASC
+        `,
+      )
+      .all() as StoredMemoryRow[];
+    return rows.map(rowToMemoryItem);
   }
 
   decideProposal(params: {
@@ -906,7 +976,9 @@ export class MultiUserMemoryStore {
           summary: sourceItem.summary,
           itemKind: sourceItem.itemKind ?? "shared",
           sourceUserId: proposal.sourceUserId,
+          provenance: `proposal:${proposal.proposalId}`,
           provenanceItemId: sourceItem.itemId,
+          durability: "durable",
         });
       }
     }

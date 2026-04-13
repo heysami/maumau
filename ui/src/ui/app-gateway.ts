@@ -54,6 +54,7 @@ import { isDashboardTab, type Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type {
   AgentsListResult,
+  ConfigSnapshot,
   DashboardSnapshot,
   DashboardTeamSnapshotsResult,
   PresenceEntry,
@@ -126,17 +127,38 @@ type GatewayHost = {
   dashboardLoading: boolean;
   dashboardError: string | null;
   dashboardSnapshot: DashboardSnapshot | null;
+  dashboardWalletLoading: boolean;
+  dashboardWalletError: string | null;
+  dashboardWalletResult: import("./types.ts").DashboardWalletResult | null;
+  dashboardWalletStartDate: string;
+  dashboardWalletEndDate: string;
+  dashboardWalletTimeZone: "local" | "utc";
   dashboardCalendarResult: import("./types.ts").DashboardCalendarResult | null;
   dashboardCalendarAnchorAtMs: number | null;
   dashboardCalendarView: "month" | "week" | "day";
   dashboardBusinessResult: import("./types.ts").DashboardBusinessResult | null;
   dashboardProjectsResult: import("./types.ts").DashboardProjectsResult | null;
+  dashboardUserChannelsResult: import("./types.ts").DashboardUserChannelsResult | null;
+  dashboardUserChannelId: string | null;
+  dashboardUserChannelAccountId: string | null;
   dashboardTeamsLoading: boolean;
   dashboardTeamsError: string | null;
   dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
   dashboardTeamRunsLoading: boolean;
   dashboardTeamRunsError: string | null;
   dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
+  dashboardTaskFilter: import("./types.ts").DashboardTaskFilter;
+  dashboardWorkshopSelectedId: string | null;
+  dashboardWorkshopTab: "saved" | "recent" | "agent-apps";
+  dashboardWorkshopSelectedIds: Set<string>;
+  dashboardWorkshopProjectDraft: string;
+  dashboardWorkshopSaving: boolean;
+  dashboardWorkshopSaveError: string | null;
+  configForm: Record<string, unknown> | null;
+  configSnapshot: ConfigSnapshot | null;
+  configFormDirty: boolean;
+  configFormMode: "form" | "raw";
+  configRaw: string;
   dashboardReloadTimer: number | null;
   mauOfficeLoading: boolean;
   mauOfficeError: string | null;

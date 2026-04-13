@@ -160,28 +160,17 @@ function ensureCuratorAgent(config: MaumauConfig, curatorAgentId: string): Mauma
 }
 
 export function applyLocalSetupMultiUserMemoryDefaults(baseConfig: MaumauConfig): MaumauConfig {
-  const currentSlot =
-    typeof baseConfig.plugins?.slots?.memory === "string"
-      ? baseConfig.plugins.slots.memory.trim()
-      : "";
-  if (currentSlot && currentSlot !== MULTI_USER_MEMORY_PLUGIN_ID) {
-    return baseConfig;
-  }
-
   const pluginConfig = ensurePluginConfigRecord(baseConfig);
   const withCuratorAgent = ensureCuratorAgent(
     {
       ...baseConfig,
       plugins: {
         ...baseConfig.plugins,
-        slots: {
-          ...baseConfig.plugins?.slots,
-          memory: MULTI_USER_MEMORY_PLUGIN_ID,
-        },
         entries: {
           ...baseConfig.plugins?.entries,
           [MULTI_USER_MEMORY_PLUGIN_ID]: {
             ...baseConfig.plugins?.entries?.[MULTI_USER_MEMORY_PLUGIN_ID],
+            enabled: true,
             config: pluginConfig,
           },
         },
@@ -236,11 +225,8 @@ export async function ensureOnboardedMultiUserMemoryArtifacts(params: {
   config: MaumauConfig;
   runtime: RuntimeEnv;
 }): Promise<void> {
-  const currentSlot =
-    typeof params.config.plugins?.slots?.memory === "string"
-      ? params.config.plugins.slots.memory.trim()
-      : "";
-  if (currentSlot !== MULTI_USER_MEMORY_PLUGIN_ID) {
+  const entry = params.config.plugins?.entries?.[MULTI_USER_MEMORY_PLUGIN_ID];
+  if (entry?.enabled === false || !entry) {
     return;
   }
 

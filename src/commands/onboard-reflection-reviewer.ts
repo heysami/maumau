@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import type { MaumauConfig } from "../config/config.js";
+import type { CronSessionTarget } from "../cron/types.js";
 import { createJob } from "../cron/service/jobs.js";
 import { createCronServiceState } from "../cron/service/state.js";
 import { loadCronStore, resolveCronStorePath, saveCronStore } from "../cron/store.js";
@@ -25,9 +26,11 @@ Do this work directly in this session. Do not delegate to teams or subagents unl
 3. Inspect up to the latest 200 non-tool messages per remaining candidate with sessions_history(includeTools=false).
 4. Extract struggles, delights, durable preferences, and candidate fixes. Paraphrase safely; do not quote sensitive text unless clearly safe.
 5. Use memory_search or memory_get only when helpful.
-6. Write or update reviews/daily/YYYY-MM-DD.md with these sections exactly: Day summary, Top struggles, Top delights, Durable preferences, Candidate fixes, Research follow-ups, Weekly carry-forward.
-7. Always write the daily file, even on calm days. Keep calm days brief and explicitly say the day was calm.
-8. Do not send chat. Reply only NO_REPLY.`;
+6. Distill user-specific learnings into memory_store. Use target="active-user". Use durability="durable" for stable preferences or long-lived facts, and durability="daily" for short-horizon session context.
+7. If a fact looks useful beyond one user, do not write directly to group or global memory. Instead use multi_user_memory_curate so shared proposals stay approval-gated.
+8. Write or update reviews/daily/YYYY-MM-DD.md with these sections exactly: Day summary, Top struggles, Top delights, Durable preferences, Candidate fixes, Research follow-ups, Weekly carry-forward.
+9. Always write the daily file, even on calm days. Keep calm days brief and explicitly say the day was calm.
+10. Do not send chat. Reply only NO_REPLY.`;
 
 const WEEKLY_REFLECTION_PROMPT = `You are the weekly reflection reviewer for this Maumau gateway.
 
@@ -40,10 +43,12 @@ Do this work directly in this session. Do not delegate to teams or subagents unl
 4. Synthesize the week from daily notes first, then use raw sessions only to fill gaps or validate high-impact claims.
 5. Extract top struggles, delights, recurring do's and don'ts, suggested personality edits, tooling or plugin opportunities, recommended solutions or experiments, research-backed recommendations, and next-week tasks. Paraphrase safely; do not quote sensitive text unless clearly safe.
 6. Use memory_search or memory_get only when helpful. Use web_search or web_fetch only for up to 3 high-leverage items that need current verification, and include links in the report.
-7. Write reviews/weekly/YYYY-WW.md with these sections exactly: Week overview, Top struggles, Top delights, Recurring do's, Recurring don'ts, Suggested personality edits, Suggested tooling/plugin opportunities, Recommended solutions / experiments, Research-backed recommendations, Next-week task plan.
-8. Always write the weekly report, even on calm weeks. Keep calm weeks brief and explicitly say the week was calm.
-9. If the report is worth surfacing and the default main session has usable deliveryContext with explicit target info, send one concise main-chat summary naming the report path and 2 to 4 highest-leverage findings. Otherwise skip chat.
-10. Reply only NO_REPLY.`;
+7. Distill stable user learnings into memory_store with target="active-user" and durability="durable". Use durability="daily" only for short-lived context that should not survive long.
+8. If you identify cross-user or group-relevant facts, use multi_user_memory_curate to queue approval-gated shared-memory proposals instead of writing group/global memory directly.
+9. Write reviews/weekly/YYYY-WW.md with these sections exactly: Week overview, Top struggles, Top delights, Recurring do's, Recurring don'ts, Suggested personality edits, Suggested tooling/plugin opportunities, Recommended solutions / experiments, Research-backed recommendations, Next-week task plan.
+10. Always write the weekly report, even on calm weeks. Keep calm weeks brief and explicitly say the week was calm.
+11. If the report is worth surfacing and the default main session has usable deliveryContext with explicit target info, send one concise main-chat summary naming the report path and 2 to 4 highest-leverage findings. Otherwise skip chat.
+12. Reply only NO_REPLY.`;
 
 function resolveReviewTimezone(config: MaumauConfig): string {
   const configured = config.agents?.defaults?.userTimezone?.trim();
@@ -157,7 +162,7 @@ function syncManagedReflectionJob(params: {
   job: ReturnType<typeof createJob>;
   agentId: string;
   description: string;
-  sessionTarget: string;
+  sessionTarget: CronSessionTarget;
   message: string;
 }) {
   let changed = false;

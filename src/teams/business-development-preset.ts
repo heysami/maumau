@@ -1,4 +1,4 @@
-import { resolveDefaultAgentWorkspaceDir } from "../agents/workspace.js";
+import { DEFAULT_AGENT_WORKSPACE_ALIAS } from "../agents/workspace-alias.js";
 import type { AgentConfig } from "../config/types.agents.js";
 import type { TeamConfig } from "../config/types.teams.js";
 import { DEFAULT_TEAM_WORKFLOW_ID } from "./model.js";
@@ -29,7 +29,7 @@ export function createBusinessDevelopmentTeamAgents(): AgentConfig[] {
     {
       id: BUSINESS_DEVELOPMENT_TEAM_MANAGER_AGENT_ID,
       name: "Business Dev Manager",
-      workspace: resolveDefaultAgentWorkspaceDir(),
+      workspace: DEFAULT_AGENT_WORKSPACE_ALIAS,
       tools: {
         allow: [...BUSINESS_DEVELOPMENT_MANAGER_TOOL_ALLOW],
       },

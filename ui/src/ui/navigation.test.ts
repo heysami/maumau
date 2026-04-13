@@ -55,6 +55,7 @@ describe("iconForTab", () => {
     expect(iconForTab("dashboardProfile")).toBe("book");
     expect(iconForTab("dashboardTeams")).toBe("users");
     expect(iconForTab("dashboardUserChannels")).toBe("link");
+    expect(iconForTab("dashboardAgents")).toBe("folder");
     expect(iconForTab("dashboardMemories")).toBe("brain");
     expect(iconForTab("cron")).toBe("loader");
     expect(iconForTab("skills")).toBe("zap");
@@ -89,7 +90,8 @@ describe("titleForTab", () => {
     expect(titleForTab("dashboardMauOffice")).toBe("MauOffice");
     expect(titleForTab("dashboardProfile")).toBe("Life Profile");
     expect(titleForTab("dashboardUserChannels")).toBe("User Channels");
-    expect(titleForTab("dashboardMemories")).toBe("Agents");
+    expect(titleForTab("dashboardAgents")).toBe("Agents");
+    expect(titleForTab("dashboardMemories")).toBe("Memory Notes");
     expect(titleForTab("cron")).toBe("Cron Jobs");
   });
 
@@ -133,13 +135,25 @@ describe("dashboard locale inventory", () => {
     for (const locale of locales) {
       expect((locale.tabs as { dashboardToday?: string }).dashboardToday).toBeTruthy();
       expect((locale.tabs as { dashboardWallet?: string }).dashboardWallet).toBeTruthy();
+      expect((locale.tabs as { dashboardAgents?: string }).dashboardAgents).toBeTruthy();
+      expect((locale.tabs as { dashboardMemories?: string }).dashboardMemories).toBeTruthy();
       expect((locale.subtitles as { dashboardToday?: string }).dashboardToday).toBeTruthy();
       expect((locale.subtitles as { dashboardWallet?: string }).dashboardWallet).toBeTruthy();
+      expect((locale.subtitles as { dashboardAgents?: string }).dashboardAgents).toBeTruthy();
+      expect((locale.subtitles as { dashboardMemories?: string }).dashboardMemories).toBeTruthy();
       expect(
         ((locale.dashboard as { shell?: { eyebrow?: string } }).shell ?? {}).eyebrow,
       ).toBeTruthy();
       expect(
         ((locale.dashboard as { mauOffice?: { subtitle?: string } }).mauOffice ?? {}).subtitle,
+      ).toBeTruthy();
+      expect(
+        ((locale.dashboard as { memories?: { filterSubtitle?: string } }).memories ?? {})
+          .filterSubtitle,
+      ).toBeTruthy();
+      expect(
+        ((locale.dashboard as { memories?: { recentNotesSubtitle?: string } }).memories ?? {})
+          .recentNotesSubtitle,
       ).toBeTruthy();
     }
   });
@@ -192,7 +206,8 @@ describe("pathForTab", () => {
     expect(pathForTab("dashboardMauOffice")).toBe("/dashboard/mau-office");
     expect(pathForTab("dashboardProfile")).toBe("/dashboard/profile");
     expect(pathForTab("dashboardUserChannels")).toBe("/dashboard/user-channels");
-    expect(pathForTab("dashboardMemories")).toBe("/dashboard/agents");
+    expect(pathForTab("dashboardAgents")).toBe("/dashboard/agents");
+    expect(pathForTab("dashboardMemories")).toBe("/dashboard/memory-notes");
   });
 
   it("prepends base path", () => {
@@ -212,6 +227,8 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/dashboard/mau-office")).toBe("dashboardMauOffice");
     expect(tabFromPath("/dashboard/profile")).toBe("dashboardProfile");
     expect(tabFromPath("/dashboard/user-channels")).toBe("dashboardUserChannels");
+    expect(tabFromPath("/dashboard/agents")).toBe("dashboardAgents");
+    expect(tabFromPath("/dashboard/memory-notes")).toBe("dashboardMemories");
   });
 
   it("keeps legacy MauOffice routes compatible", () => {
@@ -270,6 +287,7 @@ describe("dashboard route helpers", () => {
     expect(tabForDashboardPage("today")).toBe("dashboardToday");
     expect(tabForDashboardPage("mau-office")).toBe("dashboardMauOffice");
     expect(tabForDashboardPage("user-channels")).toBe("dashboardUserChannels");
+    expect(tabForDashboardPage("agents")).toBe("dashboardAgents");
     expect(tabForDashboardPage("memories")).toBe("dashboardMemories");
     expect(tabForDashboardPage("profile")).toBe("dashboardProfile");
   });
@@ -279,6 +297,8 @@ describe("dashboard route helpers", () => {
     expect(dashboardPageForTab("dashboardWorkshop")).toBe("workshop");
     expect(dashboardPageForTab("dashboardProfile")).toBe("profile");
     expect(dashboardPageForTab("dashboardUserChannels")).toBe("user-channels");
+    expect(dashboardPageForTab("dashboardAgents")).toBe("agents");
+    expect(dashboardPageForTab("dashboardMemories")).toBe("memories");
     expect(dashboardPageForTab("chat")).toBeNull();
   });
 

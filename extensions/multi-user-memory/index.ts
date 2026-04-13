@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { Type } from "@sinclair/typebox";
 import {
   definePluginEntry,
@@ -26,28 +28,11 @@ import {
   resolveGroupsContainingUsers,
   type MultiUserMemoryConfig,
 } from "./src/config.js";
+import { isCorpusPath, resolveCorpusRelativePathForItem, syncScopedCorpus } from "./src/corpus.js";
 import { maybeBootstrapFirstObservedUser } from "./src/first-user.js";
 import { DEFAULT_LANGUAGE_ID, normalizeLanguageId, translate } from "./src/language.js";
 import { resolveCurrentMultiUserMemoryConfig } from "./src/runtime-config.js";
 import { MultiUserMemoryStore, resolveDefaultStorePath, type ProposalRecord } from "./src/store.js";
-
-const SEARCH_SCHEMA = Type.Object(
-  {
-    query: Type.String(),
-    maxResults: Type.Optional(Type.Number({ minimum: 1, maximum: 25 })),
-    minScore: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
-  },
-  { additionalProperties: false },
-);
-
-const GET_SCHEMA = Type.Object(
-  {
-    path: Type.String(),
-    from: Type.Optional(Type.Number({ minimum: 1 })),
-    lines: Type.Optional(Type.Number({ minimum: 1 })),
-  },
-  { additionalProperties: false },
-);
 
 const LIST_PROVISIONAL_SCHEMA = Type.Object({}, { additionalProperties: false });
 
@@ -110,6 +95,7 @@ type ActivePrincipal = {
   configuredUserId?: string;
   provisionalUserId?: string;
   scopeKeys: string[];
+  capturedAt: number;
 };
 
 type ImpactCandidate = {
@@ -209,11 +195,171 @@ function listPendingProvisionalUsers(
   );
 }
 
+function readRecordedMemoryPrincipal(params: {
+  api: MaumauPluginApi;
+  toolCtx: Pick<MaumauPluginToolContext, "agentId" | "sessionKey">;
+}):
+  | {
+      resolvedUserId?: string;
+      provisionalUserId?: string;
+      channelId?: string;
+      accountId?: string;
+      conversationId?: string;
+      requesterSenderId?: string;
+      requesterSenderName?: string;
+      requesterSenderUsername?: string;
+      effectiveLanguage?: string;
+      capturedAt: number;
+    }
+  | null {
+  const sessionKey = params.toolCtx.sessionKey?.trim();
+  const agentId = params.toolCtx.agentId?.trim();
+  if (!sessionKey || !agentId) {
+    return null;
+  }
+  const storePath = resolveStorePath(params.api.config.session?.store, { agentId });
+  const sessionStore = params.api.runtime.agent.session.loadSessionStore(storePath);
+  const { existing } = resolveSessionStoreEntry({ store: sessionStore, sessionKey });
+  const principal = existing?.memoryPrincipal;
+  if (!principal || typeof principal.capturedAt !== "number") {
+    return null;
+  }
+  return principal;
+}
+
+function principalFromRecordedMemory(params: {
+  pluginConfig: MultiUserMemoryConfig;
+  store: MultiUserMemoryStore;
+  principal: {
+    resolvedUserId?: string;
+    provisionalUserId?: string;
+    requesterSenderId?: string;
+    requesterSenderName?: string;
+    requesterSenderUsername?: string;
+    effectiveLanguage?: string;
+    capturedAt: number;
+  };
+}): ActivePrincipal | null {
+  if (params.principal.resolvedUserId) {
+    const user = params.pluginConfig.users[params.principal.resolvedUserId];
+    const provisionalIds = user ? params.store.findProvisionalIdsForConfiguredUser(user) : [];
+    return {
+      configuredUserId: params.principal.resolvedUserId,
+      displayName: resolveDisplayName({
+        configuredUserId: params.principal.resolvedUserId,
+        configuredDisplayName: user?.displayName,
+        provisionalUserId: params.principal.provisionalUserId,
+        senderName: params.principal.requesterSenderName,
+        senderUsername: params.principal.requesterSenderUsername,
+        senderId: params.principal.requesterSenderId,
+      }),
+      language:
+        params.principal.effectiveLanguage ??
+        user?.preferredLanguage ??
+        params.pluginConfig.defaultLanguage,
+      scopeKeys: buildVisibleScopeKeys({
+        config: params.pluginConfig,
+        userId: params.principal.resolvedUserId,
+        provisionalIds,
+      }),
+      capturedAt: params.principal.capturedAt,
+    };
+  }
+  if (params.principal.provisionalUserId) {
+    return {
+      provisionalUserId: params.principal.provisionalUserId,
+      displayName: resolveDisplayName({
+        provisionalUserId: params.principal.provisionalUserId,
+        senderName: params.principal.requesterSenderName,
+        senderUsername: params.principal.requesterSenderUsername,
+        senderId: params.principal.requesterSenderId,
+      }),
+      language: params.principal.effectiveLanguage ?? params.pluginConfig.defaultLanguage,
+      scopeKeys: buildVisibleScopeKeys({
+        config: params.pluginConfig,
+        provisionalIds: [params.principal.provisionalUserId],
+      }),
+      capturedAt: params.principal.capturedAt,
+    };
+  }
+  return null;
+}
+
+function resolveRecordedActivePrincipal(params: {
+  api: MaumauPluginApi;
+  pluginConfig: MultiUserMemoryConfig;
+  store: MultiUserMemoryStore;
+  toolCtx: Pick<MaumauPluginToolContext, "agentId" | "sessionKey">;
+}): ActivePrincipal | null {
+  const principal = readRecordedMemoryPrincipal(params);
+  if (!principal) {
+    return null;
+  }
+  return principalFromRecordedMemory({
+    pluginConfig: params.pluginConfig,
+    store: params.store,
+    principal,
+  });
+}
+
+async function persistMemoryPrincipal(params: {
+  api: MaumauPluginApi;
+  sessionKey?: string;
+  agentId?: string;
+  principal: ActivePrincipal;
+  toolCtx?: Pick<
+    MaumauPluginToolContext,
+    | "messageChannel"
+    | "agentAccountId"
+    | "conversationId"
+    | "requesterSenderId"
+    | "requesterSenderName"
+    | "requesterSenderUsername"
+  >;
+}): Promise<void> {
+  const sessionKey = params.sessionKey?.trim();
+  const agentId = params.agentId?.trim();
+  if (!sessionKey || !agentId) {
+    return;
+  }
+  const storePath = resolveStorePath(params.api.config.session?.store, { agentId });
+  await updateSessionStore(storePath, (store) => {
+    const { normalizedKey, existing } = resolveSessionStoreEntry({ store, sessionKey });
+    if (!existing) {
+      return undefined;
+    }
+    store[normalizedKey] = {
+      ...existing,
+      memoryPrincipal: {
+        resolvedUserId: params.principal.configuredUserId,
+        provisionalUserId: params.principal.provisionalUserId,
+        channelId: params.toolCtx?.messageChannel,
+        accountId: params.toolCtx?.agentAccountId,
+        conversationId: params.toolCtx?.conversationId,
+        requesterSenderId: params.toolCtx?.requesterSenderId,
+        requesterSenderName: params.toolCtx?.requesterSenderName,
+        requesterSenderUsername: params.toolCtx?.requesterSenderUsername,
+        effectiveLanguage: params.principal.language,
+        capturedAt: params.principal.capturedAt,
+      },
+      updatedAt: Date.now(),
+    };
+    return store[normalizedKey];
+  });
+}
+
+async function syncScopedCorpusSafe(api: MaumauPluginApi, store: MultiUserMemoryStore) {
+  const workspaceDir = api.runtime.agent.resolveAgentWorkspaceDir(api.config, "main");
+  await syncScopedCorpus({ workspaceDir, store });
+}
+
 function resolveToolPrincipal(params: {
+  api: MaumauPluginApi;
   store: MultiUserMemoryStore;
   pluginConfig: MultiUserMemoryConfig;
   toolCtx: MaumauPluginToolContext;
 }): ActivePrincipal | null {
+  const now = Date.now();
   const channelId = params.toolCtx.messageChannel?.trim();
   const senderId = params.toolCtx.requesterSenderId?.trim();
   if (channelId && senderId) {
@@ -237,6 +383,7 @@ function resolveToolPrincipal(params: {
           userId: match.userId,
           provisionalIds,
         }),
+        capturedAt: now,
       };
     }
     const provisional = params.store.findProvisionalUserByIdentity({
@@ -253,15 +400,26 @@ function resolveToolPrincipal(params: {
           config: params.pluginConfig,
           provisionalIds: [provisional.provisionalUserId],
         }),
+        capturedAt: now,
       };
     }
   }
   if (!params.toolCtx.sessionKey) {
-    return null;
+    return resolveRecordedActivePrincipal({
+      api: params.api,
+      pluginConfig: params.pluginConfig,
+      store: params.store,
+      toolCtx: params.toolCtx,
+    });
   }
   const sessionContext = params.store.getSessionContext(params.toolCtx.sessionKey);
   if (!sessionContext) {
-    return null;
+    return resolveRecordedActivePrincipal({
+      api: params.api,
+      pluginConfig: params.pluginConfig,
+      store: params.store,
+      toolCtx: params.toolCtx,
+    });
   }
   if (sessionContext.resolvedUserId) {
     const user = params.pluginConfig.users[sessionContext.resolvedUserId];
@@ -285,6 +443,7 @@ function resolveToolPrincipal(params: {
         userId: sessionContext.resolvedUserId,
         provisionalIds,
       }),
+      capturedAt: sessionContext.updatedAt,
     };
   }
   if (sessionContext.provisionalUserId) {
@@ -301,9 +460,15 @@ function resolveToolPrincipal(params: {
         config: params.pluginConfig,
         provisionalIds: [sessionContext.provisionalUserId],
       }),
+      capturedAt: sessionContext.updatedAt,
     };
   }
-  return null;
+  return resolveRecordedActivePrincipal({
+    api: params.api,
+    pluginConfig: params.pluginConfig,
+    store: params.store,
+    toolCtx: params.toolCtx,
+  });
 }
 
 function buildPrincipalPrompt(principal: ActivePrincipal, pendingApprovalPrompt?: string): string {
@@ -521,6 +686,7 @@ async function handlePrincipalTurn(params: {
             userId: match.userId,
             provisionalIds,
           }),
+          capturedAt: Date.now(),
         }
       : observed.provisionalUserId
         ? {
@@ -536,8 +702,30 @@ async function handlePrincipalTurn(params: {
               config: pluginConfig,
               provisionalIds: [observed.provisionalUserId],
             }),
+            capturedAt: Date.now(),
           }
         : null;
+
+    if (principal) {
+      await persistMemoryPrincipal({
+        api: params.api,
+        agentId: params.ctx.agentId,
+        sessionKey: params.ctx.sessionKey,
+        principal,
+        toolCtx: {
+          messageChannel: params.ctx.channelId,
+          agentAccountId: params.ctx.accountId,
+          conversationId: params.ctx.conversationId,
+          requesterSenderId: params.ctx.requesterSenderId,
+          requesterSenderName: params.ctx.requesterSenderName,
+          requesterSenderUsername: params.ctx.requesterSenderUsername,
+        },
+      }).catch((err: unknown) => {
+        params.api.logger.warn?.(
+          `multi-user-memory: failed persisting memory principal: ${String(err)}`,
+        );
+      });
+    }
 
     if (principal?.configuredUserId && params.ctx.isGroup !== true) {
       await persistReplyLanguage({
@@ -568,6 +756,14 @@ async function handlePrincipalTurn(params: {
             summary: capture.summary,
             itemKind: capture.kind,
             sourceUserId: principal.configuredUserId,
+            provenance: "turn-capture",
+            durability: "daily",
+            entryDate: new Date().toISOString().slice(0, 10),
+          });
+          await syncScopedCorpusSafe(params.api, params.store).catch((err: unknown) => {
+            params.api.logger.warn?.(
+              `multi-user-memory: failed syncing scoped corpus: ${String(err)}`,
+            );
           });
         }
       } else if (principal?.provisionalUserId) {
@@ -577,6 +773,14 @@ async function handlePrincipalTurn(params: {
           body: params.event.prompt,
           summary: capture.summary,
           itemKind: capture.kind,
+          provenance: "turn-capture",
+          durability: "daily",
+          entryDate: new Date().toISOString().slice(0, 10),
+        });
+        await syncScopedCorpusSafe(params.api, params.store).catch((err: unknown) => {
+          params.api.logger.warn?.(
+            `multi-user-memory: failed syncing scoped corpus: ${String(err)}`,
+          );
         });
       }
     }
@@ -605,6 +809,7 @@ async function handlePrincipalTurn(params: {
           userId: sessionContext.resolvedUserId,
           provisionalIds,
         }),
+        capturedAt: sessionContext.updatedAt,
       };
     } else if (sessionContext?.provisionalUserId) {
       principal = {
@@ -620,8 +825,21 @@ async function handlePrincipalTurn(params: {
           config: pluginConfig,
           provisionalIds: [sessionContext.provisionalUserId],
         }),
+        capturedAt: sessionContext.updatedAt,
       };
     }
+  }
+
+  if (!principal) {
+    principal = resolveRecordedActivePrincipal({
+      api: params.api,
+      pluginConfig,
+      store: params.store,
+      toolCtx: {
+        agentId: params.ctx.agentId,
+        sessionKey: params.ctx.sessionKey,
+      },
+    });
   }
 
   return principal;
@@ -699,89 +917,250 @@ function isCuratorAllowed(params: {
   );
 }
 
-function buildMemorySearchTool(params: {
+function isInternalMemoryAccessAllowed(params: {
+  pluginConfig: MultiUserMemoryConfig;
+  principal: ActivePrincipal | null;
+  senderIsOwner: boolean;
+  agentId?: string;
+}): boolean {
+  return isCuratorAllowed(params);
+}
+
+function isPathVisibleToPrincipal(params: {
+  relPath: string;
+  principal: ActivePrincipal | null;
+  pluginConfig: MultiUserMemoryConfig;
+  senderIsOwner: boolean;
+  agentId?: string;
+}): boolean | null {
+  const normalized = params.relPath.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (normalized.includes("..")) {
+    return false;
+  }
+  if (normalized.startsWith("reviews/")) {
+    return isInternalMemoryAccessAllowed({
+      pluginConfig: params.pluginConfig,
+      principal: params.principal,
+      senderIsOwner: params.senderIsOwner,
+      agentId: params.agentId,
+    });
+  }
+  if (!isCorpusPath(normalized)) {
+    return null;
+  }
+  if (normalized === "corpus/global/MEMORY.md") {
+    return true;
+  }
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length < 3) {
+    return false;
+  }
+  if (segments[1] === "users") {
+    const userId = segments[2];
+    return Boolean(params.principal?.scopeKeys.includes(`private:${userId}`));
+  }
+  if (segments[1] === "provisional") {
+    const provisionalId = segments[2];
+    return Boolean(params.principal?.scopeKeys.includes(`provisional:${provisionalId}`));
+  }
+  if (segments[1] === "groups") {
+    const groupId = segments[2];
+    return Boolean(params.principal?.scopeKeys.includes(`group:${groupId}`));
+  }
+  if (segments[1] === "global") {
+    return true;
+  }
+  return false;
+}
+
+async function readScopedFile(params: {
+  workspaceDir: string;
+  relPath: string;
+  from?: number;
+  lines?: number;
+}): Promise<{ path: string; text: string; disabled?: true; error?: string }> {
+  const absolutePath = path.join(params.workspaceDir, params.relPath);
+  let text: string;
+  try {
+    text = await fs.readFile(absolutePath, "utf8");
+  } catch (err) {
+    return {
+      path: params.relPath,
+      text: "",
+      disabled: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+  if (params.from || params.lines) {
+    const start = Math.max(1, params.from ?? 1);
+    const count = Math.max(1, params.lines ?? Number.MAX_SAFE_INTEGER);
+    const slice = text.split(/\r?\n/).slice(start - 1, start - 1 + count).join("\n");
+    return { path: params.relPath, text: slice };
+  }
+  return { path: params.relPath, text };
+}
+
+async function handleOverlayRead(params: {
   api: MaumauPluginApi;
   store: MultiUserMemoryStore;
-  toolCtx: MaumauPluginToolContext;
-}): AnyAgentTool {
+  context: MaumauPluginToolContext;
+  relPath: string;
+  from?: number;
+  lines?: number;
+  authorizeOnly?: boolean;
+}) {
+  const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
+  const principal = resolveToolPrincipal({
+    api: params.api,
+    store: params.store,
+    pluginConfig,
+    toolCtx: params.context,
+  });
+  const visible = isPathVisibleToPrincipal({
+    relPath: params.relPath,
+    principal,
+    pluginConfig,
+    senderIsOwner: params.context.senderIsOwner === true,
+    agentId: params.context.agentId,
+  });
+  if (visible === null) {
+    return { handled: false as const };
+  }
+  if (!visible) {
+    return {
+      handled: true as const,
+      result: {
+        path: params.relPath,
+        text: "",
+        disabled: true as const,
+        error: "Path is outside the active principal's visible memory scopes.",
+      },
+    };
+  }
+  if (params.authorizeOnly) {
+    return {
+      handled: true as const,
+      result: { path: params.relPath, text: "" },
+    };
+  }
+  const workspaceDir =
+    params.context.workspaceDir ??
+    params.api.runtime.agent.resolveAgentWorkspaceDir(params.api.config, "main");
   return {
-    name: "memory_search",
-    label: "Memory Search",
-    description:
-      "Search scoped private, group, and global multi-user memory visible to the active sender.",
-    parameters: SEARCH_SCHEMA,
-    async execute(_toolCallId, rawParams) {
-      const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
-      const query = readStringParam(rawParams, "query", { required: true });
-      const maxResults = readNumberParam(rawParams, "maxResults", { integer: true });
-      const minScore = readNumberParam(rawParams, "minScore");
-      const principal = resolveToolPrincipal({
-        store: params.store,
-        pluginConfig,
-        toolCtx: params.toolCtx,
-      });
-      if (!principal) {
-        return jsonResult({
-          results: [],
-          disabled: true,
-          error: "No active user context is available for scoped memory search.",
-        });
-      }
-      return jsonResult({
-        results: params.store.search({
-          query,
-          maxResults: maxResults ?? undefined,
-          minScore: minScore ?? undefined,
-          scopeKeys: principal.scopeKeys,
-        }),
-        principal: {
-          configuredUserId: principal.configuredUserId,
-          provisionalUserId: principal.provisionalUserId,
-          displayName: principal.displayName,
-          language: principal.language,
-        },
-      });
-    },
+    handled: true as const,
+    result: await readScopedFile({
+      workspaceDir,
+      relPath: params.relPath,
+      from: params.from,
+      lines: params.lines,
+    }),
   };
 }
 
-function buildMemoryGetTool(params: {
+async function handleOverlayStore(params: {
   api: MaumauPluginApi;
   store: MultiUserMemoryStore;
-  toolCtx: MaumauPluginToolContext;
-}): AnyAgentTool {
-  return {
-    name: "memory_get",
-    label: "Memory Get",
-    description: "Read one scoped multi-user memory item by synthetic path.",
-    parameters: GET_SCHEMA,
-    async execute(_toolCallId, rawParams) {
-      const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
-      const relPath = readStringParam(rawParams, "path", { required: true });
-      const from = readNumberParam(rawParams, "from", { integer: true });
-      const lines = readNumberParam(rawParams, "lines", { integer: true });
-      const principal = resolveToolPrincipal({
-        store: params.store,
+  context: MaumauPluginToolContext;
+  text: string;
+  summary?: string;
+  kind?: string;
+  durability: "daily" | "durable";
+  target: "active-user" | "workspace" | "group" | "global" | "provisional";
+  targetId?: string;
+  dateStamp?: string;
+}) {
+  if (params.target === "workspace") {
+    return { handled: false as const };
+  }
+  const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
+  const principal = resolveToolPrincipal({
+    api: params.api,
+    store: params.store,
+    pluginConfig,
+    toolCtx: params.context,
+  });
+  const senderIsOwner = params.context.senderIsOwner === true;
+
+  let scopeType: "private" | "provisional" | "group" | "global" | null = null;
+  let scopeId: string | undefined;
+
+  if (params.target === "active-user") {
+    if (principal?.configuredUserId) {
+      scopeType = "private";
+      scopeId = principal.configuredUserId;
+    } else if (principal?.provisionalUserId) {
+      scopeType = "provisional";
+      scopeId = principal.provisionalUserId;
+    } else {
+      return { handled: false as const };
+    }
+  } else if (params.target === "provisional") {
+    scopeType = "provisional";
+    scopeId = params.targetId;
+  } else if (params.target === "group") {
+    if (
+      !isCuratorAllowed({
         pluginConfig,
-        toolCtx: params.toolCtx,
-      });
-      if (!principal) {
-        return jsonResult({
-          path: relPath,
-          text: "",
-          disabled: true,
-          error: "No active user context is available for scoped memory reads.",
-        });
-      }
-      return jsonResult(
-        params.store.readScopedPath({
-          relPath,
-          scopeKeys: principal.scopeKeys,
-          from: from ?? undefined,
-          lines: lines ?? undefined,
-        }),
-      );
-    },
+        principal,
+        senderIsOwner,
+        agentId: params.context.agentId,
+      })
+    ) {
+      return {
+        handled: true as const,
+        stored: false,
+        disabled: true as const,
+        error: "Admin or curator access required for group memory writes.",
+      };
+    }
+    scopeType = "group";
+    scopeId = params.targetId;
+  } else if (params.target === "global") {
+    if (
+      !isCuratorAllowed({
+        pluginConfig,
+        principal,
+        senderIsOwner,
+        agentId: params.context.agentId,
+      })
+    ) {
+      return {
+        handled: true as const,
+        stored: false,
+        disabled: true as const,
+        error: "Admin or curator access required for global memory writes.",
+      };
+    }
+    scopeType = "global";
+    scopeId = "global";
+  }
+
+  if (!scopeType || !scopeId) {
+    return {
+      handled: true as const,
+      stored: false,
+      disabled: true as const,
+      error: "targetId is required for this scoped memory write.",
+    };
+  }
+
+  const item = params.store.createMemoryItem({
+    scopeType,
+    scopeId,
+    body: params.text,
+    summary: params.summary,
+    itemKind: params.kind,
+    sourceUserId: principal?.configuredUserId,
+    provenance: params.target === "active-user" ? "memory-store" : `memory-store:${params.target}`,
+    durability: params.durability,
+    entryDate: params.dateStamp,
+  });
+  await syncScopedCorpusSafe(params.api, params.store);
+  return {
+    handled: true as const,
+    stored: true,
+    path: path.posix.join("corpus", resolveCorpusRelativePathForItem(item)),
+    details: { scopeType: item.scopeType, scopeId: item.scopeId },
   };
 }
 
@@ -792,6 +1171,7 @@ function buildAdminTools(params: {
 }): AnyAgentTool[] {
   const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
   const principal = resolveToolPrincipal({
+    api: params.api,
     store: params.store,
     pluginConfig,
     toolCtx: params.toolCtx,
@@ -962,13 +1342,13 @@ function buildAdminTools(params: {
           summary: summary ?? undefined,
           itemKind: kind ?? undefined,
           sourceUserId: principal?.configuredUserId,
+          provenance: "admin-store",
+          durability: "durable",
         });
+        await syncScopedCorpusSafe(params.api, params.store);
         return jsonResult({
           item,
-          path:
-            item.scopeType === "global"
-              ? `global/${item.itemId}.md`
-              : `${item.scopeType}/${item.scopeId}/${item.itemId}.md`,
+          path: path.posix.join("corpus", resolveCorpusRelativePathForItem(item)),
         });
       },
     },
@@ -1046,6 +1426,7 @@ function buildApprovalTools(params: {
 }): AnyAgentTool[] {
   const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
   const principal = resolveToolPrincipal({
+    api: params.api,
     store: params.store,
     pluginConfig,
     toolCtx: params.toolCtx,
@@ -1124,6 +1505,9 @@ function buildApprovalTools(params: {
           action: "approve",
           note: note ?? undefined,
         });
+        if (decided?.approvedItem) {
+          await syncScopedCorpusSafe(params.api, params.store);
+        }
         return jsonResult({
           text: translate(normalizeLanguageId(principal.language), "proposalApproved", {
             proposalId,
@@ -1177,41 +1561,77 @@ function buildApprovalTools(params: {
   ];
 }
 
-function buildPromptSection(params: {
-  availableTools: Set<string>;
-  citationsMode?: "auto" | "on" | "off";
-}): string[] {
-  const hasSearch = params.availableTools.has("memory_search");
-  const hasGet = params.availableTools.has("memory_get");
-  if (!hasSearch && !hasGet) {
-    return [];
-  }
-  const lines = [
-    "## Multi-User Memory",
-    hasSearch && hasGet
-      ? "Before answering about people, shared plans, preferences, or prior family context: run memory_search first, then memory_get only for the exact scoped items you need."
-      : hasSearch
-        ? "Before answering about people, shared plans, preferences, or prior family context: run memory_search and answer only from the scoped results you can justify."
-        : "Use memory_get only when the user already points to a specific scoped memory path.",
-    "The active memory plugin already filters private, group, and global scopes for the current sender. Never assume you can see another user's private memory.",
-  ];
-  if (params.citationsMode !== "off") {
-    lines.push("When helpful, include the synthetic Source path for retrieved memory items.");
-  }
-  lines.push("");
-  return lines;
-}
-
 export default definePluginEntry({
   id: "multi-user-memory",
   name: "Multi-User Memory",
   description: "Scoped multi-user memory with private, shared-group, and approval-aware recall.",
-  kind: "memory",
   register(api) {
     const store = resolveScopedStore(api);
     api.logger.info(`multi-user-memory: plugin registered (db: ${store.dbPath})`);
+    void syncScopedCorpusSafe(api, store).catch((err: unknown) => {
+      api.logger.warn?.(`multi-user-memory: failed initial scoped corpus sync: ${String(err)}`);
+    });
 
-    api.registerMemoryPromptSection(buildPromptSection);
+    api.registerMemoryOverlay({
+      id: "multi-user-memory",
+      resolvePrincipal: ({ context }) =>
+        resolveToolPrincipal({
+          api,
+          store,
+          pluginConfig: resolveCurrentMultiUserMemoryConfig(api),
+          toolCtx: context,
+        }),
+      readPath: (params) =>
+        handleOverlayRead({
+          api,
+          store,
+          context: params.context,
+          relPath: params.relPath,
+          from: params.from,
+          lines: params.lines,
+          authorizeOnly: params.authorizeOnly,
+        }),
+      listCollections: ({ context }) => {
+        const pluginConfig = resolveCurrentMultiUserMemoryConfig(api);
+        const principal = resolveToolPrincipal({
+          api,
+          store,
+          pluginConfig,
+          toolCtx: context,
+        });
+        const collections: Array<{ rootPath: string; kind: "scoped" | "internal"; label: string }> = [
+          { rootPath: "corpus", kind: "scoped", label: "Scoped memory" },
+        ];
+        if (
+          isInternalMemoryAccessAllowed({
+            pluginConfig,
+            principal,
+            senderIsOwner: context.senderIsOwner === true,
+            agentId: context.agentId,
+          })
+        ) {
+          collections.push({
+            rootPath: "reviews",
+            kind: "internal" as const,
+            label: "Internal reviews",
+          });
+        }
+        return collections;
+      },
+      store: (params) =>
+        handleOverlayStore({
+          api,
+          store,
+          context: params.context,
+          text: params.text,
+          summary: params.summary,
+          kind: params.kind,
+          durability: params.durability,
+          target: params.target,
+          targetId: params.targetId,
+          dateStamp: params.dateStamp,
+        }),
+    });
     api.registerHttpRoute({
       path: APPROVAL_CENTER_PATH,
       auth: "plugin",
@@ -1260,14 +1680,6 @@ export default definePluginEntry({
       return {
         prependSystemContext: buildPrincipalPrompt(principal, pendingApprovalPrompt),
       };
-    });
-
-    api.registerTool((toolCtx) => buildMemorySearchTool({ api, store, toolCtx }), {
-      names: ["memory_search"],
-    });
-
-    api.registerTool((toolCtx) => buildMemoryGetTool({ api, store, toolCtx }), {
-      names: ["memory_get"],
     });
 
     api.registerTool((toolCtx) => buildAdminTools({ api, store, toolCtx }));

@@ -114,10 +114,6 @@ export async function maybeBootstrapFirstObservedUser(params: {
     ...liveConfig,
     plugins: {
       ...liveConfig.plugins,
-      slots: {
-        ...liveConfig.plugins?.slots,
-        memory: "multi-user-memory",
-      },
       entries: {
         ...liveConfig.plugins?.entries,
         "multi-user-memory": {

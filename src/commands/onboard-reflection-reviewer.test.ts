@@ -197,6 +197,9 @@ describe("onboard reflection reviewer", () => {
       expect(job.agentId).toBe(REFLECTION_REVIEWER_AGENT_ID);
       expect(job.state.runningAtMs).toBeUndefined();
       expect(job.payload.kind).toBe("agentTurn");
+      if (job.payload.kind !== "agentTurn") {
+        throw new Error("expected agentTurn payload");
+      }
       expect(job.payload.message).toContain("Do this work directly in this session.");
     }
   });

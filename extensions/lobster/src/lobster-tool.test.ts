@@ -54,6 +54,7 @@ function fakeApi(overrides: Partial<MaumauPluginApi> = {}): MaumauPluginApi {
     registerHttpRoute() {},
     registerCommand() {},
     registerContextEngine() {},
+    registerMemoryOverlay() {},
     registerMemoryPromptSection() {},
     on() {},
     resolvePath: (p) => p,

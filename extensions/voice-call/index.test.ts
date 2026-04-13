@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../test/helpers/extensions/plugin-api.js";
-import type { MaumauPluginApi, MaumauPluginServiceDefinition } from "./api.js";
+import type { MaumauPluginApi } from "./api.js";
 
 const createVoiceCallBackendMock = vi.hoisted(() => vi.fn());
 
@@ -13,13 +13,13 @@ const { default: voiceCallPlugin } = await import("./index.js");
 const SHARED_VOICE_CALL_RUNTIME_STATE = Symbol.for("maumau.voiceCall.sharedRuntimeState");
 
 type RegisteredPlugin = {
-  service: MaumauPluginServiceDefinition;
-  tool: Parameters<MaumauPluginApi["registerTool"]>[0];
+  service: Parameters<MaumauPluginApi["registerService"]>[0];
+  tool: Exclude<Parameters<MaumauPluginApi["registerTool"]>[0], Function>;
 };
 
 function registerVoiceCallPlugin(): RegisteredPlugin {
-  let service: MaumauPluginServiceDefinition | undefined;
-  let tool: Parameters<MaumauPluginApi["registerTool"]>[0] | undefined;
+  let service: Parameters<MaumauPluginApi["registerService"]>[0] | undefined;
+  let tool: Exclude<Parameters<MaumauPluginApi["registerTool"]>[0], Function> | undefined;
 
   voiceCallPlugin.register(
     createTestPluginApi({
@@ -37,6 +37,9 @@ function registerVoiceCallPlugin(): RegisteredPlugin {
         service = nextService;
       },
       registerTool(nextTool) {
+        if (typeof nextTool === "function") {
+          throw new Error("voice-call plugin unexpectedly registered a tool factory");
+        }
         tool = nextTool;
       },
     }) as MaumauPluginApi,

@@ -23,8 +23,9 @@ function writeJson(
   return true;
 }
 
-function readSlotSelected(api: MaumauPluginApi): boolean {
-  return loadCurrentMaumauConfig(api).plugins?.slots?.memory === "multi-user-memory";
+function readOverlayEnabled(api: MaumauPluginApi): boolean {
+  const entry = loadCurrentMaumauConfig(api).plugins?.entries?.["multi-user-memory"];
+  return entry?.enabled !== false;
 }
 
 function readEntryConfigured(api: MaumauPluginApi): boolean {
@@ -60,7 +61,7 @@ export function createAdminApiHttpHandler(params: {
     return writeJson(req, res, 200, {
       ok: true,
       plugin: {
-        slotSelected: readSlotSelected(params.api),
+        overlayEnabled: readOverlayEnabled(params.api),
         entryConfigured: readEntryConfigured(params.api),
         enabled: pluginConfig.enabled,
         autoDiscover: pluginConfig.autoDiscover,

@@ -973,7 +973,10 @@ describe("dashboard view", () => {
     expect(container.querySelector(".dashboard-routines__item--active")?.textContent).toContain(
       "Weekly planning",
     );
-    expect(container.querySelector(".dashboard-timegrid--week")).not.toBeNull();
+    expect(container.querySelector(".dashboard-routine-timeline")).not.toBeNull();
+    expect(container.querySelectorAll(".dashboard-routine-timeline__row")).toHaveLength(7);
+    expect(container.querySelectorAll(".dashboard-routine-timeline__marker")).toHaveLength(1);
+    expect(container.querySelector(".dashboard-timegrid-wrap")).toBeNull();
     expect(container.textContent).toContain("Reset the week and line up commitments.");
     expect(container.textContent).toContain("Schedule");
   });
@@ -1043,6 +1046,121 @@ describe("dashboard view", () => {
     expect(container.textContent).not.toContain("Daily review");
     expect(container.textContent).not.toContain("Family trip");
     expect(container.textContent).not.toContain("Exec approval needed");
+  });
+
+  it("spans timed calendar events across their full duration in week view", async () => {
+    const container = document.createElement("div");
+    const dayAtMs = new Date(2026, 3, 13, 0, 0, 0, 0).getTime();
+    const workStartAtMs = dayAtMs + 9 * 60 * 60 * 1_000;
+    const workEndAtMs = dayAtMs + 18 * 60 * 60 * 1_000;
+    const formatTime = (value: number) =>
+      new Intl.DateTimeFormat(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(value);
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardCalendar",
+          calendarView: "week",
+          calendarAnchorAtMs: dayAtMs,
+          calendarResult: {
+            generatedAtMs: 1,
+            anchorAtMs: dayAtMs,
+            startAtMs: dayAtMs,
+            endAtMs: dayAtMs + 7 * 86_400_000,
+            view: "week",
+            events: [
+              {
+                id: "activity:work",
+                title: "Work",
+                kind: "known_activity",
+                status: "scheduled",
+                startAtMs: workStartAtMs,
+                endAtMs: workEndAtMs,
+                activityScope: "user",
+              },
+            ],
+          },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const workEvent = Array.from(container.querySelectorAll(".dashboard-timegrid__event")).find(
+      (event) => event.textContent?.includes("Work"),
+    ) as HTMLElement | undefined;
+
+    expect(workEvent).toBeDefined();
+    expect(workEvent?.querySelector(".dashboard-timegrid__event-time")?.textContent).toBe(
+      `${formatTime(workStartAtMs)} - ${formatTime(workEndAtMs)}`,
+    );
+    expect(workEvent?.style.gridRow).toBe("37 / span 36");
+  });
+
+  it("only splits calendar event width when items actually overlap", async () => {
+    const container = document.createElement("div");
+    const dayAtMs = new Date(2026, 3, 13, 0, 0, 0, 0).getTime();
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardCalendar",
+          calendarView: "week",
+          calendarAnchorAtMs: dayAtMs,
+          calendarResult: {
+            generatedAtMs: 1,
+            anchorAtMs: dayAtMs,
+            startAtMs: dayAtMs,
+            endAtMs: dayAtMs + 7 * 86_400_000,
+            view: "week",
+            events: [
+              {
+                id: "activity:wake",
+                title: "Wake up",
+                kind: "known_activity",
+                status: "scheduled",
+                startAtMs: dayAtMs + 7 * 60 * 60 * 1_000,
+                endAtMs: dayAtMs + 8 * 60 * 60 * 1_000,
+                activityScope: "user",
+              },
+              {
+                id: "activity:work",
+                title: "Work",
+                kind: "known_activity",
+                status: "scheduled",
+                startAtMs: dayAtMs + 9 * 60 * 60 * 1_000,
+                endAtMs: dayAtMs + 18 * 60 * 60 * 1_000,
+                activityScope: "user",
+              },
+              {
+                id: "routine:check-in",
+                title: "Life improvement check-in",
+                kind: "routine_occurrence",
+                status: "scheduled",
+                startAtMs: dayAtMs + 10 * 60 * 60 * 1_000,
+                endAtMs: dayAtMs + 11 * 60 * 60 * 1_000,
+              },
+            ],
+          },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const events = Array.from(container.querySelectorAll<HTMLElement>(".dashboard-timegrid__event"));
+    const wakeEvent = events.find((event) => event.textContent?.includes("Wake up"));
+    const workEvent = events.find((event) => event.textContent?.includes("Work"));
+    const checkInEvent = events.find((event) =>
+      event.textContent?.includes("Life improvement check-in"),
+    );
+
+    expect(wakeEvent?.style.getPropertyValue("--dashboard-timegrid-event-lanes")).toBe("1");
+    expect(workEvent?.style.getPropertyValue("--dashboard-timegrid-event-lanes")).toBe("2");
+    expect(checkInEvent?.style.getPropertyValue("--dashboard-timegrid-event-lanes")).toBe("2");
   });
 
   it("rolls month-view cron entries into a single daily count", async () => {
@@ -1118,13 +1236,33 @@ describe("dashboard view", () => {
     );
   });
 
+  it("does not add native title tooltips to dashboard nav items", async () => {
+    const container = document.createElement("div");
+
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardWallet",
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const navItems = Array.from(container.querySelectorAll<HTMLButtonElement>(".dashboard-rail__item"));
+    expect(navItems.length).toBeGreaterThan(0);
+    for (const item of navItems) {
+      expect(item.hasAttribute("title")).toBe(false);
+    }
+  });
+
   it("renders the dashboard agents scope tab for the selected agent", async () => {
     const container = document.createElement("div");
 
     render(
       renderDashboard(
         buildProps({
-          tab: "dashboardMemories",
+          tab: "dashboardAgents",
           agentPanel: "scope",
           memoryAgentId: "main",
           agentsList: {
@@ -1203,6 +1341,66 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain("Denied");
     expect(container.textContent).toContain("web_fetch");
     expect(container.textContent).toContain("message");
+  });
+
+  it("moves recent memory notes onto the dedicated memory notes page", async () => {
+    const snapshot = buildSnapshot([]);
+    snapshot.memories = [
+      {
+        id: "memory:1",
+        agentId: "main",
+        title: "2026-04-13.md",
+        path: "agents/main/memory/2026-04-13.md",
+        updatedAtMs: 1,
+        excerpt: "Bootstrap complete.",
+      },
+    ];
+    const agentsList = {
+      defaultId: "main",
+      mainKey: "main",
+      scope: "workspace",
+      agents: [
+        {
+          id: "main",
+          name: "Operator",
+          identity: { name: "Operator" },
+        },
+      ],
+    } as Parameters<typeof renderDashboard>[0]["agentsList"];
+
+    const agentsContainer = document.createElement("div");
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardAgents",
+          snapshot,
+          memoryAgentId: "main",
+          agentsList,
+        }),
+      ),
+      agentsContainer,
+    );
+    await Promise.resolve();
+
+    expect(agentsContainer.textContent).not.toContain("Recent memory notes");
+    expect(agentsContainer.textContent).not.toContain("Bootstrap complete.");
+
+    const memoriesContainer = document.createElement("div");
+    render(
+      renderDashboard(
+        buildProps({
+          tab: "dashboardMemories",
+          snapshot,
+          memoryAgentId: "main",
+          agentsList,
+        }),
+      ),
+      memoriesContainer,
+    );
+    await Promise.resolve();
+
+    expect(memoriesContainer.textContent).toContain("Recent memory notes");
+    expect(memoriesContainer.textContent).toContain("Bootstrap complete.");
   });
 
   it("shows the configured team task entry even when there are no delegated team tasks yet", async () => {
@@ -1426,6 +1624,10 @@ describe("dashboard view", () => {
     expect(container.textContent).toContain("Saved playground");
     expect(container.textContent).toContain("Saved");
     expect(container.textContent).toContain("Alpha");
+    expect(container.querySelector(".dashboard-workshop__preview > .dashboard-workshop__meta-grid")).toBeNull();
+    expect(container.querySelector(".dashboard-workshop__meta-details")).not.toBeNull();
+    expect(container.querySelector(".dashboard-workshop__meta-panel .dashboard-workshop__meta-grid")).not.toBeNull();
+    expect(container.querySelector(".dashboard-workshop__meta-trigger")?.textContent?.trim()).toBe("");
   });
 
   it("renders agent apps with owner and proposal context", async () => {

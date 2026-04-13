@@ -41,7 +41,7 @@ export const DESIGN_STUDIO_TEAM_IMAGE_VISUAL_DESIGNER_AGENT_ID =
   "design-studio-image-visual-designer";
 export const DESIGN_STUDIO_TEAM_REQUIREMENTS_QA_AGENT_ID = "design-studio-requirements-qa";
 export const DESIGN_STUDIO_TEAM_CONSISTENCY_QA_AGENT_ID = "design-studio-consistency-qa";
-export const STARTER_TEAM_PRESET_VERSION = 5;
+export const STARTER_TEAM_PRESET_VERSION = 6;
 export const DESIGN_STUDIO_TEAM_PRESET_VERSION = 1;
 export const MAIN_ORCHESTRATION_TEAM_PRESET_VERSION = 2;
 export {
@@ -72,6 +72,43 @@ const STARTER_MAIN_AGENT_ALSO_ALLOW = [
   "teams_run",
   "web_fetch",
   "web_search",
+] as const;
+
+const STARTER_TEAM_UI_UX_IMPECCABLE_SKILLS = [
+  "adapt",
+  "animate",
+  "audit",
+  "bolder",
+  "clarify",
+  "colorize",
+  "critique",
+  "delight",
+  "distill",
+  "harden",
+  "layout",
+  "optimize",
+  "overdrive",
+  "polish",
+  "quieter",
+  "shape",
+  "typeset",
+] as const;
+
+const STARTER_TEAM_UI_UX_TASTE_SKILLS = [
+  "taste-skill",
+  "brutalist-skill",
+  "minimalist-skill",
+  "output-skill",
+  "redesign-skill",
+  "soft-skill",
+  "stitch-skill",
+] as const;
+
+const STARTER_TEAM_UI_UX_DESIGNER_SKILLS = [
+  "emil-design-eng",
+  "impeccable",
+  ...STARTER_TEAM_UI_UX_IMPECCABLE_SKILLS,
+  ...STARTER_TEAM_UI_UX_TASTE_SKILLS,
 ] as const;
 
 const DESIGN_STUDIO_MANAGER_TOOL_ALLOW = [
@@ -353,6 +390,7 @@ export function createStarterTeamAgents(): AgentConfig[] {
     {
       id: STARTER_TEAM_UI_UX_DESIGNER_AGENT_ID,
       name: "UI/UX Designer",
+      skills: [...STARTER_TEAM_UI_UX_DESIGNER_SKILLS],
       tools: {
         profile: "coding",
       },

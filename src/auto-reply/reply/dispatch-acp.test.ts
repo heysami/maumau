@@ -52,7 +52,7 @@ const bindingServiceMocks = vi.hoisted(() => ({
   listBySession: vi.fn<(sessionKey: string) => SessionBindingRecord[]>(() => []),
 }));
 const previewDeliveryMocks = vi.hoisted(() => ({
-  maybeBuildPreviewReceiptPayloads: vi.fn(async () => []),
+  maybeBuildPreviewReceiptPayloads: vi.fn(async (_params: unknown) => []),
 }));
 
 vi.mock("../../acp/control-plane/manager.js", () => ({

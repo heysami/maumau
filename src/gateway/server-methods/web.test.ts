@@ -52,6 +52,9 @@ describe("webHandlers", () => {
 
     await webHandlers["web.login.start"]({
       params: { force: true, timeoutMs: 2_000 },
+      req: {} as never,
+      client: null,
+      isWebchatConnect: () => false,
       respond,
       context: {
         stopChannel: stopChannelMock,
@@ -81,6 +84,9 @@ describe("webHandlers", () => {
 
     await webHandlers["web.login.wait"]({
       params: { timeoutMs: 2_000 },
+      req: {} as never,
+      client: null,
+      isWebchatConnect: () => false,
       respond,
       context: {
         stopChannel: stopChannelMock,

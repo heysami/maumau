@@ -37,7 +37,7 @@ describe("collectDashboardUserChannels", () => {
     registry.channelSetups = [
       {
         pluginId: "telegram",
-        plugin: telegramSetupPlugin,
+        plugin: telegramSetupPlugin as (typeof registry.channelSetups)[number]["plugin"],
         source: "test",
         enabled: true,
       },
@@ -137,7 +137,11 @@ describe("collectDashboardUserChannels", () => {
         allowFrom: ["*"],
       },
     },
-  ])("applies onboarding quick setup defaults when connecting $channelId", async (testCase) => {
+  ] satisfies Array<{
+    channelId: string;
+    fields: Record<string, string>;
+    expectedChannel: Record<string, unknown>;
+  }>)("applies onboarding quick setup defaults when connecting $channelId", async (testCase) => {
     readConfigFileSnapshotForWriteMock.mockResolvedValue({
       snapshot: {
         config: {},
@@ -147,7 +151,7 @@ describe("collectDashboardUserChannels", () => {
 
     await connectDashboardUserChannel({
       channelId: testCase.channelId,
-      fields: testCase.fields,
+      fields: testCase.fields as Record<string, string>,
     });
 
     expect(writeConfigFileMock).toHaveBeenCalledTimes(1);

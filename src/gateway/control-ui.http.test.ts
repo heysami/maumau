@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "./control-ui-contract.js";
-import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
+import {
+  type ControlUiRequestOptions,
+  handleControlUiAvatarRequest,
+  handleControlUiHttpRequest,
+} from "./control-ui.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
 
 describe("handleControlUiHttpRequest", () => {
@@ -55,8 +59,8 @@ describe("handleControlUiHttpRequest", () => {
     rootKind?: "resolved" | "bundled";
     hostHeader?: string;
     remoteAddress?: string;
-    config?: Parameters<typeof handleControlUiHttpRequest>[2]["config"];
-    resolvedAuth?: Parameters<typeof handleControlUiHttpRequest>[2]["resolvedAuth"];
+    config?: ControlUiRequestOptions["config"];
+    resolvedAuth?: ControlUiRequestOptions["resolvedAuth"];
     trustedProxies?: string[];
     allowRealIpFallback?: boolean;
   }) {

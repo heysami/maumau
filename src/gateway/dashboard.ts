@@ -1329,6 +1329,8 @@ function resolveTrustedTranscriptBlockerSuggestion(description: string): string 
 function stripTranscriptDisplayMarkup(text: string): string {
   return normalizeText(
     text
+      .replace(WORK_ITEM_LINE_RE, " ")
+      .replace(FILE_ARTIFACT_RE, " ")
       .replace(/\[\[[^\]]+\]\]/g, " ")
       .replace(/\*\*(.*?)\*\*/g, "$1")
       .replace(/`([^`]+)`/g, "$1"),
@@ -1952,7 +1954,7 @@ function looksLikeTrivialStatusSummary(summary: string | undefined): boolean {
 }
 
 function cleanTaskSummary(summary: string | undefined, title: string): string | undefined {
-  const normalized = normalizeText(summary);
+  const normalized = stripTranscriptDisplayMarkup(summary ?? "");
   if (!normalized || looksLikeLegacyTaskSummary(normalized)) {
     return undefined;
   }
@@ -3085,10 +3087,8 @@ async function collectRecentMemoryEntries(params: {
     const agentId = agent.id;
     const workspaceDir = resolveAgentWorkspaceDir(params.cfg, agentId);
     const memoryDir = path.join(workspaceDir, MEMORY_NOTES_DIRNAME);
-    let dirEntries: Awaited<ReturnType<typeof fs.readdir>>;
-    try {
-      dirEntries = await fs.readdir(memoryDir, { withFileTypes: true });
-    } catch {
+    const dirEntries = await fs.readdir(memoryDir, { withFileTypes: true }).catch(() => null);
+    if (!dirEntries) {
       continue;
     }
     for (const entry of dirEntries) {
@@ -3468,8 +3468,8 @@ function buildApprovalCalendarEvents(
     .map((approval) => ({
       id: `approval:${approval.id}`,
       title: "Exec approval needed",
-      kind: "approval_needed",
-      status: "needs_action",
+      kind: "approval_needed" as const,
+      status: "needs_action" as const,
       startAtMs: approval.createdAtMs,
       endAtMs: approval.expiresAtMs,
       description: approval.request.command,
@@ -3719,15 +3719,19 @@ async function collectDashboardDataset(params: CollectDashboardCalendarParams): 
   const cronBlockers = buildCronBlockers(cronJobs, nowMs);
   const taskBlockers: DashboardBlocker[] = annotatedGlobalItems
     .flatMap((task) =>
-      task.blockerLinks.map((blocker) => ({
-        id: blocker.id,
-        severity: blocker.kind === "approval" ? "warning" : "error",
-        title: blocker.title,
-        description: blocker.description,
-        suggestion: blocker.suggestion,
-        sessionKey: blocker.sessionKey,
-        taskId: task.id,
-      })),
+      task.blockerLinks.map((blocker) => {
+        const severity: DashboardBlocker["severity"] =
+          blocker.kind === "approval" ? "warning" : "error";
+        return {
+          id: blocker.id,
+          severity,
+          title: blocker.title,
+          description: blocker.description,
+          suggestion: blocker.suggestion,
+          sessionKey: blocker.sessionKey,
+          taskId: task.id,
+        };
+      }),
     )
     .slice(0, 24);
   const blockers = mergeDashboardBlockers(

@@ -3,10 +3,13 @@ import { GATEWAY_EVENT_UPDATE_AVAILABLE } from "../../../src/gateway/events.js";
 import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
 import { connectGateway, resolveControlUiClientVersion } from "./app-gateway.ts";
 import { createEmptyMauOfficeState } from "./controllers/mau-office.ts";
+import type { ControlUiBootstrapConfig } from "../../../src/gateway/control-ui-contract.js";
 import type { GatewayHelloOk } from "./gateway.ts";
 
 const loadChatHistoryMock = vi.hoisted(() => vi.fn(async () => undefined));
-const loadBootstrapMock = vi.hoisted(() => vi.fn(async () => null));
+const loadBootstrapMock = vi.hoisted(
+  () => vi.fn<() => Promise<ControlUiBootstrapConfig | null>>(async () => null),
+);
 
 type GatewayClientMock = {
   start: ReturnType<typeof vi.fn>;

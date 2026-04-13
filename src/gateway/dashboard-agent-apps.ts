@@ -193,7 +193,7 @@ function parseAgentAppsMarkdown(params: {
   updatedAtMs?: number;
 }): ParsedAgentAppDraft[] {
   return splitMarkdownSections(params.content)
-    .map((section) => {
+    .flatMap((section) => {
       const owner = readMarkdownField(section.body, "Owner");
       const projectName =
         readMarkdownField(section.body, "Project") ??
@@ -211,24 +211,25 @@ function parseAgentAppsMarkdown(params: {
         readMarkdownField(section.body, "Task title") ?? readMarkdownField(section.body, "Task");
       const summary = normalizeText(howItHelps || whyNow);
       if (!section.title.trim()) {
-        return null;
+        return [];
       }
-      return {
-        title: section.title.trim(),
-        ownerLabel,
-        ownerAgentId,
-        status: parseAgentAppStatus(readMarkdownField(section.body, "Status")),
-        summary: summary || undefined,
-        whyNow,
-        howItHelps,
-        suggestedScope,
-        projectName: project.name || undefined,
-        projectKey: project.key || undefined,
-        taskTitle,
-        updatedAtMs: params.updatedAtMs,
-      } satisfies ParsedAgentAppDraft;
-    })
-    .filter((draft): draft is ParsedAgentAppDraft => Boolean(draft));
+      return [
+        {
+          title: section.title.trim(),
+          ownerLabel,
+          ownerAgentId,
+          status: parseAgentAppStatus(readMarkdownField(section.body, "Status")),
+          summary: summary || undefined,
+          whyNow,
+          howItHelps,
+          suggestedScope,
+          projectName: project.name || undefined,
+          projectKey: project.key || undefined,
+          taskTitle,
+          updatedAtMs: params.updatedAtMs,
+        } satisfies ParsedAgentAppDraft,
+      ];
+    });
 }
 
 async function readOptionalFile(filePath: string): Promise<string | undefined> {

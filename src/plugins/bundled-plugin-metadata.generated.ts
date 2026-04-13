@@ -1600,6 +1600,32 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
     },
   },
   {
+    dirName: "lossless-claw",
+    idHint: "lossless-claw",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/lossless-claw",
+    packageVersion: "2026.3.22",
+    packageDescription: "Maumau lossless transcript continuity context engine plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "lossless-claw",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      enabledByDefault: true,
+      kind: "context-engine",
+      name: "Lossless Claw",
+      description: "Lossless transcript continuity across compaction and spawned agents.",
+    },
+  },
+  {
     dirName: "matrix",
     idHint: "matrix",
     source: {
@@ -2322,14 +2348,14 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
           },
         },
       },
-      kind: "memory",
+      enabledByDefault: true,
       name: "Multi-User Memory",
       description:
         "Scoped memory with curated users, shared groups, approvals, and per-user language defaults.",
       uiHints: {
         enabled: {
           label: "Enable Multi-User Memory",
-          help: "Turns on scoped user and group memory resolution for the active memory slot.",
+          help: "Turns on scoped user and group memory overlays for the default memory stack.",
         },
         autoDiscover: {
           label: "Auto-Discover New Senders",

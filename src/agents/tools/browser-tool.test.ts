@@ -1,3 +1,4 @@
+import type { BrowserActResponse } from "../../browser/client-actions.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserClientMocks = vi.hoisted(() => ({
@@ -30,7 +31,7 @@ const browserClientMocks = vi.hoisted(() => ({
 vi.mock("../../browser/client.js", () => browserClientMocks);
 
 const browserActionsMocks = vi.hoisted(() => ({
-  browserAct: vi.fn(async () => ({ ok: true })),
+  browserAct: vi.fn(async (): Promise<BrowserActResponse> => ({ ok: true, targetId: "t1" })),
   browserArmDialog: vi.fn(async () => ({ ok: true })),
   browserArmFileChooser: vi.fn(async () => ({ ok: true })),
   browserConsoleMessages: vi.fn(async () => ({
@@ -523,10 +524,14 @@ describe("browser tool explicit routing", () => {
     };
     setResolvedBrowserProfiles(cfg.browser.profiles, "desktop");
     browserClientMocks.browserOpenTab.mockResolvedValueOnce({ targetId: "tab-1" });
-    browserActionsMocks.browserAct.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({
-      result: {
-        state: "ready",
-        items: [],
+    browserActionsMocks.browserAct
+      .mockResolvedValueOnce({ ok: true, targetId: "tab-1" })
+      .mockResolvedValueOnce({
+        ok: true,
+        targetId: "tab-1",
+        result: {
+          state: "ready",
+          items: [],
       },
     });
     const tool = createBrowserTool({ senderIsOwner: true, config: cfg });
@@ -565,7 +570,7 @@ describe("browser tool existing-session defaults", () => {
     setResolvedBrowserProfiles(cfg.browser.profiles, "chrome-live");
     browserActionsMocks.browserAct
       .mockRejectedValueOnce(new Error("404: tab not found"))
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({ ok: true, targetId: "only-tab" });
     browserClientMocks.browserTabs.mockResolvedValueOnce([{ targetId: "only-tab" }]);
     const tool = createBrowserTool({ senderIsOwner: true, config: cfg });
 
@@ -873,7 +878,7 @@ describe("browser tool act stale target recovery", () => {
   it("retries safe user-browser act once without targetId when exactly one tab remains", async () => {
     browserActionsMocks.browserAct
       .mockRejectedValueOnce(new Error("404: tab not found"))
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({ ok: true, targetId: "only-tab" });
     browserClientMocks.browserTabs.mockResolvedValueOnce([{ targetId: "only-tab" }]);
 
     const tool = createOwnerBrowserTool();

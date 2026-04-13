@@ -8,8 +8,15 @@ type MockRegistryToolEntry = {
 };
 
 const loadMaumauPluginsMock = vi.fn();
-const getActivePluginRegistryMock = vi.fn(() => null);
-const getActivePluginRegistryKeyMock = vi.fn(() => null);
+const getActivePluginRegistryMock = vi.fn<
+  () =>
+    | {
+        tools: unknown[];
+        diagnostics: unknown[];
+      }
+    | null
+>(() => null);
+const getActivePluginRegistryKeyMock = vi.fn<() => string | null>(() => null);
 
 vi.mock("./loader.js", () => ({
   loadMaumauPlugins: (params: unknown) => loadMaumauPluginsMock(params),

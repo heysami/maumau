@@ -3,7 +3,9 @@ import { promises as fs } from "node:fs";
 import { formatThinkingLevels, normalizeThinkLevel } from "../auto-reply/thinking.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { loadConfig } from "../config/config.js";
-import { mergeSessionEntry, updateSessionStore } from "../config/sessions.js";
+import { loadSessionStore, mergeSessionEntry, updateSessionStore } from "../config/sessions.js";
+import { ensureContextEnginesInitialized } from "../context-engine/init.js";
+import { resolveContextEngine } from "../context-engine/registry.js";
 import { callGateway } from "../gateway/call.js";
 import {
   pruneLegacyStoreKeys,
@@ -42,6 +44,7 @@ import {
 } from "./subagent-capabilities.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { countActiveRunsForSession, registerSubagentRun } from "./subagent-registry.js";
+import { ensureRuntimePluginsLoaded } from "./runtime-plugins.js";
 import { readStringParam } from "./tools/common.js";
 import {
   resolveDisplaySessionKey,
@@ -167,6 +170,68 @@ async function persistInitialChildSessionRuntimeModel(params: {
   } catch (err) {
     return err instanceof Error ? err.message : typeof err === "string" ? err : "error";
   }
+}
+
+async function persistSpawnedChildMemoryPrincipal(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  requesterSessionKey: string;
+  childSessionKey: string;
+}): Promise<string | undefined> {
+  try {
+    const requesterTarget = resolveGatewaySessionStoreTarget({
+      cfg: params.cfg,
+      key: params.requesterSessionKey,
+    });
+    const requesterStore = loadSessionStore(requesterTarget.storePath);
+    pruneLegacyStoreKeys({
+      store: requesterStore,
+      canonicalKey: requesterTarget.canonicalKey,
+      candidates: requesterTarget.storeKeys,
+    });
+    const principal = requesterStore[requesterTarget.canonicalKey]?.memoryPrincipal;
+    if (!principal) {
+      return undefined;
+    }
+
+    const childTarget = resolveGatewaySessionStoreTarget({
+      cfg: params.cfg,
+      key: params.childSessionKey,
+    });
+    await updateSessionStore(childTarget.storePath, (store) => {
+      pruneLegacyStoreKeys({
+        store,
+        canonicalKey: childTarget.canonicalKey,
+        candidates: childTarget.storeKeys,
+      });
+      store[childTarget.canonicalKey] = mergeSessionEntry(store[childTarget.canonicalKey], {
+        memoryPrincipal: principal,
+      });
+    });
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : typeof err === "string" ? err : "error";
+  }
+}
+
+async function prepareContextEngineSubagentSpawn(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  workspaceDir?: string;
+  parentSessionKey: string;
+  childSessionKey: string;
+  ttlMs?: number;
+}) {
+  ensureRuntimePluginsLoaded({
+    config: params.cfg,
+    workspaceDir: params.workspaceDir,
+    allowGatewaySubagentBinding: true,
+  });
+  ensureContextEnginesInitialized();
+  const engine = await resolveContextEngine(params.cfg);
+  return await engine.prepareSubagentSpawn?.({
+    parentSessionKey: params.parentSessionKey,
+    childSessionKey: params.childSessionKey,
+    ttlMs: params.ttlMs,
+  });
 }
 
 function sanitizeMountPathHint(value?: string): string | undefined {
@@ -721,6 +786,27 @@ export async function spawnSubagentDirect(
     }
     modelApplied = true;
   }
+  const memoryPrincipalPersistError = await persistSpawnedChildMemoryPrincipal({
+    cfg,
+    requesterSessionKey: requesterInternalKey,
+    childSessionKey,
+  });
+  if (memoryPrincipalPersistError) {
+    try {
+      await callGateway({
+        method: "sessions.delete",
+        params: { key: childSessionKey, emitLifecycleHooks: false },
+        timeoutMs: 10_000,
+      });
+    } catch {
+      // Best-effort cleanup only.
+    }
+    return {
+      status: "error",
+      error: memoryPrincipalPersistError,
+      childSessionKey,
+    };
+  }
   if (requestThreadBinding) {
     const bindResult = await ensureThreadBindingForSubagentSpawn({
       hookRunner,
@@ -850,6 +936,30 @@ export async function spawnSubagentDirect(
 
   const childIdem = crypto.randomUUID();
   let childRunId: string = childIdem;
+  let contextEnginePreparation:
+    | Awaited<ReturnType<typeof prepareContextEngineSubagentSpawn>>
+    | undefined;
+  try {
+    contextEnginePreparation = await prepareContextEngineSubagentSpawn({
+      cfg,
+      workspaceDir: spawnedMetadata.workspaceDir,
+      parentSessionKey: requesterInternalKey,
+      childSessionKey,
+      ttlMs: runTimeoutSeconds > 0 ? runTimeoutSeconds * 1000 : undefined,
+    });
+  } catch (err) {
+    await cleanupFailedSpawnBeforeAgentStart({
+      childSessionKey,
+      attachmentAbsDir,
+      emitLifecycleHooks: threadBindingReady,
+      deleteTranscript: true,
+    });
+    return {
+      status: "error",
+      error: `Failed to prepare subagent continuity: ${summarizeError(err)}`,
+      childSessionKey,
+    };
+  }
   try {
     const {
       spawnedBy: _spawnedBy,
@@ -932,6 +1042,7 @@ export async function spawnSubagentDirect(
     } catch {
       // Best-effort only.
     }
+    await Promise.resolve(contextEnginePreparation?.rollback?.()).catch(() => undefined);
     const messageText = summarizeError(err);
     return {
       status: "error",
@@ -984,6 +1095,7 @@ export async function spawnSubagentDirect(
     } catch {
       // Best-effort cleanup only.
     }
+    await Promise.resolve(contextEnginePreparation?.rollback?.()).catch(() => undefined);
     return {
       status: "error",
       error: `Failed to register subagent run: ${summarizeError(err)}`,

@@ -527,11 +527,7 @@ function normalizeStreamingConfigInput(
 }
 
 function inferLegacyVapiBridgeMode(params: {
-  configuredMode: VoiceCallConfigInput["vapi"] extends infer T
-    ? T extends { bridgeMode?: infer M }
-      ? M
-      : never
-    : never;
+  configuredMode?: VapiBridgeMode;
   bridgeUrl: string | undefined;
 }): VapiBridgeMode {
   if (typeof params.configuredMode === "string" && params.configuredMode.trim()) {

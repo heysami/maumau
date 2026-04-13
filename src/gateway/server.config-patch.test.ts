@@ -105,6 +105,7 @@ describe("gateway config methods", () => {
         restartExpected?: boolean;
         debounceMs?: number;
         deferralTimeoutMs?: number;
+        restartReasons?: string[];
       };
     }>(requireWs(), "config.set", {
       raw: JSON.stringify(current.payload?.config ?? {}, null, 2),

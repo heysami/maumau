@@ -37,6 +37,7 @@ export const DASHBOARD_PAGE_ORDER = [
   "profile",
   "teams",
   "user-channels",
+  "agents",
   "memories",
 ] as const;
 
@@ -63,6 +64,7 @@ export type Tab =
   | "dashboardProfile"
   | "dashboardTeams"
   | "dashboardUserChannels"
+  | "dashboardAgents"
   | "dashboardMemories"
   | "skills"
   | "nodes"
@@ -98,7 +100,8 @@ const TAB_PATHS: Record<Tab, string> = {
   dashboardProfile: "/dashboard/profile",
   dashboardTeams: "/dashboard/teams",
   dashboardUserChannels: "/dashboard/user-channels",
-  dashboardMemories: "/dashboard/agents",
+  dashboardAgents: "/dashboard/agents",
+  dashboardMemories: "/dashboard/memory-notes",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
@@ -126,6 +129,7 @@ const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
   profile: "dashboardProfile",
   teams: "dashboardTeams",
   "user-channels": "dashboardUserChannels",
+  agents: "dashboardAgents",
   memories: "dashboardMemories",
 };
 
@@ -275,6 +279,8 @@ export function iconForTab(tab: Tab): IconName {
       return "users";
     case "dashboardUserChannels":
       return "link";
+    case "dashboardAgents":
+      return "folder";
     case "dashboardMemories":
       return "brain";
     case "skills":

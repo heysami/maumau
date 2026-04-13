@@ -301,14 +301,24 @@ describe("agent file helpers", () => {
 
   it("ignores stale list responses after switching agents", async () => {
     const { state, request } = createAgentFilesState();
-    let resolveAlpha: ((value: unknown) => void) | null = null;
+    const alphaDeferred: {
+      resolve?: (value: {
+        agentId: string;
+        workspace: string;
+        files: Array<Record<string, unknown>>;
+      }) => void;
+    } = {};
     request.mockImplementation((method: string, params: Record<string, string>) => {
       if (method !== "agents.files.list") {
         throw new Error(`unexpected method ${method}`);
       }
       if (params.agentId === "alpha") {
-        return new Promise((resolve) => {
-          resolveAlpha = resolve;
+        return new Promise<{
+          agentId: string;
+          workspace: string;
+          files: Array<Record<string, unknown>>;
+        }>((resolve) => {
+          alphaDeferred.resolve = resolve;
         });
       }
       return Promise.resolve({
@@ -320,7 +330,11 @@ describe("agent file helpers", () => {
 
     const alphaPromise = loadAgentFiles(state, "alpha");
     const betaPromise = loadAgentFiles(state, "beta");
-    resolveAlpha?.({
+    expect(alphaDeferred.resolve).toBeTypeOf("function");
+    if (!alphaDeferred.resolve) {
+      throw new Error("alpha resolver was not captured");
+    }
+    alphaDeferred.resolve({
       agentId: "alpha",
       workspace: "/tmp/alpha",
       files: [{ name: DEFAULT_SOUL_FILENAME, path: "/tmp/alpha/SOUL.md", missing: false }],

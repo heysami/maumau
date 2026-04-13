@@ -5,6 +5,7 @@ import { PassThrough } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createVoiceCallBackend } from "./backend.js";
+import type { VapiBridgeMode, VoiceCallConfig } from "./config.js";
 import { createVoiceCallBaseConfig } from "./test-fixtures.js";
 import { VapiCallController } from "./vapi-runtime.js";
 import { generateVoiceResponse } from "./response-generator.js";
@@ -25,7 +26,7 @@ vi.mock("./tunnel.js", async () => {
 
 const originalFetch = globalThis.fetch;
 
-function createVapiConfig() {
+function createVapiConfig(): { config: VoiceCallConfig; tempStorePath: string } {
   const tempStorePath = fs.mkdtempSync(path.join(os.tmpdir(), "voice-call-vapi-test-"));
   return {
     config: {
@@ -39,7 +40,7 @@ function createVapiConfig() {
         phoneNumberId: "phone-1",
         telephonyProvider: "twilio" as const,
         preferredLanguage: "id",
-        bridgeMode: "manual-public-url" as const,
+        bridgeMode: "manual-public-url" as VapiBridgeMode,
         bridgeUrl: "https://demo.ts.net/plugins/voice-call/vapi",
         bridgePath: "/plugins/voice-call/vapi",
         bridgeAuthToken: "bridge-secret",
@@ -91,18 +92,20 @@ function createMockResponse(): {
     headersSent: false,
     setHeader(name: string, value: string) {
       headers[name.toLowerCase()] = String(value);
+      return this as unknown as ServerResponse;
     },
     end(chunk?: string | Buffer) {
       if (chunk != null) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
       this.headersSent = true;
+      return this as unknown as ServerResponse;
     },
-  } satisfies Partial<ServerResponse> & {
+  } as {
     statusCode: number;
     headersSent: boolean;
-    setHeader(name: string, value: string): void;
-    end(chunk?: string | Buffer): void;
+    setHeader(name: string, value: string): ServerResponse;
+    end(chunk?: string | Buffer): ServerResponse;
   };
   return {
     res: res as ServerResponse,

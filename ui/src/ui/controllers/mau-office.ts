@@ -313,6 +313,9 @@ function isSnapshotRowActive(
     | undefined,
   nowMs: number,
 ): boolean {
+  if (!row) {
+    return false;
+  }
   const updatedAtMs = row?.updatedAt ?? 0;
   if (updatedAtMs <= 0) {
     return false;
@@ -1983,12 +1986,14 @@ function activePendingActivity(actor: OfficeActor, nowMs: number): OfficeActivit
 }
 
 function resolveDeferredActivity(actor: OfficeActor, nowMs: number): OfficeActivity {
-  return preserveActiveSupportDialogue(
-    actor,
-    activePendingActivity(actor, nowMs) ??
-      activeSnapshotActivity(actor, nowMs) ??
-      fallbackActivityForActor(actor, nowMs),
-    nowMs,
+  return (
+    preserveActiveSupportDialogue(
+      actor,
+      activePendingActivity(actor, nowMs) ??
+        activeSnapshotActivity(actor, nowMs) ??
+        fallbackActivityForActor(actor, nowMs),
+      nowMs,
+    ) ?? fallbackActivityForActor(actor, nowMs)
   );
 }
 
@@ -2221,7 +2226,11 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
   for (const actor of remaining.splice(0)) {
     const packageId = randomizedSoloIds.find((id) => {
       const slotAnchorId = packageById.get(id)?.activityDefinitions[0]?.slotLayout[0];
-      return Boolean(slotAnchorId) && availablePackage(id) && !reservedAnchors.has(slotAnchorId);
+      return (
+        typeof slotAnchorId === "string" &&
+        availablePackage(id) &&
+        !reservedAnchors.has(slotAnchorId)
+      );
     });
     if (packageId && assignPackageById(packageId, 1)) {
       continue;
@@ -2412,7 +2421,7 @@ function buildSnapshotState(
           nowMs,
           isHeartbeatSnapshot,
         ),
-        snapshotRow?.updatedAt,
+        snapshotRow?.updatedAt ?? undefined,
       ),
       nowMs,
     );
@@ -2476,7 +2485,7 @@ function buildSnapshotState(
               nowMs,
               Boolean(heartbeatSessionKeys[row.key]),
             ),
-            row.updatedAt,
+            row.updatedAt ?? undefined,
           ),
           nowMs,
         ) ??
@@ -2981,7 +2990,7 @@ export function applyMauOfficeSessionToolEvent(
   if (!actor) {
     return next;
   }
-  const messageLabel = extractMessageLabel(payload?.message);
+  const messageLabel = extractMessageLabel(payload?.data?.message);
   if (messageLabel) {
     actor.label = messageLabel;
     actor.shortLabel = shortLabelForName(messageLabel, "V");
