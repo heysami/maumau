@@ -198,6 +198,13 @@ export async function runNonInteractiveLocalSetup(params: {
   await ensureLifeImprovementRoutineArtifacts({
     config: nextConfig,
   });
+  if (freshInstall) {
+    const { maybeAutoLinkFreshInstallMauworld } = await import("../onboard-mauworld.js");
+    await maybeAutoLinkFreshInstallMauworld({
+      config: nextConfig,
+      runtime,
+    });
+  }
 
   const bundledTools = await ensureFreshInstallBundledTools({
     freshInstall,

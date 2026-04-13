@@ -68,6 +68,7 @@ const ensureOnboardedMultiUserMemoryArtifacts = vi.hoisted(() => vi.fn(async () 
 const applyLocalSetupReflectionReviewerDefaults = vi.hoisted(() => vi.fn((cfg) => cfg));
 const ensureOnboardedReflectionReviewerArtifacts = vi.hoisted(() => vi.fn(async () => {}));
 const ensureLifeImprovementRoutineArtifacts = vi.hoisted(() => vi.fn(async () => {}));
+const maybeAutoLinkFreshInstallMauworld = vi.hoisted(() => vi.fn(async () => ({ status: "linked" })));
 
 const setupChannels = vi.hoisted(() => vi.fn(async (cfg) => cfg));
 const setupSkills = vi.hoisted(() => vi.fn(async (cfg) => cfg));
@@ -172,6 +173,10 @@ vi.mock("../teams/life-improvement-routine.js", () => ({
   ensureLifeImprovementRoutineArtifacts,
 }));
 
+vi.mock("../commands/onboard-mauworld.js", () => ({
+  maybeAutoLinkFreshInstallMauworld,
+}));
+
 vi.mock("../config/config.js", () => ({
   DEFAULT_GATEWAY_PORT: 18789,
   resolveGatewayPort: () => 18789,
@@ -256,6 +261,7 @@ afterEach(() => {
   applyLocalSetupReflectionReviewerDefaults.mockClear();
   ensureOnboardedReflectionReviewerArtifacts.mockClear();
   ensureLifeImprovementRoutineArtifacts.mockClear();
+  maybeAutoLinkFreshInstallMauworld.mockClear();
   readTailscaleStatusJson.mockReset();
   readTailscaleStatusJson.mockResolvedValue({});
 });
@@ -739,6 +745,34 @@ describe("runSetupWizard", () => {
     );
 
     expect(writeConfigFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-links Mauworld during fresh embedded local onboarding", async () => {
+    const prompter = buildWizardPrompter({});
+    const runtime = createRuntime();
+
+    await runSetupWizard(
+      {
+        acceptRisk: true,
+        embedded: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipSearch: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    expect(maybeAutoLinkFreshInstallMauworld).toHaveBeenCalledWith({
+      config: expect.any(Object),
+      runtime,
+    });
   });
 
   async function runTuiHatchTest(params: {

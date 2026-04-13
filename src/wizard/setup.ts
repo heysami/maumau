@@ -862,6 +862,14 @@ export async function runSetupWizard(
   await ensureLifeImprovementRoutineArtifacts({
     config: nextConfig,
   });
+  if (mode === "local" && shouldCreateStarterTeam) {
+    const { maybeAutoLinkFreshInstallMauworld } =
+      await import("../commands/onboard-mauworld.js");
+    await maybeAutoLinkFreshInstallMauworld({
+      config: nextConfig,
+      runtime,
+    });
+  }
 
   if (mode === "local" && shouldCreateStarterTeam) {
     const { ensureFreshInstallBundledTools } = await import("../commands/onboard-bundled-tools.js");

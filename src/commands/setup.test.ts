@@ -5,7 +5,7 @@ import { withTempHome } from "../../test/helpers/temp-home.js";
 import { setupCommand } from "./setup.js";
 
 describe("setupCommand", () => {
-  it("writes gateway.mode=local on first run", async () => {
+  it("writes gateway.mode=local plus fresh-install plugin defaults on first run", async () => {
     await withTempHome(async (home) => {
       const runtime = {
         log: vi.fn(),
@@ -16,10 +16,32 @@ describe("setupCommand", () => {
       await setupCommand(undefined, runtime);
 
       const configPath = path.join(home, ".maumau", "maumau.json");
-      const raw = await fs.readFile(configPath, "utf-8");
+      const raw = JSON.parse(await fs.readFile(configPath, "utf-8")) as {
+        agents?: { defaults?: { workspace?: string } };
+        gateway?: { mode?: string };
+        plugins?: {
+          entries?: {
+            mauworld?: {
+              enabled?: boolean;
+              config?: Record<string, unknown>;
+            };
+          };
+        };
+      };
 
-      expect(raw).toContain('"mode": "local"');
-      expect(raw).toContain('"workspace"');
+      expect(raw.gateway?.mode).toBe("local");
+      expect(raw.agents?.defaults?.workspace).toBeTruthy();
+      expect(raw.plugins?.entries?.mauworld).toEqual({
+        enabled: true,
+        config: {
+          apiBaseUrl: "https://mauworld-api.onrender.com/api",
+          autoHeartbeat: true,
+          autoLinkOnFreshInstall: true,
+          mainAgentId: "main",
+          timeoutMs: 15_000,
+          displayName: "Main Mau Agent",
+        },
+      });
     });
   });
 
@@ -51,10 +73,12 @@ describe("setupCommand", () => {
       const raw = JSON.parse(await fs.readFile(configPath, "utf-8")) as {
         agents?: { defaults?: { workspace?: string } };
         gateway?: { mode?: string };
+        plugins?: { entries?: Record<string, unknown> };
       };
 
       expect(raw.agents?.defaults?.workspace).toBe(workspace);
       expect(raw.gateway?.mode).toBe("local");
+      expect(raw.plugins?.entries?.mauworld).toBeUndefined();
     });
   });
 });

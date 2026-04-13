@@ -4,6 +4,7 @@ import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../agents/wor
 import { type MaumauConfig, createConfigIO, writeConfigFile } from "../config/config.js";
 import { formatConfigPath, logConfigUpdated } from "../config/logging.js";
 import { resolveSessionTranscriptsDir } from "../config/sessions.js";
+import { applyFreshInstallPluginDefaults } from "../plugins/fresh-install-defaults.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { shortenHomePath } from "../utils.js";
@@ -41,7 +42,7 @@ export async function setupCommand(
 
   const workspace = desiredWorkspace ?? defaults.workspace ?? DEFAULT_AGENT_WORKSPACE_DIR;
 
-  const next: MaumauConfig = {
+  let next: MaumauConfig = {
     ...cfg,
     agents: {
       ...cfg.agents,
@@ -55,6 +56,10 @@ export async function setupCommand(
       mode: cfg.gateway?.mode ?? "local",
     },
   };
+
+  if (!existingRaw.exists) {
+    next = applyFreshInstallPluginDefaults(next);
+  }
 
   if (
     !existingRaw.exists ||

@@ -11,6 +11,7 @@ import type { DmScope } from "../config/types.base.js";
 import type { GatewayTailscaleMode } from "../config/types.gateway.js";
 import type { ToolProfileId } from "../config/types.tools.js";
 import { readTailscaleStatusJson } from "../infra/tailscale.js";
+import { applyFreshInstallPluginDefaults } from "../plugins/fresh-install-defaults.js";
 import { applyStarterTeamOnFreshInstall } from "../teams/presets.js";
 import { applyLocalSetupMultiUserMemoryDefaults } from "./onboard-multi-user-memory.js";
 import { applyLocalSetupReflectionReviewerDefaults } from "./onboard-reflection-reviewer.js";
@@ -137,57 +138,38 @@ export function applyLocalSetupWorkspaceConfig(
   workspaceDir: string,
   options?: { freshInstall?: boolean },
 ): MaumauConfig {
+  const localSetupConfig: MaumauConfig = {
+    ...baseConfig,
+    agents: {
+      ...baseConfig.agents,
+      defaults: {
+        ...baseConfig.agents?.defaults,
+        workspace: workspaceDir,
+      },
+    },
+    gateway: {
+      ...baseConfig.gateway,
+      mode: "local",
+    },
+    session: {
+      ...baseConfig.session,
+      dmScope: baseConfig.session?.dmScope ?? ONBOARDING_DEFAULT_DM_SCOPE,
+    },
+    tools: {
+      ...baseConfig.tools,
+      profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
+      alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
+    },
+  };
+
+  const freshInstallConfig =
+    options?.freshInstall === true
+      ? applyFreshInstallPluginDefaults(applyFreshInstallBrowserDefaults(localSetupConfig))
+      : localSetupConfig;
+
   return applyStarterTeamOnFreshInstall(
     applyLocalSetupReflectionReviewerDefaults(
-      applyLocalSetupMultiUserMemoryDefaults(
-        options?.freshInstall === true
-          ? applyFreshInstallBrowserDefaults({
-              ...baseConfig,
-              agents: {
-                ...baseConfig.agents,
-                defaults: {
-                  ...baseConfig.agents?.defaults,
-                  workspace: workspaceDir,
-                },
-              },
-              gateway: {
-                ...baseConfig.gateway,
-                mode: "local",
-              },
-              session: {
-                ...baseConfig.session,
-                dmScope: baseConfig.session?.dmScope ?? ONBOARDING_DEFAULT_DM_SCOPE,
-              },
-              tools: {
-                ...baseConfig.tools,
-                profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
-                alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
-              },
-            })
-          : {
-              ...baseConfig,
-              agents: {
-                ...baseConfig.agents,
-                defaults: {
-                  ...baseConfig.agents?.defaults,
-                  workspace: workspaceDir,
-                },
-              },
-              gateway: {
-                ...baseConfig.gateway,
-                mode: "local",
-              },
-              session: {
-                ...baseConfig.session,
-                dmScope: baseConfig.session?.dmScope ?? ONBOARDING_DEFAULT_DM_SCOPE,
-              },
-              tools: {
-                ...baseConfig.tools,
-                profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
-                alsoAllow: resolveOnboardingAlsoAllow(baseConfig.tools),
-              },
-            },
-      ),
+      applyLocalSetupMultiUserMemoryDefaults(freshInstallConfig),
     ),
     { freshInstall: options?.freshInstall === true },
   );

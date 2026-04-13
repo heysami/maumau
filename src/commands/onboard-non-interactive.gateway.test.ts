@@ -20,6 +20,9 @@ const ensureOnboardedMultiUserMemoryArtifactsMock = vi.hoisted(() => vi.fn(async
 const applyLocalSetupReflectionReviewerDefaultsMock = vi.hoisted(() => vi.fn((cfg) => cfg));
 const ensureOnboardedReflectionReviewerArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
 const ensureLifeImprovementRoutineArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
+const maybeAutoLinkFreshInstallMauworldMock = vi.hoisted(() =>
+  vi.fn(async () => ({ status: "linked", installationId: "inst_auto_1" })),
+);
 const ensureFreshInstallBundledToolsMock = vi.hoisted(() =>
   vi.fn(async () => ({
     attempted: true,
@@ -118,6 +121,10 @@ vi.mock("./onboard-reflection-reviewer.js", () => ({
 
 vi.mock("../teams/life-improvement-routine.js", () => ({
   ensureLifeImprovementRoutineArtifacts: ensureLifeImprovementRoutineArtifactsMock,
+}));
+
+vi.mock("./onboard-mauworld.js", () => ({
+  maybeAutoLinkFreshInstallMauworld: maybeAutoLinkFreshInstallMauworldMock,
 }));
 
 vi.mock("../commands/onboard-bundled-tools.js", () => ({
@@ -273,6 +280,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     applyLocalSetupReflectionReviewerDefaultsMock.mockClear();
     ensureOnboardedReflectionReviewerArtifactsMock.mockClear();
     ensureLifeImprovementRoutineArtifactsMock.mockClear();
+    maybeAutoLinkFreshInstallMauworldMock.mockClear();
     ensureFreshInstallBundledToolsMock.mockClear();
     gatewayServiceMock.isLoaded.mockClear();
     gatewayServiceMock.readRuntime.mockClear();
@@ -336,6 +344,10 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       expect(ensureFreshInstallBundledToolsMock).toHaveBeenCalledWith(
         expect.objectContaining({ freshInstall: true }),
       );
+      expect(maybeAutoLinkFreshInstallMauworldMock).toHaveBeenCalledWith({
+        config: expect.any(Object),
+        runtime: runtimeWithCapture,
+      });
 
       const parsed = JSON.parse(readCapturedJson()) as {
         ok: boolean;

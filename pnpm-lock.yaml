@@ -249,6 +249,12 @@ importers:
 
   extensions/anthropic: {}
 
+  extensions/automation-runner:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 0.34.48
+        version: 0.34.48
+
   extensions/bluebubbles:
     dependencies:
       zod:
@@ -423,6 +429,12 @@ importers:
         specifier: 0.34.48
         version: 0.34.48
 
+  extensions/lossless-claw:
+    devDependencies:
+      maumau:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/matrix:
     dependencies:
       '@matrix-org/matrix-sdk-crypto-nodejs':
@@ -459,6 +471,12 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
+    devDependencies:
+      maumau:
+        specifier: workspace:*
+        version: link:../..
+
+  extensions/mauworld:
     devDependencies:
       maumau:
         specifier: workspace:*
@@ -507,6 +525,16 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+    devDependencies:
+      maumau:
+        specifier: workspace:*
+        version: link:../..
+
+  extensions/multi-user-memory:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 0.34.48
+        version: 0.34.48
     devDependencies:
       maumau:
         specifier: workspace:*

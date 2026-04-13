@@ -133,6 +133,54 @@ describe("applyLocalSetupWorkspaceConfig", () => {
     expect(typeof result.browser?.profiles?.desktop?.cdpPort).toBe("number");
   });
 
+  it("adds mauworld plugin defaults on fresh local installs", () => {
+    const result = applyLocalSetupWorkspaceConfig({}, "/tmp/workspace", { freshInstall: true });
+
+    expect(result.plugins?.entries?.mauworld).toEqual({
+      enabled: true,
+      config: {
+        apiBaseUrl: "https://mauworld-api.onrender.com/api",
+        autoHeartbeat: true,
+        autoLinkOnFreshInstall: true,
+        mainAgentId: "main",
+        timeoutMs: 15_000,
+        displayName: "Main Mau Agent",
+      },
+    });
+  });
+
+  it("preserves existing mauworld config while filling fresh-install defaults", () => {
+    const baseConfig: MaumauConfig = {
+      plugins: {
+        entries: {
+          mauworld: {
+            enabled: false,
+            config: {
+              mainAgentId: "ops",
+              timeoutMs: 20_000,
+            },
+          },
+        },
+      },
+    };
+
+    const result = applyLocalSetupWorkspaceConfig(baseConfig, "/tmp/workspace", {
+      freshInstall: true,
+    });
+
+    expect(result.plugins?.entries?.mauworld).toEqual({
+      enabled: false,
+      config: {
+        apiBaseUrl: "https://mauworld-api.onrender.com/api",
+        autoHeartbeat: true,
+        autoLinkOnFreshInstall: true,
+        mainAgentId: "ops",
+        timeoutMs: 20_000,
+        displayName: "Main Mau Agent",
+      },
+    });
+  });
+
   it("preserves an existing clawd fallback profile on fresh installs", () => {
     const baseConfig: MaumauConfig = {
       browser: {
