@@ -26,7 +26,6 @@ import {
   getActiveMauOfficeScene,
   resolveMauOfficeSceneConfigFromRoot,
   sceneBreakAnchorIds,
-  sceneIdlePackageSlotAnchorIds,
   sceneMarkerIdAt,
   sceneMarkerIdsForRole,
   sceneMarkerRoleForId,
@@ -400,7 +399,7 @@ function stableShuffleByKey<T>(
       value,
       rank: hashString(`${seed}:${keyOf(value)}`),
     }))
-    .sort((left, right) => left.rank - right.rank)
+    .toSorted((left, right) => left.rank - right.rank)
     .map((entry) => entry.value);
 }
 
@@ -489,11 +488,6 @@ function visitorSupportAnchorForAgentId(
 function visitorMeetingAnchor(): string {
   const ids = meetingSeatAnchorIds();
   return ids[ids.length - 1] ?? "meeting_seat_6";
-}
-
-function midMeetingAnchor(): string {
-  const ids = meetingSeatAnchorIds();
-  return ids[Math.floor(ids.length / 2)] ?? "meeting_seat_4";
 }
 
 function meetingAnchorForHome(homeAnchorId: string, preferPresenter = false): string {
@@ -676,7 +670,7 @@ function roleHintFromCatalog(catalog: ToolsCatalogResult | undefined): ActorRole
 
 function roomFromAnchor(anchorId: string): MauOfficeRoomId {
   const roomId = activeScene().anchors[anchorId]?.roomId;
-  return roomId === "outside" || !roomId ? "support" : (roomId as MauOfficeRoomId);
+  return roomId === "outside" || !roomId ? "support" : roomId;
 }
 
 function nodeForAnchor(anchorId: string) {
@@ -735,25 +729,6 @@ function pixelPointForTile(tileX: number, tileY: number): { x: number; y: number
     x: tileX * tileSize + tileSize / 2,
     y: tileY * tileSize + MAU_OFFICE_FOOT_OFFSET_Y,
   };
-}
-
-function spriteOccupiedTiles(sprite: {
-  tileX: number;
-  tileY: number;
-  tileWidth: number;
-  tileHeight: number;
-}) {
-  const occupied: string[] = [];
-  const startTileX = Math.floor(sprite.tileX);
-  const startTileY = Math.floor(sprite.tileY);
-  const endTileX = Math.ceil(sprite.tileX + sprite.tileWidth) - 1;
-  const endTileY = Math.ceil(sprite.tileY + sprite.tileHeight) - 1;
-  for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
-    for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
-      occupied.push(tileKey(tileX, tileY));
-    }
-  }
-  return occupied;
 }
 
 function tileDistance(
@@ -826,10 +801,9 @@ function candidateAnchorIds(anchorId: string): string[] {
     return [anchorId];
   }
   const sortByDistance = (ids: readonly string[]) =>
-    [...ids].sort(
+    [...ids].toSorted(
       (leftId, rightId) =>
-        tileDistance(scene.anchors[leftId]!, anchor) -
-        tileDistance(scene.anchors[rightId]!, anchor),
+        tileDistance(scene.anchors[leftId], anchor) - tileDistance(scene.anchors[rightId], anchor),
     );
   const role = sceneMarkerRoleForId(scene, anchorId);
   if (role === "desk.workerSeat") {
@@ -986,7 +960,7 @@ function tilePathBetween(
     path.push({ tileX, tileY });
     currentKey = cameFrom.get(currentKey) ?? null;
   }
-  return path.reverse();
+  return path.toReversed();
 }
 
 function syncActorToAnchor(actor: OfficeActor, anchorId: string) {
@@ -1239,6 +1213,26 @@ function extractAgentEventPreviewText(value: unknown): string | undefined {
   );
 }
 
+function stringifyUnknownPreviewValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "symbol") {
+    return value.description ?? "symbol";
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
 function extractVisitorPreviewText(value: unknown): string | undefined {
   if (value === null || value === undefined) {
     return undefined;
@@ -1246,7 +1240,7 @@ function extractVisitorPreviewText(value: unknown): string | undefined {
   const sanitized =
     typeof value === "object"
       ? stripEnvelopeFromMessage(value)
-      : stripEnvelopeFromMessage({ role: "user", text: String(value) });
+      : stripEnvelopeFromMessage({ role: "user", text: stringifyUnknownPreviewValue(value) });
   if (typeof sanitized === "string") {
     return normalizePreviewText(sanitized);
   }
@@ -1619,11 +1613,11 @@ function buildPathWaypoints(
           tileDistance(currentTile, stop) <= LOCAL_ROOM_HOP_MAX_TILES;
         const isNeighborNodeHop =
           Boolean(currentNodeId && stop.graphNodeId) &&
-          activeScene().nodes[currentNodeId!]?.neighbors.includes(stop.graphNodeId!);
+          activeScene().nodes[currentNodeId]?.neighbors.includes(stop.graphNodeId!);
         const isShortNeighborNodeHop =
           isNeighborNodeHop && tileDistance(currentTile, stop) <= LOCAL_NODE_HOP_MAX_TILES;
         const isClearNeighborCorridor =
-          isNeighborNodeHop && hasClearNodeEdgePath(currentNodeId!, stop.graphNodeId!);
+          isNeighborNodeHop && hasClearNodeEdgePath(currentNodeId, stop.graphNodeId!);
         if (!isInteriorShortHop && !isShortNeighborNodeHop && !isClearNeighborCorridor) {
           return null;
         }
@@ -1635,7 +1629,7 @@ function buildPathWaypoints(
         });
       } else {
         for (let index = 1; index < segment.length; index += 1) {
-          const tile = segment[index]!;
+          const tile = segment[index];
           const pixelPoint = pixelPointForTile(tile.tileX, tile.tileY);
           pushPathWaypoint(waypoints, {
             x: pixelPoint.x,
@@ -1938,7 +1932,7 @@ function setActorActivity(
     anchorId: resolvedActivity.anchorId,
     source: resolvedActivity.source,
   });
-  actor.facing = normalizeDirection(waypoints[0]!, waypoints[1]!);
+  actor.facing = normalizeDirection(waypoints[0], waypoints[1]);
 }
 
 function resolveActivityMode(
@@ -2173,7 +2167,7 @@ function assignIdleActivities(state: MauOfficeState, nowMs: number) {
     }
     state.idleCooldowns[pkg.id] = nowMs + pkg.cooldownMs;
     participants.forEach((actor, index) => {
-      const slotAnchorId = slotAnchorIds[index]!;
+      const slotAnchorId = slotAnchorIds[index];
       reservedAnchors.add(slotAnchorId);
       actor.idleAssignment = {
         packageId: pkg.id,
@@ -2323,7 +2317,7 @@ function advanceActor(
   ) {
     actor.path.segmentStartedAtMs += actor.path.segmentDurationMs;
     actor.path.segmentIndex += 1;
-    const currentWaypoint = actor.path.waypoints[actor.path.segmentIndex]!;
+    const currentWaypoint = actor.path.waypoints[actor.path.segmentIndex];
     if (currentWaypoint.nodeId) {
       actor.nodeId = currentWaypoint.nodeId;
     }
@@ -2338,8 +2332,8 @@ function advanceActor(
     changed = true;
   }
   if (actor.path && actor.path.segmentIndex < actor.path.waypoints.length - 1) {
-    const currentWaypoint = actor.path.waypoints[actor.path.segmentIndex]!;
-    const nextWaypoint = actor.path.waypoints[actor.path.segmentIndex + 1]!;
+    const currentWaypoint = actor.path.waypoints[actor.path.segmentIndex];
+    const nextWaypoint = actor.path.waypoints[actor.path.segmentIndex + 1];
     const progress = Math.max(
       0,
       Math.min(1, (nowMs - actor.path.segmentStartedAtMs) / actor.path.segmentDurationMs),

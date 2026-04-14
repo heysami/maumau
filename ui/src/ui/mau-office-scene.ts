@@ -10,7 +10,6 @@ import {
   type MauOfficeDirection,
   type MauOfficeFootprintTiles,
   type MauOfficeLabelPlacement,
-  type MauOfficeLabelTone,
   type MauOfficeNode,
   type MauOfficeRoom,
   type MauOfficeRoomId,
@@ -995,12 +994,12 @@ function buildDefaultZoneRows(): MauOfficeZoneId[][] {
   const rows = createEmptyZoneRows();
   const legacyRows = buildLegacyDefaultZoneRows();
   for (let tileY = 0; tileY < legacyRows.length; tileY += 1) {
-    for (let tileX = 0; tileX < legacyRows[tileY]!.length; tileX += 1) {
-      rows[tileY]![tileX] = legacyRows[tileY]![tileX]!;
+    for (let tileX = 0; tileX < legacyRows[tileY].length; tileX += 1) {
+      rows[tileY][tileX] = legacyRows[tileY][tileX]!;
     }
   }
   for (const tile of LEGACY_LAYOUT.map.floorTiles) {
-    rows[tile.tileY]![tile.tileX] = tile.roomId;
+    rows[tile.tileY][tile.tileX] = tile.roomId;
   }
   for (const [tileX, tileY, zoneId] of [
     [15, 1, "outside"],
@@ -1023,7 +1022,7 @@ function buildDefaultZoneRows(): MauOfficeZoneId[][] {
     [15, 18, "outside"],
     [15, 19, "outside"],
   ] as const) {
-    rows[tileY]![tileX] = zoneId;
+    rows[tileY][tileX] = zoneId;
   }
   return rows;
 }
@@ -1479,11 +1478,11 @@ function classifyFloorAsset(tileX: number, tileY: number, zone: MauOfficeZoneId)
     "mau-office/tiles/floor-room-c.png",
     "mau-office/tiles/floor-room-d.png",
   ] as const;
-  return roomVariants[(tileX * 3 + tileY) % roomVariants.length]!;
+  return roomVariants[(tileX * 3 + tileY) % roomVariants.length];
 }
 
 function sortMarkerIds(ids: string[]): string[] {
-  return [...ids].sort(naturalCompare);
+  return [...ids].toSorted(naturalCompare);
 }
 
 function buildMarkerMaps(markers: MauOfficeSceneMarker[]) {
@@ -1507,8 +1506,8 @@ function roomBoundsForZone(rows: MauOfficeZoneId[][], roomId: MauOfficeRoomId): 
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (let tileY = 0; tileY < rows.length; tileY += 1) {
-    for (let tileX = 0; tileX < rows[tileY]!.length; tileX += 1) {
-      if (rows[tileY]![tileX] !== roomId) {
+    for (let tileX = 0; tileX < rows[tileY].length; tileX += 1) {
+      if (rows[tileY][tileX] !== roomId) {
         continue;
       }
       minX = Math.min(minX, tileX);
@@ -1612,8 +1611,8 @@ function compileNodes(anchors: Record<string, MauOfficeAnchor>): Record<string, 
 function compileFloorTiles(rows: MauOfficeZoneId[][]): MauOfficeTilePlacement[] {
   const tiles: MauOfficeTilePlacement[] = [];
   for (let tileY = 0; tileY < rows.length; tileY += 1) {
-    for (let tileX = 0; tileX < rows[tileY]!.length; tileX += 1) {
-      const zone = rows[tileY]![tileX]!;
+    for (let tileX = 0; tileX < rows[tileY].length; tileX += 1) {
+      const zone = rows[tileY][tileX];
       if (zone === "outside") {
         continue;
       }
@@ -1749,8 +1748,8 @@ function compileLegacyRoomShellWalls(
 function compileLegacyHallCaps(rows: MauOfficeZoneId[][]): MauOfficeSpritePlacement[] {
   const sprites: MauOfficeSpritePlacement[] = [];
   for (let tileY = 0; tileY < rows.length; tileY += 1) {
-    for (let tileX = 0; tileX < rows[tileY]!.length; tileX += 1) {
-      if (rows[tileY]![tileX] !== "hall") {
+    for (let tileX = 0; tileX < rows[tileY].length; tileX += 1) {
+      if (rows[tileY][tileX] !== "hall") {
         continue;
       }
       const hasHorizontalNeighbor =
@@ -1808,7 +1807,7 @@ function setWallCell(rows: boolean[][], tileX: number, tileY: number) {
   if (tileY < 0 || tileY >= rows.length || tileX < 0 || tileX >= (rows[tileY]?.length ?? 0)) {
     return;
   }
-  rows[tileY]![tileX] = true;
+  rows[tileY][tileX] = true;
 }
 
 function deriveLegacyWallRows(
@@ -1837,7 +1836,7 @@ function wallAt(rows: boolean[][], tileX: number, tileY: number): boolean {
   if (tileY < 0 || tileY >= rows.length || tileX < 0 || tileX >= (rows[tileY]?.length ?? 0)) {
     return false;
   }
-  return rows[tileY]?.[tileX] === true;
+  return rows[tileY]?.[tileX];
 }
 
 function isWalkableZone(zone: MauOfficeZoneId): boolean {
@@ -2251,7 +2250,7 @@ function compileAutotilePlacement(
     const west = hasCell(cells, tileX - 1, tileY);
     let asset = "";
     if (item.autotileMode === "nine-slice") {
-      const slices = item.sliceAssets as Extract<MauOfficeCatalogItem["sliceAssets"], object>;
+      const slices = item.sliceAssets;
       asset =
         !north && !west
           ? (slices as Record<string, string>).topLeft
@@ -3568,15 +3567,15 @@ function buildDefaultWallRows(): boolean[][] {
   const rows = createEmptyWallRows();
   const legacyRows = buildLegacyDefaultWallRows();
   for (let tileY = 0; tileY < legacyRows.length; tileY += 1) {
-    for (let tileX = 0; tileX < legacyRows[tileY]!.length; tileX += 1) {
-      rows[tileY]![tileX] = legacyRows[tileY]![tileX]!;
+    for (let tileX = 0; tileX < legacyRows[tileY].length; tileX += 1) {
+      rows[tileY][tileX] = legacyRows[tileY][tileX]!;
     }
   }
   for (const sprite of LEGACY_LAYOUT.map.wallSprites) {
     const tileX = Math.round(sprite.tileX);
     const tileY = Math.round(sprite.tileY);
     if (tileY >= 0 && tileY < rows.length && tileX >= 0 && tileX < (rows[tileY]?.length ?? 0)) {
-      rows[tileY]![tileX] = true;
+      rows[tileY][tileX] = true;
     }
   }
   const eastSpine = LEGACY_LAYOUT.nodes.east_spine;
@@ -3588,7 +3587,7 @@ function buildDefaultWallRows(): boolean[][] {
       tileX <= Math.max(eastSpine.tileX, farSpine.tileX);
       tileX += 1
     ) {
-      rows[tileY]![tileX] = false;
+      rows[tileY][tileX] = false;
     }
   }
   for (const [tileX, tileY, blocked] of [
@@ -3623,7 +3622,7 @@ function buildDefaultWallRows(): boolean[][] {
     [15, 18, false],
     [15, 19, false],
   ] as const) {
-    rows[tileY]![tileX] = blocked;
+    rows[tileY][tileX] = blocked;
   }
   return rows;
 }
@@ -3692,8 +3691,8 @@ function upgradeLegacySceneRightWing(
   );
   const wallRows = Array.from({ length: targetHeight }, (_, rowIndex) =>
     Array.from({ length: targetWidth }, (_, colIndex) => {
-      const current = scene.wallRows[rowIndex]?.[colIndex] === true;
-      const fallbackValue = fallback.wallRows[rowIndex]?.[colIndex] === true;
+      const current = scene.wallRows[rowIndex]?.[colIndex];
+      const fallbackValue = fallback.wallRows[rowIndex]?.[colIndex];
       if (!current && colIndex >= MAU_OFFICE_RIGHT_WING_MERGE_TILE_X && fallbackValue) {
         return true;
       }
@@ -3960,10 +3959,7 @@ export function sanitizeMauOfficeSceneConfig(input: unknown): MauOfficeSceneConf
       )
     : deriveLegacyWallRows(normalizedRows, markers);
   const normalizedWallRows = Array.from({ length: dimensions.height }, (_, rowIndex) =>
-    Array.from(
-      { length: dimensions.width },
-      (_, colIndex) => wallRows[rowIndex]?.[colIndex] === true,
-    ),
+    Array.from({ length: dimensions.width }, (_, colIndex) => wallRows[rowIndex]?.[colIndex]),
   );
   const sanitized = {
     version: 1 as const,

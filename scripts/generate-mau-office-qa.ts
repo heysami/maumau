@@ -12,7 +12,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const uiRoot = path.join(repoRoot, "ui");
 const publicRoot = path.join(uiRoot, "public");
 const tmpRoot = path.join(uiRoot, ".tmp");
-const workerAsset = MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0]!;
+const workerAsset = MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0];
 const doorAsset = "mau-office/tiles/door-top.png";
 const wallAsset = "mau-office/tiles/wall-front-mid.png";
 

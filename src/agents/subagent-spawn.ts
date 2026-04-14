@@ -357,8 +357,8 @@ function resolveImplicitManagerSpecialistTarget(params: {
     return { ambiguous: matches.length > 1 };
   }
   return {
-    agentId: normalizeAgentId(matches[0]!.agentId),
-    role: matches[0]!.role,
+    agentId: normalizeAgentId(matches[0].agentId),
+    role: matches[0].role,
   };
 }
 

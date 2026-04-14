@@ -252,7 +252,7 @@ function resolveDashboardDraftConfigRaw(host: DashboardHost): string | undefined
   }
   const snapshotConfig = host.configSnapshot?.config;
   if (snapshotConfig && typeof snapshotConfig === "object") {
-    return serializeConfigForm(snapshotConfig as Record<string, unknown>);
+    return serializeConfigForm(snapshotConfig);
   }
   return undefined;
 }

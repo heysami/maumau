@@ -863,8 +863,7 @@ export async function runSetupWizard(
     config: nextConfig,
   });
   if (mode === "local" && shouldCreateStarterTeam) {
-    const { maybeAutoLinkFreshInstallMauworld } =
-      await import("../commands/onboard-mauworld.js");
+    const { maybeAutoLinkFreshInstallMauworld } = await import("../commands/onboard-mauworld.js");
     await maybeAutoLinkFreshInstallMauworld({
       config: nextConfig,
       runtime,

@@ -6,10 +6,7 @@ import type { ReplyPayload } from "../auto-reply/types.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { MaumauConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
-import type {
-  PreviewPublishResult,
-  publishPreviewArtifact as publishPreviewArtifactFn,
-} from "../gateway/previews.js";
+import type { publishPreviewArtifact as publishPreviewArtifactFn } from "../gateway/previews.js";
 import type { deliverOutboundPayloads as deliverOutboundPayloadsFn } from "../infra/outbound/deliver.js";
 import type { RuntimeEnv } from "../runtime.js";
 

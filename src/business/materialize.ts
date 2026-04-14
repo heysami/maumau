@@ -218,7 +218,7 @@ export async function materializeBusinessProjectBlueprint(params: {
   for (const agent of normalizedAgents) {
     const existingIndex = nextAgents.findIndex((entry) => normalizeText(entry.id) === agent.id);
     if (existingIndex >= 0) {
-      if (!isSameAgentConfig(nextAgents[existingIndex]!, agent)) {
+      if (!isSameAgentConfig(nextAgents[existingIndex], agent)) {
         throw new Error(`Agent id "${agent.id}" already exists with a different config.`);
       }
       continue;
@@ -233,7 +233,7 @@ export async function materializeBusinessProjectBlueprint(params: {
   );
   let createdTeam = false;
   if (existingTeamIndex >= 0) {
-    if (!isSameTeamConfig(nextTeams[existingTeamIndex]!, normalizedTeam)) {
+    if (!isSameTeamConfig(nextTeams[existingTeamIndex], normalizedTeam)) {
       throw new Error(`Team id "${normalizedTeam.id}" already exists with a different config.`);
     }
   } else {

@@ -272,7 +272,7 @@ describe("dashboard workshop controller state", () => {
           agentApps: [],
         };
       }
-      throw new Error(`unexpected method ${method}`);
+      throw new Error(`unexpected method ${typeof method === "string" ? method : "unknown"}`);
     });
 
     await loadDashboardData(host);
@@ -302,7 +302,7 @@ describe("dashboard workshop controller state", () => {
           agentApps: [],
         };
       }
-      throw new Error(`unexpected method ${method}`);
+      throw new Error(`unexpected method ${typeof method === "string" ? method : "unknown"}`);
     });
 
     await loadDashboardData(host);
@@ -374,7 +374,7 @@ describe("dashboard workshop controller state", () => {
           },
         };
       }
-      throw new Error(`unexpected method ${method}`);
+      throw new Error(`unexpected method ${typeof method === "string" ? method : "unknown"}`);
     });
 
     await saveDashboardWorkshopSelection(host);
@@ -408,7 +408,7 @@ describe("dashboard workshop controller state", () => {
           ],
         };
       }
-      throw new Error(`unexpected method ${method}`);
+      throw new Error(`unexpected method ${typeof method === "string" ? method : "unknown"}`);
     });
 
     await loadDashboardData(host);

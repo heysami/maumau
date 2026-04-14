@@ -38,7 +38,9 @@ function pickOptionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export function resolveMauworldConfig(api: Pick<MaumauPluginApi, "pluginConfig">): MauworldPluginConfig {
+export function resolveMauworldConfig(
+  api: Pick<MaumauPluginApi, "pluginConfig">,
+): MauworldPluginConfig {
   const raw = api.pluginConfig ?? {};
   return {
     enabled: raw.enabled !== false,

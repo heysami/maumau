@@ -52,6 +52,26 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function stringifyDashboardFieldValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "symbol") {
+    return value.description ?? "symbol";
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
 function parseDraftConfigOrThrow(rawConfig: string): MaumauConfig {
   const parsed = parseConfigJson5(rawConfig);
   if (!parsed.ok) {
@@ -284,7 +304,10 @@ export const dashboardHandlers: GatewayRequestHandlers = {
         channelId: typeof params.channelId === "string" ? params.channelId : "",
         fields: isPlainRecord(params.fields)
           ? Object.fromEntries(
-              Object.entries(params.fields).map(([key, value]) => [key, String(value ?? "")]),
+              Object.entries(params.fields).map(([key, value]) => [
+                key,
+                stringifyDashboardFieldValue(value),
+              ]),
             )
           : undefined,
         dmPolicy: typeof params.dmPolicy === "string" ? params.dmPolicy : undefined,

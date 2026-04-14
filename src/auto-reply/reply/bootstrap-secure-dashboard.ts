@@ -131,7 +131,7 @@ export function injectBootstrapSecureDashboardUrlIntoPayloads(
   }
 
   const nextPayloads = [...payloads];
-  const targetPayload = nextPayloads[firstTextPayloadIndex]!;
+  const targetPayload = nextPayloads[firstTextPayloadIndex];
   const text = targetPayload.text?.trim();
   if (!text) {
     return payloads;

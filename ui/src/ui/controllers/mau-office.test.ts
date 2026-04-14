@@ -29,7 +29,6 @@ import {
   MAU_OFFICE_WORKER_RENDER_METRICS,
   resolveMauOfficeAssetScaleSpec,
   sourcePxToLogicalPx,
-  type MauOfficeAssetScaleSpec,
   type MauOfficePxRange,
 } from "../mau-office-scale-spec.ts";
 import {
@@ -60,7 +59,6 @@ import {
   applyMauOfficeSessionMessageEvent,
   applyMauOfficeSessionToolEvent,
   createEmptyMauOfficeState,
-  createMauOfficeSessionTarget,
   loadMauOffice,
   setMauOfficeRoomFocus,
   type MauOfficeState,
@@ -833,11 +831,11 @@ Need help recovering the shared workspace password.`,
     const advanced = advanceMauOfficeState(host.mauOfficeState, Date.now() + 8_000);
     const actorId = advanced.actorOrder[0];
     expect(actorId).toBe("visitor:agent:main:direct:customer-42");
-    expect(advanced.actors[actorId!]?.anchorId).toBe("support_customer_2");
-    expect(advanced.actors[actorId!]?.currentActivity.bubbleText).toBe(
+    expect(advanced.actors[actorId]?.anchorId).toBe("support_customer_2");
+    expect(advanced.actors[actorId]?.currentActivity.bubbleText).toBe(
       "Need help recovering the shared workspace password.",
     );
-    expect(advanced.actors[actorId!]?.bubbles[0]?.text).toBe(
+    expect(advanced.actors[actorId]?.bubbles[0]?.text).toBe(
       "Need help recovering the shared workspace password.",
     );
   });
@@ -1318,7 +1316,7 @@ Need help recovering the shared workspace password.`,
 
     await loadMauOffice(host as never);
 
-    const worker = host.mauOfficeState.actors["worker:main"]!;
+    const worker = host.mauOfficeState.actors["worker:main"];
     expect(worker.snapshotActivity?.bubbleText).toBe("This is the actual newest assistant reply.");
     expect(worker.latestSupportDialogue?.text).toBe("This is the actual newest assistant reply.");
   });
@@ -1405,7 +1403,7 @@ Need help recovering the shared workspace password.`,
 
     await loadMauOffice(host as never);
 
-    const visitor = host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"]!;
+    const visitor = host.mauOfficeState.actors["visitor:agent:main:direct:customer-42"];
     expect(visitor.snapshotActivity?.bubbleText).toBe(
       "This is the actual newest customer request.",
     );
@@ -1534,7 +1532,7 @@ Need help recovering the shared workspace password.`,
     };
 
     await loadMauOffice(host as never);
-    const actor = host.mauOfficeState.actors["worker:main"]!;
+    const actor = host.mauOfficeState.actors["worker:main"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path).toMatchObject(walkingPath);
@@ -1547,7 +1545,6 @@ Need help recovering the shared workspace password.`,
   it("walks through same-node desk targets instead of snapping across the room", () => {
     const nowMs = Date.now();
     const currentAnchor = MAU_OFFICE_LAYOUT.anchors.desk_worker_1;
-    const nextAnchor = MAU_OFFICE_LAYOUT.anchors.desk_worker_2;
     const advanced = advanceMauOfficeState(
       {
         ...createEmptyMauOfficeState(),
@@ -1584,7 +1581,7 @@ Need help recovering the shared workspace password.`,
       },
       nowMs,
     );
-    const actor = advanced.actors["worker:desk"]!;
+    const actor = advanced.actors["worker:desk"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("desk_worker_2");
@@ -1645,7 +1642,7 @@ Need help recovering the shared workspace password.`,
       },
       nowMs,
     );
-    const actor = advanced.actors["worker:support"]!;
+    const actor = advanced.actors["worker:support"];
     const blockedCounterTiles = new Set(
       createEmptyMauOfficeState()
         .scene.map.propSprites.filter(
@@ -1732,7 +1729,7 @@ Need help recovering the shared workspace password.`,
       10_000,
     );
 
-    const actor = state.actors["worker:blocked"]!;
+    const actor = state.actors["worker:blocked"];
     expect(actor.anchorId).toBe("desk_worker_1");
     expect(actor.x).toBe(deskAnchor.x);
     expect(actor.y).toBe(deskAnchor.y);
@@ -1811,7 +1808,7 @@ Need help recovering the shared workspace password.`,
 
     await loadMauOffice(host as never);
 
-    const worker = host.mauOfficeState.actors["worker:main"]!;
+    const worker = host.mauOfficeState.actors["worker:main"];
     expect(worker.snapshotActivity?.id).toBe("snapshot-heartbeat");
     expect(worker.snapshotActivity?.kind).toBe("meeting");
     expect(host.mauOfficeState.actors["visitor:agent:main:direct:heartbeat-room"]).toBeUndefined();
@@ -1885,7 +1882,7 @@ Need help recovering the shared workspace password.`,
 
     await loadMauOffice(host as never);
 
-    const worker = host.mauOfficeState.actors["worker:main"]!;
+    const worker = host.mauOfficeState.actors["worker:main"];
     expect(worker.snapshotActivity).toBeNull();
     expect(host.mauOfficeState.actors["visitor:agent:main:direct:heartbeat-room"]).toBeUndefined();
   });
@@ -1977,7 +1974,7 @@ Need help recovering the shared workspace password.`,
     };
 
     await loadMauOffice(host as never);
-    const actor = host.mauOfficeState.actors["worker:main"]!;
+    const actor = host.mauOfficeState.actors["worker:main"];
 
     expect(actor.snapshotActivity).toBeNull();
     expect(actor.anchorId).toBe("break_arcade");
@@ -2571,13 +2568,13 @@ describe("advanceMauOfficeState", () => {
     };
 
     const leavingSupport = advanceMauOfficeState(state, 61_000);
-    const enRoute = leavingSupport.actors["worker:main"]!;
+    const enRoute = leavingSupport.actors["worker:main"];
     expect(enRoute.path?.targetAnchorId).toBe("break_arcade");
     expect(enRoute.latestSupportDialogue).toBeNull();
     expect(enRoute.bubbles.some((bubble) => bubble.kind === "customer_support")).toBe(false);
 
     const settled = advanceMauOfficeState(leavingSupport, 120_000);
-    const worker = settled.actors["worker:main"]!;
+    const worker = settled.actors["worker:main"];
     expect(worker.anchorId).toBe("break_arcade");
     expect(worker.currentRoomId).toBe("break");
     expect(worker.currentActivity.kind).toBe("idle");
@@ -2628,7 +2625,7 @@ describe("advanceMauOfficeState", () => {
     };
 
     const leaving = advanceMauOfficeState(state, 61_000);
-    const visitor = leaving.actors["visitor:agent:main:direct:customer-42"]!;
+    const visitor = leaving.actors["visitor:agent:main:direct:customer-42"];
     expect(visitor.path?.targetAnchorId).toBe("outside_support");
 
     const settled = advanceMauOfficeState(leaving, 120_000);
@@ -2704,7 +2701,7 @@ describe("advanceMauOfficeState", () => {
     };
 
     const advanced = advanceMauOfficeState(state, nowMs);
-    const worker = advanced.actors["worker:ops"]!;
+    const worker = advanced.actors["worker:ops"];
 
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.path?.targetAnchorId).not.toBe("support_staff_1");
@@ -2751,7 +2748,7 @@ describe("applyMauOfficeSessionToolEvent", () => {
       },
       startedAt,
     );
-    const actor = first.actors["worker:ops"]!;
+    const actor = first.actors["worker:ops"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("meeting_presenter");
@@ -2798,7 +2795,7 @@ describe("applyMauOfficeSessionToolEvent", () => {
       },
       startedAt,
     );
-    const actor = first.actors["worker:ops"]!;
+    const actor = first.actors["worker:ops"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("browser_worker_1");
@@ -2844,7 +2841,7 @@ describe("applyMauOfficeSessionToolEvent", () => {
       },
       startedAt,
     );
-    const actor = first.actors["worker:ops"]!;
+    const actor = first.actors["worker:ops"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("telephony_staff_1");
@@ -2892,12 +2889,12 @@ describe("applyMauOfficeSessionToolEvent", () => {
     );
 
     const advanced = advanceMauOfficeState(first, startedAt + 16);
-    const actor = advanced.actors["worker:ops"]!;
+    const actor = advanced.actors["worker:ops"];
 
     expect(actor.currentActivity.kind).toBe("walking");
     expect(actor.path?.targetAnchorId).toBe("browser_worker_1");
-    expect(actor.x).not.toBe(first.actors["worker:ops"]!.x);
-    expect(actor.y).not.toBe(first.actors["worker:ops"]!.y);
+    expect(actor.x).not.toBe(first.actors["worker:ops"].x);
+    expect(actor.y).not.toBe(first.actors["worker:ops"].y);
     expect(actor.path?.segmentIndex).toBeGreaterThan(0);
   });
 
@@ -2974,8 +2971,8 @@ describe("applyMauOfficeSessionToolEvent", () => {
       startedAt,
     );
     const advanced = advanceMauOfficeState(first, startedAt + 12_000);
-    const worker = advanced.actors["worker:main"]!;
-    const visitor = advanced.actors["visitor:agent:main:direct:customer-42"]!;
+    const worker = advanced.actors["worker:main"];
+    const visitor = advanced.actors["visitor:agent:main:direct:customer-42"];
 
     expect(worker.bubbles[0]?.text).toContain("Octopuses have three hearts");
     expect(visitor.bubbles[0]?.text).toBe("Can you reset my workspace access?");
@@ -3045,8 +3042,8 @@ describe("applyMauOfficeSessionToolEvent", () => {
       },
       startedAt,
     );
-    const worker = first.actors["worker:main"]!;
-    const visitor = first.actors["visitor:agent:main:direct:customer-42"]!;
+    const worker = first.actors["worker:main"];
+    const visitor = first.actors["visitor:agent:main:direct:customer-42"];
 
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.path?.targetAnchorId).toBe("browser_worker_1");
@@ -3113,7 +3110,7 @@ describe("applyMauOfficeSessionToolEvent", () => {
       startedAt + 1,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.latestSupportDialogue?.text).toBe("Latest assistant reply should stay visible.");
     expect(worker.bubbles[0]?.text).toBe("Latest assistant reply should stay visible.");
   });
@@ -3190,8 +3187,8 @@ describe("applyMauOfficeAgentEvent", () => {
       },
       startedAt,
     );
-    const worker = first.actors["worker:main"]!;
-    const visitor = first.actors["visitor:agent:main:direct:customer-42"]!;
+    const worker = first.actors["worker:main"];
+    const visitor = first.actors["visitor:agent:main:direct:customer-42"];
 
     expect(worker.currentActivity.bubbleText).toContain("Octopuses have three hearts");
     expect(visitor.currentActivity.bubbleText).toBe("Can you reset my workspace access?");
@@ -3237,7 +3234,7 @@ describe("applyMauOfficeAgentEvent", () => {
       startedAt,
     );
 
-    const worker = first.actors["worker:ops"]!;
+    const worker = first.actors["worker:ops"];
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.queuedActivity?.kind).toBe("meeting");
     expect(worker.queuedActivity?.roomId).toBe("meeting");
@@ -3300,7 +3297,7 @@ describe("applyMauOfficeAgentEvent", () => {
       startedAt,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.currentActivity.bubbleText).toBeUndefined();
     expect(worker.bubbles[0]?.text).toBe("Latest assistant reply should stay visible.");
   });
@@ -3377,7 +3374,7 @@ describe("applyMauOfficeAgentEvent", () => {
       startedAt + 1,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.currentActivity.bubbleText).toBe("This is the actual latest reply.");
     expect(worker.bubbles[0]?.text).toBe("This is the actual latest reply.");
   });
@@ -3398,7 +3395,7 @@ describe("applyMauOfficeSessionMessageEvent", () => {
       startedAt,
     );
     const advanced = advanceMauOfficeState(first, startedAt + 12_000);
-    const actor = advanced.actors[advanced.actorOrder[0]!]!;
+    const actor = advanced.actors[advanced.actorOrder[0]];
     const visitorAnchor = MAU_OFFICE_LAYOUT.anchors.support_customer_2;
 
     expect(actor.currentActivity.kind).toBe("customer_support");
@@ -3449,7 +3446,7 @@ describe("applyMauOfficeSessionMessageEvent", () => {
       startedAt,
     );
 
-    const worker = first.actors["worker:ops"]!;
+    const worker = first.actors["worker:ops"];
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.queuedActivity?.kind).toBe("meeting");
     expect(worker.queuedActivity?.roomId).toBe("meeting");
@@ -3506,13 +3503,13 @@ describe("applyMauOfficeSessionMessageEvent", () => {
     expect(first.actors["worker:ops"]?.snapshotActivity?.kind).toBe("desk_work");
 
     const walkingBack = advanceMauOfficeState(first, startedAt + 30_000);
-    const returningWorker = walkingBack.actors["worker:ops"]!;
+    const returningWorker = walkingBack.actors["worker:ops"];
 
     expect(returningWorker.currentActivity.kind).toBe("walking");
     expect(returningWorker.path?.targetAnchorId).toBe("desk_worker_1");
 
     const settled = advanceMauOfficeState(walkingBack, startedAt + 60_000);
-    const worker = settled.actors["worker:ops"]!;
+    const worker = settled.actors["worker:ops"];
 
     expect(worker.currentActivity.kind).toBe("desk_work");
     expect(worker.anchorId).toBe("desk_worker_1");
@@ -3538,7 +3535,7 @@ Need an invoice update for this account before Friday.`,
       startedAt,
     );
     const advanced = advanceMauOfficeState(first, startedAt + 12_000);
-    const actor = advanced.actors[advanced.actorOrder[0]!]!;
+    const actor = advanced.actors[advanced.actorOrder[0]];
 
     expect(actor.currentActivity.bubbleText).toBe(
       "Need an invoice update for this account before Friday.",
@@ -3583,7 +3580,7 @@ Need an invoice update for this account before Friday.`,
       },
       startedAt,
     );
-    const actor = first.actors["worker:main"]!;
+    const actor = first.actors["worker:main"];
 
     expect(actor.currentActivity.bubbleText).toBe("I can help with that now.");
     expect(actor.bubbles[0]?.text).toBe("I can help with that now.");
@@ -3648,7 +3645,7 @@ Need an invoice update for this account before Friday.`,
       startedAt,
     );
     const advanced = advanceMauOfficeState(first, startedAt + 12_000);
-    const actor = advanced.actors["visitor:agent:main:direct:customer-42"]!;
+    const actor = advanced.actors["visitor:agent:main:direct:customer-42"];
     const visitorAnchor = MAU_OFFICE_LAYOUT.anchors.support_customer_1;
 
     expect(actor.anchorId).toBe("support_customer_1");
@@ -3704,8 +3701,8 @@ Need an invoice update for this account before Friday.`,
       startedAt,
     );
 
-    const worker = first.actors["worker:main"]!;
-    const visitor = first.actors["visitor:agent:main:direct:customer-42"]!;
+    const worker = first.actors["worker:main"];
+    const visitor = first.actors["visitor:agent:main:direct:customer-42"];
 
     expect(visitor.bubbles[0]?.text).toBe("Can you reset my workspace access?");
     expect(worker.currentActivity.bubbleText).not.toBe("Can you reset my workspace access?");
@@ -3753,7 +3750,7 @@ Need an invoice update for this account before Friday.`,
       1_000,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.queuedActivity?.kind).toBe("meeting");
     expect(worker.queuedActivity?.roomId).toBe("meeting");
@@ -3800,7 +3797,7 @@ Need an invoice update for this account before Friday.`,
       1_000,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.queuedActivity?.kind).toBe("meeting");
     expect(worker.queuedActivity?.roomId).toBe("meeting");
@@ -3861,7 +3858,7 @@ Need an invoice update for this account before Friday.`,
       6_000,
     );
 
-    const worker = next.actors["worker:main"]!;
+    const worker = next.actors["worker:main"];
     expect(worker.snapshotActivity).toBeNull();
     expect(worker.currentActivity.kind).toBe("walking");
     expect(worker.queuedActivity?.kind).toBe("idle");
@@ -4001,13 +3998,13 @@ describe("mau-office contract", () => {
       },
     );
     for (let index = 0; index < deskWallFixtures.length; index += 1) {
-      const current = deskWallFixtures[index]!;
+      const current = deskWallFixtures[index];
       for (
         let compareIndex = index + 1;
         compareIndex < deskWallFixtures.length;
         compareIndex += 1
       ) {
-        const other = deskWallFixtures[compareIndex]!;
+        const other = deskWallFixtures[compareIndex];
         const overlapsX =
           current.tileX < other.tileX + other.tileWidth &&
           other.tileX < current.tileX + current.tileWidth;
@@ -4492,7 +4489,7 @@ describe("mau-office contract", () => {
 
   it("keeps Pixellab provenance for every committed MauOffice asset", () => {
     const referencedAssets = collectMauOfficeReferencedAssetPaths();
-    expect(Object.keys(MAU_OFFICE_PIXELLAB_PROVENANCE).sort()).toEqual(referencedAssets);
+    expect(Object.keys(MAU_OFFICE_PIXELLAB_PROVENANCE).toSorted()).toEqual(referencedAssets);
     for (const asset of referencedAssets) {
       const entry = MAU_OFFICE_PIXELLAB_PROVENANCE[asset];
       expect(entry?.asset).toBe(asset);
@@ -4525,7 +4522,7 @@ describe("mau-office contract", () => {
 
   it("keeps prop semantics believable relative to the worker and door references", async () => {
     const workerBounds = await readPngOpaqueBounds(
-      MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0]!,
+      MAU_OFFICE_WORKER_RIGS.cat.stand.south.frames[0],
     );
     const doorBounds = await readPngOpaqueBounds("mau-office/tiles/door-top.png");
 
@@ -5209,9 +5206,9 @@ describe("mau-office view", () => {
     const actorIds = ballAssignment.participantIds;
     const actors = Object.fromEntries(
       actorIds.map((actorId, index) => {
-        const anchorId = ballAssignment.slotAnchorIds[index]!;
+        const anchorId = ballAssignment.slotAnchorIds[index];
         const anchor =
-          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors]!;
+          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors];
         return [
           actorId,
           makeActor({
@@ -5293,9 +5290,9 @@ describe("mau-office view", () => {
       startedAtMs: 0,
       endsAtMs: 10_000,
     };
-    const driftAnchor = baseState.scene.anchors.break_arcade!;
+    const driftAnchor = baseState.scene.anchors.break_arcade;
     const expectedAnchors = rallyAssignment.slotAnchorIds.map(
-      (anchorId) => baseState.scene.anchors[anchorId]!,
+      (anchorId) => baseState.scene.anchors[anchorId],
     );
     const actorIds = rallyAssignment.participantIds;
     const actors = Object.fromEntries(
@@ -5368,9 +5365,9 @@ describe("mau-office view", () => {
     const actorIds = chaseAssignment.participantIds;
     const actors = Object.fromEntries(
       actorIds.map((actorId, index) => {
-        const anchorId = chaseAssignment.slotAnchorIds[index]!;
+        const anchorId = chaseAssignment.slotAnchorIds[index];
         const anchor =
-          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors]!;
+          MAU_OFFICE_LAYOUT.anchors[anchorId as keyof typeof MAU_OFFICE_LAYOUT.anchors];
         return [
           actorId,
           makeActor({
@@ -6799,7 +6796,7 @@ describe("mau-office view", () => {
     expect(propTarget).not.toBeNull();
     expect(dropCell).not.toBeNull();
 
-    const originalElementsFromPoint = document.elementsFromPoint;
+    const originalElementsFromPoint = document.elementsFromPoint.bind(document);
     Object.defineProperty(document, "elementsFromPoint", {
       configurable: true,
       value: () => (dropCell ? [dropCell] : []),
@@ -7027,7 +7024,7 @@ describe("mau-office view", () => {
     );
     expect(saveButton).toBeDefined();
     expect(saveButton?.getAttribute("title")).toBe("Fix validation errors above to enable save.");
-    expect((saveButton as HTMLButtonElement | undefined)?.disabled).toBe(true);
+    expect(saveButton?.disabled).toBe(true);
   });
 
   it("uses explicit close and save labels in the editor footer", () => {

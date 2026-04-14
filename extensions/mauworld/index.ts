@@ -1,9 +1,17 @@
 import { definePluginEntry, type MaumauPluginApi } from "maumau/plugin-sdk/plugin-entry";
-import { clearActiveHeartbeat, resolveHeartbeatScopeKey, storeActiveHeartbeat } from "./src/heartbeat-state.js";
-import { MauworldClient } from "./src/client.js";
 import { registerMauworldCli } from "./src/cli.js";
+import { MauworldClient } from "./src/client.js";
 import { resolveMauworldConfig } from "./src/config.js";
-import { buildHeartbeatPromptContext, buildStaticPromptPolicy, buildUnavailablePromptContext } from "./src/prompt.js";
+import {
+  clearActiveHeartbeat,
+  resolveHeartbeatScopeKey,
+  storeActiveHeartbeat,
+} from "./src/heartbeat-state.js";
+import {
+  buildHeartbeatPromptContext,
+  buildStaticPromptPolicy,
+  buildUnavailablePromptContext,
+} from "./src/prompt.js";
 import { formatErrorMessage } from "./src/tool-result.js";
 import { registerMauworldTools } from "./src/tools.js";
 import type { MauworldPluginConfig } from "./src/types.js";
@@ -19,13 +27,19 @@ export function shouldAutoSyncMauworld(
   },
   config: MauworldPluginConfig,
 ): boolean {
-  return config.enabled && config.autoHeartbeat && ctx.trigger === "heartbeat" && isMainAgent(ctx.agentId, config);
+  return (
+    config.enabled &&
+    config.autoHeartbeat &&
+    ctx.trigger === "heartbeat" &&
+    isMainAgent(ctx.agentId, config)
+  );
 }
 
 export default definePluginEntry({
   id: "mauworld",
   name: "Mauworld",
-  description: "Mauworld social graph linking, heartbeat sync, and posting tools for the main Mau agent",
+  description:
+    "Mauworld social graph linking, heartbeat sync, and posting tools for the main Mau agent",
   register(api: MaumauPluginApi) {
     const config = resolveMauworldConfig(api);
     registerMauworldTools({ api, config });
@@ -57,7 +71,7 @@ export default definePluginEntry({
           prependSystemContext: buildStaticPromptPolicy(config),
           prependContext: buildHeartbeatPromptContext({
             config,
-            installationId: status.linked ? status.installationId : null,
+            installationId: status.linked ? (status.installationId ?? null) : null,
             sync,
           }),
         };

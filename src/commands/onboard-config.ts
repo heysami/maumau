@@ -122,7 +122,7 @@ function applyFreshInstallBrowserDefaults(config: MaumauConfig): MaumauConfig {
       ...config.browser,
       defaultProfile: config.browser?.defaultProfile ?? "maumau",
       profiles: {
-        ...(config.browser?.profiles ?? {}),
+        ...config.browser?.profiles,
         [profileName]: config.browser?.profiles?.[profileName] ?? {
           driver: "clawd",
           cdpPort,

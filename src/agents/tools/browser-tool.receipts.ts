@@ -560,7 +560,7 @@ export async function runGmailReceiptDigest(params: {
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${selectedLane.pathLabel} was unavailable. ${detail}`);
+    throw new Error(`${selectedLane.pathLabel} was unavailable. ${detail}`, { cause: error });
   }
 
   if (page.state === "sign_in_required") {

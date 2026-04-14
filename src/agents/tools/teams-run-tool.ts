@@ -10,7 +10,7 @@ import {
   formatLifecycleProgressLabel,
   resolveTeamWorkflowLifecycleStages,
 } from "../../teams/lifecycle.js";
-import { canTeamUseTeam, findTeamConfig } from "../../teams/model.js";
+import { canTeamUseTeam } from "../../teams/model.js";
 import { DESIGN_STUDIO_TEAM_ID } from "../../teams/presets.js";
 import {
   materializeGeneratedTeamProgram,

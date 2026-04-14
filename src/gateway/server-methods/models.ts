@@ -102,7 +102,7 @@ export const modelsHandlers: GatewayRequestHandlers = {
             env: process.env,
           }),
         }))
-        .sort((lhs, rhs) => {
+        .toSorted((lhs, rhs) => {
           const lhsLabel = lhs.label ?? lhs.id;
           const rhsLabel = rhs.label ?? rhs.id;
           const labelOrder = lhsLabel.localeCompare(rhsLabel, undefined, {

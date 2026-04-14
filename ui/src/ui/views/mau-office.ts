@@ -58,7 +58,6 @@ const RECENT_BUBBLE_WINDOW_MS = 9_000;
 const MAU_OFFICE_CARD_PADDING_PX = 36;
 const MAU_OFFICE_VIEWPORT_GUTTER_PX = 96;
 const MAU_OFFICE_EDITOR_RAIL_GUTTER_PX = 84;
-const MAU_OFFICE_EDITOR_TOOL_PANEL_GUTTER_PX = 352;
 const MAU_OFFICE_EDITOR_SELECTION_PANEL_GUTTER_PX = 276;
 const MAU_OFFICE_EDITOR_PANEL_MARGIN_PX = 12;
 const MAU_OFFICE_MAX_FULL_SCENE_SCALE = 1;
@@ -751,7 +750,7 @@ function resolveAnimationFrame(
   }
   const phaseOffsetMs = Math.floor((phaseSeed % animation.frames.length) * frameMs);
   const frameIndex = Math.floor((nowMs + phaseOffsetMs) / frameMs) % animation.frames.length;
-  return animation.frames[frameIndex] ?? animation.frames[0]!;
+  return animation.frames[frameIndex] ?? animation.frames[0];
 }
 
 function resolveWorkerSprite(
@@ -949,7 +948,7 @@ function positionForSprite(scene: CompiledMauOfficeScene, sprite: MauOfficeSprit
       top: `${(sprite.tileY + sprite.tileHeight) * scene.tileSize}px`,
       width: `${width}px`,
       height: `${height}px`,
-      transform: `${sprite.mirrored ? "translate(-50%, -100%) scaleX(-1)" : "translate(-50%, -100%)"}`,
+      transform: sprite.mirrored ? "translate(-50%, -100%) scaleX(-1)" : "translate(-50%, -100%)",
       zIndex: String(zBase + renderBottomPx + (sprite.zOffset ?? 0)),
     });
   }
@@ -1911,9 +1910,7 @@ function formatEditorLabel(value: string): string {
     .join(" ");
 }
 
-function resolveCatalogPreviewAsset(
-  item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number],
-) {
+function resolveCatalogPreviewAsset(item: (typeof FLOOR_PROP_ITEMS)[number]) {
   if (item.asset) {
     return item.asset;
   }
@@ -1929,9 +1926,7 @@ function resolveCatalogPreviewAsset(
   return null;
 }
 
-function describeCatalogItem(
-  item: (typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number],
-) {
+function describeCatalogItem(item: (typeof FLOOR_PROP_ITEMS)[number]) {
   const parts = [`${item.tileWidth}x${item.tileHeight}`, formatEditorLabel(item.mount)];
   if (item.autotileMode) {
     parts.unshift(formatEditorLabel(item.autotileMode));
@@ -1951,7 +1946,7 @@ function markerRoleDetail(role: MauOfficeMarkerRole): string {
 function renderCatalogPicker(params: {
   label: string;
   selectedId: string;
-  items: Array<(typeof FLOOR_PROP_ITEMS)[number] | (typeof AUTOTILE_ITEMS)[number]>;
+  items: Array<(typeof FLOOR_PROP_ITEMS)[number]>;
   basePath: string;
   onSelect: (id: string) => void;
 }) {
@@ -2190,7 +2185,7 @@ function renderEditorGrid(props: MauOfficeProps, scene: CompiledMauOfficeScene) 
   return Array.from({ length: scene.authored.zoneRows.length }, (_, tileY) =>
     Array.from({ length: scene.authored.zoneRows[tileY]?.length ?? 0 }, (_, tileX) => {
       const zone = scene.authored.zoneRows[tileY]?.[tileX] ?? "outside";
-      const hasWall = scene.authored.wallRows[tileY]?.[tileX] === true;
+      const hasWall = scene.authored.wallRows[tileY]?.[tileX];
       return html`
         <button
           class="mau-office__editor-cell mau-office__editor-cell--${zone} ${

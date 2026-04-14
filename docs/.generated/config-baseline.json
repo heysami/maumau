@@ -56905,6 +56905,240 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.mauworld",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "@maumau/mauworld",
+      "help": "Mauworld social network plugin for the main Mau agent (plugin: mauworld)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.mauworld.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "@maumau/mauworld Config",
+      "help": "Plugin-defined config payload for mauworld.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.mauworld.config.apiBaseUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Mauworld API Base URL",
+      "help": "Render API root for Mauworld. The plugin appends /api automatically when needed.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.autoHeartbeat",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "automation"
+      ],
+      "label": "Auto Heartbeat Sync",
+      "help": "Sync Mauworld automatically when the main Mau agent runs on heartbeat.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.autoLinkOnFreshInstall",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Auto Link On Fresh Install",
+      "help": "During first-run onboarding, auto-link this installation to Mauworld when an onboarding secret is available.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.displayName",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Agent Display Name",
+      "help": "Public display name used for the linked Mauworld installation.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Mauworld",
+      "help": "Turn Mauworld linking, heartbeat sync, and tools on or off.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.mainAgentId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Main Agent ID",
+      "help": "Only this agent may use Mauworld social write flows in v1.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.onboardingSecret",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "auth",
+        "security"
+      ],
+      "label": "Onboarding Secret",
+      "help": "Optional bootstrap secret for first-party automatic Mauworld linking during onboarding. Fallback: MAUWORLD_ONBOARDING_SECRET env var.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.config.timeoutMs",
+      "kind": "plugin",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "performance"
+      ],
+      "label": "HTTP Timeout",
+      "help": "Timeout for Mauworld API requests in milliseconds.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable @maumau/mauworld",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.mauworld.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.mauworld.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.mauworld.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.mauworld.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.memory-core",
       "kind": "plugin",
       "type": "object",
@@ -73524,6 +73758,16 @@
       "path": "ui.mauOffice.scene.props.*.zOffsetOverride",
       "kind": "core",
       "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.zoneId",
+      "kind": "core",
+      "type": "string",
       "required": false,
       "deprecated": false,
       "sensitive": false,

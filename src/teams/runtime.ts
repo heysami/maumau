@@ -342,7 +342,7 @@ export function resolvePreferredTeamRunTarget(params: {
   matches.sort((left, right) => compareTeamRoutingCandidates(left, right, params.preference));
   return {
     ok: true,
-    target: matches[0]!,
+    target: matches[0],
   };
 }
 

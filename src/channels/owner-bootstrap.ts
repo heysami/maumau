@@ -1,7 +1,6 @@
 import type { MaumauConfig } from "../config/config.js";
 import { normalizeStringEntries } from "../shared/string-normalization.js";
 import { getChannelPlugin, normalizeChannelId } from "./plugins/index.js";
-import type { ChannelId } from "./plugins/types.js";
 
 function hasConfiguredOwnerAllowFrom(cfg: MaumauConfig): boolean {
   return Boolean(
@@ -19,7 +18,7 @@ function resolveFormattedAllowFrom(params: {
   accountId?: string;
   allowFrom: Array<string | number>;
 }): string[] {
-  const normalizedChannelId = normalizeChannelId(params.channelId) as ChannelId | null;
+  const normalizedChannelId = normalizeChannelId(params.channelId);
   let plugin;
   try {
     plugin = normalizedChannelId ? getChannelPlugin(normalizedChannelId) : undefined;

@@ -17,7 +17,7 @@ function createRuntime(): RuntimeEnv {
   return {
     log: () => {},
     error: (message?: unknown) => {
-      throw new Error(String(message ?? "runtime error"));
+      throw new Error(typeof message === "string" ? message : "runtime error");
     },
     exit: (code: number) => {
       throw new Error(`exit:${code}`);

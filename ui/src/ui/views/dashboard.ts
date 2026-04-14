@@ -1299,7 +1299,7 @@ function resolveProjectOptions(
   }
   return [...options.entries()]
     .map(([key, name]) => ({ key, name }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
 function parseDateInputStart(value: string): number | null {
@@ -1486,7 +1486,7 @@ function resolveTaskGroups(props: DashboardProps, tasks: DashboardTask[]): Dashb
       subtitle: workflowName,
       tasks: groupTasks,
       lifecycleStages: snapshot?.lifecycleStages ?? [],
-      runs: (teamRunsByKey.get(key) ?? []).slice().sort(compareTeamRunsByFreshness),
+      runs: (teamRunsByKey.get(key) ?? []).slice().toSorted(compareTeamRunsByFreshness),
     });
   }
 
@@ -1503,7 +1503,7 @@ function resolveTaskGroups(props: DashboardProps, tasks: DashboardTask[]): Dashb
       subtitle: snapshot.workflowName ?? snapshot.workflowId,
       tasks: [],
       lifecycleStages: snapshot.lifecycleStages ?? [],
-      runs: (teamRunsByKey.get(key) ?? []).slice().sort(compareTeamRunsByFreshness),
+      runs: (teamRunsByKey.get(key) ?? []).slice().toSorted(compareTeamRunsByFreshness),
     });
     knownGroupKeys.add(key);
   }
@@ -1629,108 +1629,6 @@ function compareDashboardTeamRunItems(a: DashboardTask, b: DashboardTask): numbe
     return updatedDelta;
   }
   return a.title.localeCompare(b.title);
-}
-
-function teamRunRootTaskTitle(
-  run: DashboardTeamRun,
-  snapshot: DashboardSnapshot | null,
-): string | undefined {
-  if (!run.rootTaskId) {
-    return undefined;
-  }
-  return snapshot?.tasks.find((task) => task.id === run.rootTaskId)?.title;
-}
-
-function renderTeamRunCard(props: DashboardProps, run: DashboardTeamRun) {
-  const rootTaskTitle = teamRunRootTaskTitle(run, props.snapshot);
-  const items = run.items.slice().sort(compareDashboardTeamRunItems);
-  return html`
-    <article class="dashboard-task dashboard-team-run">
-      <div class="dashboard-task__header">
-        <div class="dashboard-task__header-copy">
-          <div class="dashboard-task__eyebrow">${run.workflowName ?? run.workflowId}</div>
-          <div class="dashboard-task__title">${run.title}</div>
-          <div class="dashboard-task__meta">
-            <span>${statusLabel(run.status)}</span>
-            ${
-              run.updatedAtMs
-                ? html`<span>${dt("teams.updated", { time: formatRelativeTimestamp(run.updatedAtMs) })}</span>`
-                : nothing
-            }
-            ${
-              rootTaskTitle ? html`<span>${dt("teams.rootTask")}: ${rootTaskTitle}</span>` : nothing
-            }
-          </div>
-        </div>
-        <div class="dashboard-task__signals">
-          ${
-            run.currentStageLabel
-              ? html`<span class="dashboard-task__signal">${dt("teams.currentStage")}: ${run.currentStageLabel}</span>`
-              : nothing
-          }
-          <span class="dashboard-task__signal">
-            ${dt("teams.roleTaskCount", { count: String(items.length) })}
-          </span>
-          ${
-            run.blockerLinks.length > 0
-              ? html`
-                <span class="dashboard-task__signal dashboard-task__signal--warn">
-                  ${run.blockerLinks.length} ${dt("teams.blockers")}
-                </span>
-              `
-              : nothing
-          }
-        </div>
-      </div>
-      ${run.summary ? html`<div class="dashboard-task__summary">${run.summary}</div>` : nothing}
-      ${renderProgressBar({
-        label: run.progressLabel,
-        percent: run.progressPercent,
-      })}
-      ${
-        run.blockerLinks.length > 0
-          ? html`
-            <div class="dashboard-team-run__blockers">
-              <div class="dashboard-org-chart__label">${dt("teams.blockers")}</div>
-              ${renderBlockerCards(props, run.blockerLinks.map(taskBlockerToRenderable))}
-            </div>
-          `
-          : nothing
-      }
-      <div class="dashboard-team-run__items">
-        <div class="dashboard-org-chart__label">${dt("teams.roleTasks")}</div>
-        <div class="dashboard-team-run__items-grid">
-          ${items.map((item) => {
-            const summary = taskSummaryLine(item);
-            return html`
-              <article class="dashboard-note dashboard-team-run__item">
-                <div class="dashboard-team-run__item-head">
-                  <div>
-                    <div class="dashboard-org-chart__label">
-                      ${item.teamRole ?? item.assigneeLabel ?? item.agentId ?? dt("task.unassigned")}
-                    </div>
-                    <div class="dashboard-note__title">${item.title}</div>
-                  </div>
-                  <span class="pill">${statusLabel(item.status)}</span>
-                </div>
-                <div class="dashboard-note__meta">
-                  <span>${item.assigneeLabel ?? item.agentId ?? dt("task.unassigned")}</span>
-                  ${item.currentStageLabel ? html`<span>${item.currentStageLabel}</span>` : nothing}
-                  <span>${taskTimestampLabel(item)}</span>
-                </div>
-                ${summary ? html`<div class="dashboard-note__body">${summary}</div>` : nothing}
-                ${renderProgressBar({
-                  label: item.progressLabel,
-                  percent: item.progressPercent,
-                  compact: true,
-                })}
-              </article>
-            `;
-          })}
-        </div>
-      </div>
-    </article>
-  `;
 }
 
 function renderDashboardNav(props: DashboardProps, page: DashboardPage) {
@@ -2235,7 +2133,7 @@ function hashWalletSpendKey(value: string): number {
 }
 
 function walletSpendColor(value: string): string {
-  return WALLET_SPEND_COLORS[hashWalletSpendKey(value) % WALLET_SPEND_COLORS.length]!;
+  return WALLET_SPEND_COLORS[hashWalletSpendKey(value) % WALLET_SPEND_COLORS.length];
 }
 
 function renderWalletSpendLegendItem(segment: DashboardWalletSpendSegment, currency: string) {
@@ -2633,7 +2531,7 @@ function renderWorkflowLifecycle(params: {
   stages: DashboardLifecycleStageLike[];
   currentStageId?: string;
   completedStageIds?: string[];
-  status?: DashboardTask["status"] | DashboardTeamRun["status"];
+  status?: DashboardTask["status"];
 }) {
   if (params.stages.length === 0) {
     return nothing;
@@ -4366,7 +4264,7 @@ function renderTeamsPage(props: DashboardProps) {
   const members = (selected?.nodes ?? [])
     .filter((node): node is DashboardTeamNodeLike => node.kind === "member")
     .slice()
-    .sort(compareDashboardTeamNodes);
+    .toSorted(compareDashboardTeamNodes);
   const workflowStages = (["architecture", "execution", "qa"] as const)
     .map((stage) => ({
       stage,

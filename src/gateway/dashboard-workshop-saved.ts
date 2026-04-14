@@ -184,11 +184,9 @@ export async function readDashboardWorkshopStore(params?: {
       updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : 0,
       projectByWorkspace:
         parsed.projectByWorkspace && typeof parsed.projectByWorkspace === "object"
-          ? (parsed.projectByWorkspace as DashboardWorkshopStore["projectByWorkspace"])
+          ? parsed.projectByWorkspace
           : {},
-      savedItems: Array.isArray(parsed.savedItems)
-        ? (parsed.savedItems as DashboardWorkshopSavedItemRecord[])
-        : [],
+      savedItems: Array.isArray(parsed.savedItems) ? parsed.savedItems : [],
     };
   } catch {
     return {

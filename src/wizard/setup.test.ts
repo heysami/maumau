@@ -68,7 +68,9 @@ const ensureOnboardedMultiUserMemoryArtifacts = vi.hoisted(() => vi.fn(async () 
 const applyLocalSetupReflectionReviewerDefaults = vi.hoisted(() => vi.fn((cfg) => cfg));
 const ensureOnboardedReflectionReviewerArtifacts = vi.hoisted(() => vi.fn(async () => {}));
 const ensureLifeImprovementRoutineArtifacts = vi.hoisted(() => vi.fn(async () => {}));
-const maybeAutoLinkFreshInstallMauworld = vi.hoisted(() => vi.fn(async () => ({ status: "linked" })));
+const maybeAutoLinkFreshInstallMauworld = vi.hoisted(() =>
+  vi.fn(async () => ({ status: "linked" })),
+);
 
 const setupChannels = vi.hoisted(() => vi.fn(async (cfg) => cfg));
 const setupSkills = vi.hoisted(() => vi.fn(async (cfg) => cfg));

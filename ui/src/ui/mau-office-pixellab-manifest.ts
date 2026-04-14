@@ -120,7 +120,7 @@ export function collectMauOfficeReferencedAssetPaths(): string[] {
       assets.add(asset);
     }
   }
-  return Array.from(assets).sort();
+  return Array.from(assets).toSorted();
 }
 
 function entry(params: {
@@ -695,18 +695,13 @@ for (const asset of [
 const HUMAN_VISITOR_CHARACTER_ID = "41d723fb-9c46-4cf7-91c5-ed860e9a4354";
 const HUMAN_VISITOR_WALK_JOB_ID = "animate:41d723fb-9c46-4cf7-91c5-ed860e9a4354:walking-6-frames";
 const HUMAN_VISITOR_STAND_JOB_ID = "animate:41d723fb-9c46-4cf7-91c5-ed860e9a4354:breathing-idle";
-const BIRD_WORKER_CHARACTER_ID = "5b6c4fa4-6a04-4e86-ac4b-41248d688f13";
 const BIRD_WORKER_STAND_JOB_ID = "animate:5b6c4fa4-6a04-4e86-ac4b-41248d688f13:breathing-idle";
 const BIRD_WORKER_WALK_JOB_ID = "animate:5b6c4fa4-6a04-4e86-ac4b-41248d688f13:walking-6-frames";
-const DEER_WORKER_CHARACTER_ID = "fc376e2e-3ea8-46dd-a056-adcf5c6dfec6";
 const DEER_WORKER_STAND_JOB_ID = "animate:fc376e2e-3ea8-46dd-a056-adcf5c6dfec6:breathing-idle";
 const DEER_WORKER_WALK_JOB_ID = "animate:fc376e2e-3ea8-46dd-a056-adcf5c6dfec6:walking-6-frames";
-const DOG_WORKER_CHARACTER_ID = "228ee863-2488-44dd-8b2e-dfcfb8b89566";
 const DOG_WORKER_STAND_JOB_ID = "animate:228ee863-2488-44dd-8b2e-dfcfb8b89566:breathing-idle";
 const DOG_WORKER_WALK_JOB_ID = "animate:228ee863-2488-44dd-8b2e-dfcfb8b89566:walking-6-frames";
-const CAT_WORKER_CHARACTER_ID = "46c7ec8a-66d7-4034-bcbb-e70aac9271a0";
 const CAT_WORKER_STAND_JOB_ID = "animate:46c7ec8a-66d7-4034-bcbb-e70aac9271a0:breathing-idle";
-const CAT_WORKER_SIT_CHARACTER_ID = "854058e3-5e18-43ac-8d1e-2fc77f1ce540";
 const CAT_WORKER_SIT_JOB_ID = "animate:854058e3-5e18-43ac-8d1e-2fc77f1ce540:breathing-idle";
 const PLACEHOLDER_WORKER_POSE_NOTES = {
   reach:

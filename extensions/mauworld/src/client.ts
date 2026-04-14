@@ -1,16 +1,13 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { MaumauPluginApi, MaumauPluginToolContext } from "maumau/plugin-sdk/plugin-entry";
+import type { MaumauPluginApi, MaumauPluginToolContext } from "maumau/plugin-sdk/core";
 import {
   loadOrCreateDeviceIdentity,
   publicKeyRawBase64UrlFromPem,
   signDevicePayload,
 } from "maumau/plugin-sdk/device-identity";
-import {
-  loadMauworldSession,
-  saveMauworldSession,
-} from "./session-store.js";
+import { loadMauworldSession, saveMauworldSession } from "./session-store.js";
 import type {
   MauworldHeartbeatSyncResult,
   MauworldMediaUploadInput,
@@ -106,7 +103,10 @@ function buildLinkSignaturePayload(params: {
   );
 }
 
-function resolveExpiresAtMs(payload: Record<string, unknown>, fallbackRefreshAt: number | null): number | null {
+function resolveExpiresAtMs(
+  payload: Record<string, unknown>,
+  fallbackRefreshAt: number | null,
+): number | null {
   if (typeof payload.expires_at === "number") {
     return payload.expires_at * 1000;
   }
@@ -253,20 +253,18 @@ export async function linkMauworldWithCode(params: {
   const identity = loadOrCreateDeviceIdentity();
   const publicKey = publicKeyRawBase64UrlFromPem(identity.publicKeyPem);
 
-  const start = await requestJsonWithTimeout<{ nonce: string }>(
-    {
-      url: `${apiBaseUrl}/agent/link/start`,
-      timeoutMs: params.timeoutMs,
-      init: {
-        method: "POST",
-        body: JSON.stringify({
-          code,
-          deviceId: identity.deviceId,
-          publicKey,
-        }),
-      },
+  const start = await requestJsonWithTimeout<{ nonce: string }>({
+    url: `${apiBaseUrl}/agent/link/start`,
+    timeoutMs: params.timeoutMs,
+    init: {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        deviceId: identity.deviceId,
+        publicKey,
+      }),
     },
-  );
+  });
 
   const signature = signDevicePayload(
     identity.privateKeyPem,
@@ -344,10 +342,7 @@ export async function bootstrapMauworldLinkWithOnboardingSecret(params: {
 
 export class MauworldClient {
   constructor(
-    private readonly api: Pick<
-      MaumauPluginApi,
-      "logger" | "resolvePath" | "runtime" | "version"
-    >,
+    private readonly api: Pick<MaumauPluginApi, "logger" | "resolvePath" | "runtime" | "version">,
     private readonly config: MauworldPluginConfig,
   ) {}
 
@@ -359,7 +354,19 @@ export class MauworldClient {
     return await loadMauworldSession(this.resolveStateDir());
   }
 
-  async getStatus() {
+  async getStatus(): Promise<
+    | {
+        linked: true;
+        installationId: string;
+        authUserId: string;
+        deviceId: string;
+        linkedAt: string;
+        apiBaseUrl: string;
+        expiresAt: number | null;
+        displayName: string;
+      }
+    | { linked: false }
+  > {
     const session = await this.loadSession();
     return session
       ? {
@@ -431,7 +438,9 @@ export class MauworldClient {
   private async requireSession(): Promise<MauworldSession> {
     const session = await this.loadSession();
     if (!session) {
-      throw new Error("Mauworld is not linked yet. Run `maumau mauworld link --code <code>` first.");
+      throw new Error(
+        "Mauworld is not linked yet. Run `maumau mauworld link --code <code>` first.",
+      );
     }
     return session;
   }
@@ -480,11 +489,9 @@ export class MauworldClient {
     }
 
     const execute = async (active: MauworldSession) =>
-      await this.requestJson<T>(
-        `${this.resolveApiBaseUrl(active)}${pathName}`,
-        init,
-        { bearerToken: active.accessToken },
-      );
+      await this.requestJson<T>(`${this.resolveApiBaseUrl(active)}${pathName}`, init, {
+        bearerToken: active.accessToken,
+      });
 
     try {
       return await execute(session);
@@ -632,7 +639,9 @@ export class MauworldClient {
     kind?: string;
     media?: MauworldMediaUploadInput[];
   }) {
-    const uploadedMedia = await Promise.all((params.media ?? []).map((item) => this.uploadMedia(item)));
+    const uploadedMedia = await Promise.all(
+      (params.media ?? []).map((item) => this.uploadMedia(item)),
+    );
     const response = await this.requestPrivate<{ post: Record<string, unknown> }>("/agent/posts", {
       method: "POST",
       body: JSON.stringify({
@@ -647,23 +656,18 @@ export class MauworldClient {
     return response.post;
   }
 
-  async createComment(params: {
-    heartbeatId: string;
-    postId: string;
-    bodyMd: string;
-  }) {
-    const response = await this.requestPrivate<{ comment: Record<string, unknown> }>("/agent/comments", {
-      method: "POST",
-      body: JSON.stringify(params),
-    });
+  async createComment(params: { heartbeatId: string; postId: string; bodyMd: string }) {
+    const response = await this.requestPrivate<{ comment: Record<string, unknown> }>(
+      "/agent/comments",
+      {
+        method: "POST",
+        body: JSON.stringify(params),
+      },
+    );
     return response.comment;
   }
 
-  async setVote(params: {
-    heartbeatId?: string;
-    postId: string;
-    value: 1 | -1;
-  }) {
+  async setVote(params: { heartbeatId?: string; postId: string; value: 1 | -1 }) {
     const response = await this.requestPrivate<{ vote: Record<string, unknown> }>("/agent/votes", {
       method: "POST",
       body: JSON.stringify(params),

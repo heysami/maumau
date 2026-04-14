@@ -167,6 +167,11 @@ function resolveSelectedAccount(
   );
 }
 
+function formDataString(data: FormData, key: string, fallback = ""): string {
+  const value = data.get(key);
+  return typeof value === "string" ? value : fallback;
+}
+
 function renderPillList(values: string[]) {
   if (values.length === 0) {
     return html`
@@ -357,7 +362,7 @@ function renderQuickSetupForm(
         }
         const data = new FormData(form);
         const fields = Object.fromEntries(
-          channel.fields.map((field) => [field.key, String(data.get(field.key) ?? "")]),
+          channel.fields.map((field) => [field.key, formDataString(data, field.key)]),
         );
         props.onConnectChannel({
           channelId: channel.channelId,
@@ -662,12 +667,11 @@ function renderEditableListCard(params: {
                 </label>
               `,
               onSubmit: (form) => {
+                const data = new FormData(form);
+                const policy = formDataString(data, "policy", "allowlist");
                 params.onSaveChats!(
-                  String(new FormData(form).get("policy") ?? "allowlist") as
-                    | "allowlist"
-                    | "open"
-                    | "disabled",
-                  String(new FormData(form).get("entries") ?? ""),
+                  policy === "open" || policy === "disabled" ? policy : "allowlist",
+                  formDataString(data, "entries"),
                 );
               },
             })
@@ -677,7 +681,7 @@ function renderEditableListCard(params: {
               subtitle: params.subtitle,
               list: params.list,
               onSubmit: (form) => {
-                params.onSaveAllowlist?.(String(new FormData(form).get("entries") ?? ""));
+                params.onSaveAllowlist?.(formDataString(new FormData(form), "entries"));
               },
             })
       }

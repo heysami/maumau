@@ -1,12 +1,10 @@
+import { bootstrapMauworldLinkWithOnboardingSecret } from "../../extensions/mauworld/src/client.js";
+import { resolveMauworldConfig } from "../../extensions/mauworld/src/config.js";
+import { loadMauworldSession } from "../../extensions/mauworld/src/session-store.js";
 import type { MaumauConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { VERSION } from "../version.js";
-import {
-  bootstrapMauworldLinkWithOnboardingSecret,
-} from "../../extensions/mauworld/src/client.js";
-import { resolveMauworldConfig } from "../../extensions/mauworld/src/config.js";
-import { loadMauworldSession } from "../../extensions/mauworld/src/session-store.js";
 
 export type FreshInstallMauworldAutoLinkResult =
   | { status: "disabled" }
@@ -19,7 +17,7 @@ function flattenMauworldPluginConfig(config: MaumauConfig): Record<string, unkno
   const entry = config.plugins?.entries?.mauworld;
   return {
     enabled: entry?.enabled,
-    ...(entry?.config ?? {}),
+    ...entry?.config,
   };
 }
 
@@ -67,9 +65,7 @@ export async function maybeAutoLinkFreshInstallMauworld(params: {
       displayName: pluginConfig.displayName,
       clientVersion: VERSION,
     });
-    params.runtime.log(
-      `[mauworld] Linked fresh install to Mauworld as ${linked.installationId}.`,
-    );
+    params.runtime.log(`[mauworld] Linked fresh install to Mauworld as ${linked.installationId}.`);
     return { status: "linked", installationId: linked.installationId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

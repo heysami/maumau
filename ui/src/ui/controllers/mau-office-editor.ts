@@ -65,7 +65,7 @@ function wallAt(scene: MauOfficeSceneConfig, tileX: number, tileY: number): bool
   ) {
     return false;
   }
-  return scene.wallRows[tileY]?.[tileX] === true;
+  return scene.wallRows[tileY]?.[tileX];
 }
 
 function resolveNearestMarkerTile(
@@ -196,10 +196,10 @@ export function paintSceneZone(
   const next = cloneMauOfficeSceneConfig(scene);
   const x = clampTile(tileX, next.zoneRows[0]?.length ?? 0);
   const y = clampTile(tileY, next.zoneRows.length);
-  if (!next.zoneRows[y] || next.zoneRows[y]![x] === zone) {
+  if (!next.zoneRows[y] || next.zoneRows[y][x] === zone) {
     return next;
   }
-  next.zoneRows[y]![x] = zone;
+  next.zoneRows[y][x] = zone;
   return next;
 }
 
@@ -215,7 +215,7 @@ export function paintSceneWall(
   if (!next.wallRows[y]) {
     return next;
   }
-  next.wallRows[y]![x] = present;
+  next.wallRows[y][x] = present;
   return next;
 }
 
@@ -270,7 +270,7 @@ function normalizeCells(
       tileY: Math.round(cell.tileY),
     });
   }
-  return [...unique.values()].sort(
+  return [...unique.values()].toSorted(
     (left, right) => left.tileY - right.tileY || left.tileX - right.tileX,
   );
 }
@@ -450,7 +450,7 @@ export function undoSceneHistory(params: {
   if (params.undo.length === 0) {
     return null;
   }
-  const previous = cloneMauOfficeSceneConfig(params.undo[params.undo.length - 1]!);
+  const previous = cloneMauOfficeSceneConfig(params.undo[params.undo.length - 1]);
   return {
     draft: previous,
     undo: params.undo.slice(0, -1).map((entry) => cloneMauOfficeSceneConfig(entry)),
@@ -473,7 +473,7 @@ export function redoSceneHistory(params: {
   if (params.redo.length === 0) {
     return null;
   }
-  const next = cloneMauOfficeSceneConfig(params.redo[params.redo.length - 1]!);
+  const next = cloneMauOfficeSceneConfig(params.redo[params.redo.length - 1]);
   return {
     draft: next,
     undo: [
@@ -625,7 +625,7 @@ export function resizeSceneCanvas(
     Array.from({ length: targetWidth }, (_, tileX) => next.zoneRows[tileY]?.[tileX] ?? "outside"),
   );
   next.wallRows = Array.from({ length: targetHeight }, (_, tileY) =>
-    Array.from({ length: targetWidth }, (_, tileX) => next.wallRows[tileY]?.[tileX] === true),
+    Array.from({ length: targetWidth }, (_, tileX) => next.wallRows[tileY]?.[tileX]),
   );
   next.props = next.props.map((entry) => {
     const item = MAU_OFFICE_CATALOG[entry.itemId];
@@ -690,19 +690,19 @@ export function hitTestSceneSelection(
   tileY: number,
 ): MauOfficeEditorSelection {
   for (let index = scene.markers.length - 1; index >= 0; index -= 1) {
-    const marker = scene.markers[index]!;
+    const marker = scene.markers[index];
     if (Math.round(marker.tileX) === tileX && Math.round(marker.tileY) === tileY) {
       return { kind: "marker", id: marker.id };
     }
   }
   for (let index = scene.props.length - 1; index >= 0; index -= 1) {
-    const entry = scene.props[index]!;
+    const entry = scene.props[index];
     if (propOccupiesTile(entry, tileX, tileY)) {
       return { kind: "prop", id: entry.id };
     }
   }
   for (let index = scene.autotiles.length - 1; index >= 0; index -= 1) {
-    const entry = scene.autotiles[index]!;
+    const entry = scene.autotiles[index];
     if (entry.cells.some((cell) => cellKey(cell.tileX, cell.tileY) === cellKey(tileX, tileY))) {
       return { kind: "autotile", id: entry.id };
     }
