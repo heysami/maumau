@@ -305,7 +305,15 @@ ensure_binary_rpath() {
   if /usr/bin/otool -l "$binary" | /usr/bin/grep -Fq "$rpath"; then
     return 0
   fi
-  /usr/bin/install_name_tool -add_rpath "$rpath" "$binary"
+  local output
+  if output=$(/usr/bin/install_name_tool -add_rpath "$rpath" "$binary" 2>&1); then
+    return 0
+  fi
+  if printf '%s' "$output" | /usr/bin/grep -Fq "would duplicate path"; then
+    return 0
+  fi
+  printf '%s\n' "$output" >&2
+  return 1
 }
 
 if [[ "${SKIP_PNPM_INSTALL:-0}" != "1" ]]; then
