@@ -43,7 +43,13 @@ jobs:
           fi
 
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "release_name=Maumau macOS test build ${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Maumau ${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [[ "${TAG}" == *"-beta."* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout release ref
         uses: actions/checkout@v6
@@ -87,13 +93,11 @@ jobs:
       - name: Validate release tag and package metadata
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          RELEASE_MAIN_REF: origin/main
         shell: bash
         run: |
           set -euo pipefail
           RELEASE_SHA=$(git rev-parse HEAD)
-          export RELEASE_SHA RELEASE_TAG RELEASE_MAIN_REF
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          export RELEASE_SHA RELEASE_TAG
           pnpm release:maumau:npm:check
 
       - name: Build ad-hoc macOS release artifacts
@@ -132,11 +136,11 @@ jobs:
         shell: bash
         run: |
           cat > release-notes.md <<'EOF'
-          Maumau macOS test build.
+          Maumau macOS release.
 
-          This build is ad-hoc signed for testing only. It is not notarized, so macOS may block it on first launch.
+          This build is ad-hoc signed and not notarized. macOS may block it on first launch until you clear quarantine manually.
 
-          Test install:
+          Install:
           1. Drag `Maumau.app` into `/Applications`.
           2. Clear the quarantine flag:
              `xattr -dr com.apple.quarantine "/Applications/Maumau.app"`
@@ -167,7 +171,7 @@ jobs:
           tag_name: ${{ steps.release.outputs.tag }}
           name: ${{ steps.release.outputs.release_name }}
           body_path: release-notes.md
-          prerelease: true
+          prerelease: ${{ steps.release.outputs.prerelease == 'true' }}
           fail_on_unmatched_files: false
           files: |
             dist/Maumau-*.zip
@@ -182,7 +186,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           {
-            echo "## macOS test release published"
+            echo "## macOS release published"
             echo
             echo "- Release: https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG}"
             echo "- Quarantine bypass for testers: \`xattr -dr com.apple.quarantine \"/Applications/Maumau.app\"\`"
