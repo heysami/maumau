@@ -224,4 +224,25 @@ describe("models-config", () => {
       });
     });
   });
+
+  it("skips writing models.json when MAUMAU_MODELS_JSON_READONLY is set", async () => {
+    await withTempHome(async (home) => {
+      const previous = process.env.MAUMAU_MODELS_JSON_READONLY;
+      process.env.MAUMAU_MODELS_JSON_READONLY = "1";
+      try {
+        const agentDir = path.join(home, "agent-readonly");
+        const result = await ensureMaumauModelsJson({ models: { providers: {} } }, agentDir);
+        expect(result).toEqual({ agentDir, wrote: false });
+        await expect(fs.stat(path.join(agentDir, "models.json"))).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      } finally {
+        if (previous === undefined) {
+          delete process.env.MAUMAU_MODELS_JSON_READONLY;
+        } else {
+          process.env.MAUMAU_MODELS_JSON_READONLY = previous;
+        }
+      }
+    });
+  });
 });

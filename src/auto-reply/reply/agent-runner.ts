@@ -47,6 +47,10 @@ import {
 import { appendUsageLine, formatResponseUsageLine } from "./agent-runner-usage-line.js";
 import { createAudioAsVoiceBuffer, createBlockReplyPipeline } from "./block-reply-pipeline.js";
 import { resolveEffectiveBlockStreamingConfig } from "./block-streaming.js";
+import {
+  injectBootstrapSecureDashboardUrlIntoPayloads,
+  resolveBootstrapSecureDashboardUrl,
+} from "./bootstrap-secure-dashboard.js";
 import { createFollowupRunner } from "./followup-runner.js";
 import { resolveOriginMessageProvider, resolveOriginMessageTo } from "./origin-routing.js";
 import { readPostCompactionContext } from "./post-compaction-context.js";
@@ -579,8 +583,26 @@ export async function runReplyAgent(params: {
       hasReminderCommitment && successfulCronAdds === 0 && !coveredByExistingCron
         ? appendUnscheduledReminderNote(replyPayloads)
         : replyPayloads;
+    const bootstrapSecureDashboardUrl = await resolveBootstrapSecureDashboardUrl({
+      cfg,
+      workspaceDir: followupRun.run.workspaceDir,
+      isFirstTurnInSession: isNewSession || activeSessionEntry?.systemSent === false,
+      originatingChannel:
+        sessionCtx.OriginatingChannel ??
+        followupRun.originatingChannel ??
+        followupRun.run.messageProvider,
+      chatType: sessionCtx.ChatType,
+      senderIsOwner: followupRun.run.senderIsOwner === true,
+      requesterSenderIsOwner: activeSessionEntry?.requesterSenderIsOwner,
+      ctx: sessionCtx,
+      commandAuthorized: sessionCtx.CommandAuthorized,
+    });
+    const bootstrapReadyReplyPayloads = injectBootstrapSecureDashboardUrlIntoPayloads(
+      guardedReplyPayloads,
+      bootstrapSecureDashboardUrl,
+    );
 
-    await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
+    await signalTypingIfNeeded(bootstrapReadyReplyPayloads, typingSignals);
 
     if (isDiagnosticsEnabled(cfg) && hasNonzeroUsage(usage)) {
       const input = usage.input ?? 0;
@@ -648,7 +670,7 @@ export async function runReplyAgent(params: {
     }
 
     // If verbose is enabled, prepend operational run notices.
-    let finalPayloads = guardedReplyPayloads;
+    let finalPayloads = bootstrapReadyReplyPayloads;
     const verboseNotices: ReplyPayload[] = [];
 
     if (verboseEnabled && activeIsNewSession) {

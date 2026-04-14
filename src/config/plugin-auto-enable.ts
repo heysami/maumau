@@ -305,6 +305,12 @@ function resolveConfiguredPlugins(
       reason: "ACP runtime configured",
     });
   }
+  if (Array.isArray(cfg.teams?.list) && cfg.teams.list.length > 0) {
+    changes.push({
+      pluginId: "open-prose",
+      reason: "teams configured",
+    });
+  }
   return changes;
 }
 

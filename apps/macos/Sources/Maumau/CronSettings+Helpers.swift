@@ -32,15 +32,23 @@ extension CronSettings {
         switch schedule {
         case let .at(at):
             if let date = CronSchedule.parseAtDate(at) {
-                return self.language == .id
-                    ? "pada \(date.formatted(date: .abbreviated, time: .standard))"
-                    : "at \(date.formatted(date: .abbreviated, time: .standard))"
+                return macLocalizedHelper(
+                    "scheduleSummary.at",
+                    language: self.language,
+                    parameters: ["value": date.formatted(date: .abbreviated, time: .standard)],
+                    fallback: "at {value}")
             }
-            return self.language == .id ? "pada \(at)" : "at \(at)"
+            return macLocalizedHelper(
+                "scheduleSummary.at",
+                language: self.language,
+                parameters: ["value": at],
+                fallback: "at {value}")
         case let .every(everyMs, _):
-            return self.language == .id
-                ? "setiap \(self.formatDuration(ms: everyMs))"
-                : "every \(self.formatDuration(ms: everyMs))"
+            return macLocalizedHelper(
+                "scheduleSummary.every",
+                language: self.language,
+                parameters: ["value": self.formatDuration(ms: everyMs)],
+                fallback: "every {value}")
         case let .cron(expr, tz):
             if let tz, !tz.isEmpty { return "cron \(expr) (\(tz))" }
             return "cron \(expr)"
@@ -56,10 +64,26 @@ extension CronSettings {
         if delta <= 0 { return self.loc("due") }
         if delta < 60 { return self.loc("in <1m") }
         let minutes = Int(round(delta / 60))
-        if minutes < 60 { return self.language == .id ? "dalam \(minutes)m" : "in \(minutes)m" }
+        if minutes < 60 {
+            return macLocalizedHelper(
+                "nextRun.inMinutes",
+                language: self.language,
+                parameters: ["count": String(minutes)],
+                fallback: "in {count} minutes")
+        }
         let hours = Int(round(Double(minutes) / 60))
-        if hours < 48 { return self.language == .id ? "dalam \(hours)j" : "in \(hours)h" }
+        if hours < 48 {
+            return macLocalizedHelper(
+                "nextRun.inHours",
+                language: self.language,
+                parameters: ["count": String(hours)],
+                fallback: "in {count} hours")
+        }
         let days = Int(round(Double(hours) / 24))
-        return self.language == .id ? "dalam \(days)h" : "in \(days)d"
+        return macLocalizedHelper(
+            "nextRun.inDays",
+            language: self.language,
+            parameters: ["count": String(days)],
+            fallback: "in {count} days")
     }
 }

@@ -10,6 +10,7 @@ import {
   removePath,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
+  stopRunningMacAppIfPresent,
 } from "./cleanup-utils.js";
 import { uninstallGatewayServiceIfPresent } from "./gateway-service-cleanup.js";
 
@@ -142,6 +143,7 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
   }
 
   if (scopes.has("state")) {
+    await stopRunningMacAppIfPresent(runtime, { dryRun });
     await removeStateAndLinkedPaths(
       { stateDir, configPath, oauthDir, configInsideState, oauthInsideState },
       runtime,
@@ -155,6 +157,7 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
   }
 
   if (scopes.has("app")) {
+    await stopRunningMacAppIfPresent(runtime, { dryRun });
     await removeMacApp(runtime, dryRun);
   }
 

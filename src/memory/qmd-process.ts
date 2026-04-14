@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import {
   materializeWindowsSpawnProgram,
   resolveWindowsSpawnProgram,
@@ -17,8 +18,20 @@ export function resolveCliSpawnInvocation(params: {
   env: NodeJS.ProcessEnv;
   packageName: string;
 }): CliSpawnInvocation {
+  const trimmedCommand = params.command.trim();
+  if (
+    trimmedCommand &&
+    /\.(?:[cm]?js|mjs|ts)$/i.test(trimmedCommand) &&
+    fs.existsSync(trimmedCommand)
+  ) {
+    return {
+      command: process.execPath,
+      argv: [trimmedCommand, ...params.args],
+      windowsHide: true,
+    };
+  }
   const program = resolveWindowsSpawnProgram({
-    command: params.command,
+    command: trimmedCommand,
     platform: process.platform,
     env: params.env,
     execPath: process.execPath,

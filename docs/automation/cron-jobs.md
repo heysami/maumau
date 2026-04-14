@@ -11,6 +11,8 @@ title: "Cron Jobs"
 
 > **Cron vs Heartbeat?** See [Cron vs Heartbeat](/automation/cron-vs-heartbeat) for guidance on when to use each.
 
+> **Looking for a concrete weekly review workflow?** See [Weekly Reflection Reviewer](/automation/weekly-reflection-reviewer).
+
 Cron is the Gateway’s built-in scheduler. It persists jobs, wakes the agent at
 the right time, and can optionally deliver output back to a chat.
 
@@ -168,7 +170,7 @@ Key behaviors:
 - `delivery.mode` chooses what happens:
   - `announce`: deliver a summary to the target channel and post a brief summary to the main session.
   - `webhook`: POST the finished event payload to `delivery.to` when the finished event includes a summary.
-  - `none`: internal only (no delivery, no main-session summary).
+  - `none`: no cron-managed delivery and no automatic main-session summary.
 - `wakeMode` controls when the main-session summary posts:
   - `now`: immediate heartbeat.
   - `next-heartbeat`: waits for the next scheduled heartbeat.
@@ -198,7 +200,8 @@ Delivery config:
 - `delivery.bestEffort`: avoid failing the job if announce delivery fails.
 
 Announce delivery suppresses messaging tool sends for the run; use `delivery.channel`/`delivery.to`
-to target the chat instead. When `delivery.mode = "none"`, no summary is posted to the main session.
+to target the chat instead. When `delivery.mode = "none"`, cron does not auto-post a summary to the
+main session.
 
 If `delivery` is omitted for isolated jobs, Maumau defaults to `announce`.
 

@@ -99,6 +99,47 @@ function mergeLegacyIntoDefaults(params: {
 
 export const LEGACY_CONFIG_MIGRATIONS_PART_3: LegacyConfigMigration[] = [
   {
+    id: "teams.workflow.pattern-remove",
+    describe: "Remove deprecated team workflow pattern fields",
+    apply: (raw, changes) => {
+      const teams = getRecord(raw.teams);
+      const list = Array.isArray(teams?.list) ? teams.list : null;
+      if (!list) {
+        return;
+      }
+
+      let removed = 0;
+      for (const teamEntry of list) {
+        if (!isRecord(teamEntry)) {
+          continue;
+        }
+
+        const workflows = Array.isArray(teamEntry.workflows) ? teamEntry.workflows : [];
+        for (const workflow of workflows) {
+          if (!isRecord(workflow) || !Object.hasOwn(workflow, "pattern")) {
+            continue;
+          }
+          delete workflow.pattern;
+          removed += 1;
+        }
+
+        const legacyWorkflow = getRecord(teamEntry.workflow);
+        if (!legacyWorkflow || !Object.hasOwn(legacyWorkflow, "pattern")) {
+          continue;
+        }
+        delete legacyWorkflow.pattern;
+        teamEntry.workflow = legacyWorkflow;
+        removed += 1;
+      }
+
+      if (removed > 0) {
+        changes.push(
+          `Removed deprecated team workflow pattern field from ${removed} workflow entr${removed === 1 ? "y" : "ies"}.`,
+        );
+      }
+    },
+  },
+  {
     // v2026.2.26 added a startup guard requiring gateway.controlUi.allowedOrigins (or the
     // host-header fallback flag) for any non-loopback bind. The setup wizard was updated
     // to seed this for new installs, but existing bind=lan/bind=custom installs that upgrade

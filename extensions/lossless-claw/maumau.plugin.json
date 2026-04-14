@@ -1,0 +1,12 @@
+{
+  "id": "lossless-claw",
+  "kind": "context-engine",
+  "name": "Lossless Claw",
+  "description": "Lossless transcript continuity across compaction and spawned agents.",
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

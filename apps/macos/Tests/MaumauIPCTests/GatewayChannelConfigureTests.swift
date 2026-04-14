@@ -81,6 +81,33 @@ struct GatewayConnectionTests {
         #expect(session.snapshotCancelCount() == 1)
     }
 
+    @Test func `channel disconnect refreshes loopback token after config rotation`() async throws {
+        let session = self.makeSession()
+        let url = try #require(URL(string: "ws://127.0.0.1:18789"))
+        let cfg = ConfigSource(token: "old-token")
+        let conn = GatewayConnection(
+            configProvider: { (url: url, token: cfg.snapshotToken(), password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+
+        _ = try await conn.request(method: "status", params: nil)
+        let firstAuth = try #require(session.latestTask()?.snapshotConnectAuth())
+        #expect(firstAuth["token"] as? String == "old-token")
+
+        cfg.setToken("new-token")
+        session.latestTask()?.emitReceiveFailure()
+
+        for _ in 0..<30 {
+            if session.snapshotMakeCount() >= 2 {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(session.snapshotMakeCount() == 2)
+        let refreshedAuth = try #require(session.latestTask()?.snapshotConnectAuth())
+        #expect(refreshedAuth["token"] as? String == "new-token")
+    }
+
     @Test func `concurrent requests still use single web socket`() async throws {
         let session = self.makeSession(helloDelayMs: 150)
         let (conn, _) = try self.makeConnection(session: session)

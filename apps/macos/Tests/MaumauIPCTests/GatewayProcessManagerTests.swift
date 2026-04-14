@@ -14,6 +14,13 @@ struct GatewayProcessManagerTests {
         #expect(!GatewayProcessManager.shouldDeferLaunchAgentAutoEnable(status: .failed("boom")))
     }
 
+    @Test func `refreshes control channel whenever gateway is ready but the channel is not connected`() {
+        #expect(!GatewayProcessManager.shouldRefreshControlChannel(state: .connected))
+        #expect(GatewayProcessManager.shouldRefreshControlChannel(state: .connecting))
+        #expect(GatewayProcessManager.shouldRefreshControlChannel(state: .disconnected))
+        #expect(GatewayProcessManager.shouldRefreshControlChannel(state: .degraded("gateway restart")))
+    }
+
     @Test func `treats slow existing listener attach failures as warmup`() {
         let timeout = NSError(
             domain: "Gateway",
@@ -26,6 +33,94 @@ struct GatewayProcessManagerTests {
 
         #expect(GatewayProcessManager.shouldTreatExistingListenerAttachFailureAsWarmup(timeout))
         #expect(!GatewayProcessManager.shouldTreatExistingListenerAttachFailureAsWarmup(protocolMismatch))
+    }
+
+    @Test func `replaces managed local listener after auth failure`() {
+        let authFailure = URLError(.dataNotAllowed)
+        let managedListener = PortGuardian.Descriptor(
+            pid: 42,
+            command: "node",
+            fullCommand: "maumau-gateway",
+            executablePath: "/usr/local/bin/node")
+
+        #expect(GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            authFailure,
+            instance: managedListener))
+    }
+
+    @Test func `does not replace unrelated listener after auth failure`() {
+        let authFailure = URLError(.dataNotAllowed)
+        let unrelatedListener = PortGuardian.Descriptor(
+            pid: 99,
+            command: "python",
+            fullCommand: "python -m http.server 18789",
+            executablePath: "/usr/bin/python3")
+
+        #expect(!GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            authFailure,
+            instance: unrelatedListener))
+    }
+
+    @Test func `does not replace managed listener when auth probe times out`() {
+        let timeout = NSError(
+            domain: "Gateway",
+            code: 5,
+            userInfo: [NSLocalizedDescriptionKey: "gateway auth probe timed out"])
+        let managedListener = PortGuardian.Descriptor(
+            pid: 42,
+            command: "node",
+            fullCommand: "maumau-gateway",
+            executablePath: "/usr/local/bin/node")
+
+        #expect(!GatewayProcessManager.shouldReplaceExistingManagedGatewayAfterAuthFailure(
+            timeout,
+            instance: managedListener))
+    }
+
+    @Test func `managed auth recovery coalesces concurrent requests`() async {
+        final class RecoveryCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var rawValue = 0
+
+            func increment() {
+                self.lock.lock()
+                self.rawValue += 1
+                self.lock.unlock()
+            }
+
+            func value() -> Int {
+                self.lock.lock()
+                let value = self.rawValue
+                self.lock.unlock()
+                return value
+            }
+        }
+
+        let manager = GatewayProcessManager.shared
+        let previousMode = AppStateStore.shared.connectionMode
+        let previousStatus = manager.status
+        let counter = RecoveryCounter()
+        AppStateStore.shared.connectionMode = .local
+        manager.setTestingManagedAuthRecoveryTask(nil)
+        manager.setTestingManagedAuthRecoveryHandler { _ in
+            counter.increment()
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            return true
+        }
+        defer {
+            AppStateStore.shared.connectionMode = previousMode
+            manager.setTestingManagedAuthRecoveryHandler(nil)
+            manager.setTestingManagedAuthRecoveryTask(nil)
+            manager.setTestingStatus(previousStatus)
+        }
+
+        async let first: Bool = manager.recoverManagedGatewayAfterAuthFailureIfNeeded(URLError(.dataNotAllowed))
+        async let second: Bool = manager.recoverManagedGatewayAfterAuthFailureIfNeeded(URLError(.dataNotAllowed))
+        let (firstResult, secondResult) = await (first, second)
+
+        #expect(firstResult)
+        #expect(secondResult)
+        #expect(counter.value() == 1)
     }
 
     @Test func `clears last failure when health succeeds`() async throws {
@@ -135,5 +230,119 @@ struct GatewayProcessManagerTests {
         } else {
             Issue.record("expected gateway manager to stay in startup long enough for a slow health probe")
         }
+    }
+
+    @Test func `readiness wait resets a stuck probe connection before retrying`() async throws {
+        final class AttemptCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value = 0
+
+            func next() -> Int {
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                let current = self.value
+                self.value += 1
+                return current
+            }
+        }
+
+        let attempts = AttemptCounter()
+        let session = GatewayTestWebSocketSession(
+            taskFactory: {
+                let attempt = attempts.next()
+                if attempt == 0 {
+                    return GatewayTestWebSocketTask(
+                        receiveHook: { task, receiveIndex in
+                            if receiveIndex == 0 {
+                                return .data(GatewayWebSocketTestSupport.connectChallengeData())
+                            }
+                            if receiveIndex == 1 {
+                                let id = task.snapshotConnectRequestID() ?? "connect"
+                                return .data(GatewayWebSocketTestSupport.connectOkData(id: id))
+                            }
+                            try await Task.sleep(nanoseconds: 6_000_000_000)
+                            throw CancellationError()
+                        })
+                }
+
+                return GatewayTestWebSocketTask(
+                    sendHook: { task, message, sendIndex in
+                        guard sendIndex > 0 else { return }
+                        guard let id = GatewayWebSocketTestSupport.requestID(from: message) else { return }
+                        task.emitReceiveSuccess(.data(GatewayWebSocketTestSupport.okResponseData(id: id)))
+                    })
+            })
+        let url = try #require(URL(string: "ws://example.invalid"))
+        let connection = GatewayConnection(
+            configProvider: { (url: url, token: nil, password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+
+        let manager = GatewayProcessManager.shared
+        manager.setTestingConnection(connection)
+        manager.setTestingDesiredActive(true)
+        manager.setTestingStatus(.starting)
+        defer {
+            manager.setTestingConnection(nil)
+            manager.setTestingStatus(.stopped)
+            manager.setTestingDesiredActive(false)
+        }
+
+        let ready = await manager.waitForGatewayReady(timeout: 8.0)
+
+        #expect(ready)
+        #expect(session.snapshotMakeCount() >= 2)
+        if case .running = manager.status {
+            #expect(Bool(true))
+        } else {
+            Issue.record("expected gateway manager to recover after resetting a stuck readiness probe")
+        }
+    }
+
+    @Test func `concurrent readiness waits share one polling task`() async throws {
+        let readyAt = Date().addingTimeInterval(0.55)
+        let session = GatewayTestWebSocketSession(
+            taskFactory: {
+                GatewayTestWebSocketTask(
+                    sendHook: { task, message, sendIndex in
+                        guard sendIndex > 0 else { return }
+                        guard let id = GatewayWebSocketTestSupport.requestID(from: message) else { return }
+                        task.emitReceiveSuccess(.data(GatewayWebSocketTestSupport.okResponseData(id: id)))
+                    },
+                    receiveHook: { task, receiveIndex in
+                        if Date() < readyAt {
+                            throw URLError(.cannotConnectToHost)
+                        }
+                        if receiveIndex == 0 {
+                            return .data(GatewayWebSocketTestSupport.connectChallengeData())
+                        }
+                        let id = task.snapshotConnectRequestID() ?? "connect"
+                        return .data(GatewayWebSocketTestSupport.connectOkData(id: id))
+                    })
+            })
+        let url = try #require(URL(string: "ws://example.invalid"))
+        let connection = GatewayConnection(
+            configProvider: { (url: url, token: nil, password: nil) },
+            sessionBox: WebSocketSessionBox(session: session))
+
+        let manager = GatewayProcessManager.shared
+        let previousMode = AppStateStore.shared.connectionMode
+        manager.setTestingConnection(connection)
+        manager.setTestingDesiredActive(true)
+        manager.setTestingStatus(.starting)
+        AppStateStore.shared.connectionMode = .local
+        defer {
+            AppStateStore.shared.connectionMode = previousMode
+            manager.setTestingConnection(nil)
+            manager.setTestingStatus(.stopped)
+            manager.setTestingDesiredActive(false)
+        }
+
+        async let firstReady: Bool = manager.waitForGatewayReady(timeout: 1.2)
+        async let secondReady: Bool = manager.waitForGatewayReady(timeout: 1.2)
+        let (first, second) = await (firstReady, secondReady)
+
+        #expect(first)
+        #expect(second)
+        #expect(session.snapshotMakeCount() <= 3)
     }
 }

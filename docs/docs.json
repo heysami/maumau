@@ -895,7 +895,8 @@
                   "start/getting-started",
                   "start/onboarding-overview",
                   "start/wizard",
-                  "start/onboarding"
+                  "start/onboarding",
+                  "start/choose-providers"
                 ]
               },
               {
@@ -1105,6 +1106,7 @@
                   "automation/standing-orders",
                   "automation/cron-jobs",
                   "automation/cron-vs-heartbeat",
+                  "automation/weekly-reflection-reviewer",
                   "automation/troubleshooting",
                   "automation/webhook",
                   "automation/gmail-pubsub",

@@ -18,10 +18,16 @@ struct GeneralSettings: View {
     @State private var cliInstallStatus: String?
     @State private var cliInstallLocation: String?
     @State private var didAutoInstallCLIForLocalMode = false
+    @State private var managedBrowserSignInStatus: String?
+    @State private var managedBrowserSignInLaunching = false
     @State private var showRemoteAdvanced = false
     private let isPreview = ProcessInfo.processInfo.isPreview
     private var isNixMode: Bool {
         ProcessInfo.processInfo.isNixMode
+    }
+
+    private var onboardingStrings: OnboardingStrings {
+        OnboardingStrings(language: self.state.effectiveOnboardingLanguage)
     }
 
     private var remoteLabelWidth: CGFloat {
@@ -167,6 +173,12 @@ struct GeneralSettings: View {
                     connectionMode: self.state.connectionMode,
                     isPaused: self.state.isPaused)
                 self.healthRow
+                if Self.shouldOfferManagedBrowserSignIn(
+                    mode: self.state.connectionMode,
+                    browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+                {
+                    self.managedBrowserSignInCard
+                }
             }
 
             if self.state.connectionMode == .remote {
@@ -586,6 +598,15 @@ struct GeneralSettings: View {
             !didAutoInstallCLI
     }
 
+    static func shouldOfferManagedBrowserSignIn(
+        mode: AppState.ConnectionMode,
+        browserControlEnabled: Bool) -> Bool
+    {
+        OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: mode,
+            browserControlEnabled: browserControlEnabled)
+    }
+
     private func maybeAutoInstallCLIForLocalMode() {
         guard Self.shouldAutoInstallCLIForLocalMode(
             connectionMode: self.state.connectionMode,
@@ -761,6 +782,55 @@ extension GeneralSettings {
                     .foregroundStyle(.secondary)
             }
             .font(.caption)
+        }
+    }
+
+    private var managedBrowserSignInCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(self.onboardingStrings.managedBrowserSignInTitle, systemImage: "globe")
+                .font(.callout.weight(.semibold))
+
+            Text(self.onboardingStrings.managedBrowserSignInSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(
+                self.managedBrowserSignInLaunching
+                    ? self.onboardingStrings.managedBrowserSignInOpeningButtonTitle
+                    : self.onboardingStrings.managedBrowserSignInButtonTitle)
+            {
+                Task { await self.openManagedBrowserForSignIn() }
+            }
+            .buttonStyle(.bordered)
+            .disabled(self.managedBrowserSignInLaunching)
+
+            if let managedBrowserSignInStatus,
+               !managedBrowserSignInStatus.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                Text(managedBrowserSignInStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(10)
+    }
+
+    @MainActor
+    private func openManagedBrowserForSignIn(profile: String = "maumau") async {
+        guard !self.managedBrowserSignInLaunching else { return }
+        self.managedBrowserSignInLaunching = true
+        defer { self.managedBrowserSignInLaunching = false }
+
+        do {
+            try await ManagedBrowserSignInLauncher.start(profile: profile)
+            self.managedBrowserSignInStatus = self.onboardingStrings.managedBrowserSignInOpenedStatus
+        } catch {
+            self.managedBrowserSignInStatus =
+                "\(self.onboardingStrings.managedBrowserSignInFailedStatusPrefix) \(error.localizedDescription)"
         }
     }
 

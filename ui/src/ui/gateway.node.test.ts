@@ -135,6 +135,7 @@ function parseLatestConnectFrame(ws: MockWebSocket): ConnectFrame {
 
 async function startConnect(client: InstanceType<typeof GatewayBrowserClient>, nonce = "nonce-1") {
   client.start();
+  await vi.waitFor(() => expect(wsInstances.length).toBeGreaterThan(0));
   const ws = getLatestWebSocket();
   ws.emitOpen();
   ws.emitMessage({
@@ -206,6 +207,23 @@ describe("GatewayBrowserClient", () => {
     const signedPayload = signDevicePayloadMock.mock.calls[0]?.[1];
     expect(signedPayload).toContain("|shared-auth-token|nonce-1");
     expect(signedPayload).not.toContain("stored-device-token");
+  });
+
+  it("refreshes the explicit token before connect when a pre-connect hook updates it", async () => {
+    let currentToken = "stale-token";
+    const client = new GatewayBrowserClient({
+      url: "ws://127.0.0.1:18789",
+      token: "initial-token",
+      getToken: () => currentToken,
+      beforeConnect: async () => {
+        currentToken = "fresh-token";
+      },
+    });
+
+    const { connectFrame } = await startConnect(client);
+
+    expect(connectFrame.method).toBe("connect");
+    expect(connectFrame.params?.auth?.token).toBe("fresh-token");
   });
 
   it("sends explicit shared token on insecure first connect without cached device fallback", async () => {

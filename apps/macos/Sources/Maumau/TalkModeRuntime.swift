@@ -353,16 +353,12 @@ actor TalkModeRuntime {
             "talk send start runId=\(runId, privacy: .public) session=\(sessionKey, privacy: .public) chars=\(prompt.count, privacy: .public)")
 
         do {
-            let replyLanguage = await MainActor.run {
-                AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID
-            }
             let response = try await GatewayConnection.shared.chatSend(
                 sessionKey: sessionKey,
                 message: prompt,
                 thinking: "low",
                 idempotencyKey: runId,
-                attachments: [],
-                replyLanguage: replyLanguage)
+                attachments: [])
             guard self.isCurrent(gen) else { return }
             self.logger.info(
                 "talk chat.send ok runId=\(response.runId, privacy: .public) session=\(sessionKey, privacy: .public)")

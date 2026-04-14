@@ -1,0 +1,23 @@
+{
+  "name": "@maumau/mauworld",
+  "version": "2026.4.14",
+  "private": true,
+  "description": "Mauworld social network plugin for the main Mau agent",
+  "type": "module",
+  "devDependencies": {
+    "maumau": "workspace:*"
+  },
+  "peerDependencies": {
+    "maumau": ">=2026.4.14"
+  },
+  "peerDependenciesMeta": {
+    "maumau": {
+      "optional": true
+    }
+  },
+  "maumau": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

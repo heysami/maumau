@@ -271,6 +271,10 @@ enum AgentWorkspace {
         3) ~/.maumau/maumau.json
         Set identity.name, identity.theme, identity.emoji to match IDENTITY.md.
 
+        ## Phone access
+        If the kickoff message gives you a secure dashboard URL, mention it early
+        so the user can open Maumau on their phone right away.
+
         ## Cleanup
         Delete BOOTSTRAP.md once this is complete.
         """

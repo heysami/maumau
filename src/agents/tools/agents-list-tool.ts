@@ -5,6 +5,8 @@ import {
   normalizeAgentId,
   parseAgentSessionKey,
 } from "../../routing/session-key.js";
+import { listLinkedAgentIds, listTeamMemberAgentIds } from "../../teams/model.js";
+import { resolveSessionTeamContext } from "../../teams/runtime.js";
 import { resolveAgentConfig } from "../agent-scope.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult } from "./common.js";
@@ -45,14 +47,24 @@ export function createAgentsListTool(opts?: {
           parseAgentSessionKey(requesterInternalKey)?.agentId ??
           DEFAULT_AGENT_ID,
       );
+      const requesterTeamContext = resolveSessionTeamContext({
+        cfg,
+        sessionKey: requesterInternalKey,
+      });
 
       const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
-      const allowAny = allowAgents.some((value) => value.trim() === "*");
-      const allowSet = new Set(
-        allowAgents
-          .filter((value) => value.trim() && value.trim() !== "*")
-          .map((value) => normalizeAgentId(value)),
-      );
+      const allowAny =
+        !requesterTeamContext?.team && allowAgents.some((value) => value.trim() === "*");
+      const allowSet = requesterTeamContext?.team
+        ? new Set([
+            ...listTeamMemberAgentIds(requesterTeamContext.team),
+            ...listLinkedAgentIds(requesterTeamContext.team),
+          ])
+        : new Set(
+            allowAgents
+              .filter((value) => value.trim() && value.trim() !== "*")
+              .map((value) => normalizeAgentId(value)),
+          );
 
       const configuredAgents = Array.isArray(cfg.agents?.list) ? cfg.agents?.list : [];
       const configuredIds = configuredAgents.map((entry) => normalizeAgentId(entry.id));

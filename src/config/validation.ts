@@ -18,6 +18,7 @@ import {
   isWindowsAbsolutePath,
 } from "../shared/avatar-policy.js";
 import { isCanonicalDottedDecimalIPv4, isLoopbackIpAddress } from "../shared/net/ip.js";
+import { validateTeamsConfig } from "../teams/validation.js";
 import { isRecord } from "../utils.js";
 import { findDuplicateAgentDirs, formatDuplicateAgentDirError } from "./agent-dirs.js";
 import { appendAllowedValuesHint, summarizeAllowedValues } from "./allowed-values.js";
@@ -145,6 +146,59 @@ function mapZodIssueToConfigIssue(issue: unknown): ConfigValidationIssue {
   };
 }
 
+function stripDeprecatedTeamWorkflowPatternFields(raw: unknown): unknown {
+  if (!isRecord(raw)) {
+    return raw;
+  }
+
+  const teams = isRecord(raw.teams) ? raw.teams : null;
+  const list = Array.isArray(teams?.list) ? teams.list : null;
+  if (!list) {
+    return raw;
+  }
+
+  let nextRaw: Record<string, unknown> | null = null;
+  const ensureMutableRoot = (): Record<string, unknown> => {
+    if (nextRaw) {
+      return nextRaw;
+    }
+    nextRaw = structuredClone(raw);
+    return nextRaw;
+  };
+
+  for (const [teamIndex, teamEntry] of list.entries()) {
+    if (!isRecord(teamEntry)) {
+      continue;
+    }
+
+    const workflowEntries = Array.isArray(teamEntry.workflows) ? teamEntry.workflows : [];
+    for (const [workflowIndex, workflowEntry] of workflowEntries.entries()) {
+      if (
+        !isRecord(workflowEntry) ||
+        !Object.prototype.hasOwnProperty.call(workflowEntry, "pattern")
+      ) {
+        continue;
+      }
+      const mutableRoot = ensureMutableRoot();
+      const mutableTeams = mutableRoot.teams as { list?: unknown[] };
+      const mutableTeam = mutableTeams.list?.[teamIndex] as { workflows?: unknown[] };
+      const mutableWorkflow = mutableTeam.workflows?.[workflowIndex] as Record<string, unknown>;
+      delete mutableWorkflow.pattern;
+    }
+
+    const legacyWorkflow = isRecord(teamEntry.workflow) ? teamEntry.workflow : null;
+    if (!legacyWorkflow || !Object.prototype.hasOwnProperty.call(legacyWorkflow, "pattern")) {
+      continue;
+    }
+    const mutableRoot = ensureMutableRoot();
+    const mutableTeams = mutableRoot.teams as { list?: unknown[] };
+    const mutableTeam = mutableTeams.list?.[teamIndex] as { workflow?: Record<string, unknown> };
+    delete mutableTeam.workflow?.pattern;
+  }
+
+  return nextRaw ?? raw;
+}
+
 function isWorkspaceAvatarPath(value: string, workspaceDir: string): boolean {
   const workspaceRoot = path.resolve(workspaceDir);
   const resolved = path.resolve(workspaceRoot, value);
@@ -235,7 +289,9 @@ function validateGatewayTailscaleBind(config: MaumauConfig): ConfigValidationIss
 export function validateConfigObjectRaw(
   raw: unknown,
 ): { ok: true; config: MaumauConfig } | { ok: false; issues: ConfigValidationIssue[] } {
-  const normalizedRaw = normalizeLegacyWebSearchConfig(raw);
+  const normalizedRaw = stripDeprecatedTeamWorkflowPatternFields(
+    normalizeLegacyWebSearchConfig(raw),
+  );
   const legacyIssues = findLegacyConfigIssues(normalizedRaw);
   if (legacyIssues.length > 0) {
     return {
@@ -272,6 +328,10 @@ export function validateConfigObjectRaw(
   const gatewayTailscaleBindIssues = validateGatewayTailscaleBind(validated.data as MaumauConfig);
   if (gatewayTailscaleBindIssues.length > 0) {
     return { ok: false, issues: gatewayTailscaleBindIssues };
+  }
+  const teamIssues = validateTeamsConfig(validated.data as MaumauConfig);
+  if (teamIssues.length > 0) {
+    return { ok: false, issues: teamIssues };
   }
   return {
     ok: true,

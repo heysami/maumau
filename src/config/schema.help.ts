@@ -33,6 +33,76 @@ export const FIELD_HELP: Record<string, string> = {
     'Wizard execution mode recorded as "local" or "remote" for the most recent setup flow. Use this to understand whether setup targeted direct local runtime or remote gateway topology.',
   diagnostics:
     "Diagnostics controls for targeted tracing, telemetry export, and cache inspection during debugging. Keep baseline diagnostics minimal in production and enable deeper signals only when investigating issues.",
+  teams:
+    "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+  "teams.list":
+    "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+  "teams.list[].id":
+    "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+  "teams.list[].name":
+    "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+  "teams.list[].description":
+    "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+  "teams.list[].managerAgentId":
+    "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+  "teams.list[].implicitForManagerSessions":
+    "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
+  "teams.list[].members":
+    "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+  "teams.list[].members[].agentId":
+    "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+  "teams.list[].members[].role":
+    "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+  "teams.list[].members[].description":
+    "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+  "teams.list[].crossTeamLinks":
+    "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+  "teams.list[].crossTeamLinks[].type":
+    'Link target kind: "team" allows teams_run into another team, while "agent" allows direct specialist access to one external agent.',
+  "teams.list[].crossTeamLinks[].targetId":
+    "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+  "teams.list[].crossTeamLinks[].description":
+    "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+  "teams.list[].workflows":
+    "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+  "teams.list[].workflows[].id":
+    "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+  "teams.list[].workflows[].name":
+    "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+  "teams.list[].workflows[].description":
+    "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+  "teams.list[].workflows[].default":
+    "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+  "teams.list[].workflows[].managerPrompt":
+    "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+  "teams.list[].workflows[].synthesisPrompt":
+    "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+  "teams.list[].workflows[].lifecycle":
+    "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+  "teams.list[].workflows[].lifecycle.stages":
+    "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+  "teams.list[].workflows[].lifecycle.stages[].id":
+    "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+  "teams.list[].workflows[].lifecycle.stages[].name":
+    "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+  "teams.list[].workflows[].lifecycle.stages[].status":
+    'Coarse task-status bucket for this stage: "in_progress", "review", "done", "blocked", or "idle". This controls how the dashboard maps the active stage into the global task board.',
+  "teams.list[].workflows[].lifecycle.stages[].roles":
+    "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
+  "teams.list[].workflow":
+    "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+  "teams.list[].workflow.managerPrompt":
+    "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+  "teams.list[].workflow.synthesisPrompt":
+    "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+  "teams.list[].preset":
+    "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
+  "teams.list[].preset.id":
+    "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
+  "teams.list[].preset.source":
+    'Preset origin marker: "bundled" for Maumau bundled presets or "user" for locally-authored templates.',
+  "teams.list[].preset.version":
+    "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
   "diagnostics.otel":
     "OpenTelemetry export settings for traces, metrics, and logs emitted by gateway components. Use this when integrating with centralized observability backends and distributed tracing pipelines.",
   "diagnostics.cacheTrace":
@@ -956,6 +1026,30 @@ export const FIELD_HELP: Record<string, string> = {
     "Display name shown for the assistant in UI views, chat chrome, and status contexts. Keep this stable so operators can reliably identify which assistant persona is active.",
   "ui.assistant.avatar":
     "Assistant avatar image source used in UI surfaces (URL, path, or data URI depending on runtime support). Use trusted assets and consistent branding dimensions for clean rendering.",
+  "ui.mauOffice":
+    "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+  "ui.mauOffice.enabled":
+    "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+  "ui.mauOffice.maxVisibleWorkers":
+    "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+  "ui.mauOffice.idlePackages":
+    "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+  "ui.mauOffice.idlePackages.enabled":
+    "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+  "ui.mauOffice.scene":
+    "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+  "ui.mauOffice.scene.version":
+    "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+  "ui.mauOffice.scene.zoneRows":
+    "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+  "ui.mauOffice.scene.wallRows":
+    "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+  "ui.mauOffice.scene.props":
+    "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+  "ui.mauOffice.scene.autotiles":
+    "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+  "ui.mauOffice.scene.markers":
+    "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
   plugins:
     "Plugin system controls for enabling extensions, constraining load scope, configuring entries, and tracking installs. Keep plugin policy explicit and least-privilege in production environments.",
   "plugins.enabled":

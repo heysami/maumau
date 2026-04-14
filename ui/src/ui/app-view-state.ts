@@ -4,8 +4,23 @@ import type { CronModelSuggestionsState, CronState } from "./controllers/cron.ts
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type {
+  MauOfficeEditorBrushMode,
+  MauOfficeEditorSelection,
+  MauOfficeEditorTool,
+} from "./controllers/mau-office-editor.ts";
+import type { MauOfficeState } from "./controllers/mau-office.ts";
+import type {
+  MultiUserMemoryAdminSnapshot,
+  MultiUserMemoryIdentity,
+} from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
+import type {
+  MauOfficeMarkerRole,
+  MauOfficeSceneConfig,
+  MauOfficeZoneId,
+} from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
@@ -18,6 +33,12 @@ import type {
   ChannelsStatusSnapshot,
   ConfigSnapshot,
   ConfigUiHints,
+  DashboardCalendarResult,
+  DashboardWalletResult,
+  DashboardTaskFilter,
+  DashboardSnapshot,
+  DashboardUserChannelsResult,
+  DashboardTeamSnapshotsResult,
   HealthSummary,
   LogEntry,
   LogLevel,
@@ -57,6 +78,7 @@ export type AppViewState = {
   assistantName: string;
   assistantAvatar: string | null;
   assistantAgentId: string | null;
+  secureDashboardUrl: string | null;
   sessionKey: string;
   chatLoading: boolean;
   chatSending: boolean;
@@ -141,6 +163,16 @@ export type AppViewState = {
   aiAgentsSearchQuery: string;
   aiAgentsActiveSection: string | null;
   aiAgentsActiveSubsection: string | null;
+  multiUserMemoryLoading: boolean;
+  multiUserMemoryError: string | null;
+  multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null;
+  multiUserMemoryActiveTab: "overview" | "users" | "groups" | "settings";
+  multiUserMemoryNewUserId: string;
+  multiUserMemoryNewUserDisplayName: string;
+  multiUserMemoryNewUserLanguage: import("../../../src/i18n/languages.ts").LanguageId;
+  multiUserMemoryNewUserIdentities: MultiUserMemoryIdentity[];
+  multiUserMemoryNewGroupId: string;
+  multiUserMemoryNewGroupLabel: string;
   channelsLoading: boolean;
   channelsSnapshot: ChannelsStatusSnapshot | null;
   channelsError: string | null;
@@ -160,12 +192,25 @@ export type AppViewState = {
   agentsList: AgentsListResult | null;
   agentsError: string | null;
   agentsSelectedId: string | null;
+  teamsSelectedId: string | null;
+  teamsSelectedWorkflowId: string | null;
+  teamPromptDialogOpen: boolean;
+  teamPromptTeamId: string | null;
+  teamPromptTeamLabel: string;
+  teamPromptWorkflowId: string | null;
+  teamPromptWorkflowLabel: string;
+  teamPromptDraft: string;
+  teamPromptBusy: boolean;
+  teamPromptError: string | null;
+  teamPromptSummary: string | null;
+  teamPromptWarnings: string[];
   toolsCatalogLoading: boolean;
   toolsCatalogError: string | null;
   toolsCatalogResult: ToolsCatalogResult | null;
   agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   agentFilesLoading: boolean;
   agentFilesError: string | null;
+  agentFilesTargetId: string | null;
   agentFilesList: AgentsFilesListResult | null;
   agentFileContents: Record<string, string>;
   agentFileDrafts: Record<string, string>;
@@ -192,6 +237,86 @@ export type AppViewState = {
   sessionsPage: number;
   sessionsPageSize: number;
   sessionsSelectedKeys: Set<string>;
+  dashboardLoading: boolean;
+  dashboardError: string | null;
+  dashboardSnapshot: DashboardSnapshot | null;
+  dashboardWalletLoading: boolean;
+  dashboardWalletError: string | null;
+  dashboardWalletResult: DashboardWalletResult | null;
+  dashboardWalletStartDate: string;
+  dashboardWalletEndDate: string;
+  dashboardWalletTimeZone: "local" | "utc";
+  dashboardWalletGranularity: import("./types.ts").DashboardWalletSpendGranularity;
+  dashboardWalletBreakdown: import("./types.ts").DashboardWalletSpendBreakdown;
+  dashboardWalletCurrency: string | null;
+  dashboardCalendarResult: DashboardCalendarResult | null;
+  dashboardCalendarAnchorAtMs: number | null;
+  dashboardBusinessResult: import("./types.ts").DashboardBusinessResult | null;
+  dashboardProjectsResult: import("./types.ts").DashboardProjectsResult | null;
+  dashboardUserChannelsResult: DashboardUserChannelsResult | null;
+  dashboardUserChannelId: string | null;
+  dashboardUserChannelAccountId: string | null;
+  dashboardTeamsLoading: boolean;
+  dashboardTeamsError: string | null;
+  dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading: boolean;
+  dashboardTeamRunsError: string | null;
+  dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
+  dashboardTaskFilter: DashboardTaskFilter;
+  dashboardTaskGroupSelection: string | null;
+  dashboardDoneFromDate: string;
+  dashboardDoneToDate: string;
+  dashboardWorkshopSelectedId: string | null;
+  dashboardWorkshopTab: "saved" | "recent" | "agent-apps";
+  dashboardWorkshopSelectedIds: Set<string>;
+  dashboardWorkshopProjectDraft: string;
+  dashboardWorkshopSaving: boolean;
+  dashboardWorkshopSaveError: string | null;
+  dashboardReloadTimer: number | null;
+  dashboardCalendarView: "month" | "week" | "day";
+  dashboardCalendarFilters: import("./types.ts").DashboardCalendarFilters;
+  dashboardRoutineSelection: string | null;
+  dashboardBusinessSelection: string | null;
+  dashboardProfileSelection: string | null;
+  dashboardProjectSelection: string | null;
+  dashboardTeamSelection: string | null;
+  dashboardMemoryAgentId: string | null;
+  dashboardAgentPanel: "memory" | "scope";
+  mauOfficeLoading: boolean;
+  mauOfficeError: string | null;
+  mauOfficeState: MauOfficeState;
+  mauOfficeEditorOpen?: boolean;
+  mauOfficeEditorDraft?: MauOfficeSceneConfig | null;
+  mauOfficeEditorUndoStack?: MauOfficeSceneConfig[];
+  mauOfficeEditorRedoStack?: MauOfficeSceneConfig[];
+  mauOfficeEditorTool?: MauOfficeEditorTool;
+  mauOfficeEditorToolPanelOpen?: boolean;
+  mauOfficeEditorBrushMode?: MauOfficeEditorBrushMode;
+  mauOfficeEditorZoneBrush?: MauOfficeZoneId;
+  mauOfficeEditorPropItemId?: string;
+  mauOfficeEditorAutotileItemId?: string;
+  mauOfficeEditorMarkerRole?: MauOfficeMarkerRole;
+  mauOfficeEditorSelection?: MauOfficeEditorSelection;
+  mauOfficeEditorDragSelection?: MauOfficeEditorSelection;
+  mauOfficeEditorHoverTileX?: number | null;
+  mauOfficeEditorHoverTileY?: number | null;
+  mauOfficeChatOpen: boolean;
+  mauOfficeChatMinimized: boolean;
+  mauOfficeChatActorId: string | null;
+  mauOfficeChatActorLabel: string;
+  mauOfficeChatSessionKey: string;
+  mauOfficeChatLoading: boolean;
+  mauOfficeChatSending: boolean;
+  mauOfficeChatMessage: string;
+  mauOfficeChatMessages: unknown[];
+  mauOfficeChatThinkingLevel: string | null;
+  mauOfficeChatAttachments: ChatAttachment[];
+  mauOfficeChatRunId: string | null;
+  mauOfficeChatStream: string | null;
+  mauOfficeChatStreamStartedAt: number | null;
+  mauOfficeChatError: string | null;
+  mauOfficeChatPositionX: number | null;
+  mauOfficeChatPositionY: number | null;
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;
@@ -227,6 +352,7 @@ export type AppViewState = {
   usageLogFilterTools: string[];
   usageLogFilterHasTools: boolean;
   usageLogFilterQuery: string;
+  dashboardWalletDateDebounceTimer: number | null;
 } & Pick<
   CronState,
   | "cronLoading"

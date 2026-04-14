@@ -2,14 +2,7 @@ import Foundation
 import MaumauProtocol
 
 extension ChannelsStore {
-    static let inlineOnboardingChannelIDs = [
-        "whatsapp",
-        "telegram",
-        "discord",
-        "imessage",
-        "slack",
-        "line",
-    ]
+    static let inlineOnboardingChannelIDs = UserChannelQuickSetupRegistry.channelOrder
     static let settingsVisibleChannelIDs = inlineOnboardingChannelIDs + [
         "googlechat",
         "signal",
@@ -106,14 +99,32 @@ extension ChannelsStore {
                 ? "Config invalid; fix it in ~/.maumau/maumau.json."
                 : nil
             self.configRoot = snap.config?.mapValues { $0.foundationValue } ?? [:]
-            self.configDraft = cloneConfigValue(self.configRoot) as? [String: Any] ?? self.configRoot
-            self.configDirty = false
+            if !(self.defersConfigSaves && self.configDirty) {
+                self.configDraft = cloneConfigValue(self.configRoot) as? [String: Any] ?? self.configRoot
+                self.configDirty = false
+            }
             self.configLoaded = true
 
             self.applyUIConfig(snap)
         } catch {
             self.configStatus = error.localizedDescription
         }
+    }
+
+    func editableConfigRoot(fallback fallbackRoot: [String: Any]? = nil) -> [String: Any] {
+        if self.configLoaded || self.configDirty {
+            return self.configDraft
+        }
+        let root = fallbackRoot ?? self.configRoot
+        self.replaceConfigDraft(root, dirty: false)
+        return self.configDraft
+    }
+
+    func replaceConfigDraft(_ root: [String: Any], dirty: Bool) {
+        self.configRoot = root
+        self.configDraft = cloneConfigValue(root) as? [String: Any] ?? root
+        self.configDirty = dirty
+        self.configLoaded = true
     }
 
     private func applyUIConfig(_ snap: ConfigSnapshot) {
@@ -146,18 +157,36 @@ extension ChannelsStore {
         self.configDirty = true
     }
 
-    func saveConfigDraft() async {
-        guard !self.isSavingConfig else { return }
+    @discardableResult
+    func saveConfigDraft(forcePersist: Bool = false, reloadAfterSave: Bool = true) async -> Bool {
+        guard !self.isSavingConfig else { return false }
         self.isSavingConfig = true
         defer { self.isSavingConfig = false }
 
+        if self.defersConfigSaves && !forcePersist {
+            return true
+        }
+
+        let savedRoot = cloneConfigValue(self.configDraft) as? [String: Any] ?? self.configDraft
         do {
             try await ConfigStore.save(self.configDraft)
-            await self.loadConfig()
-            await self.refresh(probe: true)
+            self.configStatus = nil
+            self.replaceConfigDraft(savedRoot, dirty: false)
+            if reloadAfterSave {
+                await self.loadConfig()
+                await self.refresh(probe: true)
+            }
+            return true
         } catch {
             self.configStatus = error.localizedDescription
+            return false
         }
+    }
+
+    @discardableResult
+    func applyDeferredConfigChanges() async -> Bool {
+        guard self.defersConfigSaves, self.configDirty else { return true }
+        return await self.saveConfigDraft(forcePersist: true, reloadAfterSave: false)
     }
 
     func reloadConfigDraft() async {
@@ -185,14 +214,24 @@ extension ChannelsStore {
             self.updateConfigValue(path: update.path, value: update.value)
         }
 
-        await self.saveConfigDraft()
+        if self.defersConfigSaves {
+            self.configStatus = "\(successMessage) \(self.deferredOnboardingSaveNotice())"
+            return true
+        }
 
-        if !self.configDirty, self.configStatus == nil {
+        let saved = await self.saveConfigDraft()
+        if saved {
             self.configStatus = successMessage
             return true
         }
 
         return false
+    }
+
+    private func deferredOnboardingSaveNotice() -> String {
+        macLocalized(
+            "Changes apply when you finish setup.",
+            language: AppStateStore.shared.effectiveOnboardingLanguage)
     }
 }
 

@@ -7,6 +7,7 @@ import {
 } from "./subagent-spawn.test-helpers.js";
 
 const callGatewayMock = vi.fn();
+const loadSessionStoreMock = vi.fn();
 const updateSessionStoreMock = vi.fn();
 const pruneLegacyStoreKeysMock = vi.fn();
 
@@ -18,15 +19,18 @@ describe("spawnSubagentDirect runtime model persistence", () => {
     ({ resetSubagentRegistryForTests, spawnSubagentDirect } = await loadSubagentSpawnModuleForTest({
       callGatewayMock,
       loadConfig: () => createSubagentSpawnTestConfig(os.tmpdir()),
+      loadSessionStoreMock,
       updateSessionStoreMock,
       pruneLegacyStoreKeysMock,
       workspaceDir: os.tmpdir(),
     }));
     resetSubagentRegistryForTests();
     callGatewayMock.mockReset();
+    loadSessionStoreMock.mockReset();
     updateSessionStoreMock.mockReset();
     pruneLegacyStoreKeysMock.mockReset();
     setupAcceptedSubagentGatewayMock(callGatewayMock);
+    loadSessionStoreMock.mockReturnValue({});
 
     updateSessionStoreMock.mockImplementation(
       async (
@@ -91,7 +95,7 @@ describe("spawnSubagentDirect runtime model persistence", () => {
       modelProvider: "openai-codex",
       model: "gpt-5.4",
     });
-    expect(pruneLegacyStoreKeysMock).toHaveBeenCalledTimes(1);
+    expect(pruneLegacyStoreKeysMock).toHaveBeenCalledTimes(2);
     expect(operations.indexOf("gateway:sessions.patch")).toBeGreaterThan(-1);
     expect(operations.indexOf("store:update")).toBeGreaterThan(
       operations.indexOf("gateway:sessions.patch"),

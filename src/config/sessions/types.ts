@@ -65,6 +65,19 @@ export type AcpSessionRuntimeOptions = {
   backendExtras?: Record<string, string>;
 };
 
+export type SessionMemoryPrincipal = {
+  resolvedUserId?: string;
+  provisionalUserId?: string;
+  channelId?: string;
+  accountId?: string;
+  conversationId?: string;
+  requesterSenderId?: string;
+  requesterSenderName?: string;
+  requesterSenderUsername?: string;
+  effectiveLanguage?: string;
+  capturedAt: number;
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -82,10 +95,19 @@ export type SessionEntry = {
   spawnedWorkspaceDir?: string;
   /** Explicit parent session linkage for dashboard-created child sessions. */
   parentSessionKey?: string;
+  /** Active Maumau Team context for team-scoped orchestration sessions. */
+  teamId?: string;
+  /** Team-local role label for the current session within its active team. */
+  teamRole?: string;
   /** True after a thread/topic session has been forked from its parent transcript once. */
   forkedFromParent?: boolean;
   /** Subagent spawn depth (0 = main, 1 = sub-agent, 2 = sub-sub-agent). */
   spawnDepth?: number;
+  /**
+   * Session-local spawn depth ceiling override used by manager-led workflows
+   * that need deeper delegation than the global default.
+   */
+  subagentMaxSpawnDepth?: number;
   /** Explicit role assigned at spawn time for subagent tool policy/control decisions. */
   subagentRole?: "orchestrator" | "leaf";
   /** Explicit control scope assigned at spawn time for subagent control decisions. */
@@ -98,6 +120,10 @@ export type SessionEntry = {
   endedAt?: number;
   /** Accumulated runtime across subagent follow-up runs, persisted after completion. */
   runtimeMs?: number;
+  /** Latest requester owner authorization state for this session's active delivery route. */
+  requesterSenderIsOwner?: boolean;
+  /** Latest verified requester Tailscale login for this session's active delivery route. */
+  requesterTailscaleLogin?: string;
   /** Final persisted subagent run status, used after in-memory run archival. */
   status?: "running" | "done" | "failed" | "killed" | "timeout";
   /**
@@ -114,6 +140,8 @@ export type SessionEntry = {
   verboseLevel?: string;
   reasoningLevel?: string;
   elevatedLevel?: string;
+  replyLanguage?: string;
+  memoryPrincipal?: SessionMemoryPrincipal;
   ttsAuto?: TtsAutoMode;
   execHost?: string;
   execSecurity?: string;

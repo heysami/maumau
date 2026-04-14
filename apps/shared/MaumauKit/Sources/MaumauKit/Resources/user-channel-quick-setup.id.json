@@ -1,0 +1,349 @@
+{
+  "version": 1,
+  "channelOrder": [
+    "whatsapp",
+    "telegram",
+    "discord",
+    "imessage",
+    "slack",
+    "line"
+  ],
+  "settingsNote": "Channel lain dan pengaturan channel lanjutan tersedia di Settings → Channels.",
+  "channels": {
+    "whatsapp": {
+      "guidance": {
+        "identity": "Nomor WhatsApp atau perangkat tertaut menjadi identitas agen.",
+        "requirements": [
+          "Nomor telepon atau akun WhatsApp yang akan digunakan agen.",
+          "WhatsApp atau WhatsApp Business sudah terpasang dan sepenuhnya login di ponsel tersebut.",
+          "Jika ingin identitas agen terpisah, gunakan nomor khusus atau perangkat tertaut khusus. Maumau tidak dapat membuat atau membelikan nomor itu untuk Anda."
+        ],
+        "setupSteps": [
+          "Di ponsel yang akan digunakan agen, selesaikan setup WhatsApp terlebih dahulu dan tunggu sampai bisa mengirim serta menerima pesan seperti biasa.",
+          "Buka WhatsApp di ponsel itu lalu masuk ke Settings > Linked Devices > Link a device.",
+          "Kembali ke Maumau, tekan Link WhatsApp untuk menampilkan kode QR, lalu pindai dengan ponsel tersebut.",
+          "Tunggu sampai proses link selesai. Nomor yang muncul di Maumau menjadi nomor yang akan dihubungi orang untuk berbicara dengan agen."
+        ],
+        "artifacts": [
+          "Yang tertaut di sini: nomor WhatsApp agen, misalnya +1 555 123 4567.",
+          "Anda tidak menempelkan token untuk WhatsApp. Anda menautkan akun WhatsApp asli dengan memindai QR."
+        ],
+        "usage": "Orang mengirim pesan ke nomor WhatsApp itu dari akun WhatsApp biasa mereka, dan agen membalas di chat yang sama.",
+        "quickLinks": [
+          {
+            "title": "Unduh WhatsApp",
+            "url": "https://www.whatsapp.com/download/"
+          },
+          {
+            "title": "Bantuan perangkat tertaut WhatsApp",
+            "url": "https://faq.whatsapp.com/1317564962315842/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "whatsapp",
+        "sectionTitle": "Identitas bot",
+        "title": "Agen WhatsApp",
+        "emptyHeadline": "Belum ada nomor yang tertaut",
+        "emptyMessage": "Tautkan nomor WhatsApp atau perangkat tertaut yang akan digunakan bot. Maumau tidak dapat membuatkan nomor WhatsApp untuk Anda.",
+        "emptyBadge": "Belum tertaut",
+        "setupNote": "Onboarding menautkan identitas WhatsApp dan membuka chat direct agar nomor tertaut bisa langsung membalas. Perubahan akses atau routing lanjutan tetap ada di Settings → Channels lengkap.",
+        "successMessage": "WhatsApp berhasil tertaut. Pesan direct terbuka sehingga bot bisa langsung membalas.",
+        "waitingBadge": "Menunggu pemindaian",
+        "waitingMessage": "Pindai QR ini dengan nomor WhatsApp atau perangkat tertaut yang akan digunakan bot. Maumau tidak dapat membuatkan nomor WhatsApp untuk Anda.",
+        "linkedBadge": "Siap menerima pesan",
+        "qrTitle": "Pindai QR ini dengan nomor WhatsApp yang akan digunakan bot",
+        "qrBody": "Nomor WhatsApp atau perangkat tertaut yang memindai QR ini akan menjadi identitas bot. Saat orang mengirim pesan ke nomor itu, mereka sedang berbicara dengan agen.",
+        "pickerSummary": "Belum tertaut"
+      },
+      "fields": []
+    },
+    "telegram": {
+      "guidance": {
+        "identity": "Bot Telegram menjadi identitas agen.",
+        "requirements": [
+          "Akun Telegram biasa di aplikasi Telegram, aplikasi desktop, atau web app.",
+          "Akses ke @BotFather, yaitu bot resmi Telegram untuk membuat dan mengelola bot."
+        ],
+        "setupSteps": [
+          "Buka Telegram, cari @BotFather, lalu tekan Start.",
+          "Kirim /newbot, lalu ikuti prompt dari BotFather untuk nama bot dan username-nya.",
+          "Pilih username yang diakhiri dengan bot, lalu tunggu BotFather mengirimkan token bot.",
+          "Salin token dari chat BotFather lalu tempelkan ke Maumau."
+        ],
+        "artifacts": [
+          "Yang Anda tempel di sini: token bot Telegram, misalnya 1234567890:AAExampleTelegramBotToken.",
+          "Yang nanti akan dihubungi orang: handle bot, misalnya @youragentbot."
+        ],
+        "usage": "Orang mengirim pesan ke handle bot atau menambahkannya ke chat Telegram, dan balasan akan datang dari bot itu.",
+        "quickLinks": [
+          {
+            "title": "Aplikasi Telegram",
+            "url": "https://telegram.org/apps"
+          },
+          {
+            "title": "Buka BotFather",
+            "url": "https://t.me/BotFather"
+          },
+          {
+            "title": "Dokumentasi bot Telegram",
+            "url": "https://core.telegram.org/bots#how-do-i-create-a-bot"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-secret",
+        "sectionTitle": "Identitas bot",
+        "title": "Agen Telegram",
+        "emptyHeadline": "Belum ada token bot yang tersimpan",
+        "emptyMessage": "Tempelkan token bot dari BotFather. Maumau akan membuka DM Telegram agar bot bisa langsung membalas, sambil tetap mewajibkan mention di grup.",
+        "emptyBadge": "Perlu token",
+        "buttonTitle": "Simpan bot Telegram",
+        "setupNote": "Onboarding membuka DM Telegram agar Anda bisa langsung mengirim pesan ke bot, dan tetap mempertahankan mention gating di grup. Perketat akses DM nanti di Settings → Channels lengkap jika Anda ingin pairing atau allowlist.",
+        "successMessage": "Bot Telegram tersimpan. Pesan direct terbuka sehingga bot bisa langsung membalas.",
+        "pickerSummary": "Belum dikonfigurasi"
+      },
+      "fields": [
+        {
+          "key": "botToken",
+          "label": "Token bot Telegram",
+          "placeholder": "1234567890:AAExampleTelegramBotToken",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "discord": {
+      "guidance": {
+        "identity": "Aplikasi bot Discord menjadi identitas agen.",
+        "requirements": [
+          "Akun Discord.",
+          "Akses ke Discord Developer Portal dan ke server tempat Anda ingin memasang bot."
+        ],
+        "setupSteps": [
+          "Buka discord.com/developers/applications lalu klik New Application.",
+          "Buka tab Bot di sidebar kiri, klik Add Bot, lalu salin token bot dari halaman itu.",
+          "Buka halaman Installation, pastikan bot install tetap aktif, lalu gunakan link install untuk menambahkan bot ke server atau akun pengguna Anda.",
+          "Setelah bot muncul di Discord, tempelkan token bot itu ke Maumau."
+        ],
+        "artifacts": [
+          "Yang Anda tempel di sini: token bot Discord yang disalin dari halaman Bot di Developer Portal.",
+          "Yang nanti akan dilihat orang: nama aplikasi bot dan username bot di Discord."
+        ],
+        "usage": "Orang mengirim DM ke bot atau berbicara dengannya di server dan channel Discord yang diizinkan, lalu agen membalas di sana.",
+        "quickLinks": [
+          {
+            "title": "Discord Developer Portal",
+            "url": "https://discord.com/developers/applications"
+          },
+          {
+            "title": "Panduan awal Discord",
+            "url": "https://docs.discord.com/developers/docs/getting-started"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-secret",
+        "sectionTitle": "Identitas bot",
+        "title": "Agen Discord",
+        "emptyHeadline": "Belum ada token bot yang tersimpan",
+        "emptyMessage": "Tempelkan token bot Discord dari Developer Portal. Maumau akan membuka direct message agar bot bisa langsung membalas setelah dipasang.",
+        "emptyBadge": "Perlu token",
+        "buttonTitle": "Simpan bot Discord",
+        "setupNote": "Onboarding membuka DM Discord agar orang bisa langsung mengirim pesan ke bot setelah Anda mengundang atau memasangnya. Perketat akses DM nanti di Settings → Channels lengkap jika Anda ingin pairing atau allowlist.",
+        "successMessage": "Bot Discord tersimpan. Pesan direct terbuka sehingga bot bisa langsung membalas setelah dipasang.",
+        "pickerSummary": "Belum dikonfigurasi"
+      },
+      "fields": [
+        {
+          "key": "token",
+          "label": "Token bot Discord",
+          "placeholder": "Tempelkan token bot Discord",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "imessage": {
+      "guidance": {
+        "identity": "Akun Messages yang login di Mac ini menjadi identitas agen.",
+        "requirements": [
+          "Mac tempat Messages berfungsi seperti biasa.",
+          "Apple Account, email, atau nomor telepon yang akan menjadi identitas agen.",
+          "Jika ingin identitas terpisah, gunakan Apple Account khusus atau user macOS terpisah yang login ke Messages."
+        ],
+        "setupSteps": [
+          "Jika Anda memerlukan identitas terpisah, buat dulu di account.apple.com.",
+          "Di Mac yang akan digunakan agen, buka Messages dan login dengan Apple Account itu.",
+          "Di Messages > Settings > iMessage, pilih email atau nomor telepon yang harus dilihat orang untuk percakapan baru dan tunggu aktivasi selesai.",
+          "Kembali ke Maumau, arahkan channel ke imsg di Mac ini dan berikan izin macOS yang diminta."
+        ],
+        "artifacts": [
+          "Yang tertaut di sini: identitas Messages di Mac ini, misalnya agent@example.com atau +1 555 123 4567.",
+          "Tidak ada token bot untuk iMessage. Maumau menggunakan akun Messages yang sudah login di Mac."
+        ],
+        "usage": "Orang mengirim pesan ke akun Messages itu seperti biasa, dan agen membalas di percakapan iMessage tersebut.",
+        "quickLinks": [
+          {
+            "title": "Buat Apple Account",
+            "url": "https://account.apple.com/"
+          },
+          {
+            "title": "Setup Messages di Mac",
+            "url": "https://support.apple.com/guide/messages/set-up-messages-on-mac-ichte16154fb/mac"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "single-text",
+        "sectionTitle": "Identitas agen",
+        "title": "Agen Messages",
+        "emptyHeadline": "Belum ada bridge Messages yang tersimpan",
+        "emptyMessage": "Gunakan identitas Messages yang sudah login di Mac ini. Jika Anda memasang imsg di lokasi khusus, ubah path CLI sebelum menyimpan.",
+        "emptyBadge": "Perlu bridge",
+        "buttonTitle": "Gunakan Messages di Mac ini",
+        "setupNote": "Onboarding mengarahkan Maumau ke imsg di Mac ini dan membuka direct message agar bisa langsung membalas. Perketat akses DM nanti di Settings → Channels lengkap jika Anda ingin pairing atau allowlist.",
+        "successMessage": "Messages di Mac ini tersimpan. Pesan direct terbuka sehingga bisa langsung membalas.",
+        "pickerSummary": "Belum dikonfigurasi"
+      },
+      "fields": [
+        {
+          "key": "cliPath",
+          "label": "Path CLI imsg",
+          "placeholder": "imsg",
+          "required": true,
+          "helpLines": [
+            "Gunakan path default jika imsg terpasang normal di Mac ini. Ubah hanya jika Anda memasang imsg di lokasi khusus atau lewat wrapper script."
+          ]
+        }
+      ]
+    },
+    "slack": {
+      "guidance": {
+        "identity": "Aplikasi Slack di dalam sebuah workspace menjadi identitas agen.",
+        "requirements": [
+          "Workspace Slack tempat Anda bisa membuat dan memasang app.",
+          "Akses ke api.slack.com/apps agar Anda bisa membuat app dan menghasilkan dua token yang dibutuhkan Maumau."
+        ],
+        "setupSteps": [
+          "Buka api.slack.com/apps lalu klik Create New App, kemudian pilih workspace untuk agen.",
+          "Di pengaturan app, buka Socket Mode, aktifkan, lalu buat app-level token.",
+          "Di OAuth & Permissions, pasang app ke workspace lalu salin Bot User OAuth Token.",
+          "Jika ingin direct message dan mention berjalan rapi, aktifkan juga tab Messages di App Home serta events yang dibutuhkan Maumau di Event Subscriptions.",
+          "Tempelkan bot token dan app token ke Maumau."
+        ],
+        "artifacts": [
+          "Yang Anda tempel di sini: bot token xoxb-... dan app token xapp-....",
+          "Yang nanti akan dihubungi orang: app Slack itu di DM atau mention di dalam workspace."
+        ],
+        "usage": "Orang mengirim DM ke app Slack atau me-mention-nya di channel tempat app itu terpasang, dan agen membalas di Slack.",
+        "quickLinks": [
+          {
+            "title": "Buat app Slack",
+            "url": "https://api.slack.com/apps"
+          },
+          {
+            "title": "Panduan Slack Socket Mode",
+            "url": "https://docs.slack.dev/apis/events-api/using-socket-mode/"
+          },
+          {
+            "title": "Jenis token Slack",
+            "url": "https://docs.slack.dev/authentication/tokens/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "dual-secret",
+        "sectionTitle": "Identitas app",
+        "title": "Agen Slack",
+        "emptyHeadline": "Belum ada token app Slack yang tersimpan",
+        "emptyMessage": "Tempelkan bot token dan app token dari app Slack Anda. Maumau menggunakan Socket Mode dan membuka direct message agar app bisa langsung membalas setelah dipasang.",
+        "emptyBadge": "Perlu token",
+        "buttonTitle": "Simpan app Slack",
+        "setupNote": "Onboarding membuka DM Slack agar orang bisa langsung mengirim pesan ke app setelah dipasang. Perketat akses DM nanti di Settings → Channels lengkap jika Anda ingin pairing atau allowlist.",
+        "successMessage": "App Slack tersimpan. Pesan direct terbuka sehingga bisa langsung membalas setelah dipasang.",
+        "pickerSummary": "Belum dikonfigurasi"
+      },
+      "fields": [
+        {
+          "key": "botToken",
+          "label": "Bot token Slack",
+          "placeholder": "xoxb-...",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "appToken",
+          "label": "App token Slack",
+          "placeholder": "xapp-...",
+          "required": true,
+          "secret": true
+        }
+      ]
+    },
+    "line": {
+      "guidance": {
+        "identity": "Bot LINE Messaging API menjadi identitas agen.",
+        "requirements": [
+          "Akun LINE Official Account dan channel Messaging API.",
+          "Akses ke LINE Official Account Manager dan LINE Developers Console."
+        ],
+        "setupSteps": [
+          "Buat LINE Official Account terlebih dahulu. Jika belum punya, mulai dari account.line.biz dan selesaikan langkah Business ID serta formulir pendaftarannya.",
+          "Di LINE Official Account Manager, aktifkan Messaging API untuk akun tersebut.",
+          "Buka developers.line.biz/console, pilih provider, lalu buka channel Messaging API yang baru.",
+          "Salin Channel secret, lalu buat atau salin Channel access token.",
+          "Atur webhook URL channel ke gateway Maumau Anda dan gunakan tombol Verify di LINE Developers Console untuk mengujinya.",
+          "Tempelkan Channel access token dan Channel secret ke Maumau."
+        ],
+        "artifacts": [
+          "Yang Anda tempel di sini: LINE Channel access token dan Channel secret dari channel Messaging API.",
+          "Yang nanti akan dihubungi orang: LINE Official Account yang memiliki channel Messaging API tersebut."
+        ],
+        "usage": "Orang mengirim pesan ke bot LINE itu, dan agen membalas di sana.",
+        "quickLinks": [
+          {
+            "title": "Panduan awal LINE Messaging API",
+            "url": "https://developers.line.biz/en/docs/messaging-api/getting-started/"
+          },
+          {
+            "title": "LINE Developers Console",
+            "url": "https://developers.line.biz/console/"
+          },
+          {
+            "title": "Verifikasi webhook LINE",
+            "url": "https://developers.line.biz/en/docs/messaging-api/verify-webhook-url/"
+          }
+        ]
+      },
+      "quickSetup": {
+        "kind": "dual-secret",
+        "sectionTitle": "Identitas bot",
+        "title": "Agen LINE",
+        "emptyHeadline": "Belum ada channel LINE yang tertaut",
+        "emptyMessage": "Tempelkan Channel access token dan Channel secret dari LINE Developers Console. Maumau akan membuka direct message agar akun bisa langsung membalas setelah webhook aktif.",
+        "emptyBadge": "Perlu kredensial",
+        "buttonTitle": "Simpan bot LINE",
+        "setupNote": "Onboarding membuka DM LINE agar orang bisa langsung mengirim pesan ke akun setelah webhook aktif. Perketat akses DM nanti di Settings → Channels lengkap jika Anda ingin pairing atau allowlist.",
+        "successMessage": "Bot LINE tersimpan. Pesan direct terbuka sehingga bisa langsung membalas setelah webhook aktif.",
+        "pickerSummary": "Belum dikonfigurasi"
+      },
+      "fields": [
+        {
+          "key": "channelAccessToken",
+          "label": "LINE Channel access token",
+          "placeholder": "Tempelkan Channel access token",
+          "required": true,
+          "secret": true
+        },
+        {
+          "key": "channelSecret",
+          "label": "LINE Channel secret",
+          "placeholder": "Tempelkan Channel secret",
+          "required": true,
+          "secret": true
+        }
+      ]
+    }
+  }
+}

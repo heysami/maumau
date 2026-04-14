@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createWizardPrompter as buildWizardPrompter } from "../../test/helpers/wizard-prompter.js";
 import { DEFAULT_DANGEROUS_NODE_COMMANDS } from "../gateway/node-command-policy.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -6,7 +6,9 @@ import type { WizardPrompter, WizardSelectParams } from "./prompts.js";
 
 const mocks = vi.hoisted(() => ({
   randomToken: vi.fn(),
+  findTailscaleBinary: vi.fn(),
   getTailnetHostname: vi.fn(),
+  probeTailscaleExposure: vi.fn(),
 }));
 
 vi.mock("../commands/onboard-helpers.js", async (importActual) => {
@@ -18,13 +20,30 @@ vi.mock("../commands/onboard-helpers.js", async (importActual) => {
 });
 
 vi.mock("../infra/tailscale.js", () => ({
-  findTailscaleBinary: vi.fn(async () => undefined),
+  findTailscaleBinary: mocks.findTailscaleBinary,
   getTailnetHostname: mocks.getTailnetHostname,
+  probeTailscaleExposure: mocks.probeTailscaleExposure,
 }));
 
 import { configureGatewayForSetup } from "./setup.gateway-config.js";
 
 describe("configureGatewayForSetup", () => {
+  beforeEach(() => {
+    mocks.randomToken.mockReset();
+    mocks.findTailscaleBinary.mockReset();
+    mocks.getTailnetHostname.mockReset();
+    mocks.probeTailscaleExposure.mockReset();
+    mocks.findTailscaleBinary.mockResolvedValue(undefined);
+    mocks.getTailnetHostname.mockResolvedValue("maumau.tailnet.ts.net");
+    mocks.probeTailscaleExposure.mockResolvedValue({
+      mode: "serve",
+      featureEnabled: true,
+      active: false,
+      blockedReason: "service_not_running",
+      suggestedFix: "Restart the gateway so it can apply the Serve route.",
+    });
+  });
+
   function createPrompter(params: { selectQueue: string[]; textQueue: Array<string | undefined> }) {
     const selectQueue = [...params.selectQueue];
     const textQueue = [...params.textQueue];
@@ -95,6 +114,41 @@ describe("configureGatewayForSetup", () => {
 
     expect(result.settings.gatewayToken).toBe("generated-token");
     expect(result.nextConfig.gateway?.nodes?.denyCommands).toEqual(DEFAULT_DANGEROUS_NODE_COMMANDS);
+    expect(result.nextConfig.gateway?.auth?.allowTailscale).toBe(false);
+  });
+
+  it("warns when serve is disabled on the tailnet during setup", async () => {
+    mocks.findTailscaleBinary.mockResolvedValue(
+      "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    );
+    mocks.probeTailscaleExposure.mockResolvedValueOnce({
+      mode: "serve",
+      featureEnabled: false,
+      active: false,
+      blockedReason: "doctor_failed",
+      suggestedFix: "Enable Tailscale Serve for this device or tailnet, then retry.",
+    });
+    const prompter = createPrompter({
+      selectQueue: ["loopback", "token", "serve"],
+      textQueue: ["18789", undefined],
+    });
+
+    const result = await configureGatewayForSetup({
+      flow: "advanced",
+      baseConfig: {},
+      nextConfig: {},
+      localPort: 18789,
+      quickstartGateway: createQuickstartGateway("token"),
+      prompter,
+      runtime: createRuntime(),
+    });
+
+    expect(prompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("Tailscale Serve is not enabled on this tailnet yet."),
+      "Tailscale Warning",
+    );
+    expect(result.settings.tailscaleMode).toBe("off");
+    expect(result.nextConfig.gateway?.tailscale?.mode).toBe("off");
   });
 
   it("prefers MAUMAU_GATEWAY_TOKEN during quickstart token setup", async () => {
@@ -207,6 +261,7 @@ describe("configureGatewayForSetup", () => {
         id: "MAUMAU_GATEWAY_TOKEN",
       });
       expect(result.settings.gatewayToken).toBe("token-from-env");
+      expect(result.nextConfig.gateway?.auth?.allowTailscale).toBe(false);
     } finally {
       if (previous === undefined) {
         delete process.env.MAUMAU_GATEWAY_TOKEN;
@@ -258,5 +313,23 @@ describe("configureGatewayForSetup", () => {
 
     expect(result.nextConfig.gateway?.auth?.token).toEqual(quickstartGateway.token);
     expect(result.settings.gatewayToken).toBe("token-from-exec");
+  });
+
+  it("enables allowTailscale for serve onboarding with token auth", async () => {
+    mocks.randomToken.mockReturnValue("generated-token");
+    const result = await runGatewayConfig({
+      tailscaleChoice: "serve",
+    });
+
+    expect(result.nextConfig.gateway?.auth?.allowTailscale).toBe(true);
+  });
+
+  it("keeps allowTailscale disabled for funnel/password onboarding", async () => {
+    const result = await runGatewayConfig({
+      authChoice: "password",
+      tailscaleChoice: "serve",
+    });
+
+    expect(result.nextConfig.gateway?.auth?.allowTailscale).toBe(false);
   });
 });

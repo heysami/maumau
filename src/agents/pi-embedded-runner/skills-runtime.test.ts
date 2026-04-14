@@ -99,4 +99,104 @@ describe("resolveEmbeddedRunSkillEntries", () => {
     });
     expect(loadWorkspaceSkillEntriesSpy).not.toHaveBeenCalled();
   });
+
+  it("filters resolved snapshot skills for subagent sessions", () => {
+    const snapshot: SkillSnapshot = {
+      prompt: "skills prompt",
+      skills: [{ name: "coding-agent" }, { name: "diffs" }],
+      resolvedSkills: [{ name: "coding-agent" }, { name: "diffs" }] as never[],
+    };
+
+    const result = resolveEmbeddedRunSkillEntries({
+      workspaceDir: "/tmp/workspace",
+      config: {
+        agents: {
+          list: [{ id: "vibe-coder-manager" }],
+        },
+      },
+      agentId: "vibe-coder-manager",
+      sessionKey: "agent:vibe-coder-manager:subagent:child",
+      skillsSnapshot: snapshot,
+    });
+
+    expect(result).toMatchObject({
+      shouldLoadSkillEntries: false,
+    });
+    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual(["diffs"]);
+    expect(loadWorkspaceSkillEntriesSpy).not.toHaveBeenCalled();
+  });
+
+  it("omits the coding-agent skill for orchestrator sessions", () => {
+    loadWorkspaceSkillEntriesSpy.mockReturnValue([
+      { skill: { name: "coding-agent" } },
+      { skill: { name: "diffs" } },
+    ] as never[]);
+
+    const result = resolveEmbeddedRunSkillEntries({
+      workspaceDir: "/tmp/workspace",
+      config: {
+        agents: {
+          list: [{ id: "main", executionStyle: "orchestrator" }],
+        },
+      },
+      agentId: "main",
+      skillsSnapshot: {
+        prompt: "skills prompt",
+        skills: [],
+      },
+    });
+
+    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual(["diffs"]);
+  });
+
+  it("omits the coding-agent skill for execution workers and subagent sessions", () => {
+    loadWorkspaceSkillEntriesSpy.mockReturnValue([
+      { skill: { name: "coding-agent" } },
+      { skill: { name: "diffs" } },
+    ] as never[]);
+
+    const result = resolveEmbeddedRunSkillEntries({
+      workspaceDir: "/tmp/workspace",
+      config: {
+        agents: {
+          defaults: {
+            executionWorkerAgentId: "main-worker",
+          },
+          list: [{ id: "main-worker" }],
+        },
+      },
+      agentId: "main-worker",
+      sessionKey: "agent:main-worker:subagent:child",
+      skillsSnapshot: {
+        prompt: "skills prompt",
+        skills: [],
+      },
+    });
+
+    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual(["diffs"]);
+  });
+
+  it("keeps the coding-agent skill for ordinary top-level coding agents", () => {
+    loadWorkspaceSkillEntriesSpy.mockReturnValue([
+      { skill: { name: "coding-agent" } },
+      { skill: { name: "diffs" } },
+    ] as never[]);
+
+    const result = resolveEmbeddedRunSkillEntries({
+      workspaceDir: "/tmp/workspace",
+      config: {
+        agents: {
+          list: [{ id: "helper" }],
+        },
+      },
+      agentId: "helper",
+      sessionKey: "agent:helper:main",
+      skillsSnapshot: {
+        prompt: "skills prompt",
+        skills: [],
+      },
+    });
+
+    expect(result.skillEntries.map((entry) => entry.skill.name)).toEqual(["coding-agent", "diffs"]);
+  });
 });

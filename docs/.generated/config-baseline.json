@@ -1561,6 +1561,31 @@
       "hasChildren": false
     },
     {
+      "path": "agents.defaults.executionStyle",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "direct",
+        "hybrid",
+        "orchestrator"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.defaults.executionWorkerAgentId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
       "path": "agents.defaults.heartbeat",
       "kind": "core",
       "type": "object",
@@ -4239,6 +4264,31 @@
       "path": "agents.list.*.default",
       "kind": "core",
       "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.executionStyle",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "direct",
+        "hybrid",
+        "orchestrator"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "agents.list.*.executionWorkerAgentId",
+      "kind": "core",
+      "type": "string",
       "required": false,
       "deprecated": false,
       "sensitive": false,
@@ -52051,6 +52101,195 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.automation-runner",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Automation Runner",
+      "help": "Bounded browser-first automation with sender allowlists and approval-gated side effects. (plugin: automation-runner)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Automation Runner Config",
+      "help": "Plugin-defined config payload for automation-runner.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.allowFrom",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.allowFrom.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.accessPolicy.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "disabled",
+        "owner",
+        "allowlist"
+      ],
+      "defaultValue": "owner",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.config.requireApproval",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Automation Runner",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.automation-runner.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.bluebubbles",
       "kind": "plugin",
       "type": "object",
@@ -56303,6 +56542,127 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.lossless-claw",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lossless Claw",
+      "help": "Lossless transcript continuity across compaction and spawned agents. (plugin: lossless-claw)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lossless Claw Config",
+      "help": "Plugin-defined config payload for lossless-claw.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Lossless Claw",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.lossless-claw.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.matrix",
       "kind": "plugin",
       "type": "object",
@@ -57685,6 +58045,606 @@
     },
     {
       "path": "plugins.entries.msteams.subagent.allowModelOverride",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Plugin Subagent Model Override",
+      "help": "Explicitly allows this plugin to request provider/model overrides in background subagent runs. Keep false unless the plugin is trusted to steer model selection.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Multi-User Memory",
+      "help": "Scoped memory with curated users, shared groups, approvals, and per-user language defaults. (plugin: multi-user-memory)",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Multi-User Memory Config",
+      "help": "Plugin-defined config payload for multi-user-memory.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.adminUserIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Admin User Ids",
+      "help": "Canonical user ids that should be treated as multi-user-memory admins.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.adminUserIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalCenterBaseUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Center Base URL",
+      "help": "Optional HTTPS base URL for the approval center page. Leave blank to auto-detect from Tailscale Serve or the gateway bind when possible.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.accountId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Account Override",
+      "help": "Optional account override for approval requests.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.channelId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Channel Override",
+      "help": "Optional channel override for approval requests when not using the current session.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "same_session",
+        "same_channel",
+        "disabled"
+      ],
+      "defaultValue": "same_session",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Delivery Mode",
+      "help": "How proposal approvals should be requested in v1.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.approvalDelivery.to",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Approval Target Override",
+      "help": "Optional explicit target for approval requests.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.autoDiscover",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Auto-Discover New Senders",
+      "help": "Unknown senders become provisional users in the runtime store until an admin curates them in config.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.curatorAgentId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Curator Agent Id",
+      "help": "Agent id allowed to run the curation workflow without owner privileges.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.defaultLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "defaultValue": "en",
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Default Reply Language",
+      "help": "Fallback language when a matched user does not have a preferred language.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Multi-User Memory",
+      "help": "Turns on scoped user and group memory overlays for the default memory stack.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "defaultValue": {},
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Groups",
+      "help": "Shared memory groups keyed by group id.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.active",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Active Group",
+      "help": "Inactive groups are ignored for memory visibility and curation.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.description",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Description",
+      "help": "Optional admin description for the group.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.label",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Group Label",
+      "help": "Human-readable group name.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.memberUserIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Member User Ids",
+      "help": "Canonical users that belong directly to this group.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.memberUserIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.parentGroupIds",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Parent Group Ids",
+      "help": "Broader groups that inherit this group's members upward.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.groups.*.parentGroupIds.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "defaultValue": {},
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Users",
+      "help": "Curated user catalog keyed by canonical user id.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.active",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Active User",
+      "help": "Inactive users are ignored for curated identity matching.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.displayName",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Display Name",
+      "help": "Human-readable name shown in admin tooling and curation output.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "defaultValue": [],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Channel Identities",
+      "help": "Exact channel/account/sender identities that map to this user.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.accountId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Account Id",
+      "help": "Optional account id when a channel has multiple configured accounts.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.channelId",
+      "kind": "plugin",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Channel Id",
+      "help": "Exact channel id, for example whatsapp, telegram, or discord.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.label",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Identity Label",
+      "help": "Optional admin label for this channel identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderId",
+      "kind": "plugin",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Id",
+      "help": "Trusted sender id to match for this identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderName",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Name",
+      "help": "Optional display name captured for admin reference.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.identities.*.senderUsername",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Sender Username",
+      "help": "Optional username captured for admin reference.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.notes",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Admin Notes",
+      "help": "Optional operator notes for this user.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.config.users.*.preferredLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preferred Language",
+      "help": "Language used for replies and plugin-generated notices for this user.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Enable Multi-User Memory",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.hooks",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Hook Policy",
+      "help": "Per-plugin typed hook policy controls for core-enforced safety gates. Use this to constrain high-impact hook categories without disabling the entire plugin.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.hooks.allowPromptInjection",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Allow Prompt Injection Hooks",
+      "help": "Controls whether this plugin may mutate prompts through typed hooks. Set false to block `before_prompt_build` and ignore prompt-mutating fields from legacy `before_agent_start`, while preserving legacy `modelOverride` and `providerOverride` behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Plugin Subagent Policy",
+      "help": "Per-plugin subagent runtime controls for model override trust and allowlists. Keep this unset unless a plugin must explicitly steer subagent model selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowedModels",
+      "kind": "plugin",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "access"
+      ],
+      "label": "Plugin Subagent Allowed Models",
+      "help": "Allowed override targets for trusted plugin subagent runs as canonical \"provider/model\" refs. Use \"*\" only when you intentionally allow any model.",
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowedModels.*",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.multi-user-memory.subagent.allowModelOverride",
       "kind": "plugin",
       "type": "boolean",
       "required": false,
@@ -61883,6 +62843,24 @@
       "hasChildren": false
     },
     {
+      "path": "plugins.entries.voice-call.config.mode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "self-hosted",
+        "vapi"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Voice Mode",
+      "help": "Use vapi for the simple guided setup or self-hosted for direct provider webhooks.",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.voice-call.config.outbound",
       "kind": "plugin",
       "type": "object",
@@ -61996,6 +62974,7 @@
         "advanced"
       ],
       "label": "Response Model",
+      "help": "Leave blank to inherit the main Maumau agent model.",
       "hasChildren": false
     },
     {
@@ -62142,6 +63121,65 @@
       "hasChildren": true
     },
     {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.apiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "advanced",
+        "auth",
+        "security"
+      ],
+      "label": "Deepgram Realtime API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.endpointingMs",
+      "kind": "plugin",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.interimResults",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.deepgram.model",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "models"
+      ],
+      "label": "Deepgram Realtime Model",
+      "hasChildren": false
+    },
+    {
       "path": "plugins.entries.voice-call.config.streaming.enabled",
       "kind": "plugin",
       "type": "boolean",
@@ -62152,6 +63190,19 @@
         "advanced"
       ],
       "label": "Enable Streaming",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.languageCode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Realtime Language Code",
       "hasChildren": false
     },
     {
@@ -62185,7 +63236,17 @@
       "hasChildren": false
     },
     {
-      "path": "plugins.entries.voice-call.config.streaming.openaiApiKey",
+      "path": "plugins.entries.voice-call.config.streaming.openai",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.apiKey",
       "kind": "plugin",
       "type": "string",
       "required": false,
@@ -62197,6 +63258,50 @@
         "security"
       ],
       "label": "OpenAI Realtime API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.model",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "models"
+      ],
+      "label": "OpenAI Realtime Model",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.silenceDurationMs",
+      "kind": "plugin",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openai.vadThreshold",
+      "kind": "plugin",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.streaming.openaiApiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
       "hasChildren": false
     },
     {
@@ -62240,11 +63345,7 @@
       "required": false,
       "deprecated": false,
       "sensitive": false,
-      "tags": [
-        "advanced",
-        "media"
-      ],
-      "label": "Realtime STT Model",
+      "tags": [],
       "hasChildren": false
     },
     {
@@ -62253,11 +63354,16 @@
       "type": "string",
       "required": false,
       "enumValues": [
-        "openai-realtime"
+        "openai-realtime",
+        "deepgram-realtime"
       ],
       "deprecated": false,
       "sensitive": false,
-      "tags": [],
+      "tags": [
+        "advanced",
+        "media"
+      ],
+      "label": "Realtime STT Provider",
       "hasChildren": false
     },
     {
@@ -63078,6 +64184,169 @@
         "security"
       ],
       "label": "Twilio Auth Token",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi",
+      "kind": "plugin",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.apiKey",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "auth",
+        "security"
+      ],
+      "label": "Vapi API Key",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.assistantId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Assistant ID",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.baseUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi API Base URL",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeAuthToken",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": true,
+      "tags": [
+        "advanced",
+        "auth",
+        "security"
+      ],
+      "label": "Maumau Bridge Auth Token",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeMode",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "auto",
+        "manual-public-url"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Bridge Mode",
+      "help": "Use \"auto\" for the managed Tailscale Funnel bridge or \"manual-public-url\" to keep a fixed public callback URL.",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgePath",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced",
+        "storage"
+      ],
+      "label": "Maumau Bridge Path",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.bridgeUrl",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Maumau Bridge URL",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.enabled",
+      "kind": "plugin",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.phoneNumberId",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Phone Number ID",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.preferredLanguage",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preferred Language",
+      "hasChildren": false
+    },
+    {
+      "path": "plugins.entries.voice-call.config.vapi.telephonyProvider",
+      "kind": "plugin",
+      "type": "string",
+      "required": false,
+      "enumValues": [
+        "twilio"
+      ],
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Vapi Telephony Provider",
+      "help": "Use \"twilio\" for imported international numbers.",
       "hasChildren": false
     },
     {
@@ -66294,6 +67563,786 @@
       ],
       "label": "Talk Voice ID",
       "help": "Legacy ElevenLabs default voice ID for Talk mode. Prefer talk.providers.elevenlabs.voiceId.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Teams",
+      "help": "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team List",
+      "help": "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Links",
+      "help": "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Description",
+      "help": "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.targetId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Target",
+      "help": "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.crossTeamLinks.*.type",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Cross-Team Link Type",
+      "help": "Link target kind: \"team\" allows teams_run into another team, while \"agent\" allows direct specialist access to one external agent.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Description",
+      "help": "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team ID",
+      "help": "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.implicitForManagerSessions",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "storage"
+      ],
+      "label": "Implicit Manager Team Sessions",
+      "help": "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.managerAgentId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Manager Agent",
+      "help": "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Specialists",
+      "help": "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.members.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.members.*.agentId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Agent",
+      "help": "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Guidance",
+      "help": "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.members.*.role",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Specialist Role",
+      "help": "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Name",
+      "help": "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Preset Metadata",
+      "help": "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.preset.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset ID",
+      "help": "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset.source",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset Source",
+      "help": "Preset origin marker: \"bundled\" for Maumau bundled presets or \"user\" for locally-authored templates.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.preset.version",
+      "kind": "core",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Preset Version",
+      "help": "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Team Workflow",
+      "help": "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requireDelegation",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredQaRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredQaRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.contract.requiredRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.default",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.roles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.roles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.lifecycle.stages.*.status",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.managerPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Manager Workflow Prompt",
+      "help": "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflow.synthesisPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Legacy Synthesis Workflow Prompt",
+      "help": "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Team Workflows",
+      "help": "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requireDelegation",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredQaRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredQaRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredRoles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.contract.requiredRoles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.default",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Default Workflow",
+      "help": "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.description",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Description",
+      "help": "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow ID",
+      "help": "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Lifecycle",
+      "help": "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Lifecycle Stages",
+      "help": "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage ID",
+      "help": "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Name",
+      "help": "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.roles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Roles",
+      "help": "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
+      "hasChildren": true
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.roles.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.lifecycle.stages.*.status",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Lifecycle Stage Status",
+      "help": "Coarse task-status bucket for this stage: \"in_progress\", \"review\", \"done\", \"blocked\", or \"idle\". This controls how the dashboard maps the active stage into the global task board.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.managerPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Manager Workflow Prompt",
+      "help": "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.name",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Workflow Name",
+      "help": "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+      "hasChildren": false
+    },
+    {
+      "path": "teams.list.*.workflows.*.synthesisPrompt",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "Synthesis Workflow Prompt",
+      "help": "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
       "hasChildren": false
     },
     {
@@ -71023,6 +73072,544 @@
       ],
       "label": "Assistant Name",
       "help": "Display name shown for the assistant in UI views, chat chrome, and status contexts. Keep this stable so operators can reliably identify which assistant persona is active.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice",
+      "help": "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.enabled",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Enabled",
+      "help": "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.idlePackages",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Idle Packages",
+      "help": "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.idlePackages.enabled",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Enabled Idle Packages",
+      "help": "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.idlePackages.enabled.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.maxVisibleWorkers",
+      "kind": "core",
+      "type": "integer",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "performance"
+      ],
+      "label": "MauOffice Max Visible Workers",
+      "help": "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene",
+      "help": "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Autotiles",
+      "help": "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.cells.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.collisionOverride",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.itemId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.loopId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.mountOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.autotiles.*.zOffsetOverride",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Markers",
+      "help": "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.facingOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles.height",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.footprintTiles.width",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.layer",
+      "kind": "core",
+      "type": "integer",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.pose",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.role",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.markers.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Props",
+      "help": "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*",
+      "kind": "core",
+      "type": "object",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.collisionOverride",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.id",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.itemId",
+      "kind": "core",
+      "type": "string",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.loopId",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.mirrored",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.mountOverride",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.tileX",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.tileY",
+      "kind": "core",
+      "type": "number",
+      "required": true,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.props.*.zOffsetOverride",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.version",
+      "kind": "core",
+      "type": "number",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Version",
+      "help": "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Wall Rows",
+      "help": "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows.*",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.wallRows.*.*",
+      "kind": "core",
+      "type": "boolean",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": false
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [
+        "advanced"
+      ],
+      "label": "MauOffice Scene Zone Rows",
+      "help": "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows.*",
+      "kind": "core",
+      "type": "array",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
+      "hasChildren": true
+    },
+    {
+      "path": "ui.mauOffice.scene.zoneRows.*.*",
+      "kind": "core",
+      "type": "string",
+      "required": false,
+      "deprecated": false,
+      "sensitive": false,
+      "tags": [],
       "hasChildren": false
     },
     {

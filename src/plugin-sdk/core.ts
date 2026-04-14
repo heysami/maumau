@@ -52,6 +52,19 @@ export type {
   SpeechProviderPlugin,
   ProviderThinkingPolicyContext,
   ProviderWrapStreamFnContext,
+  MemoryOverlay,
+  MemoryOverlayCollection,
+  MemoryOverlayContext,
+  MemoryOverlayPathParams,
+  MemoryOverlayPrincipal,
+  MemoryOverlayPrincipalParams,
+  MemoryOverlayPromptParams,
+  MemoryOverlayReadResult,
+  MemoryOverlayRegistrationResult,
+  MemoryOverlayStoreParams,
+  MemoryOverlayStoreResult,
+  MemoryStoreDurability,
+  MemoryStoreTarget,
   MaumauPluginService,
   MaumauPluginServiceContext,
   ProviderAuthContext,
@@ -110,6 +123,12 @@ export {
   optionalStringEnum,
   stringEnum,
 } from "../agents/schema/typebox.js";
+export {
+  jsonResult,
+  readNumberParam,
+  readStringArrayParam,
+  readStringParam,
+} from "../agents/tools/common.js";
 export {
   DEFAULT_SECRET_FILE_MAX_BYTES,
   loadSecretFileSync,

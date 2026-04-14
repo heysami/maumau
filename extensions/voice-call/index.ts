@@ -4,15 +4,63 @@ import {
   type GatewayRequestHandlerOptions,
   type MaumauPluginApi,
 } from "./api.js";
+import { createVoiceCallBackend, type VoiceCallBackend } from "./src/backend.js";
 import { registerVoiceCallCli } from "./src/cli.js";
 import {
   VoiceCallConfigSchema,
+  normalizeVoiceCallConfig,
+  type VoiceCallConfigInput,
+  type VoiceCallStreamingConfig,
   resolveVoiceCallConfig,
   validateProviderConfig,
   type VoiceCallConfig,
 } from "./src/config.js";
 import type { CoreConfig } from "./src/core-bridge.js";
-import { createVoiceCallRuntime, type VoiceCallRuntime } from "./src/runtime.js";
+
+const SHARED_VOICE_CALL_RUNTIME_STATE = Symbol.for("maumau.voiceCall.sharedRuntimeState");
+
+type SharedVoiceCallRuntimeEntry = {
+  runtime: VoiceCallBackend | null;
+  runtimePromise: Promise<VoiceCallBackend> | null;
+};
+
+type SharedVoiceCallRuntimeState = {
+  entries: Map<string, SharedVoiceCallRuntimeEntry>;
+};
+
+function getSharedVoiceCallRuntimeState(): SharedVoiceCallRuntimeState {
+  const globalState = globalThis as typeof globalThis & {
+    [SHARED_VOICE_CALL_RUNTIME_STATE]?: SharedVoiceCallRuntimeState;
+  };
+  if (!globalState[SHARED_VOICE_CALL_RUNTIME_STATE]) {
+    globalState[SHARED_VOICE_CALL_RUNTIME_STATE] = {
+      entries: new Map<string, SharedVoiceCallRuntimeEntry>(),
+    };
+  }
+  return globalState[SHARED_VOICE_CALL_RUNTIME_STATE];
+}
+
+function getSharedVoiceCallRuntimeEntry(key: string): SharedVoiceCallRuntimeEntry {
+  const state = getSharedVoiceCallRuntimeState();
+  const existing = state.entries.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created: SharedVoiceCallRuntimeEntry = {
+    runtime: null,
+    runtimePromise: null,
+  };
+  state.entries.set(key, created);
+  return created;
+}
+
+function clearSharedVoiceCallRuntimeEntry(key: string): void {
+  getSharedVoiceCallRuntimeState().entries.delete(key);
+}
+
+function createSharedVoiceCallRuntimeKey(config: VoiceCallConfig): string {
+  return JSON.stringify(config);
+}
 
 const voiceCallConfigSchema = {
   parse(value: unknown): VoiceCallConfig {
@@ -27,15 +75,95 @@ const voiceCallConfigSchema = {
     const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true;
     const providerRaw = raw.provider === "log" ? "mock" : raw.provider;
     const provider = providerRaw ?? (enabled ? "mock" : undefined);
+    const modeRaw =
+      typeof raw.mode === "string" && raw.mode.trim() ? raw.mode.trim().toLowerCase() : undefined;
+    const mode = modeRaw === "vapi" ? "vapi" : "self-hosted";
+    const streamingRaw =
+      raw.streaming && typeof raw.streaming === "object" && !Array.isArray(raw.streaming)
+        ? (raw.streaming as Record<string, unknown>)
+        : undefined;
+    const streamingOpenAI =
+      streamingRaw?.openai &&
+      typeof streamingRaw.openai === "object" &&
+      !Array.isArray(streamingRaw.openai)
+        ? (streamingRaw.openai as Record<string, unknown>)
+        : undefined;
+    const streamingDeepgram =
+      streamingRaw?.deepgram &&
+      typeof streamingRaw.deepgram === "object" &&
+      !Array.isArray(streamingRaw.deepgram)
+        ? (streamingRaw.deepgram as Record<string, unknown>)
+        : undefined;
 
-    return VoiceCallConfigSchema.parse({
-      ...raw,
-      enabled,
-      provider,
-      fromNumber: raw.fromNumber ?? legacyFrom,
-    });
+    return normalizeVoiceCallConfig(
+      VoiceCallConfigSchema.parse({
+        ...raw,
+        enabled,
+        mode,
+        provider,
+        fromNumber: raw.fromNumber ?? legacyFrom,
+        streaming: streamingRaw
+          ? ({
+              ...streamingRaw,
+              openai: {
+                ...streamingOpenAI,
+                apiKey:
+                  (typeof streamingRaw.openaiApiKey === "string"
+                    ? streamingRaw.openaiApiKey
+                    : undefined) ??
+                  (typeof streamingOpenAI?.apiKey === "string"
+                    ? streamingOpenAI.apiKey
+                    : undefined),
+                model:
+                  (typeof streamingRaw.sttModel === "string" ? streamingRaw.sttModel : undefined) ??
+                  (typeof streamingOpenAI?.model === "string" ? streamingOpenAI.model : undefined),
+                silenceDurationMs:
+                  typeof streamingRaw.silenceDurationMs === "number"
+                    ? streamingRaw.silenceDurationMs
+                    : typeof streamingOpenAI?.silenceDurationMs === "number"
+                      ? streamingOpenAI.silenceDurationMs
+                      : undefined,
+                vadThreshold:
+                  typeof streamingRaw.vadThreshold === "number"
+                    ? streamingRaw.vadThreshold
+                    : typeof streamingOpenAI?.vadThreshold === "number"
+                      ? streamingOpenAI.vadThreshold
+                      : undefined,
+              },
+              deepgram: streamingDeepgram,
+            } satisfies VoiceCallConfigInput["streaming"])
+          : undefined,
+      }),
+    );
   },
   uiHints: {
+    mode: {
+      label: "Voice Mode",
+      help: "Use vapi for the simple guided setup or self-hosted for direct provider webhooks.",
+    },
+    "vapi.apiKey": {
+      label: "Vapi API Key",
+      sensitive: true,
+    },
+    "vapi.assistantId": { label: "Vapi Assistant ID" },
+    "vapi.phoneNumberId": { label: "Vapi Phone Number ID" },
+    "vapi.telephonyProvider": {
+      label: "Vapi Telephony Provider",
+      help: 'Use "twilio" for imported international numbers.',
+    },
+    "vapi.preferredLanguage": { label: "Preferred Language" },
+    "vapi.bridgeMode": {
+      label: "Vapi Bridge Mode",
+      help: 'Use "auto" for the managed Tailscale Funnel bridge or "manual-public-url" to keep a fixed public callback URL.',
+    },
+    "vapi.bridgeUrl": { label: "Maumau Bridge URL", advanced: true },
+    "vapi.bridgePath": { label: "Maumau Bridge Path", advanced: true },
+    "vapi.bridgeAuthToken": {
+      label: "Maumau Bridge Auth Token",
+      sensitive: true,
+      advanced: true,
+    },
+    "vapi.baseUrl": { label: "Vapi API Base URL", advanced: true },
     provider: {
       label: "Provider",
       help: "Use twilio, telnyx, or mock for dev/no-network.",
@@ -72,12 +200,20 @@ const voiceCallConfigSchema = {
       advanced: true,
     },
     "streaming.enabled": { label: "Enable Streaming", advanced: true },
-    "streaming.openaiApiKey": {
+    "streaming.sttProvider": { label: "Realtime STT Provider", advanced: true },
+    "streaming.languageCode": { label: "Realtime Language Code", advanced: true },
+    "streaming.openai.apiKey": {
       label: "OpenAI Realtime API Key",
       sensitive: true,
       advanced: true,
     },
-    "streaming.sttModel": { label: "Realtime STT Model", advanced: true },
+    "streaming.openai.model": { label: "OpenAI Realtime Model", advanced: true },
+    "streaming.deepgram.apiKey": {
+      label: "Deepgram Realtime API Key",
+      sensitive: true,
+      advanced: true,
+    },
+    "streaming.deepgram.model": { label: "Deepgram Realtime Model", advanced: true },
     "streaming.streamPath": { label: "Media Stream Path", advanced: true },
     "tts.provider": {
       label: "TTS Provider Override",
@@ -105,7 +241,11 @@ const voiceCallConfigSchema = {
       advanced: true,
     },
     store: { label: "Call Log Store Path", advanced: true },
-    responseModel: { label: "Response Model", advanced: true },
+    responseModel: {
+      label: "Response Model",
+      help: "Leave blank to inherit the main Maumau agent model.",
+      advanced: true,
+    },
     responseSystemPrompt: { label: "Response System Prompt", advanced: true },
     responseTimeoutMs: { label: "Response Timeout (ms)", advanced: true },
   },
@@ -147,11 +287,12 @@ const VoiceCallToolSchema = Type.Union([
 export default definePluginEntry({
   id: "voice-call",
   name: "Voice Call",
-  description: "Voice-call plugin with Telnyx/Twilio/Plivo providers",
+  description: "Voice-call plugin with simple Vapi and advanced self-hosted providers",
   configSchema: voiceCallConfigSchema,
   register(api: MaumauPluginApi) {
     const config = resolveVoiceCallConfig(voiceCallConfigSchema.parse(api.pluginConfig));
     const validation = validateProviderConfig(config);
+    const sharedRuntimeKey = createSharedVoiceCallRuntimeKey(config);
 
     if (api.pluginConfig && typeof api.pluginConfig === "object") {
       const raw = api.pluginConfig as Record<string, unknown>;
@@ -164,8 +305,8 @@ export default definePluginEntry({
       }
     }
 
-    let runtimePromise: Promise<VoiceCallRuntime> | null = null;
-    let runtime: VoiceCallRuntime | null = null;
+    let runtimePromise: Promise<VoiceCallBackend> | null = null;
+    let runtime: VoiceCallBackend | null = null;
 
     const ensureRuntime = async () => {
       if (!config.enabled) {
@@ -174,28 +315,63 @@ export default definePluginEntry({
       if (!validation.valid) {
         throw new Error(validation.errors.join("; "));
       }
-      if (runtime) {
+      const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      if (sharedRuntime.runtime) {
+        runtime = sharedRuntime.runtime;
+        runtimePromise ??= sharedRuntime.runtimePromise ?? Promise.resolve(sharedRuntime.runtime);
+        return sharedRuntime.runtime;
+      }
+      if (sharedRuntime.runtimePromise) {
+        runtimePromise = sharedRuntime.runtimePromise;
+        runtime = await sharedRuntime.runtimePromise;
         return runtime;
       }
-      if (!runtimePromise) {
-        runtimePromise = createVoiceCallRuntime({
-          config,
-          coreConfig: api.config as CoreConfig,
-          agentRuntime: api.runtime.agent,
-          ttsRuntime: api.runtime.tts,
-          logger: api.logger,
-        });
-      }
+      const nextRuntimePromise = createVoiceCallBackend({
+        config,
+        coreConfig: api.config as CoreConfig,
+        agentRuntime: api.runtime.agent,
+        ttsRuntime: api.runtime.tts,
+        logger: api.logger,
+      });
+      runtimePromise = nextRuntimePromise;
+      sharedRuntime.runtimePromise = nextRuntimePromise;
       try {
-        runtime = await runtimePromise;
+        runtime = await nextRuntimePromise;
+        sharedRuntime.runtime = runtime;
       } catch (err) {
         // Reset so the next call can retry instead of caching the
         // rejected promise forever (which also leaves the port orphaned
         // if the server started before the failure).  See: #32387
+        if (sharedRuntime.runtimePromise === nextRuntimePromise) {
+          sharedRuntime.runtimePromise = null;
+        }
         runtimePromise = null;
         throw err;
       }
       return runtime;
+    };
+
+    const stopSharedRuntime = async () => {
+      const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      const runtimeToStop =
+        runtime ??
+        sharedRuntime.runtime ??
+        (runtimePromise
+          ? await runtimePromise.catch(() => null)
+          : sharedRuntime.runtimePromise
+            ? await sharedRuntime.runtimePromise.catch(() => null)
+            : null);
+      try {
+        if (runtimeToStop) {
+          await runtimeToStop.stop();
+        }
+      } finally {
+        runtimePromise = null;
+        runtime = null;
+        sharedRuntime.runtime = null;
+        sharedRuntime.runtimePromise = null;
+        clearSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+      }
     };
 
     const sendError = (respond: (ok: boolean, payload?: unknown) => void, err: unknown) => {
@@ -212,13 +388,13 @@ export default definePluginEntry({
       return { rt, callId, message } as const;
     };
     const initiateCallAndRespond = async (params: {
-      rt: VoiceCallRuntime;
+      rt: VoiceCallBackend;
       respond: GatewayRequestHandlerOptions["respond"];
       to: string;
       message?: string;
       mode?: "notify" | "conversation";
     }) => {
-      const result = await params.rt.manager.initiateCall(params.to, undefined, {
+      const result = await params.rt.actions.initiateCall(params.to, undefined, {
         message: params.message,
         mode: params.mode,
       });
@@ -300,7 +476,7 @@ export default definePluginEntry({
           await respondToCallMessageAction({
             requestParams: params,
             respond,
-            action: (request) => request.rt.manager.continueCall(request.callId, request.message),
+            action: (request) => request.rt.actions.continueCall(request.callId, request.message),
             failure: "continue failed",
             includeTranscript: true,
           });
@@ -317,7 +493,7 @@ export default definePluginEntry({
           await respondToCallMessageAction({
             requestParams: params,
             respond,
-            action: (request) => request.rt.manager.speak(request.callId, request.message),
+            action: (request) => request.rt.actions.speak(request.callId, request.message),
             failure: "speak failed",
           });
         } catch (err) {
@@ -336,7 +512,7 @@ export default definePluginEntry({
             return;
           }
           const rt = await ensureRuntime();
-          const result = await rt.manager.endCall(callId);
+          const result = await rt.actions.endCall(callId);
           if (!result.success) {
             respond(false, { error: result.error || "end failed" });
             return;
@@ -363,7 +539,8 @@ export default definePluginEntry({
             return;
           }
           const rt = await ensureRuntime();
-          const call = rt.manager.getCall(raw) || rt.manager.getCallByProviderCallId(raw);
+          const call =
+            (await rt.actions.getCall(raw)) || (await rt.actions.getCallByProviderCallId(raw));
           if (!call) {
             respond(true, { found: false });
             return;
@@ -426,7 +603,7 @@ export default definePluginEntry({
                 if (!to) {
                   throw new Error("to required");
                 }
-                const result = await rt.manager.initiateCall(to, undefined, {
+                const result = await rt.actions.initiateCall(to, undefined, {
                   message,
                   mode:
                     params.mode === "notify" || params.mode === "conversation"
@@ -444,7 +621,7 @@ export default definePluginEntry({
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
-                const result = await rt.manager.continueCall(callId, message);
+                const result = await rt.actions.continueCall(callId, message);
                 if (!result.success) {
                   throw new Error(result.error || "continue failed");
                 }
@@ -456,7 +633,7 @@ export default definePluginEntry({
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
-                const result = await rt.manager.speak(callId, message);
+                const result = await rt.actions.speak(callId, message);
                 if (!result.success) {
                   throw new Error(result.error || "speak failed");
                 }
@@ -467,7 +644,7 @@ export default definePluginEntry({
                 if (!callId) {
                   throw new Error("callId required");
                 }
-                const result = await rt.manager.endCall(callId);
+                const result = await rt.actions.endCall(callId);
                 if (!result.success) {
                   throw new Error(result.error || "end failed");
                 }
@@ -479,7 +656,8 @@ export default definePluginEntry({
                   throw new Error("callId required");
                 }
                 const call =
-                  rt.manager.getCall(callId) || rt.manager.getCallByProviderCallId(callId);
+                  (await rt.actions.getCall(callId)) ||
+                  (await rt.actions.getCallByProviderCallId(callId));
                 return json(call ? { found: true, call } : { found: false });
               }
             }
@@ -491,7 +669,8 @@ export default definePluginEntry({
             if (!sid) {
               throw new Error("sid required for status");
             }
-            const call = rt.manager.getCall(sid) || rt.manager.getCallByProviderCallId(sid);
+            const call =
+              (await rt.actions.getCall(sid)) || (await rt.actions.getCallByProviderCallId(sid));
             return json(call ? { found: true, call } : { found: false });
           }
 
@@ -502,7 +681,7 @@ export default definePluginEntry({
           if (!to) {
             throw new Error("to required for call");
           }
-          const result = await rt.manager.initiateCall(to, undefined, {
+          const result = await rt.actions.initiateCall(to, undefined, {
             message:
               typeof params.message === "string" && params.message.trim()
                 ? params.message.trim()
@@ -531,6 +710,32 @@ export default definePluginEntry({
       { commands: ["voicecall"] },
     );
 
+    if (config.mode === "vapi" && config.vapi.bridgePath) {
+      api.registerHttpRoute({
+        path: config.vapi.bridgePath,
+        auth: "plugin",
+        match: "exact",
+        handler: async (req, res) => {
+          try {
+            const rt = await ensureRuntime();
+            const handler = rt.httpHandlers.find((entry) => entry.path === config.vapi.bridgePath);
+            if (!handler) {
+              return false;
+            }
+            return await handler.handler({ req, res, logger: api.logger });
+          } catch (err) {
+            api.logger.warn?.(`[voice-call] Vapi bridge failed: ${String(err)}`);
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.end("Internal Server Error");
+            }
+            return true;
+          }
+        },
+      });
+    }
+
     api.registerService({
       id: "voicecall",
       start: async () => {
@@ -541,23 +746,23 @@ export default definePluginEntry({
           await ensureRuntime();
         } catch (err) {
           api.logger.error(
-            `[voice-call] Failed to start runtime: ${
+            `[voice-call] Failed to start backend: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
         }
       },
       stop: async () => {
-        if (!runtimePromise) {
+        const sharedRuntime = getSharedVoiceCallRuntimeEntry(sharedRuntimeKey);
+        if (
+          !runtimePromise &&
+          !runtime &&
+          !sharedRuntime.runtime &&
+          !sharedRuntime.runtimePromise
+        ) {
           return;
         }
-        try {
-          const rt = await runtimePromise;
-          await rt.stop();
-        } finally {
-          runtimePromise = null;
-          runtime = null;
-        }
+        await stopSharedRuntime();
       },
     });
   },

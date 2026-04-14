@@ -10,9 +10,36 @@ enum ConfigStore {
         var loadRemote: (@MainActor @Sendable () async -> [String: Any])?
         var saveRemote: (@MainActor @Sendable ([String: Any]) async throws -> Void)?
         var loadGateway: (@MainActor @Sendable () async -> [String: Any]?)?
-        var saveGateway: (@MainActor @Sendable ([String: Any]) async throws -> Void)?
+        var saveGateway: (@MainActor @Sendable ([String: Any]) async throws -> GatewaySaveResult)?
+        var waitForLocalGatewayRestart: (@MainActor @Sendable (GatewaySaveReload) async throws -> Void)?
         var loadConfigFile: (@MainActor @Sendable () -> [String: Any])?
         var saveConfigFile: (@MainActor @Sendable ([String: Any]) -> Void)?
+    }
+
+    struct GatewaySaveReload: Sendable, Equatable {
+        let restartExpected: Bool
+        let debounceMs: Int
+        let deferralTimeoutMs: Int
+
+        var shutdownTimeoutMs: Int {
+            max(1_000, self.debounceMs + self.deferralTimeoutMs + 1_000)
+        }
+    }
+
+    struct GatewaySaveResult: Sendable, Equatable {
+        var hash: String?
+        var reload: GatewaySaveReload?
+    }
+
+    private struct GatewayConfigSetReloadResponse: Decodable {
+        let restartExpected: Bool?
+        let debounceMs: Int?
+        let deferralTimeoutMs: Int?
+    }
+
+    private struct GatewayConfigSetResponse: Decodable {
+        let hash: String?
+        let reload: GatewayConfigSetReloadResponse?
     }
 
     private actor OverrideStore {
@@ -23,7 +50,36 @@ enum ConfigStore {
         }
     }
 
+    #if DEBUG
+    private actor TestOverrideLeaseCoordinator {
+        private var held = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func acquire() async {
+            if !self.held {
+                self.held = true
+                return
+            }
+            await withCheckedContinuation { continuation in
+                self.waiters.append(continuation)
+            }
+        }
+
+        func release() {
+            guard !self.waiters.isEmpty else {
+                self.held = false
+                return
+            }
+            let continuation = self.waiters.removeFirst()
+            continuation.resume()
+        }
+    }
+    #endif
+
     private static let overrideStore = OverrideStore()
+    #if DEBUG
+    private static let testOverrideLeaseCoordinator = TestOverrideLeaseCoordinator()
+    #endif
     @MainActor private static var lastHash: String?
     private static let redactedSentinel = "__MAUMAU_REDACTED__"
 
@@ -60,18 +116,41 @@ enum ConfigStore {
             if let override = overrides.saveRemote {
                 try await override(root)
             } else {
-                try await self.saveToGateway(root)
+                let result = try await self.saveToGateway(root)
+                if let hash = result.hash {
+                    self.lastHash = hash
+                }
             }
         } else {
             if let override = overrides.saveLocal {
                 override(root)
             } else {
+                let initialListenerPid = await self.currentLocalGatewayListenerPid()
+                let restartPushes = await GatewayConnection.shared.subscribe(bufferingNewest: 32)
                 do {
-                    try await self.saveToGateway(root)
+                    let result = try await self.saveToGateway(root)
+                    if let hash = result.hash {
+                        self.lastHash = hash
+                    }
+                    try await self.waitForLocalGatewayRestartIfNeeded(
+                        result.reload,
+                        pushes: restartPushes,
+                        initialListenerPid: initialListenerPid,
+                        override: overrides.waitForLocalGatewayRestart)
                 } catch {
                     if self.shouldRetryGatewaySave(error) {
                         _ = await self.loadFromGateway()
-                        try await self.saveToGateway(root)
+                        let retryInitialListenerPid = await self.currentLocalGatewayListenerPid()
+                        let retryPushes = await GatewayConnection.shared.subscribe(bufferingNewest: 32)
+                        let result = try await self.saveToGateway(root)
+                        if let hash = result.hash {
+                            self.lastHash = hash
+                        }
+                        try await self.waitForLocalGatewayRestartIfNeeded(
+                            result.reload,
+                            pushes: retryPushes,
+                            initialListenerPid: retryInitialListenerPid,
+                            override: overrides.waitForLocalGatewayRestart)
                         return
                     }
                     guard self.shouldFallbackToLocalSave(error) else {
@@ -110,11 +189,10 @@ enum ConfigStore {
     }
 
     @MainActor
-    private static func saveToGateway(_ root: [String: Any]) async throws {
+    private static func saveToGateway(_ root: [String: Any]) async throws -> GatewaySaveResult {
         let overrides = await self.overrideStore.overrides
         if let saveGateway = overrides.saveGateway {
-            try await saveGateway(root)
-            return
+            return try await saveGateway(root)
         }
         if self.lastHash == nil {
             _ = await self.loadFromGateway()
@@ -129,11 +207,17 @@ enum ConfigStore {
         if let baseHash = self.lastHash {
             params["baseHash"] = AnyCodable(baseHash)
         }
-        _ = try await GatewayConnection.shared.requestRaw(
+        let response: GatewayConfigSetResponse = try await GatewayConnection.shared.requestDecoded(
             method: .configSet,
             params: params,
             timeoutMs: 10000)
-        _ = await self.loadFromGateway()
+        let reload = response.reload.map {
+            GatewaySaveReload(
+                restartExpected: $0.restartExpected ?? false,
+                debounceMs: max(0, $0.debounceMs ?? 0),
+                deferralTimeoutMs: max(0, $0.deferralTimeoutMs ?? 0))
+        }
+        return GatewaySaveResult(hash: response.hash, reload: reload)
     }
 
     private static func shouldRetryGatewaySave(_ error: Error) -> Bool {
@@ -146,6 +230,136 @@ enum ConfigStore {
     private static func shouldFallbackToLocalSave(_ error: Error) -> Bool {
         !(error is GatewayResponseError || error is GatewayDecodingError)
     }
+
+    @MainActor
+    private static func waitForLocalGatewayRestartIfNeeded(
+        _ reload: GatewaySaveReload?,
+        pushes: AsyncStream<GatewayPush>,
+        initialListenerPid: Int32?,
+        override: (@MainActor @Sendable (GatewaySaveReload) async throws -> Void)?
+    ) async throws {
+        guard let reload, reload.restartExpected else { return }
+        if let override {
+            try await override(reload)
+            return
+        }
+        try await self.waitForLocalGatewayRestart(
+            reload,
+            pushes: pushes,
+            initialListenerPid: initialListenerPid)
+    }
+
+    @MainActor
+    private static func waitForLocalGatewayRestart(
+        _ reload: GatewaySaveReload,
+        pushes: AsyncStream<GatewayPush>,
+        initialListenerPid: Int32?
+    ) async throws {
+        GatewayProcessManager.shared.setActive(true)
+
+        let observedShutdown = await self.awaitGatewayRestartBegan(
+            pushes: pushes,
+            timeoutMs: reload.shutdownTimeoutMs,
+            initialListenerPid: initialListenerPid)
+        guard observedShutdown else {
+            throw NSError(domain: "ConfigStore", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Gateway restart did not begin before timeout.",
+            ])
+        }
+
+        let ready = await GatewayProcessManager.shared.waitForGatewayReady(
+            timeout: GatewayProcessManager.localGatewayStartupTimeout)
+        guard ready else {
+            throw NSError(domain: "ConfigStore", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Gateway did not become ready after restart.",
+            ])
+        }
+
+        await GatewayEndpointStore.shared.refresh()
+    }
+
+    private static func currentLocalGatewayListenerPid() async -> Int32? {
+        await PortGuardian.shared.describe(port: GatewayEnvironment.gatewayPort())?.pid
+    }
+
+    private static func awaitGatewayRestartBegan(
+        pushes: AsyncStream<GatewayPush>,
+        timeoutMs: Int,
+        initialListenerPid: Int32?,
+        currentListenerPid: (@Sendable () async -> Int32?)? = nil,
+        probeGatewayHealth: (@Sendable () async -> Bool)? = nil
+    ) async -> Bool {
+        let currentListenerPid = currentListenerPid ?? { await self.currentLocalGatewayListenerPid() }
+        let probeGatewayHealth = probeGatewayHealth ?? {
+            await PortGuardian.shared.probeGatewayHealth(
+                port: GatewayEnvironment.gatewayPort(),
+                timeout: 0.5)
+        }
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await push in pushes {
+                    guard case let .event(evt) = push else { continue }
+                    if evt.event == "shutdown" {
+                        return true
+                    }
+                }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+                return false
+            }
+            if initialListenerPid != nil {
+                group.addTask {
+                    let deadline = Date().addingTimeInterval(Double(max(0, timeoutMs)) / 1000)
+                    while Date() < deadline {
+                        if await currentListenerPid() != initialListenerPid {
+                            return true
+                        }
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    }
+                    return false
+                }
+            }
+            group.addTask {
+                let deadline = Date().addingTimeInterval(Double(max(0, timeoutMs)) / 1000)
+                while Date() < deadline {
+                    // `config.set` just succeeded against a healthy gateway, so the first
+                    // subsequent health failure is strong evidence that the planned restart
+                    // has actually begun even if the shared socket missed its shutdown push.
+                    if !(await probeGatewayHealth()) {
+                        return true
+                    }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+                return false
+            }
+            group.addTask {
+                let delayNs = UInt64(max(0, timeoutMs)) * 1_000_000
+                try? await Task.sleep(nanoseconds: delayNs)
+                return false
+            }
+            let result = await group.next() ?? false
+            group.cancelAll()
+            return result
+        }
+    }
+
+    #if DEBUG
+    static func _testAwaitGatewayRestartBegan(
+        pushes: AsyncStream<GatewayPush>,
+        timeoutMs: Int,
+        initialListenerPid: Int32?,
+        currentListenerPid: @escaping @Sendable () async -> Int32?,
+        probeGatewayHealth: @escaping @Sendable () async -> Bool
+    ) async -> Bool {
+        await self.awaitGatewayRestartBegan(
+            pushes: pushes,
+            timeoutMs: timeoutMs,
+            initialListenerPid: initialListenerPid,
+            currentListenerPid: currentListenerPid,
+            probeGatewayHealth: probeGatewayHealth)
+    }
+    #endif
 
     @MainActor
     private static func restoreRedactedValuesForLocalFallback(
@@ -200,6 +414,25 @@ enum ConfigStore {
 
     static func _testClearOverrides() async {
         await self.overrideStore.setOverride(.init())
+    }
+
+    @MainActor
+    static func _withTestOverrides<T>(
+        _ overrides: Overrides,
+        operation: @MainActor () async throws -> T
+    ) async rethrows -> T {
+        await self.testOverrideLeaseCoordinator.acquire()
+        await self.overrideStore.setOverride(overrides)
+        do {
+            let result = try await operation()
+            await self.overrideStore.setOverride(.init())
+            await self.testOverrideLeaseCoordinator.release()
+            return result
+        } catch {
+            await self.overrideStore.setOverride(.init())
+            await self.testOverrideLeaseCoordinator.release()
+            throw error
+        }
     }
 
     @MainActor

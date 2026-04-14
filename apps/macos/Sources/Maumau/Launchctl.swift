@@ -32,6 +32,7 @@ struct LaunchAgentPlistSnapshot: Equatable {
     let stdoutPath: String?
     let stderrPath: String?
 
+    let configPath: String?
     let port: Int?
     let bind: String?
     let token: String?
@@ -57,6 +58,7 @@ enum LaunchAgentPlist {
             .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         let stderrPath = (root["StandardErrorPath"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let configPath = env["MAUMAU_CONFIG_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         let port = Self.extractFlagInt(programArguments, flag: "--port")
         let bind = Self.extractFlagString(programArguments, flag: "--bind")?.lowercased()
         let token = env["MAUMAU_GATEWAY_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
@@ -66,6 +68,7 @@ enum LaunchAgentPlist {
             environment: env,
             stdoutPath: stdoutPath,
             stderrPath: stderrPath,
+            configPath: configPath,
             port: port,
             bind: bind,
             token: token,

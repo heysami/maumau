@@ -48,6 +48,26 @@ import {
   TalkConfigParamsSchema,
   type TalkConfigResult,
   TalkConfigResultSchema,
+  type TeamPromptEditAgentIdentityPatch,
+  TeamPromptEditAgentIdentityPatchSchema,
+  type TeamPromptEditAgentPatch,
+  TeamPromptEditAgentPatchSchema,
+  type TeamPromptEditCrossTeamLink,
+  TeamPromptEditCrossTeamLinkSchema,
+  type TeamPromptEditLifecycleStage,
+  TeamPromptEditLifecycleStageSchema,
+  type TeamPromptEditMember,
+  TeamPromptEditMemberSchema,
+  type TeamPromptEditParams,
+  TeamPromptEditParamsSchema,
+  type TeamPromptEditResult,
+  TeamPromptEditResultSchema,
+  type TeamPromptEditTeamPatch,
+  TeamPromptEditTeamPatchSchema,
+  type TeamPromptEditWorkflowContract,
+  TeamPromptEditWorkflowContractSchema,
+  type TeamPromptEditWorkflowPatch,
+  TeamPromptEditWorkflowPatchSchema,
   type TalkSpeakParams,
   TalkSpeakParamsSchema,
   type TalkSpeakResult,
@@ -68,6 +88,12 @@ import {
   ConfigApplyParamsSchema,
   type ConfigGetParams,
   ConfigGetParamsSchema,
+  type DashboardBusinessParams,
+  type DashboardProjectsApplyBlueprintParams,
+  type DashboardProjectsParams,
+  type DashboardTeamsSnapshotParams,
+  type DashboardWalletParams,
+  type DashboardWorkshopSaveParams,
   type ConfigPatchParams,
   ConfigPatchParamsSchema,
   type ConfigSchemaLookupParams,
@@ -80,6 +106,12 @@ import {
   ConfigSchemaResponseSchema,
   type ConfigSetParams,
   ConfigSetParamsSchema,
+  DashboardBusinessParamsSchema,
+  DashboardProjectsApplyBlueprintParamsSchema,
+  DashboardProjectsParamsSchema,
+  DashboardTeamsSnapshotParamsSchema,
+  DashboardWalletParamsSchema,
+  DashboardWorkshopSaveParamsSchema,
   type ConnectParams,
   ConnectParamsSchema,
   type CronAddParams,
@@ -138,8 +170,14 @@ import {
   LogsTailParamsSchema,
   type LogsTailResult,
   LogsTailResultSchema,
+  type ModelsImageGenerationProvidersParams,
+  ModelsImageGenerationProvidersParamsSchema,
+  type ModelsImageGenerationProvidersResult,
+  ModelsImageGenerationProvidersResultSchema,
   type ModelsListParams,
   ModelsListParamsSchema,
+  type ModelsListResult,
+  ModelsListResultSchema,
   type PluginsStatusParams,
   PluginsStatusParamsSchema,
   type NodeDescribeParams,
@@ -364,6 +402,23 @@ export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
 export const validateSessionsUsageParams =
   ajv.compile<SessionsUsageParams>(SessionsUsageParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
+export const validateDashboardBusinessParams = ajv.compile<DashboardBusinessParams>(
+  DashboardBusinessParamsSchema,
+);
+export const validateDashboardProjectsParams = ajv.compile<DashboardProjectsParams>(
+  DashboardProjectsParamsSchema,
+);
+export const validateDashboardProjectsApplyBlueprintParams =
+  ajv.compile<DashboardProjectsApplyBlueprintParams>(DashboardProjectsApplyBlueprintParamsSchema);
+export const validateDashboardTeamsSnapshotParams = ajv.compile<DashboardTeamsSnapshotParams>(
+  DashboardTeamsSnapshotParamsSchema,
+);
+export const validateDashboardWalletParams = ajv.compile<DashboardWalletParams>(
+  DashboardWalletParamsSchema,
+);
+export const validateDashboardWorkshopSaveParams = ajv.compile<DashboardWorkshopSaveParams>(
+  DashboardWorkshopSaveParamsSchema,
+);
 export const validateConfigSetParams = ajv.compile<ConfigSetParams>(ConfigSetParamsSchema);
 export const validateConfigApplyParams = ajv.compile<ConfigApplyParams>(ConfigApplyParamsSchema);
 export const validateConfigPatchParams = ajv.compile<ConfigPatchParams>(ConfigPatchParamsSchema);
@@ -379,6 +434,12 @@ export const validateWizardNextParams = ajv.compile<WizardNextParams>(WizardNext
 export const validateWizardCancelParams = ajv.compile<WizardCancelParams>(WizardCancelParamsSchema);
 export const validateWizardStatusParams = ajv.compile<WizardStatusParams>(WizardStatusParamsSchema);
 export const validateTalkModeParams = ajv.compile<TalkModeParams>(TalkModeParamsSchema);
+export const validateTeamPromptEditParams = ajv.compile<TeamPromptEditParams>(
+  TeamPromptEditParamsSchema,
+);
+export const validateTeamPromptEditResult = ajv.compile<TeamPromptEditResult>(
+  TeamPromptEditResultSchema,
+);
 export const validateTalkConfigParams = ajv.compile<TalkConfigParams>(TalkConfigParamsSchema);
 export const validateTalkConfigResult = ajv.compile<TalkConfigResult>(TalkConfigResultSchema);
 export const validateTalkSpeakParams = ajv.compile<TalkSpeakParams>(TalkSpeakParamsSchema);
@@ -390,6 +451,8 @@ export const validateChannelsLogoutParams = ajv.compile<ChannelsLogoutParams>(
   ChannelsLogoutParamsSchema,
 );
 export const validateModelsListParams = ajv.compile<ModelsListParams>(ModelsListParamsSchema);
+export const validateModelsImageGenerationProvidersParams =
+  ajv.compile<ModelsImageGenerationProvidersParams>(ModelsImageGenerationProvidersParamsSchema);
 export const validatePluginsStatusParams =
   ajv.compile<PluginsStatusParams>(PluginsStatusParamsSchema);
 export const validateSkillsStatusParams = ajv.compile<SkillsStatusParams>(SkillsStatusParamsSchema);
@@ -533,6 +596,10 @@ export {
   SessionsCompactParamsSchema,
   SessionsUsageParamsSchema,
   ConfigGetParamsSchema,
+  DashboardBusinessParamsSchema,
+  DashboardProjectsParamsSchema,
+  DashboardProjectsApplyBlueprintParamsSchema,
+  DashboardTeamsSnapshotParamsSchema,
   ConfigSetParamsSchema,
   ConfigApplyParamsSchema,
   ConfigPatchParamsSchema,
@@ -548,6 +615,16 @@ export {
   WizardNextResultSchema,
   WizardStartResultSchema,
   WizardStatusResultSchema,
+  TeamPromptEditParamsSchema,
+  TeamPromptEditResultSchema,
+  TeamPromptEditTeamPatchSchema,
+  TeamPromptEditMemberSchema,
+  TeamPromptEditCrossTeamLinkSchema,
+  TeamPromptEditWorkflowPatchSchema,
+  TeamPromptEditWorkflowContractSchema,
+  TeamPromptEditLifecycleStageSchema,
+  TeamPromptEditAgentPatchSchema,
+  TeamPromptEditAgentIdentityPatchSchema,
   TalkConfigParamsSchema,
   TalkConfigResultSchema,
   TalkSpeakParamsSchema,
@@ -573,7 +650,10 @@ export {
   AgentsFilesSetResultSchema,
   AgentsListParamsSchema,
   AgentsListResultSchema,
+  ModelsImageGenerationProvidersParamsSchema,
+  ModelsImageGenerationProvidersResultSchema,
   ModelsListParamsSchema,
+  ModelsListResultSchema,
   PluginsStatusParamsSchema,
   SkillsStatusParamsSchema,
   ToolsCatalogParamsSchema,
@@ -627,11 +707,22 @@ export type {
   DevicePairApproveParams,
   DevicePairRejectParams,
   ConfigGetParams,
+  DashboardTeamsSnapshotParams,
   ConfigSetParams,
   ConfigApplyParams,
   ConfigPatchParams,
   ConfigSchemaParams,
   ConfigSchemaResponse,
+  TeamPromptEditAgentIdentityPatch,
+  TeamPromptEditAgentPatch,
+  TeamPromptEditCrossTeamLink,
+  TeamPromptEditLifecycleStage,
+  TeamPromptEditMember,
+  TeamPromptEditParams,
+  TeamPromptEditResult,
+  TeamPromptEditTeamPatch,
+  TeamPromptEditWorkflowContract,
+  TeamPromptEditWorkflowPatch,
   WizardStartParams,
   WizardNextParams,
   WizardCancelParams,
@@ -707,6 +798,9 @@ export type {
   ExecApprovalsSnapshot,
   LogsTailParams,
   LogsTailResult,
+  ModelsImageGenerationProvidersParams,
+  ModelsImageGenerationProvidersResult,
+  ModelsListResult,
   PollParams,
   UpdateRunParams,
   ChatInjectParams,

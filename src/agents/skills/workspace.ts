@@ -648,6 +648,17 @@ type WorkspaceSkillBuildOptions = {
   eligibility?: SkillEligibilityContext;
 };
 
+function buildPromptEntriesFromResolvedSkills(skills?: Skill[]): SkillEntry[] {
+  return (skills ?? []).map((skill) => ({
+    skill,
+    frontmatter: {},
+    invocation: {
+      userInvocable: true,
+      disableModelInvocation: skill.disableModelInvocation === true,
+    },
+  }));
+}
+
 function resolveWorkspaceSkillPromptState(
   workspaceDir: string,
   opts?: WorkspaceSkillBuildOptions,
@@ -698,16 +709,20 @@ export function resolveSkillsPromptForRun(params: {
   config?: MaumauConfig;
   workspaceDir: string;
 }): string {
-  const snapshotPrompt = params.skillsSnapshot?.prompt?.trim();
-  if (snapshotPrompt) {
-    return snapshotPrompt;
-  }
-  if (params.entries && params.entries.length > 0) {
+  const promptEntries =
+    params.entries && params.entries.length > 0
+      ? params.entries
+      : buildPromptEntriesFromResolvedSkills(params.skillsSnapshot?.resolvedSkills);
+  if (promptEntries.length > 0) {
     const prompt = buildWorkspaceSkillsPrompt(params.workspaceDir, {
-      entries: params.entries,
+      entries: promptEntries,
       config: params.config,
     });
     return prompt.trim() ? prompt : "";
+  }
+  const snapshotPrompt = params.skillsSnapshot?.prompt?.trim();
+  if (snapshotPrompt) {
+    return snapshotPrompt;
   }
   return "";
 }

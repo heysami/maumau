@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseThemeSelection, resolveSystemTheme, resolveTheme } from "./theme.ts";
+import {
+  normalizeStoredThemeSelection,
+  parseThemeSelection,
+  resolveSystemTheme,
+  resolveTheme,
+} from "./theme.ts";
 
 describe("resolveTheme", () => {
   it("resolves named theme families when mode is provided", () => {
@@ -31,6 +36,21 @@ describe("parseThemeSelection", () => {
     expect(parseThemeSelection("fieldmanual", undefined)).toEqual({
       theme: "dash",
       mode: "dark",
+    });
+  });
+
+  it("defaults unknown selections to the fixed light-mode baseline", () => {
+    expect(parseThemeSelection(undefined, undefined)).toEqual({
+      theme: "dash",
+      mode: "light",
+    });
+  });
+
+  it("migrates the old claw/system default to dash/light", () => {
+    expect(normalizeStoredThemeSelection("claw", "system", undefined)).toEqual({
+      theme: "dash",
+      mode: "light",
+      migrated: true,
     });
   });
 });

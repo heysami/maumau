@@ -9,7 +9,6 @@ final class GatewayConnectivityCoordinator {
 
     private let logger = Logger(subsystem: "ai.maumau", category: "gateway.connectivity")
     private var endpointTask: Task<Void, Never>?
-    private var lastResolvedEndpoint: ReadyEndpointIdentity?
 
     private(set) var endpointState: GatewayEndpointState?
     private(set) var resolvedURL: URL?
@@ -36,53 +35,37 @@ final class GatewayConnectivityCoordinator {
         return Self.hostLabel(for: url)
     }
 
+    static func shouldRefreshControlChannel(
+        previous: GatewayEndpointState?,
+        next: GatewayEndpointState) -> Bool
+    {
+        guard case let .ready(nextMode, nextURL, nextToken, nextPassword) = next else { return false }
+        guard let previous else { return true }
+        guard case let .ready(previousMode, previousURL, previousToken, previousPassword) = previous else {
+            return true
+        }
+        return previousMode != nextMode ||
+            previousURL != nextURL ||
+            previousToken != nextToken ||
+            previousPassword != nextPassword
+    }
+
     private func handleEndpointState(_ state: GatewayEndpointState) {
+        let previousState = self.endpointState
         self.endpointState = state
         switch state {
-        case let .ready(mode, url, token, password):
+        case let .ready(mode, url, _, _):
             self.resolvedMode = mode
             self.resolvedURL = url
             self.resolvedHostLabel = Self.hostLabel(for: url)
-            let endpoint = ReadyEndpointIdentity(
-                mode: mode,
-                url: url,
-                token: token,
-                password: password)
-            if Self.shouldRefreshControlChannel(
-                previous: self.lastResolvedEndpoint,
-                next: endpoint)
-            {
-                self.lastResolvedEndpoint = endpoint
+            if Self.shouldRefreshControlChannel(previous: previousState, next: state) {
                 Task { await ControlChannel.shared.refreshEndpoint(reason: "endpoint changed") }
-            } else {
-                self.lastResolvedEndpoint = endpoint
             }
         case let .connecting(mode, _):
             self.resolvedMode = mode
         case let .unavailable(mode, _):
             self.resolvedMode = mode
         }
-    }
-
-    struct ReadyEndpointIdentity: Equatable {
-        let mode: AppState.ConnectionMode
-        let url: URL
-        let token: String?
-        let password: String?
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.mode == rhs.mode &&
-                lhs.url.absoluteString == rhs.url.absoluteString &&
-                lhs.token == rhs.token &&
-                lhs.password == rhs.password
-        }
-    }
-
-    nonisolated static func shouldRefreshControlChannel(
-        previous: ReadyEndpointIdentity?,
-        next: ReadyEndpointIdentity
-    ) -> Bool {
-        previous != next
     }
 
     private static func hostLabel(for url: URL) -> String {

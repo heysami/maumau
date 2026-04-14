@@ -152,6 +152,12 @@ export class ExecApprovalManager {
     return entry?.record ?? null;
   }
 
+  listPending(): ExecApprovalRecord[] {
+    return Array.from(this.pending.values())
+      .map((entry) => entry.record)
+      .filter((record) => record.resolvedAtMs === undefined);
+  }
+
   consumeAllowOnce(recordId: string): boolean {
     const entry = this.pending.get(recordId);
     if (!entry) {

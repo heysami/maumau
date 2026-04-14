@@ -248,11 +248,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let initialOnboardingRetryDelay = Duration.milliseconds(700)
     private static let initialOnboardingMaxAttempts = 8
 
-    static func shouldApplyInitialConnectionMode(mode: AppState.ConnectionMode, onboardingSeen: Bool) -> Bool {
-        // Fresh onboarding defaults to local immediately after the window appears.
-        // Skip the stale `.unconfigured` launch apply so it cannot race in later and
-        // tear down a gateway startup that onboarding already kicked off.
-        !(mode == .unconfigured && !onboardingSeen)
+    static func shouldApplyInitialConnectionMode(mode _: AppState.ConnectionMode, onboardingSeen: Bool) -> Bool {
+        // When onboarding is incomplete, the app should not restore background gateway/tunnel
+        // state until the user relaunches and finishes setup.
+        onboardingSeen
     }
 
     static func shouldShowInitialOnboarding(seenVersion: Int, onboardingSeen: Bool) -> Bool {
@@ -357,7 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 Self.logger.info("initial onboarding show attempt \(attempt, privacy: .public)")
-                OnboardingController.shared.show()
+                OnboardingController.shared.show(requiresCompletion: !currentOnboardingSeen)
                 try? await Task.sleep(for: Self.initialOnboardingRetryDelay)
             }
 

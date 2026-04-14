@@ -33,7 +33,7 @@ extension OnboardingView {
     private func navigateToPage(_ index: Int) {
         guard index != self.currentPage else { return }
         let leavingWizard = self.activePageIndex == self.wizardPageIndex
-        if leavingWizard, !self.onboardingWizard.isComplete {
+        if leavingWizard, !self.onboardingWizard.isSatisfiedForOnboarding {
             Task {
                 await self.onboardingWizard.cancelIfRunning()
                 self.onboardingWizard.reset()
@@ -63,7 +63,7 @@ extension OnboardingView {
                                 canAdvance: self.canAdvance,
                                 requiredSetupPageIndex: self.requiredSetupPageOrderIndex,
                                 wizardPageOrderIndex: self.wizardPageOrderIndex,
-                                wizardComplete: self.onboardingWizard.isComplete)
+                                wizardComplete: self.onboardingWizard.isSatisfiedForOnboarding)
                             return OnboardingHeaderHero.StepItem(
                                 stage: step.stage,
                                 title: step.title,
@@ -81,6 +81,7 @@ extension OnboardingView {
                         self.pageView(for: pageIndex)
                             .frame(width: viewportWidth)
                             .frame(maxHeight: .infinity, alignment: .top)
+                            .clipped()
                     }
                 }
                 .offset(x: CGFloat(-self.currentPage) * viewportWidth)
@@ -115,6 +116,12 @@ extension OnboardingView {
             self.maybeDefaultToLocalConnectionMode()
             self.updateMonitoring(for: self.activePageIndex)
         }
+        .onChange(of: self.pageOrder) { oldValue, _ in
+            guard !oldValue.isEmpty else { return }
+            let clamped = min(max(0, self.currentPage), oldValue.count - 1)
+            let previousActivePageIndex = oldValue[clamped]
+            self.reconcilePageForModeChange(previousActivePageIndex: previousActivePageIndex)
+        }
         .onChange(of: self.currentPage) { _, newValue in
             self.updateMonitoring(for: self.activePageIndex(for: newValue))
         }
@@ -134,9 +141,15 @@ extension OnboardingView {
                 self.currentPage = max(0, self.pageOrder.count - 1)
             }
         }
-        .onChange(of: self.onboardingWizard.isComplete) { _, newValue in
-            guard newValue, self.activePageIndex == self.wizardPageIndex else { return }
+        .onChange(of: self.onboardingWizard.isSatisfiedForOnboarding) { oldValue, newValue in
+            guard !oldValue, newValue, self.activePageIndex == self.wizardPageIndex else { return }
             self.refreshBootstrapStatus()
+            guard Self.shouldAutoAdvanceAfterWizardCompletion(
+                mode: self.state.connectionMode,
+                browserControlEnabled: MaumauConfigFile.browserControlEnabled())
+            else {
+                return
+            }
             self.handleNext()
         }
         .onDisappear {
@@ -176,10 +189,10 @@ extension OnboardingView {
         let wizardLockIndex = self.wizardPageOrderIndex
         let hideBackButton = self.activePageIndex == self.wizardPageIndex && self.onboardingWizard.isBlocking
         let showsWizardFooterControls = self.activePageIndex == self.wizardPageIndex &&
-            !self.onboardingWizard.isComplete
+            !self.onboardingWizard.isSatisfiedForOnboarding
         let footerSlotWidth: CGFloat = 120
         let showWizardPrimaryButton = showsWizardFooterControls &&
-            !self.onboardingWizard.isComplete &&
+            !self.onboardingWizard.isSatisfiedForOnboarding &&
             self.onboardingWizard.primaryActionTitle != nil
         return Group {
             if showsWizardFooterControls {
@@ -238,42 +251,51 @@ extension OnboardingView {
                 .padding(.bottom, 13)
                 .frame(minHeight: 86, alignment: .bottom)
             } else {
-                HStack(spacing: 20) {
-                    ZStack(alignment: .leading) {
-                        Button(action: {}, label: {
-                            Label(self.strings.backButtonTitle, systemImage: "chevron.left").labelStyle(.iconOnly)
-                        })
-                        .buttonStyle(.plain)
-                        .opacity(0)
-                        .disabled(true)
+                VStack(spacing: 8) {
+                    if let onboardingFinishStatus = self.onboardingFinishStatus, !onboardingFinishStatus.isEmpty {
+                        Text(onboardingFinishStatus)
+                            .font(.caption)
+                            .foregroundStyle(self.onboardingFinishStatusIsError ? .orange : .secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                        if self.currentPage > 0 && !hideBackButton {
-                            Button(action: self.handleBack, label: {
-                                Label(self.strings.backButtonTitle, systemImage: "chevron.left")
-                                    .labelStyle(.iconOnly)
+                    HStack(spacing: 20) {
+                        ZStack(alignment: .leading) {
+                            Button(action: {}, label: {
+                                Label(self.strings.backButtonTitle, systemImage: "chevron.left").labelStyle(.iconOnly)
                             })
                             .buttonStyle(.plain)
-                            .foregroundColor(.secondary)
-                            .opacity(0.8)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            .opacity(0)
+                            .disabled(true)
+
+                            if self.currentPage > 0 && !hideBackButton {
+                                Button(action: self.handleBack, label: {
+                                    Label(self.strings.backButtonTitle, systemImage: "chevron.left")
+                                        .labelStyle(.iconOnly)
+                                })
+                                .buttonStyle(.plain)
+                                .foregroundColor(.secondary)
+                                .opacity(0.8)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            }
                         }
+                        .frame(width: footerSlotWidth, alignment: .leading)
+
+                        Spacer()
+
+                        self.pageDots(wizardLockIndex: wizardLockIndex)
+
+                        Spacer()
+
+                        Button(action: self.handleNext) {
+                            Text(self.buttonTitle)
+                                .frame(minWidth: 88)
+                        }
+                        .keyboardShortcut(.return)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!self.canAdvance)
+                        .frame(width: footerSlotWidth, alignment: .trailing)
                     }
-                    .frame(width: footerSlotWidth, alignment: .leading)
-
-                    Spacer()
-
-                    self.pageDots(wizardLockIndex: wizardLockIndex)
-
-                    Spacer()
-
-                    Button(action: self.handleNext) {
-                        Text(self.buttonTitle)
-                            .frame(minWidth: 88)
-                    }
-                    .keyboardShortcut(.return)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!self.canAdvance)
-                    .frame(width: footerSlotWidth, alignment: .trailing)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 13)
@@ -292,7 +314,7 @@ extension OnboardingView {
                     canAdvance: self.canAdvance,
                     requiredSetupPageIndex: requiredSetupPageIndex,
                     wizardPageOrderIndex: wizardLockIndex,
-                    wizardComplete: self.onboardingWizard.isComplete)
+                    wizardComplete: self.onboardingWizard.isSatisfiedForOnboarding)
                 Button {
                     withAnimation { self.currentPage = index }
                 } label: {
@@ -321,6 +343,7 @@ extension OnboardingView {
         .padding(.horizontal, 28)
         .frame(width: self.pageWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
+        .clipped()
         .id("onboarding-scroll-\(pageID)")
     }
 
@@ -365,6 +388,7 @@ extension OnboardingView {
         subtitle: String,
         systemImage: String,
         buttonTitle: String,
+        disabled: Bool = false,
         action: @escaping () -> Void) -> some View
     {
         self.featureRowContent(
@@ -374,6 +398,7 @@ extension OnboardingView {
             action: AnyView(
                 Button(buttonTitle, action: action)
                     .buttonStyle(.link)
+                    .disabled(disabled)
                     .padding(.top, 2)))
     }
 

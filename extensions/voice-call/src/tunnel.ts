@@ -11,6 +11,8 @@ export interface TunnelConfig {
   port: number;
   /** Path prefix for the tunnel (e.g., /voice/webhook) */
   path: string;
+  /** Optional HTTPS listener port for Tailscale serve/funnel */
+  httpsPort?: number;
   /** ngrok auth token (optional, enables longer sessions) */
   ngrokAuthToken?: string;
   /** ngrok custom domain (paid feature) */
@@ -215,6 +217,7 @@ export async function startTailscaleTunnel(config: {
   mode: "serve" | "funnel";
   port: number;
   path: string;
+  httpsPort?: number;
 }): Promise<TunnelResult> {
   // Get Tailscale DNS name
   const dnsName = await getTailscaleDnsName();
@@ -226,7 +229,12 @@ export async function startTailscaleTunnel(config: {
   const localUrl = `http://127.0.0.1:${config.port}${path}`;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn("tailscale", [config.mode, "--bg", "--yes", "--set-path", path, localUrl], {
+    const args = [config.mode, "--bg", "--yes"];
+    if (typeof config.httpsPort === "number" && Number.isFinite(config.httpsPort)) {
+      args.push(`--https=${Math.max(1, Math.floor(config.httpsPort))}`);
+    }
+    args.push("--set-path", path, localUrl);
+    const proc = spawn("tailscale", args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -238,7 +246,12 @@ export async function startTailscaleTunnel(config: {
     proc.on("close", (code) => {
       clearTimeout(timeout);
       if (code === 0) {
-        const publicUrl = `https://${dnsName}${path}`;
+        const normalizedPort =
+          typeof config.httpsPort === "number" && Number.isFinite(config.httpsPort)
+            ? Math.max(1, Math.floor(config.httpsPort))
+            : 443;
+        const portSuffix = normalizedPort == 443 ? "" : `:${normalizedPort}`;
+        const publicUrl = `https://${dnsName}${portSuffix}${path}`;
         console.log(`[voice-call] Tailscale ${config.mode} active: ${publicUrl}`);
 
         resolve({
@@ -299,6 +312,7 @@ export async function startTunnel(config: TunnelConfig): Promise<TunnelResult | 
         mode: "serve",
         port: config.port,
         path: config.path,
+        httpsPort: config.httpsPort,
       });
 
     case "tailscale-funnel":
@@ -306,6 +320,7 @@ export async function startTunnel(config: TunnelConfig): Promise<TunnelResult | 
         mode: "funnel",
         port: config.port,
         path: config.path,
+        httpsPort: config.httpsPort,
       });
 
     default:

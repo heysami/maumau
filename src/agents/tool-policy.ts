@@ -91,6 +91,12 @@ export function collectExplicitAllowlist(policies: Array<ToolPolicyLike | undefi
   return entries;
 }
 
+export function collectProfileCompatibilityAllowlist(
+  policies: Array<ToolPolicyLike | undefined>,
+): string[] {
+  return collectExplicitAllowlist(policies).filter((entry) => normalizeToolName(entry) !== "*");
+}
+
 export function buildPluginToolGroups<T extends { name: string }>(params: {
   tools: T[];
   toolMeta: (tool: T) => { pluginId: string } | undefined;

@@ -150,6 +150,13 @@ struct SettingsViewSmokeTests {
         _ = view.body
     }
 
+    @Test func `phone calls settings builds body`() {
+        let state = AppState(preview: true)
+        let store = ChannelsStore(isPreview: true)
+        let view = PhoneCallsSettings(state: state, store: store)
+        _ = view.body
+    }
+
     @Test func `models settings mounts in window`() {
         let controller = NSHostingController(rootView: ModelsSettings())
         let window = NSWindow(contentViewController: controller)
@@ -177,6 +184,26 @@ struct SettingsViewSmokeTests {
 
     @Test func `general settings exercises branches`() {
         GeneralSettings.exerciseForTesting()
+    }
+
+    @Test func `general settings mounts in window`() {
+        let state = AppState(preview: true)
+        let controller = NSHostingController(rootView: GeneralSettings(state: state))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
+    @Test func `general settings shows managed browser action for local flows`() {
+        #expect(GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: false))
+        #expect(!GeneralSettings.shouldOfferManagedBrowserSignIn(
+            mode: .remote,
+            browserControlEnabled: true))
     }
 
     @Test func `sessions settings builds body`() {
@@ -270,6 +297,14 @@ struct SettingsViewSmokeTests {
     @Test func `settings root mounts models tab in window`() {
         let state = AppState(preview: true)
         let controller = NSHostingController(rootView: SettingsRootView(state: state, updater: nil, initialTab: .models))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
+    }
+
+    @Test func `settings root mounts phone calls tab in window`() {
+        let state = AppState(preview: true)
+        let controller = NSHostingController(rootView: SettingsRootView(state: state, updater: nil, initialTab: .phoneCalls))
         let window = NSWindow(contentViewController: controller)
         window.contentView?.layoutSubtreeIfNeeded()
         #expect(window.contentViewController === controller)
@@ -419,9 +454,11 @@ struct SettingsViewSmokeTests {
         }
     }
 
-    @Test func `about settings builds body`() {
-        let view = AboutSettings(updater: nil)
-        _ = view.body
+    @Test func `about settings mounts in window`() {
+        let controller = NSHostingController(rootView: AboutSettings(updater: nil))
+        let window = NSWindow(contentViewController: controller)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.contentViewController === controller)
     }
 
     @Test func `voice wake settings builds body`() {

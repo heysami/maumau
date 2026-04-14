@@ -51,6 +51,9 @@ const sessionMetaMocks = vi.hoisted(() => ({
 const bindingServiceMocks = vi.hoisted(() => ({
   listBySession: vi.fn<(sessionKey: string) => SessionBindingRecord[]>(() => []),
 }));
+const previewDeliveryMocks = vi.hoisted(() => ({
+  maybeBuildPreviewReceiptPayloads: vi.fn(async (_params: unknown) => []),
+}));
 
 vi.mock("../../acp/control-plane/manager.js", () => ({
   getAcpSessionManager: () => managerMocks,
@@ -85,6 +88,10 @@ vi.mock("../../infra/outbound/session-binding-service.js", () => ({
   getSessionBindingService: () => ({
     listBySession: (sessionKey: string) => bindingServiceMocks.listBySession(sessionKey),
   }),
+}));
+vi.mock("../../gateway/preview-delivery.js", () => ({
+  maybeBuildPreviewReceiptPayloads: (params: unknown) =>
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads(params),
 }));
 
 const { tryDispatchAcpReply } = await import("./dispatch-acp.js");
@@ -268,6 +275,8 @@ describe("tryDispatchAcpReply", () => {
     sessionMetaMocks.readAcpSessionEntry.mockReturnValue(null);
     bindingServiceMocks.listBySession.mockReset();
     bindingServiceMocks.listBySession.mockReturnValue([]);
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockReset();
+    previewDeliveryMocks.maybeBuildPreviewReceiptPayloads.mockResolvedValue([]);
   });
 
   it("routes ACP block output to originating channel", async () => {
@@ -476,6 +485,12 @@ describe("tryDispatchAcpReply", () => {
     expect(result?.counts.block).toBe(1);
     expect(result?.counts.final).toBe(1);
     expect(routeMocks.routeReply).toHaveBeenCalledTimes(2);
+    expect(routeMocks.routeReply).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mirror: false,
+      }),
+    );
     expectSecondRoutedPayload({ text: "CODEX_OK" });
   });
 
@@ -491,6 +506,12 @@ describe("tryDispatchAcpReply", () => {
     expect(result?.counts.block).toBe(1);
     expect(result?.counts.final).toBe(1);
     expect(routeMocks.routeReply).toHaveBeenCalledTimes(2);
+    expect(routeMocks.routeReply).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mirror: false,
+      }),
+    );
     expectSecondRoutedPayload({
       mediaUrl: "https://example.com/final.mp3",
       audioAsVoice: true,

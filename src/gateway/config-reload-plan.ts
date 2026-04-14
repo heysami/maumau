@@ -36,6 +36,9 @@ type ReloadAction =
 const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: "gateway.remote", kind: "none" },
   { prefix: "gateway.reload", kind: "none" },
+  // First-message owner bootstrap updates this allowlist during live traffic.
+  // Command auth resolves it from fresh config on each turn, so no restart is needed.
+  { prefix: "commands.ownerAllowFrom", kind: "none" },
   {
     prefix: "gateway.channelHealthCheckMinutes",
     kind: "hot",
@@ -82,6 +85,10 @@ const BASE_RELOAD_RULES: ReloadRule[] = [
     kind: "hot",
     actions: ["restart-browser-control"],
   },
+  // The bundled multi-user-memory plugin re-reads its config from runtime for
+  // each turn/tool request, so first-user bootstrap and later user curation
+  // should not bounce the whole gateway.
+  { prefix: "plugins.entries.multi-user-memory.config", kind: "none" },
 ];
 
 const BASE_RELOAD_RULES_TAIL: ReloadRule[] = [

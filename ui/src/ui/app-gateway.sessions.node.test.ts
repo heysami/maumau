@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
+import type { MauOfficeState } from "./controllers/mau-office.ts";
 
 const loadSessionsMock = vi.fn();
+const applyMauOfficeAgentEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficePresenceMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficeSessionMessageEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const applyMauOfficeSessionToolEventMock = vi.fn<
+  (state: MauOfficeState, payload: unknown, nowMs?: number) => MauOfficeState
+>((state) => state);
+const scheduleMauOfficeReloadMock = vi.fn();
 
 vi.mock("./app-chat.ts", () => ({
   CHAT_SESSIONS_ACTIVE_MINUTES: 10,
@@ -29,6 +43,13 @@ vi.mock("./controllers/chat.ts", () => ({
 }));
 vi.mock("./controllers/devices.ts", () => ({
   loadDevices: vi.fn(),
+}));
+vi.mock("./controllers/mau-office.ts", () => ({
+  applyMauOfficeAgentEvent: applyMauOfficeAgentEventMock,
+  applyMauOfficePresence: applyMauOfficePresenceMock,
+  applyMauOfficeSessionMessageEvent: applyMauOfficeSessionMessageEventMock,
+  applyMauOfficeSessionToolEvent: applyMauOfficeSessionToolEventMock,
+  scheduleMauOfficeReload: scheduleMauOfficeReloadMock,
 }));
 vi.mock("./controllers/exec-approval.ts", () => ({
   addExecApproval: vi.fn(),
@@ -98,6 +119,20 @@ function createHost() {
     sessionKey: "main",
     chatRunId: null,
     refreshSessionsAfterChat: new Set<string>(),
+    dashboardLoading: false,
+    dashboardError: null,
+    dashboardSnapshot: null,
+    dashboardCalendarResult: null,
+    dashboardCalendarAnchorAtMs: null,
+    dashboardCalendarView: "month",
+    dashboardTeamsLoading: false,
+    dashboardTeamsError: null,
+    dashboardTeamSnapshots: null,
+    dashboardReloadTimer: null,
+    mauOfficeLoading: false,
+    mauOfficeError: null,
+    mauOfficeState: { loaded: false, actorOrder: [], actors: {} },
+    mauOfficeReloadTimer: null,
     execApprovalQueue: [],
     execApprovalError: null,
     updateAvailable: null,
@@ -107,6 +142,7 @@ function createHost() {
 describe("handleGatewayEvent sessions.changed", () => {
   it("reloads sessions when the gateway pushes a sessions.changed event", () => {
     loadSessionsMock.mockReset();
+    scheduleMauOfficeReloadMock.mockReset();
     const host = createHost();
 
     handleGatewayEvent(host, {
@@ -118,5 +154,58 @@ describe("handleGatewayEvent sessions.changed", () => {
 
     expect(loadSessionsMock).toHaveBeenCalledTimes(1);
     expect(loadSessionsMock).toHaveBeenCalledWith(host);
+    expect(scheduleMauOfficeReloadMock).toHaveBeenCalledWith(host);
+  });
+
+  it("routes session.tool events into the MauOffice reducer", () => {
+    applyMauOfficeSessionToolEventMock.mockClear();
+    const host = createHost();
+
+    handleGatewayEvent(host, {
+      type: "event",
+      event: "session.tool",
+      payload: { sessionKey: "agent:main:main", data: { toolName: "sessions_send" } },
+      seq: 2,
+    });
+
+    expect(applyMauOfficeSessionToolEventMock).toHaveBeenCalledTimes(1);
+    expect(applyMauOfficeSessionToolEventMock.mock.calls[0]?.[1]).toEqual({
+      sessionKey: "agent:main:main",
+      data: { toolName: "sessions_send" },
+    });
+  });
+
+  it("routes session.message events into the MauOffice reducer", () => {
+    applyMauOfficeSessionMessageEventMock.mockClear();
+    const host = createHost();
+
+    handleGatewayEvent(host, {
+      type: "event",
+      event: "session.message",
+      payload: { sessionKey: "agent:main:main", message: { role: "assistant" } },
+      seq: 3,
+    });
+
+    expect(applyMauOfficeSessionMessageEventMock).toHaveBeenCalledTimes(1);
+    expect(applyMauOfficeSessionMessageEventMock.mock.calls[0]?.[1]).toEqual({
+      sessionKey: "agent:main:main",
+      message: { role: "assistant" },
+    });
+  });
+
+  it("routes presence events into the MauOffice reducer", () => {
+    applyMauOfficePresenceMock.mockClear();
+    const host = createHost();
+    const presence = [{ id: "gateway", mode: "webchat" }];
+
+    handleGatewayEvent(host, {
+      type: "event",
+      event: "presence",
+      payload: { presence },
+      seq: 4,
+    });
+
+    expect(applyMauOfficePresenceMock).toHaveBeenCalledTimes(1);
+    expect(host.presenceEntries).toEqual(presence);
   });
 });

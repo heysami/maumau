@@ -1,6 +1,7 @@
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import { normalizeProviderId, normalizeProviderIdForAuth } from "../provider-id.js";
+import { hasUsableStoredCredential } from "./credential-state.js";
 import {
   ensureAuthProfileStore,
   saveAuthProfileStore,
@@ -82,6 +83,19 @@ export function listProfilesForProvider(store: AuthProfileStore, provider: strin
   return Object.entries(store.profiles)
     .filter(([, cred]) => normalizeProviderIdForAuth(cred.provider) === providerKey)
     .map(([id]) => id);
+}
+
+export function hasUsableProfileForProvider(
+  store: AuthProfileStore,
+  provider: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const providerKey = normalizeProviderIdForAuth(provider);
+  return Object.values(store.profiles).some(
+    (credential) =>
+      normalizeProviderIdForAuth(credential.provider) === providerKey &&
+      hasUsableStoredCredential({ credential, env }),
+  );
 }
 
 export async function markAuthProfileGood(params: {

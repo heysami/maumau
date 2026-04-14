@@ -199,20 +199,58 @@ export type OutboundConfig = z.infer<typeof OutboundConfigSchema>;
 // Streaming Configuration (OpenAI Realtime STT)
 // -----------------------------------------------------------------------------
 
+export const VoiceCallStreamingOpenAIConfigSchema = z
+  .object({
+    /** OpenAI API key for Realtime API (uses OPENAI_API_KEY env if not set) */
+    apiKey: z.string().min(1).optional(),
+    /** OpenAI transcription model (default: gpt-4o-transcribe) */
+    model: z.string().min(1).default("gpt-4o-transcribe"),
+    /** VAD silence duration in ms before considering speech ended */
+    silenceDurationMs: z.number().int().positive().default(800),
+    /** VAD threshold 0-1 (higher = less sensitive) */
+    vadThreshold: z.number().min(0).max(1).default(0.5),
+  })
+  .strict()
+  .default({
+    model: "gpt-4o-transcribe",
+    silenceDurationMs: 800,
+    vadThreshold: 0.5,
+  });
+export type VoiceCallStreamingOpenAIConfig = z.infer<typeof VoiceCallStreamingOpenAIConfigSchema>;
+
+export const VoiceCallStreamingDeepgramConfigSchema = z
+  .object({
+    /** Deepgram API key (uses DEEPGRAM_API_KEY env if not set) */
+    apiKey: z.string().min(1).optional(),
+    /** Deepgram realtime model (default: nova-3) */
+    model: z.string().min(1).default("nova-3"),
+    /** Silence pause before endpointing emits speech_final */
+    endpointingMs: z.number().int().positive().default(300),
+    /** Emit interim transcripts while speech is still ongoing */
+    interimResults: z.boolean().default(true),
+  })
+  .strict()
+  .default({
+    model: "nova-3",
+    endpointingMs: 300,
+    interimResults: true,
+  });
+export type VoiceCallStreamingDeepgramConfig = z.infer<
+  typeof VoiceCallStreamingDeepgramConfigSchema
+>;
+
 export const VoiceCallStreamingConfigSchema = z
   .object({
     /** Enable real-time audio streaming (requires WebSocket support) */
     enabled: z.boolean().default(false),
     /** STT provider for real-time transcription */
-    sttProvider: z.enum(["openai-realtime"]).default("openai-realtime"),
-    /** OpenAI API key for Realtime API (uses OPENAI_API_KEY env if not set) */
-    openaiApiKey: z.string().min(1).optional(),
-    /** OpenAI transcription model (default: gpt-4o-transcribe) */
-    sttModel: z.string().min(1).default("gpt-4o-transcribe"),
-    /** VAD silence duration in ms before considering speech ended */
-    silenceDurationMs: z.number().int().positive().default(800),
-    /** VAD threshold 0-1 (higher = less sensitive) */
-    vadThreshold: z.number().min(0).max(1).default(0.5),
+    sttProvider: z.enum(["openai-realtime", "deepgram-realtime"]).default("openai-realtime"),
+    /** Shared language hint used by the selected realtime STT provider */
+    languageCode: z.string().min(1).optional(),
+    /** OpenAI realtime-specific settings */
+    openai: VoiceCallStreamingOpenAIConfigSchema,
+    /** Deepgram realtime-specific settings */
+    deepgram: VoiceCallStreamingDeepgramConfigSchema,
     /** WebSocket path for media stream connections */
     streamPath: z.string().min(1).default("/voice/stream"),
     /**
@@ -231,9 +269,16 @@ export const VoiceCallStreamingConfigSchema = z
   .default({
     enabled: false,
     sttProvider: "openai-realtime",
-    sttModel: "gpt-4o-transcribe",
-    silenceDurationMs: 800,
-    vadThreshold: 0.5,
+    openai: {
+      model: "gpt-4o-transcribe",
+      silenceDurationMs: 800,
+      vadThreshold: 0.5,
+    },
+    deepgram: {
+      model: "nova-3",
+      endpointingMs: 300,
+      interimResults: true,
+    },
     streamPath: "/voice/stream",
     preStartTimeoutMs: 5000,
     maxPendingConnections: 32,
@@ -241,6 +286,55 @@ export const VoiceCallStreamingConfigSchema = z
     maxConnections: 128,
   });
 export type VoiceCallStreamingConfig = z.infer<typeof VoiceCallStreamingConfigSchema>;
+
+// -----------------------------------------------------------------------------
+// Vapi Configuration
+// -----------------------------------------------------------------------------
+
+export const VoiceCallModeSchema = z.enum(["self-hosted", "vapi"]).default("self-hosted");
+export type VoiceCallMode = z.infer<typeof VoiceCallModeSchema>;
+
+export const VapiTelephonyProviderSchema = z.literal("twilio").default("twilio");
+export type VapiTelephonyProvider = z.infer<typeof VapiTelephonyProviderSchema>;
+
+export const VapiBridgeModeSchema = z.enum(["auto", "manual-public-url"]).default("auto");
+export type VapiBridgeMode = z.infer<typeof VapiBridgeModeSchema>;
+
+export const VoiceCallVapiConfigSchema = z
+  .object({
+    /** Enable the Vapi-backed call path when mode=vapi */
+    enabled: z.boolean().default(true),
+    /** Vapi private API key */
+    apiKey: z.string().min(1).optional(),
+    /** Saved Vapi assistant to use as the base assistant */
+    assistantId: z.string().min(1).optional(),
+    /** Imported Vapi phone number ID */
+    phoneNumberId: z.string().min(1).optional(),
+    /** Imported telephony provider backing the Vapi number */
+    telephonyProvider: VapiTelephonyProviderSchema,
+    /** Preferred reply language passed into the transient assistant */
+    preferredLanguage: z.string().min(1).default("en"),
+    /** Whether Maumau should auto-publish the Vapi bridge or use a fixed public URL */
+    bridgeMode: VapiBridgeModeSchema,
+    /** Public HTTPS URL Vapi should call for Maumau tool turns */
+    bridgeUrl: z.string().url().optional(),
+    /** Gateway route path that serves the Vapi bridge */
+    bridgePath: z.string().min(1).default("/plugins/voice-call/vapi"),
+    /** Shared secret used to authenticate Vapi callbacks to the bridge */
+    bridgeAuthToken: z.string().min(1).optional(),
+    /** Optional Vapi API base URL override */
+    baseUrl: z.string().url().default("https://api.vapi.ai"),
+  })
+  .strict()
+  .default({
+    enabled: true,
+    telephonyProvider: "twilio",
+    preferredLanguage: "en",
+    bridgeMode: "auto",
+    bridgePath: "/plugins/voice-call/vapi",
+    baseUrl: "https://api.vapi.ai",
+  });
+export type VoiceCallVapiConfig = z.infer<typeof VoiceCallVapiConfigSchema>;
 
 // -----------------------------------------------------------------------------
 // Main Voice Call Configuration
@@ -251,8 +345,14 @@ export const VoiceCallConfigSchema = z
     /** Enable voice call functionality */
     enabled: z.boolean().default(false),
 
+    /** Runtime mode: direct self-hosted telephony vs Vapi-managed calls */
+    mode: VoiceCallModeSchema,
+
     /** Active provider (telnyx, twilio, plivo, or mock) */
     provider: z.enum(["telnyx", "twilio", "plivo", "mock"]).optional(),
+
+    /** Vapi-backed configuration */
+    vapi: VoiceCallVapiConfigSchema,
 
     /** Telnyx-specific configuration */
     telnyx: TelnyxConfigSchema.optional(),
@@ -334,8 +434,11 @@ export const VoiceCallConfigSchema = z
     /** Store path for call logs */
     store: z.string().optional(),
 
-    /** Model for generating voice responses (e.g., "anthropic/claude-sonnet-4", "openai/gpt-4o") */
-    responseModel: z.string().default("openai/gpt-4o-mini"),
+    /**
+     * Optional model override for generating voice responses.
+     * When omitted, calls inherit the main Maumau agent default model.
+     */
+    responseModel: z.string().optional(),
 
     /** System prompt for voice responses */
     responseSystemPrompt: z.string().optional(),
@@ -375,13 +478,88 @@ function normalizeVoiceCallTtsConfig(
   return TtsConfigSchema.parse(deepMergeDefined(defaults ?? {}, overrides ?? {}));
 }
 
+function normalizeStreamingConfigInput(
+  streaming: DeepPartial<VoiceCallStreamingConfig> | undefined,
+): DeepPartial<VoiceCallStreamingConfig> | undefined {
+  if (!streaming) {
+    return streaming;
+  }
+
+  const raw =
+    typeof streaming === "object" && streaming !== null
+      ? (streaming as Record<string, unknown>)
+      : {};
+  const openaiInput =
+    raw.openai && typeof raw.openai === "object" && !Array.isArray(raw.openai)
+      ? (raw.openai as Record<string, unknown>)
+      : {};
+  const deepgramInput =
+    raw.deepgram && typeof raw.deepgram === "object" && !Array.isArray(raw.deepgram)
+      ? (raw.deepgram as Record<string, unknown>)
+      : {};
+  const normalizedOpenAI: Record<string, unknown> = { ...openaiInput };
+  const normalizedDeepgram: Record<string, unknown> = { ...deepgramInput };
+
+  const legacyOpenAIApiKey = typeof raw.openaiApiKey === "string" ? raw.openaiApiKey : undefined;
+  const legacyOpenAIModel = typeof raw.sttModel === "string" ? raw.sttModel : undefined;
+  const legacySilenceDurationMs =
+    typeof raw.silenceDurationMs === "number" ? raw.silenceDurationMs : undefined;
+  const legacyVadThreshold = typeof raw.vadThreshold === "number" ? raw.vadThreshold : undefined;
+
+  if (legacyOpenAIApiKey) {
+    normalizedOpenAI.apiKey = legacyOpenAIApiKey;
+  }
+  if (legacyOpenAIModel) {
+    normalizedOpenAI.model = legacyOpenAIModel;
+  }
+  if (legacySilenceDurationMs != null) {
+    normalizedOpenAI.silenceDurationMs = legacySilenceDurationMs;
+  }
+  if (legacyVadThreshold != null) {
+    normalizedOpenAI.vadThreshold = legacyVadThreshold;
+  }
+
+  return {
+    ...streaming,
+    openai: normalizedOpenAI,
+    deepgram: normalizedDeepgram,
+  };
+}
+
+function inferLegacyVapiBridgeMode(params: {
+  configuredMode?: VapiBridgeMode;
+  bridgeUrl: string | undefined;
+}): VapiBridgeMode {
+  if (typeof params.configuredMode === "string" && params.configuredMode.trim()) {
+    return params.configuredMode === "manual-public-url" ? "manual-public-url" : "auto";
+  }
+  const bridgeUrl = params.bridgeUrl?.trim();
+  if (!bridgeUrl) {
+    return "auto";
+  }
+  try {
+    const parsed = new URL(bridgeUrl);
+    const host = parsed.hostname.trim().toLowerCase();
+    const port = parsed.port ? Number(parsed.port) : undefined;
+    if (host.endsWith(".ts.net") && (port == null || port === 443 || port === 8443)) {
+      return "auto";
+    }
+  } catch {}
+  return "manual-public-url";
+}
+
 export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallConfig {
   const defaults = cloneDefaultVoiceCallConfig();
+  const normalizedStreamingInput = normalizeStreamingConfigInput(config.streaming);
   return {
     ...defaults,
     ...config,
     allowFrom: config.allowFrom ?? defaults.allowFrom,
     outbound: { ...defaults.outbound, ...config.outbound },
+    vapi: {
+      ...defaults.vapi,
+      ...config.vapi,
+    },
     serve: { ...defaults.serve, ...config.serve },
     tailscale: { ...defaults.tailscale, ...config.tailscale },
     tunnel: { ...defaults.tunnel, ...config.tunnel },
@@ -392,7 +570,18 @@ export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCal
       trustedProxyIPs:
         config.webhookSecurity?.trustedProxyIPs ?? defaults.webhookSecurity.trustedProxyIPs,
     },
-    streaming: { ...defaults.streaming, ...config.streaming },
+    streaming: {
+      ...defaults.streaming,
+      ...normalizedStreamingInput,
+      openai: {
+        ...defaults.streaming.openai,
+        ...normalizedStreamingInput?.openai,
+      },
+      deepgram: {
+        ...defaults.streaming.deepgram,
+        ...normalizedStreamingInput?.deepgram,
+      },
+    },
     stt: { ...defaults.stt, ...config.stt },
     tts: normalizeVoiceCallTtsConfig(defaults.tts, config.tts),
   };
@@ -405,8 +594,22 @@ export function normalizeVoiceCallConfig(config: VoiceCallConfigInput): VoiceCal
 export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallConfig {
   const resolved = normalizeVoiceCallConfig(config);
 
+  resolved.vapi = resolved.vapi ?? {
+    enabled: true,
+    telephonyProvider: "twilio",
+    preferredLanguage: "en",
+    bridgeMode: "auto",
+    bridgePath: "/plugins/voice-call/vapi",
+    baseUrl: "https://api.vapi.ai",
+  };
+  resolved.vapi.apiKey = resolved.vapi.apiKey ?? process.env.VAPI_API_KEY;
+  resolved.vapi.bridgeMode = inferLegacyVapiBridgeMode({
+    configuredMode: config.vapi?.bridgeMode,
+    bridgeUrl: resolved.vapi.bridgeUrl,
+  });
+
   // Telnyx
-  if (resolved.provider === "telnyx") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "telnyx") {
     resolved.telnyx = resolved.telnyx ?? {};
     resolved.telnyx.apiKey = resolved.telnyx.apiKey ?? process.env.TELNYX_API_KEY;
     resolved.telnyx.connectionId = resolved.telnyx.connectionId ?? process.env.TELNYX_CONNECTION_ID;
@@ -414,14 +617,14 @@ export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallC
   }
 
   // Twilio
-  if (resolved.provider === "twilio") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "twilio") {
     resolved.twilio = resolved.twilio ?? {};
     resolved.twilio.accountSid = resolved.twilio.accountSid ?? process.env.TWILIO_ACCOUNT_SID;
     resolved.twilio.authToken = resolved.twilio.authToken ?? process.env.TWILIO_AUTH_TOKEN;
   }
 
   // Plivo
-  if (resolved.provider === "plivo") {
+  if (resolved.mode === "self-hosted" && resolved.provider === "plivo") {
     resolved.plivo = resolved.plivo ?? {};
     resolved.plivo.authId = resolved.plivo.authId ?? process.env.PLIVO_AUTH_ID;
     resolved.plivo.authToken = resolved.plivo.authToken ?? process.env.PLIVO_AUTH_TOKEN;
@@ -448,6 +651,20 @@ export function resolveVoiceCallConfig(config: VoiceCallConfigInput): VoiceCallC
     resolved.webhookSecurity.trustForwardingHeaders ?? false;
   resolved.webhookSecurity.trustedProxyIPs = resolved.webhookSecurity.trustedProxyIPs ?? [];
 
+  resolved.streaming.openai = resolved.streaming.openai ?? {
+    model: "gpt-4o-transcribe",
+    silenceDurationMs: 800,
+    vadThreshold: 0.5,
+  };
+  resolved.streaming.openai.apiKey = resolved.streaming.openai.apiKey ?? process.env.OPENAI_API_KEY;
+  resolved.streaming.deepgram = resolved.streaming.deepgram ?? {
+    model: "nova-3",
+    endpointingMs: 300,
+    interimResults: true,
+  };
+  resolved.streaming.deepgram.apiKey =
+    resolved.streaming.deepgram.apiKey ?? process.env.DEEPGRAM_API_KEY;
+
   return normalizeVoiceCallConfig(resolved);
 }
 
@@ -462,6 +679,37 @@ export function validateProviderConfig(config: VoiceCallConfig): {
 
   if (!config.enabled) {
     return { valid: true, errors: [] };
+  }
+
+  if (config.mode === "vapi") {
+    if (!config.vapi?.enabled) {
+      return { valid: true, errors: [] };
+    }
+
+    if (!config.vapi?.apiKey) {
+      errors.push(
+        "plugins.entries.voice-call.config.vapi.apiKey is required (or set VAPI_API_KEY env)",
+      );
+    }
+    if (!config.vapi?.assistantId) {
+      errors.push("plugins.entries.voice-call.config.vapi.assistantId is required");
+    }
+    if (!config.vapi?.phoneNumberId) {
+      errors.push("plugins.entries.voice-call.config.vapi.phoneNumberId is required");
+    }
+    if (config.vapi?.telephonyProvider !== "twilio") {
+      errors.push(
+        'plugins.entries.voice-call.config.vapi.telephonyProvider must be "twilio" for the simple Vapi path',
+      );
+    }
+    if (config.vapi?.bridgeMode === "manual-public-url" && !config.vapi?.bridgeUrl) {
+      errors.push("plugins.entries.voice-call.config.vapi.bridgeUrl is required");
+    }
+    if (!config.vapi?.bridgeAuthToken) {
+      errors.push("plugins.entries.voice-call.config.vapi.bridgeAuthToken is required");
+    }
+
+    return { valid: errors.length === 0, errors };
   }
 
   if (!config.provider) {

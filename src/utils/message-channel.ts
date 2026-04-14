@@ -28,6 +28,11 @@ const MARKDOWN_CAPABLE_CHANNELS = new Set<string>([
   "tui",
   INTERNAL_MESSAGE_CHANNEL,
 ]);
+const LOCAL_INTERACTIVE_MESSAGE_CHANNELS = new Set<string>([
+  INTERNAL_MESSAGE_CHANNEL,
+  "tui",
+  "voicewake",
+]);
 
 export { GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES };
 export type { GatewayClientName, GatewayClientMode };
@@ -105,6 +110,14 @@ export function isGatewayMessageChannel(value: string): value is GatewayMessageC
 
 export function isDeliverableMessageChannel(value: string): value is DeliverableMessageChannel {
   return listDeliverableMessageChannels().includes(value as DeliverableMessageChannel);
+}
+
+export function isRequesterRemoteMessagingChannel(raw?: string | null): boolean {
+  const normalized = normalizeMessageChannel(raw);
+  if (!normalized || LOCAL_INTERACTIVE_MESSAGE_CHANNELS.has(normalized)) {
+    return false;
+  }
+  return isDeliverableMessageChannel(normalized);
 }
 
 export function resolveGatewayMessageChannel(

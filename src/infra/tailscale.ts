@@ -162,6 +162,131 @@ export async function getTailscaleBinary(): Promise<string> {
   return cachedTailscaleBinary ?? "tailscale";
 }
 
+export type TailscaleExposureMode = "serve" | "funnel";
+
+export type TailscaleExposureProbe = {
+  mode: TailscaleExposureMode;
+  featureEnabled: boolean;
+  active: boolean;
+  blockedReason?: "service_not_running" | "doctor_failed";
+  suggestedFix?: string;
+  enableUrl?: string;
+};
+
+function extractEnableUrl(text: string): string | undefined {
+  return text.match(/https?:\/\/\S+/)?.[0];
+}
+
+function buildServeProbeFromText(text: string): TailscaleExposureProbe {
+  const combined = text.trim();
+  if (/serve is not enabled on your tailnet/i.test(combined)) {
+    const enableUrl = extractEnableUrl(combined);
+    return {
+      mode: "serve",
+      featureEnabled: false,
+      active: false,
+      blockedReason: "doctor_failed",
+      enableUrl,
+      suggestedFix: enableUrl
+        ? `Enable Tailscale Serve for this device or tailnet, then retry: ${enableUrl}`
+        : "Enable Tailscale Serve for this device or tailnet, then retry.",
+    };
+  }
+  if (!combined || /no serve config/i.test(combined)) {
+    return {
+      mode: "serve",
+      featureEnabled: true,
+      active: false,
+      blockedReason: "service_not_running",
+      suggestedFix:
+        "Tailscale Serve is configured in Maumau but is not active on this host. Restart the gateway so it can apply the Serve route.",
+    };
+  }
+  return {
+    mode: "serve",
+    featureEnabled: true,
+    active: true,
+  };
+}
+
+function buildFunnelProbeFromText(text: string): TailscaleExposureProbe {
+  const combined = text.trim();
+  if (
+    !combined ||
+    /funnel is not enabled/i.test(combined) ||
+    /enable in admin console/i.test(combined)
+  ) {
+    const enableUrl = extractEnableUrl(combined) ?? "https://login.tailscale.com/admin";
+    return {
+      mode: "funnel",
+      featureEnabled: false,
+      active: false,
+      blockedReason: "doctor_failed",
+      enableUrl,
+      suggestedFix: `Enable Tailscale Funnel for this tailnet, then retry: ${enableUrl}`,
+    };
+  }
+  return {
+    mode: "funnel",
+    featureEnabled: true,
+    active: true,
+  };
+}
+
+export async function probeTailscaleExposure(
+  mode: TailscaleExposureMode,
+  exec: typeof runExec = runExec,
+): Promise<TailscaleExposureProbe> {
+  const tailscaleBin = await getTailscaleBinary();
+  if (mode === "serve") {
+    try {
+      const { stdout, stderr } = await exec(tailscaleBin, ["serve", "status"], {
+        timeoutMs: 5_000,
+        maxBuffer: 200_000,
+      });
+      return buildServeProbeFromText(`${stdout ?? ""}\n${stderr ?? ""}`);
+    } catch (err) {
+      const { stdout, stderr, message } = extractExecErrorText(err);
+      const combined = `${stdout}\n${stderr}\n${message}`;
+      if (
+        /serve is not enabled on your tailnet/i.test(combined) ||
+        /no serve config/i.test(combined)
+      ) {
+        return buildServeProbeFromText(combined);
+      }
+      return {
+        mode,
+        featureEnabled: false,
+        active: false,
+        blockedReason: "doctor_failed",
+        suggestedFix:
+          "Tailscale Serve readiness could not be verified on this host. Confirm the tailscale CLI is installed and working, then restart the gateway.",
+      };
+    }
+  }
+
+  try {
+    const { stdout, stderr } = await exec(tailscaleBin, ["funnel", "status", "--json"], {
+      timeoutMs: 5_000,
+      maxBuffer: 200_000,
+    });
+    const combined = `${stdout ?? ""}\n${stderr ?? ""}`.trim();
+    const parsed = combined ? parsePossiblyNoisyJsonObject(combined) : {};
+    if (Object.keys(parsed).length === 0) {
+      return buildFunnelProbeFromText(combined);
+    }
+    return {
+      mode,
+      featureEnabled: true,
+      active: true,
+    };
+  } catch (err) {
+    const { stdout, stderr, message } = extractExecErrorText(err);
+    const combined = `${stdout}\n${stderr}\n${message}`;
+    return buildFunnelProbeFromText(combined);
+  }
+}
+
 export async function readTailscaleStatusJson(
   exec: typeof runExec = runExec,
   opts?: { timeoutMs?: number },

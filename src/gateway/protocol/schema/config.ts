@@ -9,6 +9,46 @@ const ConfigSchemaLookupPathString = Type.String({
 
 export const ConfigGetParamsSchema = Type.Object({}, { additionalProperties: false });
 
+export const DashboardTeamsSnapshotParamsSchema = Type.Object(
+  {
+    rawConfig: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
+export const DashboardWorkshopSaveParamsSchema = Type.Object(
+  {
+    itemIds: Type.Array(NonEmptyString, { minItems: 1 }),
+    projectName: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const DashboardBusinessParamsSchema = Type.Object({}, { additionalProperties: false });
+
+export const DashboardProjectsParamsSchema = Type.Object({}, { additionalProperties: false });
+
+export const DashboardProjectsApplyBlueprintParamsSchema = Type.Object(
+  {
+    businessId: NonEmptyString,
+    projectId: NonEmptyString,
+    expectedVersion: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+export const DashboardWalletParamsSchema = Type.Object(
+  {
+    startDate: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),
+    endDate: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),
+    mode: Type.Optional(
+      Type.Union([Type.Literal("utc"), Type.Literal("gateway"), Type.Literal("specific")]),
+    ),
+    utcOffset: Type.Optional(Type.String({ pattern: "^UTC[+-]\\d{1,2}(?::[0-5]\\d)?$" })),
+  },
+  { additionalProperties: false },
+);
+
 export const ConfigSetParamsSchema = Type.Object(
   {
     raw: NonEmptyString,

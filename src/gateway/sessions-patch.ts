@@ -68,6 +68,10 @@ function supportsSpawnLineage(storeKey: string): boolean {
   return isSubagentSessionKey(storeKey) || isAcpSessionKey(storeKey);
 }
 
+function supportsTeamMetadata(storeKey: string): boolean {
+  return storeKey === "main" || parseAgentSessionKey(storeKey) != null;
+}
+
 function normalizeSubagentRole(raw: string): "orchestrator" | "leaf" | undefined {
   const normalized = raw.trim().toLowerCase();
   if (normalized === "orchestrator" || normalized === "leaf") {
@@ -82,6 +86,14 @@ function normalizeSubagentControlScope(raw: string): "children" | "none" | undef
     return normalized;
   }
   return undefined;
+}
+
+function normalizeSubagentMaxSpawnDepth(raw: unknown): number | undefined {
+  const numeric = Number(raw);
+  if (!Number.isInteger(numeric) || numeric < 1 || numeric > 5) {
+    return undefined;
+  }
+  return numeric;
 }
 
 export async function applySessionsPatchToStore(params: {
@@ -150,6 +162,49 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("requesterSenderIsOwner" in patch) {
+    const raw = patch.requesterSenderIsOwner;
+    if (raw === null) {
+      if (typeof existing?.requesterSenderIsOwner === "boolean") {
+        return invalid("requesterSenderIsOwner cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsSpawnLineage(storeKey)) {
+        return invalid("requesterSenderIsOwner is only supported for subagent:* or acp:* sessions");
+      }
+      if (
+        typeof existing?.requesterSenderIsOwner === "boolean" &&
+        existing.requesterSenderIsOwner !== raw
+      ) {
+        return invalid("requesterSenderIsOwner cannot be changed once set");
+      }
+      next.requesterSenderIsOwner = raw;
+    }
+  }
+
+  if ("requesterTailscaleLogin" in patch) {
+    const raw = patch.requesterTailscaleLogin;
+    if (raw === null) {
+      if (existing?.requesterTailscaleLogin) {
+        return invalid("requesterTailscaleLogin cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsSpawnLineage(storeKey)) {
+        return invalid(
+          "requesterTailscaleLogin is only supported for subagent:* or acp:* sessions",
+        );
+      }
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid requesterTailscaleLogin: empty");
+      }
+      if (existing?.requesterTailscaleLogin && existing.requesterTailscaleLogin !== trimmed) {
+        return invalid("requesterTailscaleLogin cannot be changed once set");
+      }
+      next.requesterTailscaleLogin = trimmed;
+    }
+  }
+
   if ("spawnDepth" in patch) {
     const raw = patch.spawnDepth;
     if (raw === null) {
@@ -169,6 +224,72 @@ export async function applySessionsPatchToStore(params: {
         return invalid("spawnDepth cannot be changed once set");
       }
       next.spawnDepth = normalized;
+    }
+  }
+
+  if ("subagentMaxSpawnDepth" in patch) {
+    const raw = patch.subagentMaxSpawnDepth;
+    if (raw === null) {
+      if (typeof existing?.subagentMaxSpawnDepth === "number") {
+        return invalid("subagentMaxSpawnDepth cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsSpawnLineage(storeKey)) {
+        return invalid("subagentMaxSpawnDepth is only supported for subagent:* or acp:* sessions");
+      }
+      const normalized = normalizeSubagentMaxSpawnDepth(raw);
+      if (normalized === undefined) {
+        return invalid("invalid subagentMaxSpawnDepth (use an integer between 1 and 5)");
+      }
+      if (
+        typeof existing?.subagentMaxSpawnDepth === "number" &&
+        existing.subagentMaxSpawnDepth !== normalized
+      ) {
+        return invalid("subagentMaxSpawnDepth cannot be changed once set");
+      }
+      next.subagentMaxSpawnDepth = normalized;
+    }
+  }
+
+  if ("teamId" in patch) {
+    const raw = patch.teamId;
+    if (raw === null) {
+      if (existing?.teamId) {
+        return invalid("teamId cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsTeamMetadata(storeKey)) {
+        return invalid("teamId is only supported for agent sessions");
+      }
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid teamId: empty");
+      }
+      if (existing?.teamId && existing.teamId !== trimmed) {
+        return invalid("teamId cannot be changed once set");
+      }
+      next.teamId = trimmed;
+    }
+  }
+
+  if ("teamRole" in patch) {
+    const raw = patch.teamRole;
+    if (raw === null) {
+      if (existing?.teamRole) {
+        return invalid("teamRole cannot be cleared once set");
+      }
+    } else if (raw !== undefined) {
+      if (!supportsTeamMetadata(storeKey)) {
+        return invalid("teamRole is only supported for agent sessions");
+      }
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid teamRole: empty");
+      }
+      if (existing?.teamRole && existing.teamRole !== trimmed) {
+        return invalid("teamRole cannot be changed once set");
+      }
+      next.teamRole = trimmed;
     }
   }
 

@@ -190,11 +190,15 @@ public final class MaumauChatViewModel {
         !self.modelChoices.isEmpty
     }
 
-    public var defaultModelLabel: String {
+    public func defaultModelLabel(localeID: String?) -> String {
+        let prefix = MaumauSharedLocalization.fallbackString(
+            path: ["shared", "chat", "defaultModelLabel"],
+            localeID: localeID,
+            fallback: "Default")
         guard let defaultModelID = self.normalizedModelSelectionID(self.sessionDefaults?.model) else {
-            return "Default"
+            return prefix
         }
-        return "Default: \(self.modelLabel(for: defaultModelID))"
+        return "\(prefix): \(self.modelLabel(for: defaultModelID))"
     }
 
     public func addAttachments(urls: [URL]) {

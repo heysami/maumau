@@ -201,4 +201,27 @@ describe("subagent announce seam flow", () => {
       timeoutMs: 10_000,
     });
   });
+
+  it("can suppress requester announce when a tool owns final delivery", async () => {
+    ({ runSubagentAnnounceFlow } = await import("./subagent-announce.js"));
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-suppressed-direct-announce",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "tool-owned team run",
+      timeoutMs: 10,
+      cleanup: "keep",
+      waitForCompletion: false,
+      startedAt: 10,
+      endedAt: 20,
+      outcome: { status: "ok" },
+      roundOneReply: "final team result",
+      suppressRequesterAnnounce: true,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(agentSpy).not.toHaveBeenCalled();
+    expect(sessionsDeleteSpy).not.toHaveBeenCalled();
+  });
 });

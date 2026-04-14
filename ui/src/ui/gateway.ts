@@ -197,12 +197,14 @@ type DeviceTokenRetryDecision = {
 export type GatewayBrowserClientOptions = {
   url: string;
   token?: string;
+  getToken?: () => string | undefined;
   password?: string;
   clientName?: GatewayClientName;
   clientVersion?: string;
   platform?: string;
   mode?: GatewayClientMode;
   instanceId?: string;
+  beforeConnect?: () => Promise<void> | void;
   onHello?: (hello: GatewayHelloOk) => void;
   onEvent?: (evt: GatewayEventFrame) => void;
   onClose?: (info: { code: number; reason: string; error?: GatewayErrorInfo }) => void;
@@ -284,6 +286,7 @@ export class GatewayBrowserClient {
   private pendingConnectError: GatewayErrorInfo | undefined;
   private pendingDeviceTokenRetry = false;
   private deviceTokenRetryBudgetUsed = false;
+  private connectAttempt = 0;
 
   constructor(private opts: GatewayBrowserClientOptions) {}
 
@@ -294,6 +297,7 @@ export class GatewayBrowserClient {
 
   stop() {
     this.closed = true;
+    this.connectAttempt += 1;
     this.ws?.close();
     this.ws = null;
     this.pendingConnectError = undefined;
@@ -310,31 +314,42 @@ export class GatewayBrowserClient {
     if (this.closed) {
       return;
     }
-    this.ws = new WebSocket(this.opts.url);
-    this.ws.addEventListener("open", () => this.queueConnect());
-    this.ws.addEventListener("message", (ev) => this.handleMessage(String(ev.data ?? "")));
-    this.ws.addEventListener("close", (ev) => {
-      const reason = String(ev.reason ?? "");
-      const connectError = this.pendingConnectError;
-      this.pendingConnectError = undefined;
-      this.ws = null;
-      this.flushPending(new Error(`gateway closed (${ev.code}): ${reason}`));
-      this.opts.onClose?.({ code: ev.code, reason, error: connectError });
-      const connectErrorCode = resolveGatewayErrorDetailCode(connectError);
-      if (
-        connectErrorCode === ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH &&
-        this.deviceTokenRetryBudgetUsed &&
-        !this.pendingDeviceTokenRetry
-      ) {
-        return;
-      }
-      if (!isNonRecoverableAuthError(connectError)) {
-        this.scheduleReconnect();
-      }
-    });
-    this.ws.addEventListener("error", () => {
-      // ignored; close handler will fire
-    });
+    const attempt = ++this.connectAttempt;
+    void Promise.resolve(this.opts.beforeConnect?.())
+      .catch(() => {
+        // Best-effort bootstrap/token refresh. A failed pre-connect hook should not
+        // block loopback reconnects; the gateway connect path still reports auth errors.
+      })
+      .then(() => {
+        if (this.closed || attempt != this.connectAttempt) {
+          return;
+        }
+        this.ws = new WebSocket(this.opts.url);
+        this.ws.addEventListener("open", () => this.queueConnect());
+        this.ws.addEventListener("message", (ev) => this.handleMessage(String(ev.data ?? "")));
+        this.ws.addEventListener("close", (ev) => {
+          const reason = String(ev.reason ?? "");
+          const connectError = this.pendingConnectError;
+          this.pendingConnectError = undefined;
+          this.ws = null;
+          this.flushPending(new Error(`gateway closed (${ev.code}): ${reason}`));
+          this.opts.onClose?.({ code: ev.code, reason, error: connectError });
+          const connectErrorCode = resolveGatewayErrorDetailCode(connectError);
+          if (
+            connectErrorCode === ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH &&
+            this.deviceTokenRetryBudgetUsed &&
+            !this.pendingDeviceTokenRetry
+          ) {
+            return;
+          }
+          if (!isNonRecoverableAuthError(connectError)) {
+            this.scheduleReconnect();
+          }
+        });
+        this.ws.addEventListener("error", () => {
+          // ignored; close handler will fire
+        });
+      });
   }
 
   private scheduleReconnect() {
@@ -382,7 +397,8 @@ export class GatewayBrowserClient {
     const role = CONTROL_UI_OPERATOR_ROLE;
     const scopes = [...CONTROL_UI_OPERATOR_SCOPES];
     const client = this.buildConnectClient();
-    const explicitGatewayToken = this.opts.token?.trim() || undefined;
+    const explicitGatewayToken =
+      this.opts.getToken?.()?.trim() || this.opts.token?.trim() || undefined;
     const explicitPassword = this.opts.password?.trim() || undefined;
 
     // crypto.subtle is only available in secure contexts (HTTPS, localhost).

@@ -153,6 +153,166 @@ describe("sessions_spawn tool", () => {
     expect(hoisted.spawnSubagentDirectMock).not.toHaveBeenCalled();
   });
 
+  it("reroutes configured execution workers away from mistaken ACP spawns", async () => {
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "agent:main:telegram:direct:123",
+      config: {
+        agents: {
+          defaults: {
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: "main-worker",
+          },
+          list: [
+            {
+              id: "main",
+              default: true,
+              executionStyle: "orchestrator",
+              executionWorkerAgentId: "main-worker",
+              subagents: {
+                allowAgents: ["main-worker"],
+              },
+            },
+            {
+              id: "main-worker",
+              tools: {
+                profile: "coding",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await tool.execute("call-execution-worker", {
+      runtime: "acp",
+      task: "initialize the workspace bootstrap",
+      agentId: "main-worker",
+      mode: "run",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "accepted",
+      requestedRuntime: "acp",
+      effectiveRuntime: "subagent",
+    });
+    expect(hoisted.spawnSubagentDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: "initialize the workspace bootstrap",
+        agentId: "main-worker",
+        mode: "run",
+      }),
+      expect.objectContaining({
+        agentSessionKey: "agent:main:telegram:direct:123",
+      }),
+    );
+    expect(hoisted.spawnAcpDirectMock).not.toHaveBeenCalled();
+    const details = result.details as { note?: string };
+    expect(details.note).toContain('Using runtime="subagent" instead.');
+  });
+
+  it("reroutes execution-worker ACP spawns when requester agent comes from an explicit override", async () => {
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "cron:daily-maintenance",
+      requesterAgentIdOverride: "main",
+      config: {
+        agents: {
+          defaults: {
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: "main-worker",
+          },
+          list: [
+            {
+              id: "main",
+              default: true,
+              executionStyle: "orchestrator",
+              executionWorkerAgentId: "main-worker",
+              subagents: {
+                allowAgents: ["main-worker"],
+              },
+            },
+            {
+              id: "main-worker",
+              tools: {
+                profile: "coding",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await tool.execute("call-execution-worker-override", {
+      runtime: "acp",
+      task: "continue the scheduled workspace repair",
+      agentId: "main-worker",
+      mode: "run",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "accepted",
+      requestedRuntime: "acp",
+      effectiveRuntime: "subagent",
+    });
+    expect(hoisted.spawnSubagentDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: "continue the scheduled workspace repair",
+        agentId: "main-worker",
+        mode: "run",
+      }),
+      expect.objectContaining({
+        agentSessionKey: "cron:daily-maintenance",
+        requesterAgentIdOverride: "main",
+      }),
+    );
+    expect(hoisted.spawnAcpDirectMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects ACP-only params when execution-worker spawns should stay in the subagent lane", async () => {
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "agent:main:telegram:direct:123",
+      config: {
+        agents: {
+          defaults: {
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: "main-worker",
+          },
+          list: [
+            {
+              id: "main",
+              default: true,
+              executionStyle: "orchestrator",
+              executionWorkerAgentId: "main-worker",
+              subagents: {
+                allowAgents: ["main-worker"],
+              },
+            },
+            {
+              id: "main-worker",
+              tools: {
+                profile: "coding",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await tool.execute("call-execution-worker-acp-only", {
+      runtime: "acp",
+      task: "resume prior work",
+      agentId: "main-worker",
+      streamTo: "parent",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "error",
+    });
+    const details = result.details as { error?: string };
+    expect(details.error).toContain('Spawn it with runtime="subagent"');
+    expect(hoisted.spawnSubagentDirectMock).not.toHaveBeenCalled();
+    expect(hoisted.spawnAcpDirectMock).not.toHaveBeenCalled();
+  });
+
   it("forwards ACP sandbox options and requester sandbox context", async () => {
     const tool = createSessionsSpawnTool({
       agentSessionKey: "agent:main:subagent:parent",

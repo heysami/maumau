@@ -1,15 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ControlUiBootstrapConfig } from "../../../src/gateway/control-ui-contract.js";
 import { GATEWAY_EVENT_UPDATE_AVAILABLE } from "../../../src/gateway/events.js";
 import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
 import { connectGateway, resolveControlUiClientVersion } from "./app-gateway.ts";
+import { createEmptyMauOfficeState } from "./controllers/mau-office.ts";
 import type { GatewayHelloOk } from "./gateway.ts";
 
 const loadChatHistoryMock = vi.hoisted(() => vi.fn(async () => undefined));
+const loadBootstrapMock = vi.hoisted(() =>
+  vi.fn<() => Promise<ControlUiBootstrapConfig | null>>(async () => null),
+);
 
 type GatewayClientMock = {
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
-  options: { clientVersion?: string };
+  request: ReturnType<typeof vi.fn>;
+  options: {
+    clientVersion?: string;
+    token?: string;
+    getToken?: (() => string | undefined) | undefined;
+    beforeConnect?: (() => Promise<void> | void) | undefined;
+  };
   emitHello: (hello?: GatewayHelloOk) => void;
   emitClose: (info: {
     code: number;
@@ -23,6 +34,8 @@ type GatewayClientMock = {
 const gatewayClientInstances: GatewayClientMock[] = [];
 
 vi.mock("./gateway.ts", () => {
+  class GatewayRequestError extends Error {}
+
   function resolveGatewayErrorDetailCode(
     error: { details?: unknown } | null | undefined,
   ): string | null {
@@ -37,10 +50,14 @@ vi.mock("./gateway.ts", () => {
   class GatewayBrowserClient {
     readonly start = vi.fn();
     readonly stop = vi.fn();
+    readonly request = vi.fn(async () => ({}));
 
     constructor(
       private opts: {
         clientVersion?: string;
+        token?: string;
+        getToken?: () => string | undefined;
+        beforeConnect?: () => Promise<void> | void;
         onHello?: (hello: GatewayHelloOk) => void;
         onClose?: (info: {
           code: number;
@@ -54,7 +71,13 @@ vi.mock("./gateway.ts", () => {
       gatewayClientInstances.push({
         start: this.start,
         stop: this.stop,
-        options: { clientVersion: this.opts.clientVersion },
+        request: this.request,
+        options: {
+          clientVersion: this.opts.clientVersion,
+          token: this.opts.token,
+          getToken: this.opts.getToken,
+          beforeConnect: this.opts.beforeConnect,
+        },
         emitHello: (hello) => {
           this.opts.onHello?.(
             hello ?? {
@@ -81,7 +104,7 @@ vi.mock("./gateway.ts", () => {
     }
   }
 
-  return { GatewayBrowserClient, resolveGatewayErrorDetailCode };
+  return { GatewayBrowserClient, GatewayRequestError, resolveGatewayErrorDetailCode };
 });
 
 vi.mock("./controllers/chat.ts", async (importOriginal) => {
@@ -92,18 +115,26 @@ vi.mock("./controllers/chat.ts", async (importOriginal) => {
   };
 });
 
+vi.mock("./controllers/control-ui-bootstrap.ts", () => ({
+  loadControlUiBootstrapConfig: loadBootstrapMock,
+}));
+
 function createHost() {
   return {
+    basePath: "/",
     settings: {
       gatewayUrl: "ws://127.0.0.1:18789",
       token: "",
       sessionKey: "main",
       lastActiveSessionKey: "main",
       theme: "system",
+      themeMode: "system",
       chatFocusMode: false,
       chatShowThinking: true,
+      chatShowToolCalls: true,
       splitRatio: 0.6,
       navCollapsed: false,
+      navWidth: 220,
       navGroupsCollapsed: {},
       borderRadius: 50,
     },
@@ -139,6 +170,20 @@ function createHost() {
     toolStreamOrder: [],
     toolStreamSyncTimer: null,
     refreshSessionsAfterChat: new Set<string>(),
+    dashboardLoading: false,
+    dashboardError: null,
+    dashboardSnapshot: null,
+    dashboardCalendarResult: null,
+    dashboardCalendarAnchorAtMs: null,
+    dashboardCalendarView: "month",
+    dashboardTeamsLoading: false,
+    dashboardTeamsError: null,
+    dashboardTeamSnapshots: null,
+    dashboardReloadTimer: null,
+    mauOfficeLoading: false,
+    mauOfficeError: null,
+    mauOfficeState: createEmptyMauOfficeState(),
+    mauOfficeReloadTimer: null,
     execApprovalQueue: [],
     execApprovalError: null,
     updateAvailable: null,
@@ -149,6 +194,7 @@ describe("connectGateway", () => {
   beforeEach(() => {
     gatewayClientInstances.length = 0;
     loadChatHistoryMock.mockClear();
+    loadBootstrapMock.mockReset();
   });
 
   it("ignores stale client onGap callbacks after reconnect", () => {
@@ -367,6 +413,60 @@ describe("connectGateway", () => {
 
     expect(host.lastError).toContain("gateway token mismatch");
     expect(host.lastErrorCode).toBe("AUTH_TOKEN_MISMATCH");
+  });
+
+  it("refreshes the local token from bootstrap after token mismatch", async () => {
+    const host = createHost();
+    host.settings.token = "stale-token";
+    loadBootstrapMock.mockResolvedValueOnce({
+      basePath: "/",
+      assistantName: "Maumau",
+      assistantAvatar: "/avatar/main",
+      assistantAgentId: "main",
+      loopbackGatewayToken: "fresh-token",
+    });
+
+    connectGateway(host);
+    const firstClient = gatewayClientInstances[0];
+    expect(firstClient).toBeDefined();
+
+    firstClient.emitClose({
+      code: 4008,
+      reason: "connect failed",
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Fetch failed",
+        details: { code: ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH },
+      },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(host.settings.token).toBe("fresh-token");
+    expect(gatewayClientInstances).toHaveLength(2);
+    expect(gatewayClientInstances[1]?.options.token).toBe("fresh-token");
+  });
+
+  it("refreshes the loopback token before connect attempts", async () => {
+    const host = createHost();
+    host.settings.token = "stale-token";
+    loadBootstrapMock.mockResolvedValueOnce({
+      basePath: "/",
+      assistantName: "Maumau",
+      assistantAvatar: "/avatar/main",
+      assistantAgentId: "main",
+      loopbackGatewayToken: "fresh-token",
+    });
+
+    connectGateway(host);
+    const client = gatewayClientInstances[0];
+    expect(client).toBeDefined();
+
+    await client.options.beforeConnect?.();
+
+    expect(host.settings.token).toBe("fresh-token");
+    expect(client.options.getToken?.()).toBe("fresh-token");
   });
 
   it("surfaces shutdown restart reasons before the socket closes", () => {

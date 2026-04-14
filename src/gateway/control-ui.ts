@@ -12,6 +12,7 @@ import { openVerifiedFileSync } from "../infra/safe-open-sync.js";
 import { AVATAR_MAX_BYTES } from "../shared/avatar-policy.js";
 import { resolveRuntimeServiceVersion } from "../version.js";
 import { DEFAULT_ASSISTANT_IDENTITY, resolveAssistantIdentity } from "./assistant-identity.js";
+import { isLocalDirectRequest, resolveGatewayAuth, type ResolvedGatewayAuth } from "./auth.js";
 import {
   CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
   type ControlUiBootstrapConfig,
@@ -29,6 +30,7 @@ import {
   normalizeControlUiBasePath,
   resolveAssistantAvatarUrl,
 } from "./control-ui-shared.js";
+import { resolveTailnetDnsHint } from "./server-discovery.js";
 
 const ROOT_PREFIX = "/";
 const CONTROL_UI_ASSETS_MISSING_MESSAGE =
@@ -37,8 +39,11 @@ const CONTROL_UI_ASSETS_MISSING_MESSAGE =
 export type ControlUiRequestOptions = {
   basePath?: string;
   config?: MaumauConfig;
+  resolvedAuth?: ResolvedGatewayAuth | null;
   agentId?: string;
   root?: ControlUiRootState;
+  trustedProxies?: string[];
+  allowRealIpFallback?: boolean;
 };
 
 export type ControlUiRootState =
@@ -122,6 +127,29 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   res.end(JSON.stringify(body));
+}
+
+function buildControlUiDashboardPath(basePath: string) {
+  return basePath ? `${basePath}/dashboard/today` : "/dashboard/today";
+}
+
+async function resolveControlUiSecureDashboardUrl(params: {
+  config?: MaumauConfig;
+  basePath: string;
+  loopbackGatewayToken?: string;
+}): Promise<string | undefined> {
+  const tailscaleMode = params.config?.gateway?.tailscale?.mode ?? "off";
+  if (tailscaleMode !== "serve" && tailscaleMode !== "funnel") {
+    return undefined;
+  }
+  const tailnetHost = await resolveTailnetDnsHint({ enabled: true });
+  if (!tailnetHost) {
+    return undefined;
+  }
+  const dashboardUrl = `https://${tailnetHost}${buildControlUiDashboardPath(params.basePath)}`;
+  return params.loopbackGatewayToken
+    ? `${dashboardUrl}#token=${encodeURIComponent(params.loopbackGatewayToken)}`
+    : dashboardUrl;
 }
 
 function respondControlUiAssetsUnavailable(
@@ -349,11 +377,30 @@ export function handleControlUiHttpRequest(
     const identity = config
       ? resolveAssistantIdentity({ cfg: config, agentId: opts?.agentId })
       : DEFAULT_ASSISTANT_IDENTITY;
+    const resolvedAuth =
+      opts?.resolvedAuth ??
+      (config ? resolveGatewayAuth({ authConfig: config.gateway?.auth }) : null);
+    const loopbackGatewayToken =
+      resolvedAuth &&
+      resolvedAuth.mode === "token" &&
+      isLocalDirectRequest(req, opts?.trustedProxies, opts?.allowRealIpFallback)
+        ? resolvedAuth.token?.trim() || undefined
+        : undefined;
     const avatarValue = resolveAssistantAvatarUrl({
       avatar: identity.avatar,
       agentId: identity.agentId,
       basePath,
     });
+    const bootstrapConfigBase = {
+      basePath,
+      assistantName: identity.name,
+      assistantAvatar: avatarValue ?? identity.avatar,
+      assistantAgentId: identity.agentId,
+      serverVersion: resolveRuntimeServiceVersion(process.env),
+      // Only direct loopback requests get the shared token so an already-open
+      // local Control UI tab can recover after onboarding rotates auth.
+      loopbackGatewayToken,
+    } satisfies Omit<ControlUiBootstrapConfig, "secureDashboardUrl">;
     if (req.method === "HEAD") {
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -361,13 +408,19 @@ export function handleControlUiHttpRequest(
       res.end();
       return true;
     }
-    sendJson(res, 200, {
-      basePath,
-      assistantName: identity.name,
-      assistantAvatar: avatarValue ?? identity.avatar,
-      assistantAgentId: identity.agentId,
-      serverVersion: resolveRuntimeServiceVersion(process.env),
-    } satisfies ControlUiBootstrapConfig);
+    void (async () => {
+      const secureDashboardUrl = await resolveControlUiSecureDashboardUrl({
+        config,
+        basePath,
+        loopbackGatewayToken,
+      });
+      sendJson(res, 200, {
+        ...bootstrapConfigBase,
+        secureDashboardUrl,
+      } satisfies ControlUiBootstrapConfig);
+    })().catch(() => {
+      sendJson(res, 200, bootstrapConfigBase satisfies ControlUiBootstrapConfig);
+    });
     return true;
   }
 

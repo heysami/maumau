@@ -175,6 +175,14 @@ describe("buildAgentSystemPrompt", () => {
       workspaceDir: "/tmp/maumau",
     });
 
+    expect(prompt).toContain("## Truthfulness & Scope");
+    expect(prompt).toContain(
+      "Never claim actions, edits, delegated sessions, approvals, tests, previews, links, or capability paths unless they actually happened in this session.",
+    );
+    expect(prompt).toContain("If something is only planned, suggested, inferred, or still blocked");
+    expect(prompt).toContain("contract_failed");
+    expect(prompt).toContain("returned accepted for delegated/background work");
+    expect(prompt).toContain("waiting_timed_out");
     expect(prompt).toContain("## Safety");
     expect(prompt).toContain("You have no independent goals");
     expect(prompt).toContain("Prioritize safety and human oversight");
@@ -234,6 +242,9 @@ describe("buildAgentSystemPrompt", () => {
       "For long waits, avoid rapid poll loops: use exec with enough yieldMs or process(action=poll, timeout=<ms>).",
     );
     expect(prompt).toContain("Completion is push-based: it will auto-announce when done.");
+    expect(prompt).toContain(
+      "If you hand work off to a sub-agent or linked team and then wait or yield, send one brief user-facing status line first so the requester knows work is underway.",
+    );
     expect(prompt).toContain("Do not poll `subagents list` / `sessions_list` in a loop");
     expect(prompt).toContain(
       "When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI or slash commands.",
@@ -553,6 +564,77 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(prompt).not.toContain("# Project Context");
+  });
+
+  it("nudges the agent to ask one skippable life snapshot question when bootstrap is done but USER.md is still blank", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+- **What they want more help with:**
+- **Energy / health / sleep:**
+`,
+        },
+      ],
+    });
+
+    expect(prompt).toContain("## User Snapshot");
+    expect(prompt).toContain("USER.md still has an empty Life Snapshot.");
+    expect(prompt).toContain("normal day or week looks like");
+    expect(prompt).toContain("hobbies, exercise, and the shape of their work or study life");
+    expect(prompt).toContain("update USER.md in the same turn");
+    expect(prompt).toContain("Do not interrupt an urgent concrete task just to do this");
+  });
+
+  it("does not add the life snapshot nudge when BOOTSTRAP.md is still present", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+- **What they want more help with:**
+`,
+        },
+        {
+          path: "BOOTSTRAP.md",
+          content: "# bootstrap",
+        },
+      ],
+    });
+
+    expect(prompt).not.toContain("## User Snapshot");
+  });
+
+  it("does not add the life snapshot nudge when USER.md already has life snapshot content", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/maumau",
+      contextFiles: [
+        {
+          path: "USER.md",
+          content: `# USER.md
+
+## Life Snapshot
+
+- **Current priorities:**
+  sleep and stress
+- **What they want more help with:**
+`,
+        },
+      ],
+    });
+
+    expect(prompt).not.toContain("## User Snapshot");
   });
 
   it("summarizes the message tool when available", () => {

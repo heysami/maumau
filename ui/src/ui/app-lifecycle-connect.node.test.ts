@@ -1,10 +1,14 @@
+/* @vitest-environment jsdom */
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { applySettingsFromUrlMock, connectGatewayMock, loadBootstrapMock } = vi.hoisted(() => ({
-  applySettingsFromUrlMock: vi.fn(),
-  connectGatewayMock: vi.fn(),
-  loadBootstrapMock: vi.fn(),
-}));
+const { applySettingsFromUrlMock, applySettingsMock, connectGatewayMock, loadBootstrapMock } =
+  vi.hoisted(() => ({
+    applySettingsFromUrlMock: vi.fn(),
+    applySettingsMock: vi.fn(),
+    connectGatewayMock: vi.fn(),
+    loadBootstrapMock: vi.fn(),
+  }));
 
 vi.mock("./app-gateway.ts", () => ({
   connectGateway: connectGatewayMock,
@@ -15,6 +19,7 @@ vi.mock("./controllers/control-ui-bootstrap.ts", () => ({
 }));
 
 vi.mock("./app-settings.ts", () => ({
+  applySettings: applySettingsMock,
   applySettingsFromUrl: applySettingsFromUrlMock,
   attachThemeListener: vi.fn(),
   detachThemeListener: vi.fn(),
@@ -40,12 +45,33 @@ vi.mock("./app-scroll.ts", () => ({
 
 import { handleConnected } from "./app-lifecycle.ts";
 
+async function flushMicrotasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function createHost() {
   return {
     basePath: "",
     client: null,
     connectGeneration: 0,
     connected: false,
+    settings: {
+      gatewayUrl: "ws://127.0.0.1:18789",
+      token: "stale-token",
+      sessionKey: "main",
+      lastActiveSessionKey: "main",
+      theme: "claw",
+      themeMode: "system",
+      chatFocusMode: false,
+      chatShowThinking: true,
+      chatShowToolCalls: true,
+      splitRatio: 0.6,
+      navCollapsed: false,
+      navWidth: 220,
+      navGroupsCollapsed: {},
+      borderRadius: 50,
+    },
     tab: "chat",
     assistantName: "Maumau",
     assistantAvatar: null,
@@ -68,6 +94,7 @@ function createHost() {
 describe("handleConnected", () => {
   beforeEach(() => {
     applySettingsFromUrlMock.mockReset();
+    applySettingsMock.mockReset();
     connectGatewayMock.mockReset();
     loadBootstrapMock.mockReset();
   });
@@ -86,7 +113,7 @@ describe("handleConnected", () => {
     expect(connectGatewayMock).not.toHaveBeenCalled();
 
     resolveBootstrap();
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(connectGatewayMock).toHaveBeenCalledTimes(1);
   });
 
@@ -105,7 +132,7 @@ describe("handleConnected", () => {
 
     host.connectGeneration += 1;
     resolveBootstrap();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     expect(connectGatewayMock).not.toHaveBeenCalled();
   });
@@ -120,6 +147,28 @@ describe("handleConnected", () => {
     expect(loadBootstrapMock).toHaveBeenCalledTimes(1);
     expect(applySettingsFromUrlMock.mock.invocationCallOrder[0]).toBeLessThan(
       loadBootstrapMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("applies a refreshed loopback token before the first gateway connect", async () => {
+    loadBootstrapMock.mockResolvedValueOnce({
+      basePath: "/",
+      assistantName: "Maumau",
+      assistantAvatar: "/avatar/main",
+      assistantAgentId: "main",
+      loopbackGatewayToken: "fresh-token",
+    });
+    const host = createHost();
+
+    handleConnected(host as never);
+    await flushMicrotasks();
+
+    expect(applySettingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ token: "fresh-token" }),
+    );
+    expect(applySettingsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      connectGatewayMock.mock.invocationCallOrder[0],
     );
   });
 });

@@ -2095,6 +2095,41 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expect(draftStream.clear).toHaveBeenCalledTimes(1);
   });
 
+  it("suppresses exact NO_REPLY finals before Telegram delivery", async () => {
+    const draftStream = createDraftStream(999);
+    createTelegramDraftStream.mockReturnValue(draftStream);
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
+      await dispatcherOptions.deliver({ text: "NO_REPLY" }, { kind: "final" });
+      return { queuedFinal: false };
+    });
+
+    await dispatchWithContext({ context: createContext() });
+
+    expect(deliverReplies).not.toHaveBeenCalled();
+    expect(draftStream.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("strips trailing silent and heartbeat tokens before final Telegram delivery", async () => {
+    const draftStream = createDraftStream(999);
+    createTelegramDraftStream.mockReturnValue(draftStream);
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
+      await dispatcherOptions.deliver(
+        { text: "Finished the task.\n\nNO_REPLY\nHEARTBEAT_OK" },
+        { kind: "final" },
+      );
+      return { queuedFinal: true };
+    });
+    deliverReplies.mockResolvedValue({ delivered: true });
+
+    await dispatchWithContext({ context: createContext(), streamMode: "off" });
+
+    expect(deliverReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replies: [expect.objectContaining({ text: "Finished the task." })],
+      }),
+    );
+  });
+
   it("clears stale preview when response is NO_REPLY", async () => {
     const draftStream = createDraftStream(999);
     createTelegramDraftStream.mockReturnValue(draftStream);
@@ -2302,7 +2337,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expect(draftB.clear).toHaveBeenCalledTimes(1);
   });
 
-  it("swallows post-connect network timeout on preview edit to prevent duplicate messages", async () => {
+  it("retries a post-connect preview edit timeout once before avoiding duplicate fallback sends", async () => {
     const draftStream = createDraftStream(999);
     createTelegramDraftStream.mockReturnValue(draftStream);
     dispatchReplyWithBufferedBlockDispatcher.mockImplementation(
@@ -2314,12 +2349,14 @@ describe("dispatchTelegramMessage draft streaming", () => {
     );
     deliverReplies.mockResolvedValue({ delivered: true });
     // Simulate a post-connect timeout: editMessageTelegram throws a network
-    // error even though Telegram's server already processed the edit.
-    editMessageTelegram.mockRejectedValue(new Error("timeout: request timed out after 30000ms"));
+    // error on the first attempt even though retrying the same edit is safe.
+    editMessageTelegram
+      .mockRejectedValueOnce(new Error("timeout: request timed out after 30000ms"))
+      .mockResolvedValueOnce({ ok: true, chatId: "123", messageId: "999" });
 
     await dispatchWithContext({ context: createContext() });
 
-    expect(editMessageTelegram).toHaveBeenCalledTimes(1);
+    expect(editMessageTelegram).toHaveBeenCalledTimes(2);
     const deliverCalls = deliverReplies.mock.calls;
     const finalTextSentViaDeliverReplies = deliverCalls.some((call: unknown[]) =>
       (call[0] as { replies?: Array<{ text?: string }> })?.replies?.some(
@@ -2327,6 +2364,12 @@ describe("dispatchTelegramMessage draft streaming", () => {
       ),
     );
     expect(finalTextSentViaDeliverReplies).toBe(false);
+    expect(emitInternalMessageSentHook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "Final answer",
+        messageId: 999,
+      }),
+    );
   });
 
   it("falls back to sendPayload on pre-connect error during final edit", async () => {

@@ -20,6 +20,7 @@ import {
   SessionSchema,
   SessionSendPolicySchema,
 } from "./zod-schema.session.js";
+import { TeamsSchema } from "./zod-schema.teams.js";
 
 const BrowserSnapshotDefaultsSchema = z
   .object({
@@ -228,6 +229,121 @@ const McpConfigSchema = z
   .strict()
   .optional();
 
+const MauOfficeZoneIdSchema = z.union([
+  z.literal("desk"),
+  z.literal("meeting"),
+  z.literal("browser"),
+  z.literal("break"),
+  z.literal("support"),
+  z.literal("telephony"),
+  z.literal("hall"),
+  z.literal("outside"),
+]);
+
+const MauOfficeRoomIdSchema = z.union([
+  z.literal("desk"),
+  z.literal("meeting"),
+  z.literal("browser"),
+  z.literal("break"),
+  z.literal("support"),
+  z.literal("telephony"),
+]);
+
+const MauOfficeMarkerRoleSchema = z.union([
+  z.literal("spawn.office"),
+  z.literal("spawn.support"),
+  z.literal("desk.board"),
+  z.literal("desk.workerSeat"),
+  z.literal("meeting.presenter"),
+  z.literal("meeting.seat"),
+  z.literal("browser.workerSeat"),
+  z.literal("support.staff"),
+  z.literal("support.customer"),
+  z.literal("telephony.staff"),
+  z.literal("break.arcade"),
+  z.literal("break.snack"),
+  z.literal("break.volley"),
+  z.literal("break.tableSeat"),
+  z.literal("break.chase"),
+  z.literal("break.game"),
+  z.literal("break.jukebox"),
+  z.literal("break.reading"),
+]);
+
+const MauOfficeMountSchema = z.union([
+  z.literal("floor"),
+  z.literal("wall"),
+  z.literal("underlay"),
+]);
+
+const MauOfficeScenePropSchema = z
+  .object({
+    id: z.string().min(1),
+    itemId: z.string().min(1),
+    tileX: z.number(),
+    tileY: z.number(),
+    zoneId: MauOfficeRoomIdSchema.optional(),
+    mirrored: z.boolean().optional(),
+    mountOverride: MauOfficeMountSchema.optional(),
+    zOffsetOverride: z.number().optional(),
+    collisionOverride: z.boolean().optional(),
+    loopId: z.string().optional(),
+  })
+  .strict();
+
+const MauOfficeSceneAutotileSchema = z
+  .object({
+    id: z.string().min(1),
+    itemId: z.string().min(1),
+    cells: z
+      .array(
+        z
+          .object({
+            tileX: z.number(),
+            tileY: z.number(),
+          })
+          .strict(),
+      )
+      .optional(),
+    mountOverride: MauOfficeMountSchema.optional(),
+    zOffsetOverride: z.number().optional(),
+    collisionOverride: z.boolean().optional(),
+    loopId: z.string().optional(),
+  })
+  .strict();
+
+const MauOfficeSceneMarkerSchema = z
+  .object({
+    id: z.string().min(1),
+    role: MauOfficeMarkerRoleSchema,
+    tileX: z.number(),
+    tileY: z.number(),
+    pose: z.union([z.literal("stand"), z.literal("sit")]),
+    layer: z.number().int(),
+    facingOverride: z
+      .union([z.literal("north"), z.literal("east"), z.literal("south"), z.literal("west")])
+      .optional(),
+    footprintTiles: z
+      .object({
+        width: z.number(),
+        height: z.number(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const MauOfficeSceneSchema = z
+  .object({
+    version: z.literal(1).optional(),
+    zoneRows: z.array(z.array(MauOfficeZoneIdSchema)).optional(),
+    wallRows: z.array(z.array(z.boolean())).optional(),
+    props: z.array(MauOfficeScenePropSchema).optional(),
+    autotiles: z.array(MauOfficeSceneAutotileSchema).optional(),
+    markers: z.array(MauOfficeSceneMarkerSchema).optional(),
+  })
+  .strict();
+
 export const MaumauSchema = z
   .object({
     $schema: z.string().optional(),
@@ -417,6 +533,20 @@ export const MaumauSchema = z
           })
           .strict()
           .optional(),
+        mauOffice: z
+          .object({
+            enabled: z.boolean().optional(),
+            maxVisibleWorkers: z.number().int().min(1).max(12).optional(),
+            idlePackages: z
+              .object({
+                enabled: z.array(z.string().min(1)).optional(),
+              })
+              .strict()
+              .optional(),
+            scene: MauOfficeSceneSchema.optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -494,6 +624,7 @@ export const MaumauSchema = z
     models: ModelsConfigSchema,
     nodeHost: NodeHostSchema,
     agents: AgentsSchema,
+    teams: TeamsSchema,
     tools: ToolsSchema,
     bindings: BindingsSchema,
     broadcast: BroadcastSchema,

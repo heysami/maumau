@@ -221,11 +221,11 @@ describe("createLaneTextDeliverer", () => {
     const result = await deliverFinalAnswer(harness, HELLO_FINAL);
 
     expect(expectPreviewFinalized(result)).toEqual({ content: HELLO_FINAL, messageId: 999 });
-    expect(harness.editPreview).toHaveBeenCalledTimes(1);
+    expect(harness.editPreview).toHaveBeenCalledTimes(2);
     expect(harness.sendPayload).not.toHaveBeenCalled();
     expect(harness.markDelivered).toHaveBeenCalledTimes(1);
     expect(harness.log).toHaveBeenCalledWith(
-      expect.stringContaining('edit returned "message is not modified"; treating as delivered'),
+      expect.stringContaining('retry returned "message is not modified"; treating as delivered'),
     );
   });
 
@@ -238,7 +238,7 @@ describe("createLaneTextDeliverer", () => {
       harness,
       expectedLogSnippet: "ambiguous error; keeping existing preview to avoid duplicate",
     });
-    expect(harness.editPreview).toHaveBeenCalledTimes(1);
+    expect(harness.editPreview).toHaveBeenCalledTimes(2);
   });
 
   it("falls back when Telegram reports the current final edit target missing", async () => {
@@ -330,6 +330,41 @@ describe("createLaneTextDeliverer", () => {
     expect(harness.editPreview).not.toHaveBeenCalled();
     expect(harness.sendPayload).toHaveBeenCalledWith(expect.objectContaining({ text: longText }));
     expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("preview final too long"));
+  });
+
+  it("sends dashboard-link finals as standalone messages instead of preview edits", async () => {
+    const harness = createHarness({ answerMessageId: 999 });
+    const text = [
+      "Phone dashboard: https://maumau.tailnet.ts.net/dashboard/today#token=abc",
+      "If your computer shows a pairing request, approve it there first before this link will work.",
+      "Hello final",
+    ].join("\n\n");
+
+    const result = await deliverFinalAnswer(harness, text);
+
+    expect(result.kind).toBe("sent");
+    expect(harness.editPreview).not.toHaveBeenCalled();
+    expect(harness.sendPayload).toHaveBeenCalledWith(expect.objectContaining({ text }));
+    expect(harness.log).toHaveBeenCalledWith(
+      expect.stringContaining("protected link; sending standalone final message"),
+    );
+  });
+
+  it("sends preview-link finals as standalone messages instead of preview edits", async () => {
+    const harness = createHarness({ answerMessageId: 999 });
+    const text = [
+      "Private preview:",
+      "https://maumau.tailnet.ts.net/preview/for-req-er/149cf12730dd4c2b8ad81bb77b52be18/",
+    ].join("\n");
+
+    const result = await deliverFinalAnswer(harness, text);
+
+    expect(result.kind).toBe("sent");
+    expect(harness.editPreview).not.toHaveBeenCalled();
+    expect(harness.sendPayload).toHaveBeenCalledWith(expect.objectContaining({ text }));
+    expect(harness.log).toHaveBeenCalledWith(
+      expect.stringContaining("protected link; sending standalone final message"),
+    );
   });
 
   it("materializes DM draft streaming final even when text is unchanged", async () => {
@@ -460,7 +495,7 @@ describe("createLaneTextDeliverer", () => {
     harness.editPreview.mockRejectedValue(new Error("500: Internal Server Error"));
 
     await expectFinalPreviewRetained({ harness });
-    expect(harness.editPreview).toHaveBeenCalledTimes(1);
+    expect(harness.editPreview).toHaveBeenCalledTimes(2);
   });
 
   it("falls back when an archived preview edit target is missing and no alternate preview exists", async () => {

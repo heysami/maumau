@@ -375,6 +375,7 @@ export type GatewayServerOptions = {
   modelAuthWizardRunner?: (
     opts: {
       authChoice?: string;
+      setDefaultModel?: boolean;
     },
     runtime: import("../runtime.js").RuntimeEnv,
     prompter: import("../wizard/prompts.js").WizardPrompter,

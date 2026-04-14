@@ -237,6 +237,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/acpx/**"
+"extensions: automation-runner":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/automation-runner/**"
 "extensions: byteplus":
   - changed-files:
       - any-glob-to-any-file:

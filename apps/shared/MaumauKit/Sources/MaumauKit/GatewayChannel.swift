@@ -227,6 +227,8 @@ public actor GatewayChannelActor {
     }
 
     public func authSource() -> GatewayAuthSource { self.lastAuthSource }
+    public func isConnected() -> Bool { self.connected }
+    public func isConnectedOrConnecting() -> Bool { self.connected || self.isConnecting }
 
     public func shutdown() async {
         self.shouldReconnect = false
@@ -491,11 +493,12 @@ public actor GatewayChannelActor {
                 self.pendingDeviceTokenRetry = true
                 self.deviceTokenRetryBudgetUsed = true
                 self.backoffMs = min(self.backoffMs, 250)
-            } else if selectedAuth.authDeviceToken != nil,
-                let identity,
-                self.shouldClearStoredDeviceTokenAfterRetry(error)
+            } else if let identity,
+                self.shouldClearStoredDeviceTokenAfterAuthFailure(
+                    error,
+                    selectedAuth: selectedAuth)
             {
-                // Retry failed with an explicit device-token mismatch; clear stale local token.
+                // A stored device token was rejected, so clear the local copy before the next connect.
                 DeviceAuthStore.clearToken(
                     deviceId: identity.deviceId,
                     role: role,
@@ -632,8 +635,9 @@ public actor GatewayChannelActor {
         self.connected = false
         self.keepaliveTask?.cancel()
         self.keepaliveTask = nil
-        await self.disconnectHandler?("receive failed: \(wrapped.localizedDescription)")
+        // Let callers recover/retry immediately instead of waiting behind any reconnect work.
         await self.failPending(wrapped)
+        await self.disconnectHandler?("receive failed: \(wrapped.localizedDescription)")
         await self.scheduleReconnect()
     }
 
@@ -807,11 +811,21 @@ public actor GatewayChannelActor {
         return false
     }
 
-    private func shouldClearStoredDeviceTokenAfterRetry(_ error: Error) -> Bool {
+    private func shouldClearStoredDeviceTokenAfterAuthFailure(
+        _ error: Error,
+        selectedAuth: SelectedConnectAuth) -> Bool
+    {
         guard let authError = error as? GatewayConnectAuthError else {
             return false
         }
-        return authError.detail == .authDeviceTokenMismatch
+        if selectedAuth.authSource == .deviceToken {
+            return authError.detail == .authTokenMismatch ||
+                authError.detail == .authDeviceTokenMismatch
+        }
+        if selectedAuth.authDeviceToken != nil {
+            return authError.detail == .authDeviceTokenMismatch
+        }
+        return false
     }
 
     private func isTrustedDeviceRetryEndpoint() -> Bool {

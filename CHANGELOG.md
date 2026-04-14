@@ -10,37 +10,17 @@ Docs: https://docs.maumau.ai
 
 ### Fixes
 
-## 2026.3.29-beta.2
+## 2026.4.14
 
 ### Breaking
 
 ### Changes
 
-### Fixes
-
-- macOS/release packaging: free unused GitHub runner disk after selecting Xcode so tagged macOS prerelease builds can finish packaging and publish desktop artifacts again.
-
-## 2026.3.29-beta.1
-
-### Breaking
-
-### Changes
+- macOS/models settings: replace the raw model editor with a guided provider-first flow inside Settings, including in-place provider connect, provider-scoped primary/fallback selection, and clearer loading/saving states.
 
 ### Fixes
 
-- macOS/gateway local mode: keep retrying local control-channel recovery after the gateway restarts, refresh the shared auth endpoint when local auth changes, and send empty-object params for no-arg gateway RPCs so clean installs stop getting stuck on endless loading spinners while the app claims the gateway is connected.
-
-## 2026.3.28-beta.3
-
-### Breaking
-
-### Changes
-
-- Automation/models: add shared background model and thinking defaults for heartbeat, cron, and hook-driven runs, and expose the background automation model controls in macOS Settings -> Models.
-
-### Fixes
-
-- Heartbeat/models: preserve partial heartbeat overrides while inheriting background automation defaults, and make the macOS models/settings coverage pass cleanly in both workspace checks and window-backed smoke tests.
+- macOS/models settings: stop showing misleading mixed-provider selections, keep `Connect another provider` available while editing fallbacks, and immediately add a newly connected provider into fallback setup when that flow asked for it.
 
 ## 2026.3.28-beta.1
 

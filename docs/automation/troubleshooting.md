@@ -67,7 +67,7 @@ Good output looks like:
 
 Common signatures:
 
-- Run succeeded but delivery mode is `none` → no external message is expected.
+- Run succeeded but delivery mode is `none` → no automatic external message is expected.
 - Delivery target missing/invalid (`channel`/`to`) → run may succeed internally but skip outbound.
 - Channel auth errors (`unauthorized`, `missing_scope`, `Forbidden`) → delivery blocked by channel credentials/permissions.
 
@@ -117,6 +117,7 @@ Common signatures:
 Related:
 
 - [/automation/cron-jobs](/automation/cron-jobs)
+- [/automation/weekly-reflection-reviewer](/automation/weekly-reflection-reviewer)
 - [/gateway/heartbeat](/gateway/heartbeat)
 - [/automation/cron-vs-heartbeat](/automation/cron-vs-heartbeat)
 - [/concepts/timezone](/concepts/timezone)

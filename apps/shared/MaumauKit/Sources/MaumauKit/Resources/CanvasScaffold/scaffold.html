@@ -504,13 +504,13 @@
 
           <div class="hero-grid">
             <div class="meta-card">
-              <div class="meta-label">Gateway</div>
+              <div class="meta-label" id="maumau-home-gateway-label">Gateway</div>
               <div class="meta-value" id="maumau-home-gateway">Gateway</div>
               <div class="meta-subtitle" id="maumau-home-gateway-caption">Connect to load your agents</div>
             </div>
 
             <div class="meta-card">
-              <div class="meta-label">Active Agent</div>
+              <div class="meta-label" id="maumau-home-active-label">Active Agent</div>
               <div class="agent-focus">
                 <div class="agent-badge" id="maumau-home-active-badge">OC</div>
                 <div>
@@ -524,7 +524,7 @@
 
         <div class="meta-card section">
           <div class="section-header">
-            <div class="section-title">Live agents</div>
+            <div class="section-title" id="maumau-home-live-title">Live agents</div>
             <div class="section-count" id="maumau-home-agent-count">0 agents</div>
           </div>
           <div class="agent-grid" id="maumau-home-agent-grid"></div>
@@ -554,15 +554,39 @@
           eyebrow: document.getElementById('maumau-home-eyebrow'),
           title: document.getElementById('maumau-home-title'),
           subtitle: document.getElementById('maumau-home-subtitle'),
+          gatewayLabel: document.getElementById('maumau-home-gateway-label'),
           gateway: document.getElementById('maumau-home-gateway'),
           gatewayCaption: document.getElementById('maumau-home-gateway-caption'),
+          activeLabel: document.getElementById('maumau-home-active-label'),
           activeBadge: document.getElementById('maumau-home-active-badge'),
           activeName: document.getElementById('maumau-home-active-name'),
           activeCaption: document.getElementById('maumau-home-active-caption'),
+          liveTitle: document.getElementById('maumau-home-live-title'),
           agentCount: document.getElementById('maumau-home-agent-count'),
           agentGrid: document.getElementById('maumau-home-agent-grid'),
           footer: document.getElementById('maumau-home-footer')
         };
+        const defaultLocaleStrings = {
+          welcomeEyebrow: 'Welcome to Maumau',
+          offlineTitle: 'Your phone stays quiet until it is needed',
+          offlineSubtitle: 'Pair this device to your gateway to wake it only for real work, keep a live agent overview handy, and avoid battery-draining background loops.',
+          gatewayLabel: 'Gateway',
+          activeAgentLabel: 'Active Agent',
+          activeAgentName: 'Main',
+          connectToLoadAgents: 'Connect to load your agents',
+          liveAgentsTitle: 'Live agents',
+          agentCountOne: '{count} agent',
+          agentCountOther: '{count} agents',
+          agentsAvailableOne: '{count} agent available',
+          agentsAvailableOther: '{count} agents available',
+          offlineFooter: 'When connected, the gateway can wake the phone with a silent push instead of holding an always-on session.',
+          emptyConnected: 'Your gateway is online. Agents will appear here as soon as the current scope reports them.',
+          emptyOffline: 'Connect this phone to your gateway and the live agent overview will appear here.',
+          agentFallbackName: 'Agent',
+          agentFallbackCaption: 'Ready'
+        };
+        let localeStrings = { ...defaultLocaleStrings };
+        let lastHomeState = null;
         const debugStatusEnabledByQuery = (() => {
           try {
             const params = new URLSearchParams(window.location.search);
@@ -575,6 +599,58 @@
           }
         })();
         let debugStatusEnabled = debugStatusEnabledByQuery;
+
+        function interpolate(template, parameters) {
+          if (typeof template !== 'string') return '';
+          return Object.entries(parameters || {}).reduce(
+            (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
+            template,
+          );
+        }
+
+        function localized(key, fallback, parameters) {
+          const template = localeStrings[key] || defaultLocaleStrings[key] || fallback;
+          return interpolate(template, parameters);
+        }
+
+        function countText(oneKey, otherKey, count, oneFallback, otherFallback) {
+          const safeCount = Number.isFinite(count) ? count : 0;
+          return localized(
+            safeCount === 1 ? oneKey : otherKey,
+            safeCount === 1 ? oneFallback : otherFallback,
+            { count: String(safeCount) },
+          );
+        }
+
+        function applyStaticHomeText() {
+          home.eyebrow.textContent = localized('welcomeEyebrow', 'Welcome to Maumau');
+          home.title.textContent = localized('offlineTitle', 'Your phone stays quiet until it is needed');
+          home.subtitle.textContent = localized(
+            'offlineSubtitle',
+            'Pair this device to your gateway to wake it only for real work, keep a live agent overview handy, and avoid battery-draining background loops.',
+          );
+          home.gatewayLabel.textContent = localized('gatewayLabel', 'Gateway');
+          home.gateway.textContent = localized('gatewayLabel', 'Gateway');
+          home.gatewayCaption.textContent = localized('connectToLoadAgents', 'Connect to load your agents');
+          home.activeLabel.textContent = localized('activeAgentLabel', 'Active Agent');
+          home.activeName.textContent = localized('activeAgentName', 'Main');
+          home.activeCaption.textContent = localized('connectToLoadAgents', 'Connect to load your agents');
+          home.liveTitle.textContent = localized('liveAgentsTitle', 'Live agents');
+          home.agentCount.textContent = countText('agentCountOne', 'agentCountOther', 0, '{count} agent', '{count} agents');
+          home.footer.textContent = localized(
+            'offlineFooter',
+            'When connected, the gateway can wake the phone with a silent push instead of holding an always-on session.',
+          );
+        }
+
+        function setLocaleStrings(strings) {
+          localeStrings = { ...defaultLocaleStrings, ...(strings || {}) };
+          if (lastHomeState) {
+            renderHome(lastHomeState);
+            return;
+          }
+          applyStaticHomeText();
+        }
 
         function resize() {
           const dpr = window.devicePixelRatio || 1;
@@ -622,11 +698,11 @@
 
           const name = document.createElement('div');
           name.className = 'name';
-          name.textContent = agent.name || agent.id || 'Agent';
+          name.textContent = agent.name || agent.id || localized('agentFallbackName', 'Agent');
 
           const caption = document.createElement('div');
           caption.className = 'caption';
-          caption.textContent = agent.caption || 'Ready';
+          caption.textContent = agent.caption || localized('agentFallbackCaption', 'Ready');
 
           text.appendChild(name);
           text.appendChild(caption);
@@ -638,30 +714,62 @@
 
         function renderHome(state) {
           if (!state || typeof state !== 'object') return;
+          lastHomeState = state;
 
           document.body.dataset.state = state.gatewayState || 'offline';
           home.root.style.display = 'flex';
-          home.eyebrow.textContent = state.eyebrow || 'Welcome to Maumau';
-          home.title.textContent = state.title || 'Maumau';
-          home.subtitle.textContent = state.subtitle || '';
-          home.gateway.textContent = state.gatewayLabel || 'Gateway';
-          home.gatewayCaption.textContent = state.gatewayState === 'connected'
-            ? `${state.agentCount || 0} agent${state.agentCount === 1 ? '' : 's'} available`
-            : (state.activeAgentCaption || 'Connect to load your agents');
+          home.eyebrow.textContent = state.eyebrow || localized('welcomeEyebrow', 'Welcome to Maumau');
+          home.title.textContent = state.title || localized('offlineTitle', 'Your phone stays quiet until it is needed');
+          home.subtitle.textContent = state.subtitle || localized(
+            'offlineSubtitle',
+            'Pair this device to your gateway to wake it only for real work, keep a live agent overview handy, and avoid battery-draining background loops.',
+          );
+          home.gatewayLabel.textContent = state.gatewaySectionLabel || localized('gatewayLabel', 'Gateway');
+          home.gateway.textContent = state.gatewayLabel || localized('gatewayLabel', 'Gateway');
+          home.gatewayCaption.textContent = state.gatewayCaption || (
+            state.gatewayState === 'connected'
+              ? countText(
+                'agentsAvailableOne',
+                'agentsAvailableOther',
+                Number(state.agentCount) || 0,
+                '{count} agent available',
+                '{count} agents available',
+              )
+              : (state.activeAgentCaption || localized('connectToLoadAgents', 'Connect to load your agents'))
+          );
+          home.activeLabel.textContent = state.activeAgentLabel || localized('activeAgentLabel', 'Active Agent');
           home.activeBadge.textContent = state.activeAgentBadge || 'OC';
-          home.activeName.textContent = state.activeAgentName || 'Main';
+          home.activeName.textContent = state.activeAgentName || localized('activeAgentName', 'Main');
           home.activeCaption.textContent = state.activeAgentCaption || '';
-          home.agentCount.textContent = `${state.agentCount || 0} agent${state.agentCount === 1 ? '' : 's'}`;
-          home.footer.textContent = state.footer || '';
+          home.liveTitle.textContent = state.liveAgentsTitle || localized('liveAgentsTitle', 'Live agents');
+          home.agentCount.textContent = state.agentCountLabel || countText(
+            'agentCountOne',
+            'agentCountOther',
+            Number(state.agentCount) || 0,
+            '{count} agent',
+            '{count} agents',
+          );
+          home.footer.textContent = state.footer || localized(
+            'offlineFooter',
+            'When connected, the gateway can wake the phone with a silent push instead of holding an always-on session.',
+          );
 
           clearChildren(home.agentGrid);
           const agents = Array.isArray(state.agents) ? state.agents : [];
           if (!agents.length) {
             const empty = document.createElement('div');
             empty.className = 'empty-state';
-            empty.textContent = state.gatewayState === 'connected'
-              ? 'Your gateway is online. Agents will appear here as soon as the current scope reports them.'
-              : 'Connect this phone to your gateway and the live agent overview will appear here.';
+            empty.textContent = state.emptyStateText || (
+              state.gatewayState === 'connected'
+                ? localized(
+                  'emptyConnected',
+                  'Your gateway is online. Agents will appear here as soon as the current scope reports them.',
+                )
+                : localized(
+                  'emptyOffline',
+                  'Connect this phone to your gateway and the live agent overview will appear here.',
+                )
+            );
             home.agentGrid.appendChild(empty);
             return;
           }
@@ -678,13 +786,20 @@
           statusEl.style.display = 'none';
         }
 
+        applyStaticHomeText();
+
         window.__maumau = {
           canvas,
           ctx,
           setDebugStatusEnabled,
           setStatus,
+          setLocaleStrings,
           renderHome
         };
+
+        if (globalThis.__maumauLocaleStrings) {
+          setLocaleStrings(globalThis.__maumauLocaleStrings);
+        }
       })();
     </script>
   </body>

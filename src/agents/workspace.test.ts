@@ -79,6 +79,24 @@ describe("ensureAgentWorkspace", () => {
 
     await expectBootstrapSeeded(tempDir);
     expect((await readWorkspaceState(tempDir)).setupCompletedAt).toBeUndefined();
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("Life Snapshot (Optional)");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("walk me through what your days usually look like");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain('Do not tell the user something is "locked in"');
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME), "utf-8"),
+    ).resolves.toContain("Do not close bootstrap without handling that choice.");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_USER_FILENAME), "utf-8"),
+    ).resolves.toContain("## Life Snapshot");
+    await expect(
+      fs.readFile(path.join(tempDir, DEFAULT_USER_FILENAME), "utf-8"),
+    ).resolves.toContain("**Family / siblings / parents:**");
   });
 
   it("recovers partial initialization by creating BOOTSTRAP.md when marker is missing", async () => {
@@ -139,6 +157,37 @@ describe("ensureAgentWorkspace", () => {
     expect(state.setupCompletedAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
     const memoryContent = await fs.readFile(path.join(tempDir, "MEMORY.md"), "utf-8");
     expect(memoryContent).toBe("# Long-term memory\nImportant stuff");
+  });
+
+  it("does not treat empty memory scaffolding as a completed workspace", async () => {
+    const tempDir = await makeTempWorkspace("maumau-workspace-");
+    await fs.mkdir(path.join(tempDir, "memory"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "corpus"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "reviews"), { recursive: true });
+
+    await ensureAgentWorkspace({ dir: tempDir, ensureBootstrapFiles: true });
+
+    await expectBootstrapSeeded(tempDir);
+  });
+
+  it("repairs a false completed marker caused by empty scaffolding", async () => {
+    const tempDir = await makeTempWorkspace("maumau-workspace-");
+    await fs.mkdir(path.join(tempDir, ".maumau"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "memory"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "corpus"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "reviews"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempDir, ...WORKSPACE_STATE_PATH_SEGMENTS),
+      JSON.stringify({
+        version: 1,
+        setupCompletedAt: "2026-04-13T07:30:40.755Z",
+      }),
+    );
+
+    await ensureAgentWorkspace({ dir: tempDir, ensureBootstrapFiles: true });
+
+    await expectBootstrapSeeded(tempDir);
+    expect((await readWorkspaceState(tempDir)).setupCompletedAt).toBeUndefined();
   });
 
   it("treats git-backed workspaces as existing even when template files are missing", async () => {

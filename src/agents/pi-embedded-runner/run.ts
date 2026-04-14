@@ -73,6 +73,7 @@ import { log } from "./logger.js";
 import { resolveModelAsync } from "./model.js";
 import { runEmbeddedAttempt } from "./run/attempt.js";
 import { createFailoverDecisionLogger } from "./run/failover-observation.js";
+import { buildEmbeddedHookContext } from "./run/hook-context.js";
 import type { RunEmbeddedPiAgentParams } from "./run/params.js";
 import { buildEmbeddedRunPayloads } from "./run/payloads.js";
 import {
@@ -269,15 +270,11 @@ export async function runEmbeddedPiAgent(
       let modelResolveOverride: { providerOverride?: string; modelOverride?: string } | undefined;
       let legacyBeforeAgentStartResult: PluginHookBeforeAgentStartResult | undefined;
       const hookRunner = getGlobalHookRunner();
-      const hookCtx = {
+      const hookCtx = buildEmbeddedHookContext({
+        ...params,
         agentId: workspaceResolution.agentId,
-        sessionKey: params.sessionKey,
-        sessionId: params.sessionId,
         workspaceDir: resolvedWorkspace,
-        messageProvider: params.messageProvider ?? undefined,
-        trigger: params.trigger,
-        channelId: params.messageChannel ?? params.messageProvider ?? undefined,
-      };
+      });
       if (hookRunner?.hasHooks("before_model_resolve")) {
         try {
           modelResolveOverride = await hookRunner.runBeforeModelResolve(
@@ -880,11 +877,13 @@ export async function runEmbeddedPiAgent(
             groupId: params.groupId,
             groupChannel: params.groupChannel,
             groupSpace: params.groupSpace,
+            isGroup: params.isGroup,
             spawnedBy: params.spawnedBy,
             senderId: params.senderId,
             senderName: params.senderName,
             senderUsername: params.senderUsername,
             senderE164: params.senderE164,
+            requesterTailscaleLogin: params.requesterTailscaleLogin,
             senderIsOwner: params.senderIsOwner,
             currentChannelId: params.currentChannelId,
             currentThreadTs: params.currentThreadTs,

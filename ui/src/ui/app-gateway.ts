@@ -2,6 +2,7 @@ import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
 } from "../../../src/gateway/events.js";
+import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
 import { CHAT_SESSIONS_ACTIVE_MINUTES, flushChatQueueForEvent } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import {
@@ -18,6 +19,8 @@ import { loadAgents } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
+import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
+import { scheduleDashboardReload } from "./controllers/dashboard.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import {
@@ -27,6 +30,18 @@ import {
   removeExecApproval,
 } from "./controllers/exec-approval.ts";
 import { loadHealthState } from "./controllers/health.ts";
+import {
+  applyMauOfficeChatEvent,
+  refreshMauOfficeChatForSessionMessage,
+  type MauOfficeChatHost,
+} from "./controllers/mau-office-chat.ts";
+import {
+  applyMauOfficeAgentEvent,
+  applyMauOfficePresence,
+  applyMauOfficeSessionMessageEvent,
+  applyMauOfficeSessionToolEvent,
+  scheduleMauOfficeReload,
+} from "./controllers/mau-office.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions, subscribeSessions } from "./controllers/sessions.ts";
 import {
@@ -35,10 +50,13 @@ import {
   type GatewayHelloOk,
 } from "./gateway.ts";
 import { GatewayBrowserClient } from "./gateway.ts";
-import type { Tab } from "./navigation.ts";
+import { isDashboardTab, type Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type {
   AgentsListResult,
+  ConfigSnapshot,
+  DashboardSnapshot,
+  DashboardTeamSnapshotsResult,
   PresenceEntry,
   HealthSummary,
   StatusSummary,
@@ -49,7 +67,33 @@ function isGenericBrowserFetchFailure(message: string): boolean {
   return /^(?:typeerror:\s*)?(?:fetch failed|failed to fetch)$/i.test(message.trim());
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "127.0.0.1" ||
+    normalized.startsWith("127.")
+  );
+}
+
+function isLoopbackGatewayTarget(url: string, pageUrl?: string): boolean {
+  try {
+    const resolved = new URL(
+      url,
+      pageUrl ?? (typeof window === "undefined" ? undefined : window.location.href),
+    );
+    return isLoopbackHostname(resolved.hostname);
+  } catch {
+    return false;
+  }
+}
+
 type GatewayHost = {
+  basePath: string;
   settings: UiSettings;
   password: string;
   clientInstanceId: string;
@@ -76,9 +120,67 @@ type GatewayHost = {
   assistantAvatar: string | null;
   assistantAgentId: string | null;
   serverVersion: string | null;
+  secureDashboardUrl: string | null;
   sessionKey: string;
   chatRunId: string | null;
   refreshSessionsAfterChat: Set<string>;
+  dashboardLoading: boolean;
+  dashboardError: string | null;
+  dashboardSnapshot: DashboardSnapshot | null;
+  dashboardWalletLoading: boolean;
+  dashboardWalletError: string | null;
+  dashboardWalletResult: import("./types.ts").DashboardWalletResult | null;
+  dashboardWalletStartDate: string;
+  dashboardWalletEndDate: string;
+  dashboardWalletTimeZone: "local" | "utc";
+  dashboardCalendarResult: import("./types.ts").DashboardCalendarResult | null;
+  dashboardCalendarAnchorAtMs: number | null;
+  dashboardCalendarView: "month" | "week" | "day";
+  dashboardBusinessResult: import("./types.ts").DashboardBusinessResult | null;
+  dashboardProjectsResult: import("./types.ts").DashboardProjectsResult | null;
+  dashboardUserChannelsResult: import("./types.ts").DashboardUserChannelsResult | null;
+  dashboardUserChannelId: string | null;
+  dashboardUserChannelAccountId: string | null;
+  dashboardTeamsLoading: boolean;
+  dashboardTeamsError: string | null;
+  dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading: boolean;
+  dashboardTeamRunsError: string | null;
+  dashboardTeamRuns: import("./types.ts").DashboardTeamRunsResult | null;
+  dashboardTaskFilter: import("./types.ts").DashboardTaskFilter;
+  dashboardWorkshopSelectedId: string | null;
+  dashboardWorkshopTab: "saved" | "recent" | "agent-apps";
+  dashboardWorkshopSelectedIds: Set<string>;
+  dashboardWorkshopProjectDraft: string;
+  dashboardWorkshopSaving: boolean;
+  dashboardWorkshopSaveError: string | null;
+  configForm: Record<string, unknown> | null;
+  configSnapshot: ConfigSnapshot | null;
+  configFormDirty: boolean;
+  configFormMode: "form" | "raw";
+  configRaw: string;
+  dashboardReloadTimer: number | null;
+  mauOfficeLoading: boolean;
+  mauOfficeError: string | null;
+  mauOfficeState: import("./controllers/mau-office.ts").MauOfficeState;
+  mauOfficeReloadTimer: number | null;
+  mauOfficeChatOpen: boolean;
+  mauOfficeChatMinimized: boolean;
+  mauOfficeChatActorId: string | null;
+  mauOfficeChatActorLabel: string;
+  mauOfficeChatSessionKey: string;
+  mauOfficeChatLoading: boolean;
+  mauOfficeChatSending: boolean;
+  mauOfficeChatMessage: string;
+  mauOfficeChatMessages: unknown[];
+  mauOfficeChatThinkingLevel: string | null;
+  mauOfficeChatAttachments: import("./ui-types.ts").ChatAttachment[];
+  mauOfficeChatRunId: string | null;
+  mauOfficeChatStream: string | null;
+  mauOfficeChatStreamStartedAt: number | null;
+  mauOfficeChatError: string | null;
+  mauOfficeChatPositionX: number | null;
+  mauOfficeChatPositionY: number | null;
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
   updateAvailable: UpdateAvailable | null;
@@ -94,6 +196,53 @@ type SessionDefaultsSnapshot = {
 type GatewayHostWithShutdownMessage = GatewayHost & {
   pendingShutdownMessage?: string | null;
 };
+
+async function refreshLoopbackGatewayTokenFromBootstrap(
+  host: GatewayHost,
+  client: GatewayBrowserClient,
+  opts?: { reconnectOnChange?: boolean },
+): Promise<boolean> {
+  if (!isLoopbackGatewayTarget(host.settings.gatewayUrl)) {
+    return false;
+  }
+  const bootstrap = await loadControlUiBootstrapConfig(
+    host as unknown as Parameters<typeof loadControlUiBootstrapConfig>[0],
+  );
+  const nextToken = bootstrap?.loopbackGatewayToken?.trim() ?? "";
+  if (!nextToken || nextToken === host.settings.token.trim()) {
+    return false;
+  }
+  if (host.client !== client) {
+    return false;
+  }
+  applySettings(host as unknown as Parameters<typeof applySettings>[0], {
+    ...host.settings,
+    token: nextToken,
+  });
+  if (opts?.reconnectOnChange !== false) {
+    connectGateway(host);
+  }
+  return true;
+}
+
+function hasMauOfficeState(host: GatewayHost): host is GatewayHost & {
+  mauOfficeState: import("./controllers/mau-office.ts").MauOfficeState;
+} {
+  return Boolean((host as { mauOfficeState?: unknown }).mauOfficeState);
+}
+
+function scheduleDashboardReloadIfNeeded(
+  host: GatewayHost,
+  opts?: { includeTeams?: boolean; delayMs?: number },
+) {
+  if (!isDashboardTab(host.tab) && !host.dashboardSnapshot) {
+    return;
+  }
+  scheduleDashboardReload(host, {
+    delayMs: opts?.delayMs,
+    includeTeams: opts?.includeTeams ?? host.tab === "dashboardTeams",
+  });
+}
 
 export function resolveControlUiClientVersion(params: {
   gatewayUrl: string;
@@ -189,14 +338,19 @@ export function connectGateway(host: GatewayHost) {
     gatewayUrl: host.settings.gatewayUrl,
     serverVersion: host.serverVersion,
   });
-  const client = new GatewayBrowserClient({
+  let client: GatewayBrowserClient;
+  client = new GatewayBrowserClient({
     url: host.settings.gatewayUrl,
     token: host.settings.token.trim() ? host.settings.token : undefined,
+    getToken: () => (host.settings.token.trim() ? host.settings.token : undefined),
     password: host.password.trim() ? host.password : undefined,
     clientName: "maumau-control-ui",
     clientVersion,
     mode: "webchat",
     instanceId: host.clientInstanceId,
+    beforeConnect: async () => {
+      await refreshLoopbackGatewayTokenFromBootstrap(host, client, { reconnectOnChange: false });
+    },
     onHello: (hello) => {
       if (host.client !== client) {
         return;
@@ -230,6 +384,9 @@ export function connectGateway(host: GatewayHost) {
       host.lastErrorCode =
         resolveGatewayErrorDetailCode(error) ??
         (typeof error?.code === "string" ? error.code : null);
+      if (host.lastErrorCode === ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH) {
+        void refreshLoopbackGatewayTokenFromBootstrap(host, client);
+      }
       if (code !== 1012) {
         if (error?.message) {
           host.lastError =
@@ -314,6 +471,7 @@ function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | u
       payload.sessionKey,
     );
   }
+  applyMauOfficeChatEvent(host as GatewayHost & MauOfficeChatHost, payload);
   const state = handleChatEvent(host as unknown as MaumauApp, payload);
   const historyReloaded = handleTerminalChatEvent(host, payload, state);
   if (state === "final" && !historyReloaded && shouldReloadHistoryForFinalEvent(payload)) {
@@ -334,6 +492,14 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (host.onboarding) {
       return;
     }
+    scheduleDashboardReloadIfNeeded(host);
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeAgentEvent(
+        host.mauOfficeState,
+        evt.payload as AgentEventPayload | undefined,
+        Date.now(),
+      );
+    }
     handleAgentEvent(
       host as unknown as Parameters<typeof handleAgentEvent>[0],
       evt.payload as AgentEventPayload | undefined,
@@ -352,6 +518,14 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host.presenceEntries = payload.presence;
       host.presenceError = null;
       host.presenceStatus = null;
+      scheduleDashboardReloadIfNeeded(host);
+      if (hasMauOfficeState(host)) {
+        host.mauOfficeState = applyMauOfficePresence(
+          host.mauOfficeState,
+          payload.presence,
+          Date.now(),
+        );
+      }
     }
     return;
   }
@@ -372,13 +546,48 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
+  if (evt.event === "session.tool") {
+    scheduleDashboardReloadIfNeeded(host);
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeSessionToolEvent(
+        host.mauOfficeState,
+        evt.payload as { sessionKey?: unknown; data?: Record<string, unknown> } | undefined,
+        Date.now(),
+      );
+    }
+    return;
+  }
+
+  if (evt.event === "session.message") {
+    scheduleDashboardReloadIfNeeded(host);
+    if (hasMauOfficeState(host)) {
+      host.mauOfficeState = applyMauOfficeSessionMessageEvent(
+        host.mauOfficeState,
+        evt.payload as { sessionKey?: unknown; message?: Record<string, unknown> } | undefined,
+        Date.now(),
+      );
+    }
+    void refreshMauOfficeChatForSessionMessage(
+      host as GatewayHost & MauOfficeChatHost,
+      evt.payload as { sessionKey?: unknown } | undefined,
+    );
+    return;
+  }
+
   if (evt.event === "sessions.changed") {
+    scheduleDashboardReloadIfNeeded(host, { includeTeams: host.tab === "dashboardTeams" });
+    if (hasMauOfficeState(host)) {
+      scheduleMauOfficeReload(host);
+    }
     void loadSessions(host as unknown as MaumauApp);
     return;
   }
 
-  if (evt.event === "cron" && host.tab === "cron") {
-    void loadCron(host as unknown as Parameters<typeof loadCron>[0]);
+  if (evt.event === "cron") {
+    scheduleDashboardReloadIfNeeded(host);
+    if (host.tab === "cron") {
+      void loadCron(host as unknown as Parameters<typeof loadCron>[0]);
+    }
   }
 
   if (evt.event === "device.pair.requested" || evt.event === "device.pair.resolved") {
@@ -386,6 +595,7 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
   }
 
   if (evt.event === "exec.approval.requested") {
+    scheduleDashboardReloadIfNeeded(host);
     const entry = parseExecApprovalRequested(evt.payload);
     if (entry) {
       host.execApprovalQueue = addExecApproval(host.execApprovalQueue, entry);
@@ -399,6 +609,7 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
   }
 
   if (evt.event === "exec.approval.resolved") {
+    scheduleDashboardReloadIfNeeded(host);
     const resolved = parseExecApprovalResolved(evt.payload);
     if (resolved) {
       host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, resolved.id);

@@ -112,6 +112,7 @@ Use these hubs to discover every page, including deep dives and reference docs t
 - [Elevated mode](/tools/elevated)
 - [Cron jobs](/automation/cron-jobs)
 - [Cron vs Heartbeat](/automation/cron-vs-heartbeat)
+- [Weekly Reflection Reviewer](/automation/weekly-reflection-reviewer)
 - [Thinking + verbose](/tools/thinking)
 - [Models](/concepts/models)
 - [Sub-agents](/tools/subagents)

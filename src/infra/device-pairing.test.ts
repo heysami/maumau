@@ -13,6 +13,7 @@ import {
   requestDevicePairing,
   rotateDeviceToken,
   verifyDeviceToken,
+  verifyPairedOperatorToken,
   type PairedDevice,
   type RotateDeviceTokenResult,
 } from "./device-pairing.js";
@@ -402,6 +403,34 @@ describe("device pairing tokens", () => {
       scopes: ["operator.write"],
     });
     expect(writeOk.ok).toBe(true);
+  });
+
+  test("accepts paired operator token lookups across devices for admin-scoped HTTP auth", async () => {
+    const { baseDir, token } = await setupOperatorToken(["operator.admin"]);
+
+    await expect(
+      verifyPairedOperatorToken({
+        baseDir,
+        token,
+        requiredScopes: ["operator.admin"],
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      deviceId: "device-1",
+      scopes: expect.arrayContaining(["operator.admin"]),
+    });
+  });
+
+  test("rejects paired operator token lookups when the token scope is too narrow", async () => {
+    const { baseDir, token } = await setupOperatorToken(["operator.read"]);
+
+    await expect(
+      verifyPairedOperatorToken({
+        baseDir,
+        token,
+        requiredScopes: ["operator.admin"],
+      }),
+    ).resolves.toEqual({ ok: false, reason: "scope-mismatch" });
   });
 
   test("accepts custom operator scopes under an operator.admin approval baseline", async () => {

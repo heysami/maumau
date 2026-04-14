@@ -32,14 +32,23 @@ import {
   type RestartSentinelPayload,
   writeRestartSentinel,
 } from "../../infra/restart-sentinel.js";
-import { scheduleGatewaySigusr1Restart } from "../../infra/restart.js";
+import {
+  DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS,
+  scheduleGatewaySigusr1Restart,
+} from "../../infra/restart.js";
 import { loadMaumauPlugins } from "../../plugins/loader.js";
-import { diffConfigPaths } from "../config-reload.js";
+import { ensureLifeImprovementRoutineArtifacts } from "../../teams/life-improvement-routine.js";
+import {
+  buildGatewayReloadPlan,
+  diffConfigPaths,
+  resolveGatewayReloadSettings,
+} from "../config-reload.js";
 import {
   formatControlPlaneActor,
   resolveControlPlaneActor,
   summarizeChangedPaths,
 } from "../control-plane-audit.js";
+import { haveTeamsConfigChanged, refreshStoredDashboardTeamSnapshots } from "../dashboard.js";
 import {
   ErrorCodes,
   errorShape,
@@ -54,7 +63,7 @@ import {
 } from "../protocol/index.js";
 import { resolveBaseHashParam } from "./base-hash.js";
 import { parseRestartRequestParams } from "./restart-request.js";
-import type { GatewayRequestHandlers, RespondFn } from "./types.js";
+import type { GatewayRequestHandlerOptions, GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
 const MAX_CONFIG_ISSUES_IN_ERROR_MESSAGE = 3;
@@ -198,6 +207,32 @@ function summarizeConfigValidationIssues(issues: ReadonlyArray<ConfigValidationI
   }`;
 }
 
+function describeConfigSetReload(params: {
+  previousConfig: MaumauConfig | undefined;
+  nextConfig: MaumauConfig;
+}) {
+  const changedPaths = diffConfigPaths(params.previousConfig ?? {}, params.nextConfig);
+  const reloadSettings = resolveGatewayReloadSettings(params.nextConfig);
+  const reloadPlan = buildGatewayReloadPlan(changedPaths);
+  const restartExpected =
+    changedPaths.length > 0 &&
+    (reloadSettings.mode === "restart" ||
+      (reloadSettings.mode === "hybrid" && reloadPlan.restartGateway));
+
+  return {
+    changedPaths,
+    reload: {
+      mode: reloadSettings.mode,
+      debounceMs: reloadSettings.debounceMs,
+      deferralTimeoutMs:
+        params.nextConfig.gateway?.reload?.deferralTimeoutMs ??
+        DEFAULT_GATEWAY_RESTART_DEFERRAL_TIMEOUT_MS,
+      restartExpected,
+      restartReasons: restartExpected ? reloadPlan.restartReasons : [],
+    },
+  };
+}
+
 function resolveConfigRestartRequest(params: unknown): {
   sessionKey: string | undefined;
   note: string | undefined;
@@ -296,6 +331,39 @@ function loadSchemaWithPlugins(): ConfigSchemaResponse {
   });
 }
 
+async function refreshDashboardTeamSnapshotsIfNeeded(params: {
+  previousConfig: MaumauConfig | undefined;
+  nextConfig: MaumauConfig;
+  logger?: { warn?: (message: string) => void };
+}) {
+  if (!haveTeamsConfigChanged(params.previousConfig, params.nextConfig)) {
+    return;
+  }
+  try {
+    await refreshStoredDashboardTeamSnapshots({
+      cfg: params.nextConfig,
+      logger: params.logger,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    params.logger?.warn?.(
+      `[dashboard] failed to refresh team snapshots after config write: ${message}`,
+    );
+  }
+}
+
+async function syncManagedLifeImprovementRoutine(params: {
+  nextConfig: MaumauConfig;
+  context?: GatewayRequestHandlerOptions["context"];
+}) {
+  await ensureLifeImprovementRoutineArtifacts({
+    config: params.nextConfig,
+    cron: params.context?.cron,
+    cronStorePath: params.context?.cronStorePath,
+    logger: params.context?.logGateway,
+  });
+}
+
 export const configHandlers: GatewayRequestHandlers = {
   "config.get": async ({ params, respond }) => {
     if (!assertValidParams(params, validateConfigGetParams, "config.get", respond)) {
@@ -344,7 +412,7 @@ export const configHandlers: GatewayRequestHandlers = {
     }
     respond(true, result, undefined);
   },
-  "config.set": async ({ params, respond }) => {
+  "config.set": async ({ params, respond, client, context }) => {
     if (!assertValidParams(params, validateConfigSetParams, "config.set", respond)) {
       return;
     }
@@ -356,13 +424,33 @@ export const configHandlers: GatewayRequestHandlers = {
     if (!parsed) {
       return;
     }
+    const { changedPaths, reload } = describeConfigSetReload({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+    });
+    const actor = resolveControlPlaneActor(client);
+    context?.logGateway?.info(
+      `config.set write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)}`,
+    );
     await writeConfigFile(parsed.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+      logger: context?.logGateway,
+    });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: parsed.config,
+      context,
+    });
+    const nextSnapshot = await readConfigFileSnapshot();
     respond(
       true,
       {
         ok: true,
         path: createConfigIO().configPath,
+        hash: resolveConfigSnapshotHash(nextSnapshot),
         config: redactConfigObject(parsed.config, parsed.schema.uiHints),
+        reload,
       },
       undefined,
     );
@@ -447,6 +535,15 @@ export const configHandlers: GatewayRequestHandlers = {
       `config.patch write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)} restartReason=config.patch`,
     );
     await writeConfigFile(validated.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: validated.config,
+      logger: context?.logGateway,
+    });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: validated.config,
+      context,
+    });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =
       resolveConfigRestartRequest(params);
@@ -507,6 +604,15 @@ export const configHandlers: GatewayRequestHandlers = {
       `config.apply write ${formatControlPlaneActor(actor)} changedPaths=${summarizeChangedPaths(changedPaths)} restartReason=config.apply`,
     );
     await writeConfigFile(parsed.config, writeOptions);
+    await refreshDashboardTeamSnapshotsIfNeeded({
+      previousConfig: snapshot.config,
+      nextConfig: parsed.config,
+      logger: context?.logGateway,
+    });
+    await syncManagedLifeImprovementRoutine({
+      nextConfig: parsed.config,
+      context,
+    });
 
     const { sessionKey, note, restartDelayMs, deliveryContext, threadId } =
       resolveConfigRestartRequest(params);

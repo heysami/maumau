@@ -242,6 +242,7 @@ final class ChannelsStore {
     var configUiHints: [String: ConfigUiHint] = [:]
     var configDraft: [String: Any] = [:]
     var configDirty = false
+    var defersConfigSaves: Bool
 
     let interval: TimeInterval = 45
     let isPreview: Bool
@@ -312,7 +313,11 @@ final class ChannelsStore {
         return ordered
     }
 
-    init(isPreview: Bool = ProcessInfo.processInfo.isPreview) {
+    init(
+        isPreview: Bool = ProcessInfo.processInfo.isPreview,
+        deferConfigSaves: Bool = false)
+    {
         self.isPreview = isPreview
+        self.defersConfigSaves = deferConfigSaves
     }
 }

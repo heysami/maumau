@@ -26,6 +26,14 @@ extension ChannelsSettings {
         self.store.whatsappLoginQrDataUrl == nil ? self.loc("Link WhatsApp") : self.loc("Refresh QR")
     }
 
+    private func quickSetupEntry(_ channelId: String) -> UserChannelQuickSetupEntry? {
+        UserChannelQuickSetupRegistry.entry(for: channelId, language: self.language)
+    }
+
+    private func quickSetupField(_ channelId: String, key: String) -> UserChannelQuickSetupField? {
+        self.quickSetupEntry(channelId)?.fields.first(where: { $0.key == key })
+    }
+
     func formSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         GroupBox(title) {
             VStack(alignment: .leading, spacing: 10) {
@@ -83,7 +91,8 @@ extension ChannelsSettings {
             self.whatsAppLinkingSection
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding links the WhatsApp identity and opens direct chats so the linked number can reply right away. Advanced access or routing changes stay in full Settings → Channels."))
+                    self.quickSetupEntry("whatsapp")?.quickSetup.setupNote ??
+                        "Onboarding links the WhatsApp identity and opens direct chats so the linked number can reply right away. Advanced access or routing changes stay in full Settings → Channels."))
         }
     }
 
@@ -118,35 +127,45 @@ extension ChannelsSettings {
     }
 
     private var onboardingTelegramSection: some View {
+        let quickSetup = self.quickSetupEntry("telegram")?.quickSetup
+        let tokenField = self.quickSetupField("telegram", key: "botToken")
         let handle = self.telegramBotHandle
         let tokenSaved = self.hasSavedStringValue(at: self.channelConfigPath("telegram", "botToken"))
-        let headline = handle.map { "@\($0)" } ?? (tokenSaved ? self.loc("Bot token saved") : self.loc("No bot token saved yet"))
+        let headline = handle.map { "@\($0)" } ?? (tokenSaved
+            ? self.loc("Bot token saved")
+            : self.loc(quickSetup?.emptyHeadline ?? "No bot token saved yet"))
         let body = handle != nil
             ? self.loc("This Telegram bot is the agent identity. People message that bot handle to talk to the agent.")
             : tokenSaved
                 ? self.loc("Maumau already has a Telegram bot token saved. Refresh after the bot is live to show the handle here.")
-                : self.loc("Paste the bot token from BotFather. Maumau will open Telegram DMs so the bot can reply right away, while still requiring mentions in groups.")
-        let badge = handle != nil ? self.loc("Ready to message") : (tokenSaved ? self.loc("Token saved") : self.loc("Needs token"))
+                : self.loc(
+                    quickSetup?.emptyMessage ??
+                        "Paste the bot token from BotFather. Maumau will open Telegram DMs so the bot can reply right away, while still requiring mentions in groups.")
+        let badge = handle != nil
+            ? self.loc("Ready to message")
+            : (tokenSaved ? self.loc("Token saved") : self.loc(quickSetup?.emptyBadge ?? "Needs token"))
 
         return VStack(alignment: .leading, spacing: 16) {
             self.onboardingGuidanceSection(channelId: "telegram")
             OnboardingSingleSecretSetupCard(
                 store: self.store,
                 channelId: "telegram",
-                sectionTitle: self.loc("Bot identity"),
-                title: self.loc("Telegram Agent"),
+                sectionTitle: self.loc(quickSetup?.sectionTitle ?? "Bot identity"),
+                title: self.loc(quickSetup?.title ?? "Telegram Agent"),
                 headline: headline,
                 message: body,
                 badge: badge,
                 systemImage: "paperplane.circle.fill",
                 tint: handle != nil || tokenSaved ? .green : .accentColor,
-                fieldLabel: self.loc("Telegram bot token"),
-                placeholder: "1234567890:AAExampleTelegramBotToken",
+                fieldLabel: self.loc(tokenField?.label ?? "Telegram bot token"),
+                placeholder: tokenField?.placeholder ?? "1234567890:AAExampleTelegramBotToken",
                 existingCredentialNote: tokenSaved
                     ? self.loc("A Telegram bot token is already saved. Paste a new one only if you want to replace it.")
                     : nil,
-                buttonTitle: self.loc("Save Telegram bot"),
-                successMessage: self.loc("Telegram bot saved. Direct messages are open so it replies right away."),
+                buttonTitle: self.loc(quickSetup?.buttonTitle ?? "Save Telegram bot"),
+                successMessage: self.loc(
+                    quickSetup?.successMessage ??
+                        "Telegram bot saved. Direct messages are open so it replies right away."),
                 buildUpdates: { token in
                     [
                         (self.channelConfigPath("telegram", "enabled"), true),
@@ -157,40 +176,51 @@ extension ChannelsSettings {
             self.configStatusMessage
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding opens Telegram DMs so you can message the bot immediately, and keeps group mention gating on. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
+                    quickSetup?.setupNote ??
+                        "Onboarding opens Telegram DMs so you can message the bot immediately, and keeps group mention gating on. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
         }
     }
 
     private var onboardingDiscordSection: some View {
+        let quickSetup = self.quickSetupEntry("discord")?.quickSetup
+        let tokenField = self.quickSetupField("discord", key: "token")
         let handle = self.discordBotHandle
         let tokenSaved = self.hasSavedStringValue(at: self.channelConfigPath("discord", "token"))
-        let headline = handle.map { "@\($0)" } ?? (tokenSaved ? self.loc("Bot token saved") : self.loc("No bot token saved yet"))
+        let headline = handle.map { "@\($0)" } ?? (tokenSaved
+            ? self.loc("Bot token saved")
+            : self.loc(quickSetup?.emptyHeadline ?? "No bot token saved yet"))
         let body = handle != nil
             ? self.loc("This Discord bot is the agent identity. People DM it or talk to it in the servers where you install it.")
             : tokenSaved
                 ? self.loc("Maumau already has a Discord bot token saved. Refresh after the bot is installed to show the bot name here.")
-                : self.loc("Paste the Discord bot token from the Developer Portal. Maumau will open direct messages so the bot can reply right away after you install it.")
-        let badge = handle != nil ? self.loc("Ready in Discord") : (tokenSaved ? self.loc("Token saved") : self.loc("Needs token"))
+                : self.loc(
+                    quickSetup?.emptyMessage ??
+                        "Paste the Discord bot token from the Developer Portal. Maumau will open direct messages so the bot can reply right away after you install it.")
+        let badge = handle != nil
+            ? self.loc("Ready in Discord")
+            : (tokenSaved ? self.loc("Token saved") : self.loc(quickSetup?.emptyBadge ?? "Needs token"))
 
         return VStack(alignment: .leading, spacing: 16) {
             self.onboardingGuidanceSection(channelId: "discord")
             OnboardingSingleSecretSetupCard(
                 store: self.store,
                 channelId: "discord",
-                sectionTitle: self.loc("Bot identity"),
-                title: self.loc("Discord Agent"),
+                sectionTitle: self.loc(quickSetup?.sectionTitle ?? "Bot identity"),
+                title: self.loc(quickSetup?.title ?? "Discord Agent"),
                 headline: headline,
                 message: body,
                 badge: badge,
                 systemImage: "gamecontroller.fill",
                 tint: handle != nil || tokenSaved ? .green : .accentColor,
-                fieldLabel: self.loc("Discord bot token"),
-                placeholder: self.loc("Paste the Discord bot token"),
+                fieldLabel: self.loc(tokenField?.label ?? "Discord bot token"),
+                placeholder: self.loc(tokenField?.placeholder ?? "Paste the Discord bot token"),
                 existingCredentialNote: tokenSaved
                     ? self.loc("A Discord bot token is already saved. Paste a new one only if you want to replace it.")
                     : nil,
-                buttonTitle: self.loc("Save Discord bot"),
-                successMessage: self.loc("Discord bot saved. Direct messages are open so it replies right away after install."),
+                buttonTitle: self.loc(quickSetup?.buttonTitle ?? "Save Discord bot"),
+                successMessage: self.loc(
+                    quickSetup?.successMessage ??
+                        "Discord bot saved. Direct messages are open so it replies right away after install."),
                 buildUpdates: { token in
                     [
                         (self.channelConfigPath("discord", "enabled"), true),
@@ -200,41 +230,51 @@ extension ChannelsSettings {
             self.configStatusMessage
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding opens Discord DMs so people can message the bot immediately after you invite or install it. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
+                    quickSetup?.setupNote ??
+                        "Onboarding opens Discord DMs so people can message the bot immediately after you invite or install it. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
         }
     }
 
     private var onboardingSlackSection: some View {
+        let quickSetup = self.quickSetupEntry("slack")?.quickSetup
+        let botTokenField = self.quickSetupField("slack", key: "botToken")
+        let appTokenField = self.quickSetupField("slack", key: "appToken")
         let botTokenSaved = self.hasSavedStringValue(at: self.channelConfigPath("slack", "botToken"))
         let appTokenSaved = self.hasSavedStringValue(at: self.channelConfigPath("slack", "appToken"))
         let saved = botTokenSaved && appTokenSaved
-        let headline = saved ? self.loc("Slack app tokens saved") : self.loc("No Slack app tokens saved yet")
+        let headline = saved
+            ? self.loc("Slack app tokens saved")
+            : self.loc(quickSetup?.emptyHeadline ?? "No Slack app tokens saved yet")
         let body = saved
             ? self.loc("This Slack app becomes the agent identity inside the workspace. People DM it or mention it where the app is installed.")
-            : self.loc("Paste the bot token and app token from your Slack app. Maumau uses Socket Mode and opens direct messages so the app can reply right away after install.")
-        let badge = saved ? self.loc("Tokens saved") : self.loc("Needs tokens")
+            : self.loc(
+                quickSetup?.emptyMessage ??
+                    "Paste the bot token and app token from your Slack app. Maumau uses Socket Mode and opens direct messages so the app can reply right away after install.")
+        let badge = saved ? self.loc("Tokens saved") : self.loc(quickSetup?.emptyBadge ?? "Needs tokens")
 
         return VStack(alignment: .leading, spacing: 16) {
             self.onboardingGuidanceSection(channelId: "slack")
             OnboardingDualSecretSetupCard(
                 store: self.store,
                 channelId: "slack",
-                sectionTitle: self.loc("App identity"),
-                title: self.loc("Slack Agent"),
+                sectionTitle: self.loc(quickSetup?.sectionTitle ?? "App identity"),
+                title: self.loc(quickSetup?.title ?? "Slack Agent"),
                 headline: headline,
                 message: body,
                 badge: badge,
                 systemImage: "number.square.fill",
                 tint: saved ? .green : .accentColor,
-                firstFieldLabel: self.loc("Slack bot token"),
-                firstPlaceholder: "xoxb-...",
-                secondFieldLabel: self.loc("Slack app token"),
-                secondPlaceholder: "xapp-...",
+                firstFieldLabel: self.loc(botTokenField?.label ?? "Slack bot token"),
+                firstPlaceholder: botTokenField?.placeholder ?? "xoxb-...",
+                secondFieldLabel: self.loc(appTokenField?.label ?? "Slack app token"),
+                secondPlaceholder: appTokenField?.placeholder ?? "xapp-...",
                 existingCredentialNote: saved
                     ? self.loc("Slack bot and app tokens are already saved. Paste new ones only if you want to replace them.")
                     : nil,
-                buttonTitle: self.loc("Save Slack app"),
-                successMessage: self.loc("Slack app saved. Direct messages are open so it replies right away after install."),
+                buttonTitle: self.loc(quickSetup?.buttonTitle ?? "Save Slack app"),
+                successMessage: self.loc(
+                    quickSetup?.successMessage ??
+                        "Slack app saved. Direct messages are open so it replies right away after install."),
                 buildUpdates: { botToken, appToken in
                     [
                         (self.channelConfigPath("slack", "enabled"), true),
@@ -246,41 +286,55 @@ extension ChannelsSettings {
             self.configStatusMessage
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding opens Slack DMs so people can message the app immediately after install. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
+                    quickSetup?.setupNote ??
+                        "Onboarding opens Slack DMs so people can message the app immediately after install. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
         }
     }
 
     private var onboardingLineSection: some View {
+        let quickSetup = self.quickSetupEntry("line")?.quickSetup
+        let accessTokenField = self.quickSetupField("line", key: "channelAccessToken")
+        let channelSecretField = self.quickSetupField("line", key: "channelSecret")
         let tokenSaved = self.hasSavedStringValue(at: self.channelConfigPath("line", "channelAccessToken"))
         let secretSaved = self.hasSavedStringValue(at: self.channelConfigPath("line", "channelSecret"))
         let saved = tokenSaved && secretSaved
-        let headline = saved ? self.loc("LINE channel credentials saved") : self.loc("No LINE channel linked yet")
+        let headline = saved
+            ? self.loc("LINE channel credentials saved")
+            : self.loc(quickSetup?.emptyHeadline ?? "No LINE channel linked yet")
         let body = saved
             ? self.loc("This LINE Official Account is the agent identity. People message that account, and the agent replies there.")
-            : self.loc("Paste the Channel access token and Channel secret from the LINE Developers Console. Maumau will open direct messages so the account can reply right away once the webhook is live.")
-        let badge = saved ? self.loc("Credentials saved") : self.loc("Needs credentials")
+            : self.loc(
+                quickSetup?.emptyMessage ??
+                    "Paste the Channel access token and Channel secret from the LINE Developers Console. Maumau will open direct messages so the account can reply right away once the webhook is live.")
+        let badge = saved
+            ? self.loc("Credentials saved")
+            : self.loc(quickSetup?.emptyBadge ?? "Needs credentials")
 
         return VStack(alignment: .leading, spacing: 16) {
             self.onboardingGuidanceSection(channelId: "line")
             OnboardingDualSecretSetupCard(
                 store: self.store,
                 channelId: "line",
-                sectionTitle: self.loc("Bot identity"),
-                title: self.loc("LINE Agent"),
+                sectionTitle: self.loc(quickSetup?.sectionTitle ?? "Bot identity"),
+                title: self.loc(quickSetup?.title ?? "LINE Agent"),
                 headline: headline,
                 message: body,
                 badge: badge,
                 systemImage: "message.badge.circle.fill",
                 tint: saved ? .green : .accentColor,
-                firstFieldLabel: self.loc("LINE Channel access token"),
-                firstPlaceholder: self.loc("Paste the Channel access token"),
-                secondFieldLabel: self.loc("LINE Channel secret"),
-                secondPlaceholder: self.loc("Paste the Channel secret"),
+                firstFieldLabel: self.loc(accessTokenField?.label ?? "LINE Channel access token"),
+                firstPlaceholder: self.loc(
+                    accessTokenField?.placeholder ?? "Paste the Channel access token"),
+                secondFieldLabel: self.loc(channelSecretField?.label ?? "LINE Channel secret"),
+                secondPlaceholder: self.loc(
+                    channelSecretField?.placeholder ?? "Paste the Channel secret"),
                 existingCredentialNote: saved
                     ? self.loc("LINE credentials are already saved. Paste new ones only if you want to replace them.")
                     : nil,
-                buttonTitle: self.loc("Save LINE bot"),
-                successMessage: self.loc("LINE bot saved. Direct messages are open so it replies right away once the webhook is live."),
+                buttonTitle: self.loc(quickSetup?.buttonTitle ?? "Save LINE bot"),
+                successMessage: self.loc(
+                    quickSetup?.successMessage ??
+                        "LINE bot saved. Direct messages are open so it replies right away once the webhook is live."),
                 buildUpdates: { accessToken, channelSecret in
                     [
                         (self.channelConfigPath("line", "enabled"), true),
@@ -291,36 +345,53 @@ extension ChannelsSettings {
             self.configStatusMessage
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding opens LINE DMs so people can message the account immediately once the webhook is live. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
+                    quickSetup?.setupNote ??
+                        "Onboarding opens LINE DMs so people can message the account immediately once the webhook is live. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
         }
     }
 
     private var onboardingIMessageSection: some View {
+        let quickSetup = self.quickSetupEntry("imessage")?.quickSetup
+        let cliPathField = self.quickSetupField("imessage", key: "cliPath")
         let status = self.store.snapshot?.decodeChannel("imessage", as: ChannelsStatusSnapshot.IMessageStatus.self)
         let savedCliPath = self.savedStringValue(at: self.channelConfigPath("imessage", "cliPath")) ?? "imsg"
         let configured = status?.configured == true || self.hasSavedStringValue(at: self.channelConfigPath("imessage", "cliPath"))
-        let headline = configured ? self.loc("Messages on this Mac") : self.loc("No Messages bridge saved yet")
+        let headline = configured
+            ? self.loc("Messages on this Mac")
+            : self.loc(quickSetup?.emptyHeadline ?? "No Messages bridge saved yet")
         let body = configured
-            ? (self.language == .id
-                ? "Maumau memakai identitas Messages yang sudah login di Mac ini. Jika Anda memasang imsg di lokasi khusus, path yang tersimpan adalah \(savedCliPath)."
-                : "Maumau uses the Messages identity already signed into this Mac. If you installed imsg somewhere custom, the saved path is \(savedCliPath).")
-            : self.loc("Use the Messages identity already signed into this Mac. If you installed imsg somewhere custom, change the CLI path before saving.")
-        let badge = configured ? self.loc("Ready on this Mac") : self.loc("Needs bridge")
+            ? macLocalizedHelper(
+                "imessageConfiguredBody",
+                language: self.language,
+                parameters: ["path": savedCliPath],
+                fallback: "Maumau uses the Messages identity already signed into this Mac. If you installed imsg somewhere custom, the saved path is {path}.")
+            : self.loc(
+                quickSetup?.emptyMessage ??
+                    "Use the Messages identity already signed into this Mac. If you installed imsg somewhere custom, change the CLI path before saving.")
+        let badge = configured ? self.loc("Ready on this Mac") : self.loc(quickSetup?.emptyBadge ?? "Needs bridge")
 
         return VStack(alignment: .leading, spacing: 16) {
             self.onboardingGuidanceSection(channelId: "imessage")
             OnboardingIMessageSetupCard(
                 store: self.store,
                 channelId: "imessage",
-                sectionTitle: self.loc("Agent identity"),
-                title: self.loc("Messages Agent"),
+                sectionTitle: self.loc(quickSetup?.sectionTitle ?? "Agent identity"),
+                title: self.loc(quickSetup?.title ?? "Messages Agent"),
                 headline: headline,
                 message: body,
                 badge: badge,
                 systemImage: "message.fill",
                 tint: configured ? .green : .accentColor,
                 initialCliPath: savedCliPath,
-                successMessage: self.loc("Messages on this Mac saved. Direct messages are open so it replies right away."),
+                fieldLabel: self.loc(cliPathField?.label ?? "imsg CLI path"),
+                placeholder: cliPathField?.placeholder ?? "imsg",
+                helpMessage: self.loc(
+                    cliPathField?.helpLines?.joined(separator: " ") ??
+                        "Use the default path if imsg is installed on this Mac normally. Only change it if you installed imsg somewhere custom or through a wrapper script."),
+                buttonTitle: self.loc(quickSetup?.buttonTitle ?? "Use Messages on this Mac"),
+                successMessage: self.loc(
+                    quickSetup?.successMessage ??
+                        "Messages on this Mac saved. Direct messages are open so it replies right away."),
                 buildUpdates: { cliPath in
                     [
                         (self.channelConfigPath("imessage", "enabled"), true),
@@ -330,7 +401,8 @@ extension ChannelsSettings {
             self.configStatusMessage
             self.onboardingSetupOnlyNote(
                 self.loc(
-                    "Onboarding points Maumau at imsg on this Mac and opens direct messages so it replies right away. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
+                    quickSetup?.setupNote ??
+                        "Onboarding points Maumau at imsg on this Mac and opens direct messages so it replies right away. Tighten DM access later in full Settings → Channels if you want pairing or an allowlist."))
         }
     }
 
@@ -371,7 +443,7 @@ extension ChannelsSettings {
     }
 
     private var whatsAppLinkingSection: some View {
-        self.formSection(self.loc("Bot identity")) {
+        self.formSection(self.loc(self.quickSetupEntry("whatsapp")?.quickSetup.sectionTitle ?? "Bot identity")) {
             self.whatsAppIdentityCard
 
             if let message = self.store.whatsappLoginMessage {
@@ -382,12 +454,14 @@ extension ChannelsSettings {
             }
 
             if let qr = self.store.whatsappLoginQrDataUrl, let image = self.qrImage(from: qr) {
+                let quickSetup = self.quickSetupEntry("whatsapp")?.quickSetup
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(self.loc("Scan this QR with the WhatsApp number the bot will use"))
+                    Text(self.loc(quickSetup?.qrTitle ?? "Scan this QR with the WhatsApp number the bot will use"))
                         .font(.headline)
                     Text(
                         self.loc(
-                            "The WhatsApp number or linked device that scans this QR becomes the bot identity. When people message that number, they are talking to the agent.")
+                            quickSetup?.qrBody ??
+                                "The WhatsApp number or linked device that scans this QR becomes the bot identity. When people message that number, they are talking to the agent.")
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -468,35 +542,50 @@ extension ChannelsSettings {
     }
 
     static func whatsAppIdentityBadgeText(linkedIdentity: String?, qrVisible: Bool) -> String {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         if linkedIdentity != nil {
-            return macLocalized("Ready to message", language: AppStateStore.shared.effectiveOnboardingLanguage)
+            return macLocalized(
+                quickSetup?.linkedBadge ?? "Ready to message",
+                language: language)
         }
         return qrVisible
-            ? macLocalized("Waiting for scan", language: AppStateStore.shared.effectiveOnboardingLanguage)
-            : macLocalized("Not linked", language: AppStateStore.shared.effectiveOnboardingLanguage)
+            ? macLocalized(
+                quickSetup?.waitingBadge ?? "Waiting for scan",
+                language: language)
+            : macLocalized(
+                quickSetup?.emptyBadge ?? "Not linked",
+                language: language)
     }
 
     static func whatsAppIdentityHeadline(linkedIdentity: String?) -> String {
-        linkedIdentity ?? macLocalized(
-            "No number linked yet",
-            language: AppStateStore.shared.effectiveOnboardingLanguage)
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
+        return linkedIdentity ?? macLocalized(
+            quickSetup?.emptyHeadline ?? "No number linked yet",
+            language: language)
     }
 
     static func whatsAppIdentityBodyText(linkedIdentity: String?, qrVisible: Bool) -> String {
+        let language = AppStateStore.shared.effectiveOnboardingLanguage
+        let quickSetup = UserChannelQuickSetupRegistry.entry(for: "whatsapp", language: language)?.quickSetup
         if let linkedIdentity {
-            if AppStateStore.shared.effectiveOnboardingLanguage == .id {
-                return "Akun WhatsApp tertaut ini adalah identitas bot. Kirim pesan ke \(linkedIdentity) dari akun WhatsApp biasa untuk berbicara dengan agen."
-            }
-            return "This linked WhatsApp account is the bot identity. Message \(linkedIdentity) from a normal WhatsApp account to talk to the agent."
+            return macLocalizedHelper(
+                "whatsAppLinkedIdentityBody",
+                language: language,
+                parameters: ["identity": linkedIdentity],
+                fallback: "This linked WhatsApp account is the bot identity. Message {identity} from a normal WhatsApp account to talk to the agent.")
         }
         if qrVisible {
             return macLocalized(
-                "Scan the QR with the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
-                language: AppStateStore.shared.effectiveOnboardingLanguage)
+                quickSetup?.waitingMessage ??
+                    "Scan the QR with the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
+                language: language)
         }
         return macLocalized(
-            "Link the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
-            language: AppStateStore.shared.effectiveOnboardingLanguage)
+            quickSetup?.emptyMessage ??
+                "Link the WhatsApp number or linked device the bot will use. Maumau cannot create a WhatsApp number for you.",
+            language: language)
     }
 
     private func onboardingSetupOnlyNote(_ message: String) -> some View {
@@ -883,6 +972,10 @@ private struct OnboardingIMessageSetupCard: View {
     let systemImage: String
     let tint: Color
     let initialCliPath: String
+    let fieldLabel: String
+    let placeholder: String
+    let helpMessage: String
+    let buttonTitle: String
     let successMessage: String
     let buildUpdates: (String) -> [(path: ConfigPath, value: Any?)]
 
@@ -899,6 +992,10 @@ private struct OnboardingIMessageSetupCard: View {
         systemImage: String,
         tint: Color,
         initialCliPath: String,
+        fieldLabel: String,
+        placeholder: String,
+        helpMessage: String,
+        buttonTitle: String,
         successMessage: String,
         buildUpdates: @escaping (String) -> [(path: ConfigPath, value: Any?)])
     {
@@ -912,6 +1009,10 @@ private struct OnboardingIMessageSetupCard: View {
         self.systemImage = systemImage
         self.tint = tint
         self.initialCliPath = initialCliPath
+        self.fieldLabel = fieldLabel
+        self.placeholder = placeholder
+        self.helpMessage = helpMessage
+        self.buttonTitle = buttonTitle
         self.successMessage = successMessage
         self.buildUpdates = buildUpdates
         self._cliPath = State(initialValue: initialCliPath)
@@ -919,10 +1020,6 @@ private struct OnboardingIMessageSetupCard: View {
 
     private var trimmedCliPath: String {
         self.cliPath.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var language: OnboardingLanguage {
-        AppStateStore.shared.effectiveOnboardingLanguage
     }
 
     var body: some View {
@@ -936,17 +1033,13 @@ private struct OnboardingIMessageSetupCard: View {
                     systemImage: self.systemImage,
                     tint: self.tint)
 
-                Text(macLocalized("imsg CLI path", language: self.language))
+                Text(self.fieldLabel)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                TextField("imsg", text: self.$cliPath)
+                TextField(self.placeholder, text: self.$cliPath)
                     .textFieldStyle(.roundedBorder)
 
-                Text(
-                    macLocalized(
-                        "Use the default path if imsg is installed on this Mac normally. Only change it if you installed imsg somewhere custom or through a wrapper script.",
-                        language: self.language)
-                )
+                Text(self.helpMessage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -963,7 +1056,7 @@ private struct OnboardingIMessageSetupCard: View {
                     if self.store.isSavingConfig {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text(macLocalized("Use Messages on this Mac", language: self.language))
+                        Text(self.buttonTitle)
                     }
                 }
                 .buttonStyle(.borderedProminent)

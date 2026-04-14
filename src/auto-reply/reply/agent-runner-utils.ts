@@ -1,4 +1,5 @@
 import { resolveRunModelFallbacksOverride } from "../../agents/agent-scope.js";
+import { normalizeChatType } from "../../channels/chat-type.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plugins/types.js";
 import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
@@ -146,6 +147,15 @@ export function buildEmbeddedContextFromTemplate(params: {
   sessionCtx: TemplateContext;
   hasRepliedRef: { value: boolean } | undefined;
 }) {
+  const normalizedChatType = normalizeChatType(params.sessionCtx.ChatType);
+  const isGroup =
+    normalizedChatType != null
+      ? normalizedChatType !== "direct"
+      : Boolean(
+          params.sessionCtx.GroupChannel ??
+          params.sessionCtx.GroupSubject ??
+          params.sessionCtx.GroupSpace,
+        ) || undefined;
   return {
     sessionId: params.run.sessionId,
     sessionKey: params.run.sessionKey,
@@ -160,6 +170,7 @@ export function buildEmbeddedContextFromTemplate(params: {
       to: params.sessionCtx.To,
     }),
     messageThreadId: params.sessionCtx.MessageThreadId ?? undefined,
+    isGroup,
     // Provider threading context for tool auto-injection
     ...buildThreadingToolContext({
       sessionCtx: params.sessionCtx,

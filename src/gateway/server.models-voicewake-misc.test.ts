@@ -3,11 +3,17 @@ import { createServer } from "node:net";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { WebSocket } from "ws";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  upsertAuthProfile,
+} from "../agents/auth-profiles.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import type { ChannelOutboundAdapter } from "../channels/plugins/types.js";
 import { clearConfigCache } from "../config/config.js";
+import type { ImageGenerationProvider } from "../image-generation/types.js";
 import { resolveCanvasHostUrl } from "../infra/canvas-host-url.js";
 import { GatewayLockError } from "../infra/gateway-lock.js";
+import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { getActivePluginRegistry, setActivePluginRegistry } from "../plugins/runtime.js";
 import { createOutboundTestPlugin } from "../test-utils/channel-plugins.js";
 import { withEnvAsync } from "../test-utils/env.js";
@@ -85,6 +91,63 @@ const whatsappRegistry = createRegistry([
 ]);
 const emptyRegistry = createRegistry([]);
 
+function createTestImageGenerationProvider(params: {
+  id: string;
+  label: string;
+  defaultModel: string;
+  models?: string[];
+}): ImageGenerationProvider {
+  return {
+    id: params.id,
+    label: params.label,
+    defaultModel: params.defaultModel,
+    models: params.models ?? [params.defaultModel],
+    capabilities: {
+      generate: {},
+      edit: {
+        enabled: false,
+      },
+    },
+    async generateImage() {
+      throw new Error("not implemented in gateway test");
+    },
+  };
+}
+
+const imageGenerationRegistry = {
+  ...createEmptyPluginRegistry(),
+  imageGenerationProviders: [
+    {
+      pluginId: "google",
+      source: "test",
+      provider: createTestImageGenerationProvider({
+        id: "google",
+        label: "Google",
+        defaultModel: "gemini-3.1-flash-image-preview",
+        models: ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
+      }),
+    },
+    {
+      pluginId: "openai",
+      source: "test",
+      provider: createTestImageGenerationProvider({
+        id: "openai",
+        label: "OpenAI",
+        defaultModel: "gpt-image-1",
+      }),
+    },
+    {
+      pluginId: "fal",
+      source: "test",
+      provider: createTestImageGenerationProvider({
+        id: "fal",
+        label: "fal",
+        defaultModel: "fal-ai/flux/dev",
+      }),
+    },
+  ],
+};
+
 type ModelCatalogRpcEntry = {
   id: string;
   name: string;
@@ -102,6 +165,14 @@ type ModelAuthChoiceGroupRpc = {
     hint?: string;
     providerId?: string;
   }>;
+};
+
+type ImageGenerationProviderCatalogRpcEntry = {
+  id: string;
+  label?: string;
+  defaultModel?: string;
+  models: string[];
+  configured: boolean;
 };
 
 type PiCatalogFixtureEntry = {
@@ -161,6 +232,11 @@ const expectedSortedCatalog = (): ModelCatalogRpcEntry[] => [
 
 describe("gateway server models + voicewake", () => {
   const listModels = async () => rpcReq<{ models: ModelCatalogRpcEntry[] }>(ws, "models.list");
+  const listImageGenerationProviders = async () =>
+    rpcReq<{ providers: ImageGenerationProviderCatalogRpcEntry[] }>(
+      ws,
+      "models.image-generation.providers",
+    );
   const listModelAuthChoices = async () =>
     rpcReq<{ groups: ModelAuthChoiceGroupRpc[] }>(ws, "models.auth.choices");
 
@@ -202,8 +278,10 @@ describe("gateway server models + voicewake", () => {
   const withTempHome = async <T>(fn: (homeDir: string) => Promise<T>): Promise<T> => {
     const tempHome = await createTempHomeEnv("maumau-home-");
     try {
+      clearRuntimeAuthProfileStoreSnapshots();
       return await fn(tempHome.home);
     } finally {
+      clearRuntimeAuthProfileStoreSnapshots();
       await tempHome.restore();
     }
   };
@@ -379,6 +457,138 @@ describe("gateway server models + voicewake", () => {
     const res = await rpcReq(ws, "models.list", { extra: true });
     expect(res.ok).toBe(false);
     expect(res.error?.message ?? "").toMatch(/invalid models\.list params/i);
+  });
+
+  test("models.image-generation.providers reports env-backed configured providers", async () => {
+    const prevRegistry = getActivePluginRegistry() ?? emptyRegistry;
+    try {
+      setActivePluginRegistry(imageGenerationRegistry);
+      await withTempHome(async () => {
+        await withEnvAsync(
+          {
+            OPENAI_API_KEY: "env-openai-key",
+            GEMINI_API_KEY: undefined,
+            GOOGLE_API_KEY: undefined,
+            FAL_KEY: undefined,
+          },
+          async () => {
+            clearRuntimeAuthProfileStoreSnapshots();
+            const res = await listImageGenerationProviders();
+            expect(res.ok).toBe(true);
+
+            const providers = res.payload?.providers ?? [];
+            const openAI = providers.find((provider) => provider.id === "openai");
+            const google = providers.find((provider) => provider.id === "google");
+            const fal = providers.find((provider) => provider.id === "fal");
+
+            expect(openAI).toMatchObject({
+              id: "openai",
+              defaultModel: "gpt-image-1",
+              configured: true,
+            });
+            expect(openAI?.models).toContain("gpt-image-1");
+            expect(google?.configured).toBe(false);
+            expect(fal?.configured).toBe(false);
+          },
+        );
+      });
+    } finally {
+      setActivePluginRegistry(prevRegistry);
+    }
+  });
+
+  test("models.image-generation.providers reports main auth-profile providers as configured", async () => {
+    const prevRegistry = getActivePluginRegistry() ?? emptyRegistry;
+    try {
+      setActivePluginRegistry(imageGenerationRegistry);
+      await withTempHome(async () => {
+        await withEnvAsync(
+          {
+            OPENAI_API_KEY: undefined,
+            GEMINI_API_KEY: undefined,
+            GOOGLE_API_KEY: undefined,
+            FAL_KEY: undefined,
+          },
+          async () => {
+            upsertAuthProfile({
+              profileId: "google:default",
+              credential: {
+                type: "api_key",
+                provider: "google",
+                key: "google-profile-key",
+              },
+            });
+            clearRuntimeAuthProfileStoreSnapshots();
+
+            const res = await listImageGenerationProviders();
+            expect(res.ok).toBe(true);
+
+            const providers = res.payload?.providers ?? [];
+            const google = providers.find((provider) => provider.id === "google");
+            const openAI = providers.find((provider) => provider.id === "openai");
+
+            expect(google).toMatchObject({
+              id: "google",
+              configured: true,
+            });
+            expect(google?.models).toEqual(
+              expect.arrayContaining([
+                "gemini-3.1-flash-image-preview",
+                "gemini-3-pro-image-preview",
+              ]),
+            );
+            expect(openAI?.configured).toBe(false);
+          },
+        );
+      });
+    } finally {
+      setActivePluginRegistry(prevRegistry);
+    }
+  });
+
+  test("models.image-generation.providers ignores unresolved env-ref auth profiles", async () => {
+    const prevRegistry = getActivePluginRegistry() ?? emptyRegistry;
+    try {
+      setActivePluginRegistry(imageGenerationRegistry);
+      await withTempHome(async () => {
+        await withEnvAsync(
+          {
+            OPENAI_API_KEY: undefined,
+            GEMINI_API_KEY: undefined,
+            GOOGLE_API_KEY: undefined,
+            FAL_KEY: undefined,
+          },
+          async () => {
+            upsertAuthProfile({
+              profileId: "google:default",
+              credential: {
+                type: "api_key",
+                provider: "google",
+                keyRef: {
+                  source: "env",
+                  provider: "default",
+                  id: "GEMINI_API_KEY",
+                },
+              },
+            });
+            clearRuntimeAuthProfileStoreSnapshots();
+
+            const res = await listImageGenerationProviders();
+            expect(res.ok).toBe(true);
+
+            const providers = res.payload?.providers ?? [];
+            const google = providers.find((provider) => provider.id === "google");
+
+            expect(google).toMatchObject({
+              id: "google",
+              configured: false,
+            });
+          },
+        );
+      });
+    } finally {
+      setActivePluginRegistry(prevRegistry);
+    }
   });
 
   test("models.auth.choices returns grouped provider auth options", async () => {

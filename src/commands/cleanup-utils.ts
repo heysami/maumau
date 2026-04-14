@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveDefaultAgentWorkspaceDir } from "../agents/workspace.js";
 import type { MaumauConfig } from "../config/config.js";
+import { runCommandWithTimeout } from "../process/exec.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { resolveHomeDir, resolveUserPath, shortenHomeInString } from "../utils.js";
+import { resolveHomeDir, resolveUserPath, shortenHomeInString, sleep } from "../utils.js";
 
 export type RemovalResult = {
   ok: boolean;
@@ -177,6 +178,73 @@ export async function removeMacAppStateArtifacts(
       dryRun: opts?.dryRun,
       label: target,
     });
+  }
+}
+
+async function runMacProcessCommand(argv: string[]): Promise<number | null> {
+  try {
+    const result = await runCommandWithTimeout(argv, { timeoutMs: 2_000 });
+    return result.code;
+  } catch {
+    return null;
+  }
+}
+
+async function hasRunningMacAppProcess(): Promise<boolean> {
+  const code = await runMacProcessCommand(["pgrep", "-f", "Maumau.app/Contents/MacOS/Maumau"]);
+  if (code === 0) {
+    return true;
+  }
+  return (await runMacProcessCommand(["pgrep", "-x", "Maumau"])) === 0;
+}
+
+export async function stopRunningMacAppIfPresent(
+  runtime: RuntimeEnv,
+  opts?: { dryRun?: boolean },
+): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+  if (opts?.dryRun) {
+    runtime.log("[dry-run] stop running Maumau app");
+    return;
+  }
+
+  await runMacProcessCommand(["osascript", "-e", 'tell application "Maumau" to quit']);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await runMacProcessCommand(["pkill", "-f", "Maumau.app/Contents/MacOS/Maumau"]);
+    await runMacProcessCommand(["pkill", "-x", "Maumau"]);
+    if (!(await hasRunningMacAppProcess())) {
+      runtime.log("Stopped running Maumau app.");
+      return;
+    }
+    await sleep(200);
+  }
+
+  runtime.error(
+    "Maumau app is still running after reset cleanup attempted to stop it; local app state may be recreated until it fully exits.",
+  );
+}
+
+export async function clearMacLaunchctlGatewayEnvOverrides(
+  runtime: RuntimeEnv,
+  opts?: { dryRun?: boolean },
+): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  for (const key of ["MAUMAU_GATEWAY_TOKEN", "MAUMAU_GATEWAY_PASSWORD"]) {
+    if (opts?.dryRun) {
+      runtime.log(`[dry-run] launchctl unsetenv ${key}`);
+      continue;
+    }
+
+    const code = await runMacProcessCommand(["launchctl", "unsetenv", key]);
+    if (code === 0) {
+      runtime.log(`Cleared launchctl ${key} override if present.`);
+    }
   }
 }
 

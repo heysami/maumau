@@ -23,6 +23,33 @@ describe("control UI routing", () => {
     expect(window.location.pathname).toBe("/sessions");
   });
 
+  it("hydrates MauOffice from the location", async () => {
+    const app = mountApp("/mau-office");
+    await app.updateComplete;
+
+    expect(app.tab).toBe("dashboardMauOffice");
+    expect(window.location.pathname).toBe("/mau-office");
+  });
+
+  it("hydrates standalone dashboard routes from the location", async () => {
+    const app = mountApp("/dashboard/today");
+    await app.updateComplete;
+
+    expect(app.tab).toBe("dashboardToday");
+    expect(window.location.pathname).toBe("/dashboard/today");
+    expect(app.querySelector(".dashboard-shell")).not.toBeNull();
+    expect(app.querySelector(".dashboard-rail")).not.toBeNull();
+  });
+
+  it("hydrates the wallet dashboard route from the location", async () => {
+    const app = mountApp("/dashboard/wallet");
+    await app.updateComplete;
+
+    expect(app.tab).toBe("dashboardWallet");
+    expect(window.location.pathname).toBe("/dashboard/wallet");
+    expect(app.querySelector(".dashboard-shell")).not.toBeNull();
+  });
+
   it("respects /ui base paths", async () => {
     const app = mountApp("/ui/cron");
     await app.updateComplete;
@@ -119,6 +146,17 @@ describe("control UI routing", () => {
 
     expect(app.querySelector(".sidebar-shell__footer")).not.toBeNull();
     expect(app.querySelector(".sidebar-utility-link")).not.toBeNull();
+  });
+
+  it("shows Maumau documentation copy in the sidebar footer", async () => {
+    const app = mountApp("/chat");
+    await app.updateComplete;
+
+    const docsCard = app.querySelector<HTMLAnchorElement>(".sidebar-docs-card");
+    expect(docsCard).not.toBeNull();
+    expect(docsCard?.getAttribute("href")).toBe("https://docs.maumau.ai");
+    expect(docsCard?.textContent).toContain("Learn more in the Maumau documentation.");
+    expect(docsCard?.textContent).toContain("Maumau documentation");
   });
 
   it("keeps the collapsed desktop rail compact", async () => {
@@ -226,6 +264,84 @@ describe("control UI routing", () => {
 
     expect(toggleWidth).toBeGreaterThan(0);
     expect(actionsWidth).toBeLessThan(shellWidth);
+  });
+
+  it("keeps the standalone dashboard rail labeled on narrow viewports", async () => {
+    const app = mountApp("/dashboard/today");
+    await app.updateComplete;
+
+    expect(window.matchMedia("(max-width: 768px)").matches).toBe(true);
+
+    const rail = app.querySelector<HTMLElement>(".dashboard-rail");
+    const label = app.querySelector<HTMLElement>(".dashboard-rail__label");
+    expect(rail).not.toBeNull();
+    expect(label).not.toBeNull();
+    if (!rail || !label) {
+      return;
+    }
+
+    expect(getComputedStyle(rail).overflowX).toBe("auto");
+    expect(getComputedStyle(label).position).toBe("static");
+    expect(getComputedStyle(label).opacity).toBe("1");
+  });
+
+  it("stacks workshop navigation and preview on narrow viewports", async () => {
+    const app = mountApp("/dashboard/workshop");
+    app.tab = "dashboardWorkshop";
+    app.dashboardSnapshot = {
+      generatedAtMs: Date.now(),
+      tasks: [],
+      workshop: [
+        {
+          id: "workshop:1",
+          title: "Preview sandbox",
+          taskId: "task-1",
+          taskStatus: "done",
+          sessionKey: "agent:main:main",
+          previewUrl: "https://example.com/demo",
+          embeddable: false,
+          updatedAtMs: Date.now(),
+        },
+      ],
+      workshopSaved: [],
+      workshopAgentApps: [],
+      calendar: [],
+      routines: [],
+      lifeProfile: {
+        generatedAtMs: Date.now(),
+        teamConfigured: false,
+        bootstrapPending: false,
+        sourceStatus: "missing",
+        sourceLabel: "main/USER.md",
+        recordedFieldCount: 0,
+        missingFieldCount: 0,
+        futureFieldCount: 0,
+        recordedNeedCount: 0,
+        missingNeedCount: 0,
+        futureNeedCount: 0,
+        fields: [],
+        agents: [],
+      },
+      memories: [],
+      today: {
+        generatedAtMs: Date.now(),
+        inProgressTasks: [],
+        scheduledToday: [],
+        blockers: [],
+        recentMemory: [],
+      },
+    };
+    app.dashboardWorkshopSelectedId = "workshop:1";
+    app.requestUpdate();
+    await app.updateComplete;
+
+    const workshop = app.querySelector<HTMLElement>(".dashboard-workshop");
+    expect(workshop).not.toBeNull();
+    if (!workshop) {
+      return;
+    }
+
+    expect(getComputedStyle(workshop).gridTemplateColumns).toBe("minmax(0, 1fr)");
   });
 
   it("opens the mobile sidenav as a drawer from the topbar toggle", async () => {

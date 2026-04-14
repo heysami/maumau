@@ -61,14 +61,31 @@ final class OnboardingWizardModel {
         let value: AnyCodable?
     }
 
+    enum LocalGatewayWizardReadiness: Equatable {
+        case authReady
+        case processReady
+        case authRejected(String)
+        case notReady
+    }
+
+    enum LocalGatewayAuthProbeReadiness: Equatable {
+        case ready
+        case pending
+        case rejected(String)
+    }
+
     private enum StartRoute: Equatable {
         case onboarding(mode: AppState.ConnectionMode, workspace: String?)
-        case modelAuth(authChoice: String?)
+        case modelAuth(authChoice: String?, setDefaultModel: Bool)
     }
 
     typealias WizardStartParams = [String: AnyCodable]
     private static let maxAutomaticStepFetches = 8
     private static let progressPollingIntervalNanoseconds: UInt64 = 500_000_000
+    private static let localGatewayAuthWarmupTimeout: TimeInterval = 15
+    private static let localGatewayProcessProbeIntervalNanoseconds: UInt64 = 300_000_000
+    private static let localGatewayAuthProbeTimeoutMs: Double = 2_000
+    private static let wizardRequestTimeoutMs = 30_000
 
     private(set) var sessionId: String?
     private(set) var currentStep: WizardStep?
@@ -91,6 +108,25 @@ final class OnboardingWizardModel {
     private var autoHandledClientActionStepIDs: Set<String> = []
     private var progressPollingTask: Task<Void, Never>?
     private var progressPollingSessionId: String?
+    // Keep wizard traffic isolated from the app-wide shared gateway socket so
+    // onboarding can survive unrelated startup and control-channel churn.
+    private let gatewayConnection: GatewayConnection
+    private let requestTimeoutMs: Int
+
+    init(
+        gatewayConnection: GatewayConnection = GatewayConnection(),
+        requestTimeoutMs: Int? = nil)
+    {
+        self.gatewayConnection = gatewayConnection
+        self.requestTimeoutMs = max(requestTimeoutMs ?? Self.wizardRequestTimeoutMs, 1)
+    }
+
+    deinit {
+        let gatewayConnection = self.gatewayConnection
+        Task {
+            await gatewayConnection.shutdown()
+        }
+    }
 
     private var language: OnboardingLanguage {
         AppStateStore.shared.effectiveOnboardingLanguage
@@ -98,6 +134,15 @@ final class OnboardingWizardModel {
 
     var isComplete: Bool {
         self.status == "done"
+    }
+
+    var isSkippedForNow: Bool {
+        self.status == "cancelled" && self.sessionId == nil && self.currentStep == nil &&
+            self.errorMessage == nil
+    }
+
+    var isSatisfiedForOnboarding: Bool {
+        self.isComplete || self.isSkippedForNow
     }
 
     var isBlocking: Bool {
@@ -173,8 +218,8 @@ final class OnboardingWizardModel {
         await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
     }
 
-    func startModelAuthIfNeeded(authChoice: String? = nil) async {
-        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
+    func startModelAuthIfNeeded(authChoice: String? = nil, setDefaultModel: Bool = true) async {
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel))
     }
 
     private func startIfNeeded(route: StartRoute) async {
@@ -193,6 +238,7 @@ final class OnboardingWizardModel {
         defer { self.isStarting = false }
 
         do {
+            await self.resetGatewayConnection()
             if case let .onboarding(mode, _) = route, mode == .local {
                 try await self.ensureLocalGatewayReady()
             }
@@ -202,9 +248,10 @@ final class OnboardingWizardModel {
             do {
                 self.usingLegacyGatewayCompatibility = false
                 res = try await self.resolveStartResult(
-                    try await GatewayConnection.shared.requestDecoded(
+                    try await self.requestDecoded(
                         method: .wizardStart,
-                        params: Self.startParams(route: route, useEmbeddedProtocol: true)))
+                        params: Self.startParams(route: route, useEmbeddedProtocol: true),
+                        timeoutMessage: "The setup flow took too long to start. Retry setup."))
             } catch {
                 guard Self.shouldRetryLegacyStart(for: error, route: route) else {
                     throw error
@@ -212,12 +259,16 @@ final class OnboardingWizardModel {
                 onboardingWizardLogger.notice("wizard.start retrying with legacy params")
                 self.usingLegacyGatewayCompatibility = true
                 res = try await self.resolveStartResult(
-                    try await GatewayConnection.shared.requestDecoded(
+                    try await self.requestDecoded(
                         method: .wizardStart,
-                        params: Self.startParams(route: route, useEmbeddedProtocol: false)))
+                        params: Self.startParams(route: route, useEmbeddedProtocol: false),
+                        timeoutMessage: "The setup flow took too long to start. Retry setup."))
             }
             self.applyStartResult(res)
         } catch {
+            if self.restartIfSessionLost(error: error) {
+                return
+            }
             self.status = "error"
             self.errorMessage = macLocalized(error.localizedDescription, language: self.language)
             onboardingWizardLogger.error("start failed: \(error.localizedDescription, privacy: .public)")
@@ -227,10 +278,55 @@ final class OnboardingWizardModel {
     private func ensureLocalGatewayReady() async throws {
         GatewayProcessManager.shared.clearLastFailure()
         GatewayProcessManager.shared.setActive(true)
-        if await GatewayProcessManager.shared.waitForGatewayReady(
-            timeout: GatewayProcessManager.localGatewayStartupTimeout)
-        {
+        let port = GatewayEnvironment.gatewayPort()
+        let readiness = await Self.evaluateLocalWizardGatewayReadiness(
+            totalTimeout: GatewayProcessManager.localGatewayStartupTimeout,
+            authWarmupTimeout: Self.localGatewayAuthWarmupTimeout,
+            port: port,
+            probeAuthReady: {
+                do {
+                    _ = try await AsyncTimeout.withTimeoutMs(
+                        timeoutMs: Int(Self.localGatewayAuthProbeTimeoutMs),
+                        onTimeout: {
+                            NSError(
+                                domain: "Gateway",
+                                code: 5,
+                                userInfo: [NSLocalizedDescriptionKey: "gateway auth probe timed out"])
+                        },
+                        operation: {
+                            try await self.requestRaw(
+                                method: .health,
+                                timeoutMs: Self.localGatewayAuthProbeTimeoutMs,
+                                allowRecovery: false,
+                                timeoutMessage: "gateway auth probe timed out")
+                        })
+                    return .ready
+                } catch {
+                    return await Self.classifyLocalGatewayAuthProbeReadiness(
+                        error: error,
+                        attemptManagedAuthRecovery: { authError in
+                            await GatewayProcessManager.shared
+                                .recoverManagedGatewayAfterAuthFailureIfNeeded(authError)
+                        })
+                }
+            },
+            probeGatewayHealth: { port in
+                await PortGuardian.shared.probeGatewayHealth(port: port, timeout: 1.0)
+            })
+        switch readiness {
+        case .authReady:
             return
+        case .processReady:
+            onboardingWizardLogger.notice(
+                "wizard local gateway proceeding after raw health probe while auth-ready wait catches up")
+            return
+        case let .authRejected(reason):
+            throw NSError(
+                domain: "Gateway",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: reason])
+        case .notReady:
+            break
         }
 
         let fallback = "Gateway did not become ready. Check that it is running."
@@ -240,6 +336,127 @@ final class OnboardingWizardModel {
             domain: "Gateway",
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: reason?.isEmpty == false ? reason! : fallback])
+    }
+
+    static func evaluateLocalWizardGatewayReadiness(
+        totalTimeout: TimeInterval,
+        authWarmupTimeout: TimeInterval,
+        port: Int,
+        probeAuthReady: @escaping @Sendable () async -> LocalGatewayAuthProbeReadiness,
+        probeGatewayHealth: @escaping @Sendable (Int) async -> Bool) async -> LocalGatewayWizardReadiness
+    {
+        let totalBudget = max(0, totalTimeout)
+        let deadline = Date().addingTimeInterval(totalBudget)
+        let authDeadline = Date().addingTimeInterval(min(max(0, authWarmupTimeout), totalBudget))
+        repeat {
+            if Date() < authDeadline {
+                switch await probeAuthReady() {
+                case .ready:
+                    return .authReady
+                case .rejected(let reason):
+                    return .authRejected(reason)
+                case .pending:
+                    break
+                }
+            }
+            if await probeGatewayHealth(port) {
+                return .processReady
+            }
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            let sleepSeconds = min(
+                Double(Self.localGatewayProcessProbeIntervalNanoseconds) / 1_000_000_000,
+                remaining)
+            let sleepNanoseconds = UInt64(max(0, sleepSeconds) * 1_000_000_000)
+            if sleepNanoseconds == 0 {
+                break
+            }
+            do {
+                try await Task.sleep(nanoseconds: sleepNanoseconds)
+            } catch {
+                return .notReady
+            }
+        } while Date() < deadline
+
+        return .notReady
+    }
+
+    static func classifyLocalGatewayAuthProbeReadiness(
+        error: Error,
+        attemptManagedAuthRecovery: @escaping @Sendable (Error) async -> Bool) async -> LocalGatewayAuthProbeReadiness
+    {
+        let message = error.localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty, Self.isGatewayAuthFailure(error) else {
+            return .pending
+        }
+        if await attemptManagedAuthRecovery(error) {
+            return .ready
+        }
+        return .rejected(message)
+    }
+
+    private func requestRaw(
+        method: GatewayConnection.Method,
+        params: [String: AnyCodable]? = nil,
+        timeoutMs: Double? = nil,
+        allowRecovery: Bool = true,
+        timeoutMessage: String) async throws -> Data
+    {
+        let resolvedTimeoutMs = timeoutMs ?? Double(self.requestTimeoutMs)
+        do {
+            return try await AsyncTimeout.withTimeoutMs(
+                timeoutMs: max(Int(resolvedTimeoutMs.rounded()), 1),
+                onTimeout: {
+                    NSError(
+                        domain: "Gateway",
+                        code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: timeoutMessage])
+                },
+                operation: {
+                    if allowRecovery {
+                        return try await self.gatewayConnection.requestRaw(
+                            method: method,
+                            params: params,
+                            timeoutMs: resolvedTimeoutMs)
+                    }
+                    return try await self.gatewayConnection.requestRawWithoutRecovery(
+                        method: method,
+                        params: params,
+                        timeoutMs: resolvedTimeoutMs)
+                })
+        } catch {
+            await self.resetGatewayConnection()
+            throw error
+        }
+    }
+
+    private func requestDecoded<T: Decodable>(
+        method: GatewayConnection.Method,
+        params: [String: AnyCodable]? = nil,
+        timeoutMs: Double? = nil,
+        allowRecovery: Bool = true,
+        timeoutMessage: String) async throws -> T
+    {
+        let data = try await self.requestRaw(
+            method: method,
+            params: params,
+            timeoutMs: timeoutMs,
+            allowRecovery: allowRecovery,
+            timeoutMessage: timeoutMessage)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw GatewayDecodingError(method: method.rawValue, message: error.localizedDescription)
+        }
+    }
+
+    private func resetGatewayConnection() async {
+        await self.gatewayConnection.shutdown()
+    }
+
+    private nonisolated static func isGatewayAuthFailure(_ error: Error) -> Bool {
+        GatewayAuthFailureClassifier.isAuthFailure(error)
     }
 
     private func resolveStartResult(_ result: WizardStartResult) async throws -> WizardStartResult {
@@ -256,9 +473,10 @@ final class OnboardingWizardModel {
                     ])
             }
             onboardingWizardLogger.notice("wizard.start awaiting next step from gateway")
-            let next: WizardNextResult = try await GatewayConnection.shared.requestDecoded(
+            let next: WizardNextResult = try await self.requestDecoded(
                 method: .wizardNext,
-                params: ["sessionId": AnyCodable(resolved.sessionid)])
+                params: ["sessionId": AnyCodable(resolved.sessionid)],
+                timeoutMessage: "The setup flow took too long to respond. Retry setup.")
             resolved = WizardStartResult(
                 sessionid: resolved.sessionid,
                 done: next.done,
@@ -286,9 +504,10 @@ final class OnboardingWizardModel {
                     ])
             }
             onboardingWizardLogger.notice("wizard.next awaiting next step from gateway")
-            resolved = try await GatewayConnection.shared.requestDecoded(
+            resolved = try await self.requestDecoded(
                 method: .wizardNext,
-                params: ["sessionId": AnyCodable(sessionId)])
+                params: ["sessionId": AnyCodable(sessionId)],
+                timeoutMessage: "The setup flow took too long to respond. Retry setup.")
         }
         return resolved
     }
@@ -328,9 +547,10 @@ final class OnboardingWizardModel {
             params["answer"] = AnyCodable(answer)
             let res: WizardNextResult = try await self.resolveNextResult(
                 sessionId: sessionId,
-                result: try await GatewayConnection.shared.requestDecoded(
+                result: try await self.requestDecoded(
                     method: .wizardNext,
-                    params: params))
+                    params: params,
+                    timeoutMessage: "The setup flow took too long to respond. Retry setup."))
             if rememberStep {
                 self.completedSteps.append(CompletedStep(value: value))
             }
@@ -372,10 +592,12 @@ final class OnboardingWizardModel {
     func cancelIfRunning() async {
         guard let sessionId else { return }
         do {
-            let res: WizardStatusResult = try await GatewayConnection.shared.requestDecoded(
+            let res: WizardStatusResult = try await self.requestDecoded(
                 method: .wizardCancel,
-                params: ["sessionId": AnyCodable(sessionId)])
+                params: ["sessionId": AnyCodable(sessionId)],
+                timeoutMessage: "The setup flow took too long to cancel. Retry setup.")
             self.applyStatusResult(res)
+            await self.resetGatewayConnection()
         } catch {
             if let gatewayError = error as? GatewayResponseError,
                gatewayError.code == ErrorCode.invalidRequest.rawValue,
@@ -386,6 +608,7 @@ final class OnboardingWizardModel {
                 self.status = "cancelled"
                 self.errorMessage = nil
                 self.stepErrorMessage = nil
+                await self.resetGatewayConnection()
                 return
             }
             self.status = "error"
@@ -400,10 +623,10 @@ final class OnboardingWizardModel {
         await self.startIfNeeded(route: .onboarding(mode: mode, workspace: workspace))
     }
 
-    func retryModelAuth(authChoice: String? = nil) async {
+    func retryModelAuth(authChoice: String? = nil, setDefaultModel: Bool = true) async {
         await self.cancelIfRunning()
         self.reset()
-        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice))
+        await self.startIfNeeded(route: .modelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel))
     }
 
     func skipForNow() async {
@@ -436,9 +659,9 @@ final class OnboardingWizardModel {
         await self.submit(step: step, value: value)
     }
 
-    func triggerModelAuthPrimaryAction(authChoice: String? = nil) async {
+    func triggerModelAuthPrimaryAction(authChoice: String? = nil, setDefaultModel: Bool = true) async {
         if self.errorMessage != nil {
-            await self.retryModelAuth(authChoice: authChoice)
+            await self.retryModelAuth(authChoice: authChoice, setDefaultModel: setDefaultModel)
             return
         }
         guard let step = self.currentStep else { return }
@@ -546,10 +769,7 @@ final class OnboardingWizardModel {
     }
 
     private func restartIfSessionLost(error: Error) -> Bool {
-        guard let gatewayError = error as? GatewayResponseError else { return false }
-        guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
-        let message = gatewayError.message.lowercased()
-        guard message.contains("wizard not found") || message.contains("wizard not running") else { return false }
+        guard Self.isWizardSessionLostError(error) else { return false }
         guard let route = self.lastStartRoute else {
             return false
         }
@@ -569,6 +789,13 @@ final class OnboardingWizardModel {
         self.errorMessage = macLocalized("Wizard session lost. Restarting…", language: self.language)
         Task { await self.startIfNeeded(route: route) }
         return true
+    }
+
+    static func isWizardSessionLostError(_ error: Error) -> Bool {
+        guard let gatewayError = error as? GatewayResponseError else { return false }
+        guard gatewayError.code == ErrorCode.invalidRequest.rawValue else { return false }
+        let message = gatewayError.message.lowercased()
+        return message.contains("wizard not found") || message.contains("wizard not running")
     }
 
     private func markCompleteFromPersistedSetup() {
@@ -646,17 +873,27 @@ final class OnboardingWizardModel {
             params["skipChannels"] = AnyCodable(true)
             params["skipSkills"] = AnyCodable(true)
             return params
-        case let .modelAuth(authChoice):
-            var params: WizardStartParams = [
-                "entrypoint": AnyCodable("models-auth"),
-                "embedded": AnyCodable(true),
-                "fresh": AnyCodable(true),
-            ]
-            if let authChoice, !authChoice.isEmpty {
-                params["authChoice"] = AnyCodable(authChoice)
-            }
-            return params
+        case let .modelAuth(authChoice, setDefaultModel):
+            return self.focusedModelAuthStartParams(
+                authChoice: authChoice,
+                setDefaultModel: setDefaultModel)
         }
+    }
+
+    static func focusedModelAuthStartParams(
+        authChoice: String?,
+        setDefaultModel: Bool
+    ) -> WizardStartParams {
+        var params: WizardStartParams = [
+            "entrypoint": AnyCodable("models-auth"),
+            "embedded": AnyCodable(true),
+            "fresh": AnyCodable(true),
+            "setDefaultModel": AnyCodable(setDefaultModel),
+        ]
+        if let authChoice, !authChoice.isEmpty {
+            params["authChoice"] = AnyCodable(authChoice)
+        }
+        return params
     }
 
     static func shouldRetryLegacyStart(for error: Error) -> Bool {
@@ -873,9 +1110,10 @@ final class OnboardingWizardModel {
             do {
                 let result: WizardNextResult = try await self.resolveNextResult(
                     sessionId: sessionId,
-                    result: try await GatewayConnection.shared.requestDecoded(
+                    result: try await self.requestDecoded(
                         method: .wizardNext,
-                        params: ["sessionId": AnyCodable(sessionId)]))
+                        params: ["sessionId": AnyCodable(sessionId)],
+                        timeoutMessage: "The setup flow took too long to respond. Retry setup."))
                 guard !Task.isCancelled else { break }
                 guard self.progressPollingSessionId == sessionId else { break }
                 self.applyNextResult(result)
@@ -1131,74 +1369,68 @@ struct OnboardingWizardStepView: View {
         let title = step.title?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let message = step.message?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let combined = "\(title)\n\(message)"
+        let strings = OnboardingStrings(language: language)
 
         if combined.contains("setup mode") {
+            let copy = strings.wizardExplanation(.setupMode)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Simple or custom" : "Sederhana atau khusus",
-                bodyText: language == .en
-                    ? "This is Maumau asking how much of the setup work you want it to handle for you."
-                    : "Di sini Maumau menanyakan seberapa banyak pekerjaan pengaturan yang ingin Anda serahkan kepadanya.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("existing setup") || combined.contains("existing config") {
+            let copy = strings.wizardExplanation(.existingSetup)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Keep or reset" : "Pakai atau reset",
-                bodyText: language == .en
-                    ? "Maumau found an older home setup and wants to know whether to reuse it or start fresh."
-                    : "Maumau menemukan pengaturan lama dan ingin tahu apakah harus memakainya lagi atau mulai dari awal.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("default model") || combined.contains("choose a default model") ||
             combined.contains("ai service")
         {
+            let copy = strings.wizardExplanation(.pickBrain)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Pick the brain" : "Pilih brain",
-                bodyText: language == .en
-                    ? "You are choosing which AI service or model does the thinking for Maumau."
-                    : "Anda sedang memilih layanan AI atau model mana yang akan berpikir untuk Maumau.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("web search") || combined.contains("search provider") ||
             combined.contains("look things up online")
         {
+            let copy = strings.wizardExplanation(.liveSearch)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Add live search" : "Tambah pencarian live",
-                bodyText: language == .en
-                    ? "This optional step lets Maumau look up current information on the web when it needs it."
-                    : "Langkah opsional ini memungkinkan Maumau mencari informasi terbaru di web saat membutuhkannya.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("api key") || combined.contains("oauth") || combined.contains("sign in") ||
             combined.contains("signed in") || combined.contains("auth")
         {
+            let copy = strings.wizardExplanation(.connectBrain)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "Connect the brain" : "Hubungkan brain",
-                bodyText: language == .en
-                    ? "This is the sign-in step so Maumau can actually talk to the AI service you picked."
-                    : "Ini adalah langkah masuk agar Maumau benar-benar bisa berbicara dengan layanan AI yang Anda pilih.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("workspace") {
+            let copy = strings.wizardExplanation(.workspace)
             return StepExplanation(
                 stage: .home,
-                title: language == .en ? "Pick Maumau’s room" : "Pilih ruang Maumau",
-                bodyText: language == .en
-                    ? "This is the folder where Maumau keeps notes, reads instructions, and makes files."
-                    : "Ini adalah folder tempat Maumau menyimpan catatan, membaca instruksi, dan membuat file.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         if combined.contains("preparing setup") || combined.contains("starting wizard") {
+            let copy = strings.wizardExplanation(.preparingSetup)
             return StepExplanation(
                 stage: .brain,
-                title: language == .en ? "A quick setup moment" : "Sebentar menyiapkan",
-                bodyText: language == .en
-                    ? "Maumau is just getting the next brain setup step ready for you."
-                    : "Maumau sedang menyiapkan langkah pengaturan brain berikutnya untuk Anda.")
+                title: copy.title,
+                bodyText: copy.bodyText)
         }
 
         return nil

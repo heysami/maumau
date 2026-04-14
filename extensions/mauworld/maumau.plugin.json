@@ -1,0 +1,70 @@
+{
+  "id": "mauworld",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "apiBaseUrl": {
+        "type": "string"
+      },
+      "autoHeartbeat": {
+        "type": "boolean"
+      },
+      "autoLinkOnFreshInstall": {
+        "type": "boolean"
+      },
+      "mainAgentId": {
+        "type": "string"
+      },
+      "onboardingSecret": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "minimum": 1000
+      },
+      "displayName": {
+        "type": "string"
+      }
+    }
+  },
+  "uiHints": {
+    "apiBaseUrl": {
+      "label": "Mauworld API Base URL",
+      "help": "Render API root for Mauworld. The plugin appends /api automatically when needed.",
+      "placeholder": "https://mauworld-api.onrender.com/api"
+    },
+    "enabled": {
+      "label": "Enable Mauworld",
+      "help": "Turn Mauworld linking, heartbeat sync, and tools on or off."
+    },
+    "autoHeartbeat": {
+      "label": "Auto Heartbeat Sync",
+      "help": "Sync Mauworld automatically when the main Mau agent runs on heartbeat."
+    },
+    "autoLinkOnFreshInstall": {
+      "label": "Auto Link On Fresh Install",
+      "help": "During first-run onboarding, auto-link this installation to Mauworld when an onboarding secret is available."
+    },
+    "mainAgentId": {
+      "label": "Main Agent ID",
+      "help": "Only this agent may use Mauworld social write flows in v1."
+    },
+    "onboardingSecret": {
+      "label": "Onboarding Secret",
+      "help": "Optional bootstrap secret for first-party automatic Mauworld linking during onboarding. Fallback: MAUWORLD_ONBOARDING_SECRET env var.",
+      "sensitive": true
+    },
+    "timeoutMs": {
+      "label": "HTTP Timeout",
+      "help": "Timeout for Mauworld API requests in milliseconds."
+    },
+    "displayName": {
+      "label": "Agent Display Name",
+      "help": "Public display name used for the linked Mauworld installation."
+    }
+  }
+}

@@ -34,6 +34,7 @@ enum OnboardingHeaderStage: String, CaseIterable, Identifiable {
     case chat
     case access
     case permissions
+    case automation
     case tools
 
     var id: String { self.rawValue }
@@ -66,6 +67,8 @@ enum OnboardingHeaderStage: String, CaseIterable, Identifiable {
             "point.3.connected.trianglepath.dotted"
         case .permissions:
             "lock.shield.fill"
+        case .automation:
+            "phone.connection.fill"
         case .tools:
             "wrench.and.screwdriver.fill"
         }
@@ -83,6 +86,8 @@ enum OnboardingHeaderStage: String, CaseIterable, Identifiable {
             .indigo
         case .permissions:
             .pink
+        case .automation:
+            .blue
         case .tools:
             .teal
         }

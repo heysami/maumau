@@ -15,6 +15,8 @@ import type {
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { resolveProxyFetchFromEnv } from "../infra/net/proxy-fetch.js";
 import { resolvePreferredMaumauTmpDir } from "../infra/tmp-maumau-dir.js";
+import { appendWalletEvent } from "../infra/wallet-events.js";
+import { runFfprobe } from "../media/ffmpeg-exec.js";
 import { runExec } from "../process/exec.js";
 import { MediaAttachmentCache } from "./attachments.js";
 import {
@@ -413,6 +415,27 @@ function assertMinAudioSize(params: { size: number; attachmentIndex: number }): 
   );
 }
 
+async function probeAudioDurationMs(filePath: string): Promise<number | undefined> {
+  try {
+    const stdout = await runFfprobe([
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "csv=p=0",
+      filePath,
+    ]);
+    const seconds = Number.parseFloat(stdout.trim());
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return undefined;
+    }
+    return Math.round(seconds * 1000);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runProviderEntry(params: {
   capability: MediaUnderstandingCapability;
   entry: MediaUnderstandingModelConfig;
@@ -527,6 +550,25 @@ export async function runProviderEntry(params: {
           fetchFn,
         }),
     });
+    if (providerId === "deepgram") {
+      let durationMs: number | undefined;
+      try {
+        const pathResult = await params.cache.getPath({
+          attachmentIndex: params.attachmentIndex,
+          maxBytes,
+          timeoutMs,
+        });
+        durationMs = await probeAudioDurationMs(pathResult.path);
+      } catch {
+        durationMs = undefined;
+      }
+      await appendWalletEvent({
+        kind: "deepgram-audio",
+        completedAtMs: Date.now(),
+        provider: "deepgram",
+        durationMs,
+      });
+    }
     return {
       kind: "audio.transcription",
       attachmentIndex: params.attachmentIndex,

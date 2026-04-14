@@ -11,6 +11,7 @@ export type AgentTaskCompletionInternalEvent = {
   statusLabel: string;
   result: string;
   statsLine?: string;
+  followupDetails?: string;
   replyInstruction: string;
 };
 
@@ -33,6 +34,15 @@ function formatTaskCompletionEvent(event: AgentTaskCompletionInternalEvent): str
   ];
   if (event.statsLine?.trim()) {
     lines.push("", event.statsLine.trim());
+  }
+  if (event.followupDetails?.trim()) {
+    lines.push(
+      "",
+      "Follow-up details (internal only; use only if the user explicitly asks):",
+      "<<<BEGIN_INTERNAL_FOLLOWUP_DETAILS>>>",
+      event.followupDetails.trim(),
+      "<<<END_INTERNAL_FOLLOWUP_DETAILS>>>",
+    );
   }
   lines.push("", "Action:", event.replyInstruction);
   return lines.join("\n");

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidNonNegativeByteSizeString } from "./byte-size.js";
 import {
+  AgentExecutionStyleSchema,
   BackgroundAutomationSchema,
   HeartbeatSchema,
   AgentSandboxSchema,
@@ -39,6 +40,8 @@ export const AgentDefaultsSchema = z
       )
       .optional(),
     workspace: z.string().optional(),
+    executionStyle: AgentExecutionStyleSchema,
+    executionWorkerAgentId: z.string().optional(),
     repoRoot: z.string().optional(),
     skipBootstrap: z.boolean().optional(),
     bootstrapMaxChars: z.number().int().positive().optional(),

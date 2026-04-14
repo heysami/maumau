@@ -1,5 +1,61 @@
 export type UpdateAvailable = import("../../../src/infra/update-startup.js").UpdateAvailable;
 import type { CronJobBase } from "../../../src/cron/types-shared.js";
+import type {
+  DashboardAgentAppItem as SharedDashboardAgentAppItem,
+  DashboardBusinessItem as SharedDashboardBusinessItem,
+  DashboardBusinessResult as SharedDashboardBusinessResult,
+  DashboardCalendarResult as SharedDashboardCalendarResult,
+  DashboardCalendarView as SharedDashboardCalendarView,
+  DashboardProjectItem as SharedDashboardProjectItem,
+  DashboardProjectsResult as SharedDashboardProjectsResult,
+  DashboardLifeProfileAgent as SharedDashboardLifeProfileAgent,
+  DashboardLifeProfileField as SharedDashboardLifeProfileField,
+  DashboardLifeProfileNeed as SharedDashboardLifeProfileNeed,
+  DashboardLifeProfileResult as SharedDashboardLifeProfileResult,
+  DashboardWalletSpendBar as SharedDashboardWalletSpendBar,
+  DashboardWalletSpendBreakdown as SharedDashboardWalletSpendBreakdown,
+  DashboardWalletSpendChart as SharedDashboardWalletSpendChart,
+  DashboardWalletSpendGranularity as SharedDashboardWalletSpendGranularity,
+  DashboardWalletSpendResult as SharedDashboardWalletSpendResult,
+  DashboardWalletSpendSegment as SharedDashboardWalletSpendSegment,
+  DashboardWalletCard as SharedDashboardWalletCard,
+  DashboardWalletResult as SharedDashboardWalletResult,
+  DashboardRecentMemoryEntry as SharedDashboardRecentMemoryEntry,
+  DashboardMemoriesResult as SharedDashboardMemoriesResult,
+  DashboardRoutine as SharedDashboardRoutine,
+  DashboardRoutinePreview as SharedDashboardRoutinePreview,
+  DashboardRoutinePreviewView as SharedDashboardRoutinePreviewView,
+  DashboardRoutineScheduleKind as SharedDashboardRoutineScheduleKind,
+  DashboardRoutinesResult as SharedDashboardRoutinesResult,
+  DashboardUserChannel as SharedDashboardUserChannel,
+  DashboardUserChannelAccount as SharedDashboardUserChannelAccount,
+  DashboardUserChannelCapabilityFlags as SharedDashboardUserChannelCapabilityFlags,
+  DashboardUserChannelConnectSpec as SharedDashboardUserChannelConnectSpec,
+  DashboardUserChannelsResult as SharedDashboardUserChannelsResult,
+  DashboardUserChannelEditableList as SharedDashboardUserChannelEditableList,
+  DashboardUserChannelOverride as SharedDashboardUserChannelOverride,
+  DashboardUserChannelUserRow as SharedDashboardUserChannelUserRow,
+  DashboardSavedWorkshopItem as SharedDashboardSavedWorkshopItem,
+  DashboardSnapshot as SharedDashboardSnapshot,
+  DashboardTask as SharedDashboardTask,
+  DashboardTasksResult as SharedDashboardTasksResult,
+  DashboardTeamRun as SharedDashboardTeamRun,
+  DashboardTeamRunsResult as SharedDashboardTeamRunsResult,
+  DashboardTeamSnapshot as SharedDashboardTeamSnapshot,
+  DashboardTeamSnapshotsResult as SharedDashboardTeamSnapshotsResult,
+  DashboardTodaySnapshot as SharedDashboardTodaySnapshot,
+  DashboardWorkshopItem as SharedDashboardWorkshopItem,
+  DashboardWorkshopResult as SharedDashboardWorkshopResult,
+  DashboardWorkshopSaveResult as SharedDashboardWorkshopSaveResult,
+  DashboardWorkItem as SharedDashboardWorkItem,
+  DashboardCalendarEvent as SharedDashboardCalendarEvent,
+} from "../../../src/gateway/dashboard-types.ts";
+import type { TeamPromptEditResult as SharedTeamPromptEditResult } from "../../../src/gateway/protocol/index.js";
+import type {
+  SessionPreviewItem as SharedSessionPreviewItem,
+  SessionsPreviewEntry as SharedSessionsPreviewEntry,
+  SessionsPreviewResult as SharedSessionsPreviewResult,
+} from "../../../src/gateway/session-utils.types.ts";
 import type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 import type {
   GatewayAgentRow as SharedGatewayAgentRow,
@@ -7,6 +63,65 @@ import type {
   SessionsPatchResultBase,
 } from "../../../src/shared/session-types.js";
 export type { ConfigUiHint, ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
+export type DashboardSnapshot = SharedDashboardSnapshot;
+export type DashboardTodaySnapshot = SharedDashboardTodaySnapshot;
+export type DashboardTask = SharedDashboardTask;
+export type DashboardWorkItem = SharedDashboardWorkItem;
+export type DashboardTasksResult = SharedDashboardTasksResult;
+export type DashboardTeamRun = SharedDashboardTeamRun;
+export type DashboardTeamRunsResult = SharedDashboardTeamRunsResult;
+export type DashboardWorkshopItem = SharedDashboardWorkshopItem;
+export type DashboardWorkshopResult = SharedDashboardWorkshopResult;
+export type DashboardSavedWorkshopItem = SharedDashboardSavedWorkshopItem;
+export type DashboardAgentAppItem = SharedDashboardAgentAppItem;
+export type DashboardBusinessItem = SharedDashboardBusinessItem;
+export type DashboardBusinessResult = SharedDashboardBusinessResult;
+export type DashboardProjectItem = SharedDashboardProjectItem;
+export type DashboardProjectsResult = SharedDashboardProjectsResult;
+export type DashboardWorkshopSaveResult = SharedDashboardWorkshopSaveResult;
+export type DashboardCalendarEvent = SharedDashboardCalendarEvent;
+export type DashboardCalendarResult = SharedDashboardCalendarResult;
+export type DashboardCalendarView = SharedDashboardCalendarView;
+export type DashboardLifeProfileField = SharedDashboardLifeProfileField;
+export type DashboardLifeProfileNeed = SharedDashboardLifeProfileNeed;
+export type DashboardLifeProfileAgent = SharedDashboardLifeProfileAgent;
+export type DashboardLifeProfileResult = SharedDashboardLifeProfileResult;
+export type DashboardCalendarFilters = {
+  cron: boolean;
+  userActivity: boolean;
+  groupActivity: boolean;
+  approvals: boolean;
+};
+export type DashboardWalletCard = SharedDashboardWalletCard;
+export type DashboardWalletSpendBar = SharedDashboardWalletSpendBar;
+export type DashboardWalletSpendBreakdown = SharedDashboardWalletSpendBreakdown;
+export type DashboardWalletSpendChart = SharedDashboardWalletSpendChart;
+export type DashboardWalletSpendGranularity = SharedDashboardWalletSpendGranularity;
+export type DashboardWalletSpendResult = SharedDashboardWalletSpendResult;
+export type DashboardWalletSpendSegment = SharedDashboardWalletSpendSegment;
+export type DashboardWalletResult = SharedDashboardWalletResult;
+export type DashboardRoutine = SharedDashboardRoutine;
+export type DashboardRoutinePreview = SharedDashboardRoutinePreview;
+export type DashboardRoutinePreviewView = SharedDashboardRoutinePreviewView;
+export type DashboardRoutineScheduleKind = SharedDashboardRoutineScheduleKind;
+export type DashboardRoutinesResult = SharedDashboardRoutinesResult;
+export type DashboardRecentMemoryEntry = SharedDashboardRecentMemoryEntry;
+export type DashboardMemoriesResult = SharedDashboardMemoriesResult;
+export type DashboardUserChannel = SharedDashboardUserChannel;
+export type DashboardUserChannelAccount = SharedDashboardUserChannelAccount;
+export type DashboardUserChannelCapabilityFlags = SharedDashboardUserChannelCapabilityFlags;
+export type DashboardUserChannelConnectSpec = SharedDashboardUserChannelConnectSpec;
+export type DashboardUserChannelsResult = SharedDashboardUserChannelsResult;
+export type DashboardUserChannelEditableList = SharedDashboardUserChannelEditableList;
+export type DashboardUserChannelOverride = SharedDashboardUserChannelOverride;
+export type DashboardUserChannelUserRow = SharedDashboardUserChannelUserRow;
+export type DashboardTeamSnapshot = SharedDashboardTeamSnapshot;
+export type DashboardTeamSnapshotsResult = SharedDashboardTeamSnapshotsResult;
+export type TeamPromptEditResult = SharedTeamPromptEditResult;
+export type DashboardTaskFilter =
+  | { kind: "task"; value: string }
+  | { kind: "project"; value: string }
+  | null;
 
 export type ChannelsStatusSnapshot = {
   ts: number;
@@ -369,16 +484,28 @@ export type AgentsFilesSetResult = {
 
 export type SessionRunStatus = "running" | "done" | "failed" | "killed" | "timeout";
 
+export type SessionPreviewItem = SharedSessionPreviewItem;
+export type SessionsPreviewEntry = SharedSessionsPreviewEntry;
+export type SessionsPreviewResult = SharedSessionsPreviewResult;
+
 export type GatewaySessionRow = {
   key: string;
   spawnedBy?: string;
   kind: "direct" | "group" | "global" | "unknown";
   label?: string;
   displayName?: string;
+  derivedTitle?: string;
+  lastMessagePreview?: string;
+  lastUserMessagePreview?: string;
+  lastAssistantMessagePreview?: string;
+  channel?: string;
   surface?: string;
   subject?: string;
+  groupChannel?: string;
   room?: string;
   space?: string;
+  chatType?: string;
+  origin?: string;
   updatedAt: number | null;
   sessionId?: string;
   systemSent?: boolean;
@@ -392,14 +519,21 @@ export type GatewaySessionRow = {
   outputTokens?: number;
   totalTokens?: number;
   totalTokensFresh?: boolean;
+  estimatedCostUsd?: number;
   status?: SessionRunStatus;
   startedAt?: number;
   endedAt?: number;
   runtimeMs?: number;
+  parentSessionKey?: string;
   childSessions?: string[];
+  responseUsage?: "on" | "off" | "tokens" | "full";
   model?: string;
   modelProvider?: string;
   contextTokens?: number;
+  deliveryContext?: Record<string, unknown>;
+  lastChannel?: string;
+  lastTo?: string;
+  lastAccountId?: string;
 };
 
 export type SessionsListResult = SessionsListResultBase<GatewaySessionsDefaults, GatewaySessionRow>;

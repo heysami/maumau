@@ -34,7 +34,7 @@ function Write-Host {
 
 function Write-Banner {
     Write-Host ""
-    Write-Host "${ACCENT}  🦞 Maumau Installer$NC" -Level info
+    Write-Host "${ACCENT}  😼 Maumau Installer$NC" -Level info
     Write-Host "${MUTED}  All your chats, one Maumau.$NC" -Level info
     Write-Host ""
 }
@@ -353,7 +353,7 @@ function Main {
     }
     
     Write-Host ""
-    Write-Host "🦞 Maumau installed successfully!" -Level success
+    Write-Host "😼 Maumau installed successfully!" -Level success
 }
 
 Main

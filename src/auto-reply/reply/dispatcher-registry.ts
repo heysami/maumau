@@ -3,14 +3,21 @@
  * Used to ensure gateway restart waits for all replies to complete.
  */
 
+import { resolveGlobalSingleton } from "../../shared/global-singleton.js";
+
 type TrackedDispatcher = {
   readonly id: string;
   readonly pending: () => number;
   readonly waitForIdle: () => Promise<void>;
 };
 
-const activeDispatchers = new Set<TrackedDispatcher>();
-let nextId = 0;
+const DISPATCHER_REGISTRY_STATE_KEY = Symbol.for("maumau.replyDispatcherRegistry");
+
+const dispatcherRegistryState = resolveGlobalSingleton(DISPATCHER_REGISTRY_STATE_KEY, () => ({
+  activeDispatchers: new Set<TrackedDispatcher>(),
+  nextId: 0,
+}));
+const activeDispatchers = dispatcherRegistryState.activeDispatchers;
 
 /**
  * Register a reply dispatcher for global tracking.
@@ -20,7 +27,7 @@ export function registerDispatcher(dispatcher: {
   readonly pending: () => number;
   readonly waitForIdle: () => Promise<void>;
 }): { id: string; unregister: () => void } {
-  const id = `dispatcher-${++nextId}`;
+  const id = `dispatcher-${++dispatcherRegistryState.nextId}`;
   const tracked: TrackedDispatcher = {
     id,
     pending: dispatcher.pending,

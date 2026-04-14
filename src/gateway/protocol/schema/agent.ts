@@ -13,6 +13,7 @@ export const AgentInternalEventSchema = Type.Object(
     statusLabel: Type.String(),
     result: Type.String(),
     statsLine: Type.Optional(Type.String()),
+    followupDetails: Type.Optional(Type.String()),
     replyInstruction: Type.String(),
   },
   { additionalProperties: false },

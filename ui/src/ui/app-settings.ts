@@ -1,4 +1,5 @@
 import { roleScopesAllow } from "../../../src/shared/operator-scope-compat.js";
+import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "./agent-workspace-constants.ts";
 import { refreshChat } from "./app-chat.ts";
 import {
   startLogsPolling,
@@ -8,22 +9,27 @@ import {
 } from "./app-polling.ts";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import type { MaumauApp } from "./app.ts";
+import { loadPinnedAgentFiles } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
-import { loadAgents } from "./controllers/agents.ts";
+import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronRuns, loadCronStatus } from "./controllers/cron.ts";
+import { loadDashboardData } from "./controllers/dashboard.ts";
 import { loadDebug } from "./controllers/debug.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
+import { loadMauOffice } from "./controllers/mau-office.ts";
+import { loadMultiUserMemoryAdmin } from "./controllers/multi-user-memory.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import { loadUsage } from "./controllers/usage.ts";
 import {
+  isDashboardTab,
   inferBasePathFromPathname,
   normalizeBasePath,
   normalizePath,
@@ -54,10 +60,43 @@ type SettingsHost = {
   basePath: string;
   agentsList?: AgentsListResult | null;
   agentsSelectedId?: string | null;
+  teamsSelectedId?: string | null;
+  teamsSelectedWorkflowId?: string | null;
   agentsPanel?: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   pendingGatewayUrl?: string | null;
   systemThemeCleanup?: (() => void) | null;
   pendingGatewayToken?: string | null;
+  syncMauOfficeTicker?: () => void;
+  dashboardMemoryAgentId?: string | null;
+  dashboardAgentPanel?: "memory" | "scope";
+  dashboardLoading?: boolean;
+  dashboardError?: string | null;
+  dashboardSnapshot?: import("./types.ts").DashboardSnapshot | null;
+  dashboardWalletLoading?: boolean;
+  dashboardWalletError?: string | null;
+  dashboardWalletResult?: import("./types.ts").DashboardWalletResult | null;
+  dashboardWalletStartDate?: string;
+  dashboardWalletEndDate?: string;
+  dashboardWalletTimeZone?: "local" | "utc";
+  dashboardUserChannelsResult?: import("./types.ts").DashboardUserChannelsResult | null;
+  dashboardUserChannelId?: string | null;
+  dashboardUserChannelAccountId?: string | null;
+  dashboardTeamsLoading?: boolean;
+  dashboardTeamsError?: string | null;
+  dashboardTeamSnapshots?: import("./types.ts").DashboardTeamSnapshotsResult | null;
+  dashboardTeamRunsLoading?: boolean;
+  dashboardTeamRunsError?: string | null;
+  dashboardTeamRuns?: import("./types.ts").DashboardTeamRunsResult | null;
+  agentFilesLoading?: boolean;
+  agentFilesError?: string | null;
+  agentFilesTargetId?: string | null;
+  agentFilesList?: import("./types.ts").AgentsFilesListResult | null;
+  agentFileContents?: Record<string, string>;
+  agentFileDrafts?: Record<string, string>;
+  toolsCatalogLoading?: boolean;
+  toolsCatalogError?: string | null;
+  toolsCatalogResult?: import("./types.ts").ToolsCatalogResult | null;
+  dashboardReloadTimer?: number | null;
 };
 
 export function applySettings(host: SettingsHost, next: UiSettings) {
@@ -214,6 +253,60 @@ export function setThemeMode(
 }
 
 export async function refreshActiveTab(host: SettingsHost) {
+  if (isDashboardTab(host.tab)) {
+    await loadDashboardData(host as unknown as Parameters<typeof loadDashboardData>[0], {
+      includeTeams: host.tab === "dashboardTeams",
+    });
+    if (host.tab === "dashboardMauOffice") {
+      await loadConfig(host as unknown as MaumauApp);
+      await loadMauOffice(host as unknown as MaumauApp);
+    }
+    if (host.tab === "dashboardAgents" || host.tab === "dashboardMemories") {
+      await Promise.allSettled([
+        loadAgents(host as unknown as MaumauApp),
+        host.tab === "dashboardAgents"
+          ? loadConfig(host as unknown as MaumauApp)
+          : Promise.resolve(),
+      ]);
+      const knownAgentIds = new Set((host.agentsList?.agents ?? []).map((entry) => entry.id));
+      const dashboardMemoryAgentId =
+        (host.dashboardMemoryAgentId && knownAgentIds.has(host.dashboardMemoryAgentId)
+          ? host.dashboardMemoryAgentId
+          : null) ??
+        host.agentsList?.defaultId ??
+        host.agentsList?.agents?.[0]?.id ??
+        null;
+      if (dashboardMemoryAgentId) {
+        host.dashboardMemoryAgentId = dashboardMemoryAgentId;
+        if (host.tab === "dashboardAgents") {
+          await Promise.allSettled([
+            loadPinnedAgentFiles(
+              host as unknown as MaumauApp,
+              dashboardMemoryAgentId,
+              [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME],
+              { preserveDraft: true },
+            ),
+            loadToolsCatalog(host as unknown as MaumauApp, dashboardMemoryAgentId),
+          ]);
+        }
+      } else {
+        host.dashboardMemoryAgentId = null;
+        if (host.tab === "dashboardAgents") {
+          host.agentFilesTargetId = null;
+          host.agentFilesList = null;
+          host.agentFilesError = null;
+          host.agentFilesLoading = false;
+          host.agentFileContents = {};
+          host.agentFileDrafts = {};
+          host.toolsCatalogResult = null;
+          host.toolsCatalogError = null;
+          host.toolsCatalogLoading = false;
+          host.dashboardAgentPanel = "memory";
+        }
+      }
+    }
+    return;
+  }
   if (host.tab === "overview") {
     await loadOverview(host);
   }
@@ -257,6 +350,10 @@ export async function refreshActiveTab(host: SettingsHost) {
       }
     }
   }
+  if (host.tab === "teams") {
+    await loadAgents(host as unknown as MaumauApp);
+    await loadConfig(host as unknown as MaumauApp);
+  }
   if (host.tab === "nodes") {
     await loadNodes(host as unknown as MaumauApp);
     await loadDevices(host as unknown as MaumauApp);
@@ -271,15 +368,20 @@ export async function refreshActiveTab(host: SettingsHost) {
     );
   }
   if (
+    host.tab === "users" ||
     host.tab === "config" ||
     host.tab === "communications" ||
     host.tab === "appearance" ||
     host.tab === "automation" ||
     host.tab === "infrastructure" ||
-    host.tab === "aiAgents"
+    host.tab === "aiAgents" ||
+    host.tab === "teams"
   ) {
     await loadConfigSchema(host as unknown as MaumauApp);
     await loadConfig(host as unknown as MaumauApp);
+  }
+  if (host.tab === "users") {
+    await loadMultiUserMemoryAdmin(host as unknown as MaumauApp);
   }
   if (host.tab === "debug") {
     await loadDebug(host as unknown as MaumauApp);
@@ -304,8 +406,8 @@ export function inferBasePath() {
 }
 
 export function syncThemeWithSettings(host: SettingsHost) {
-  host.theme = host.settings.theme ?? "claw";
-  host.themeMode = host.settings.themeMode ?? "system";
+  host.theme = host.settings.theme ?? "dash";
+  host.themeMode = host.settings.themeMode ?? "light";
   applyResolvedTheme(host, resolveTheme(host.theme, host.themeMode));
   applyBorderRadius(host.settings.borderRadius ?? 50);
   syncSystemThemeListener(host);
@@ -447,6 +549,7 @@ function applyTabSelection(
   } else {
     stopDebugPolling(host as unknown as Parameters<typeof stopDebugPolling>[0]);
   }
+  host.syncMauOfficeTicker?.();
 
   if (options.refreshPolicy === "always" || host.connected) {
     void refreshActiveTab(host);
@@ -498,6 +601,7 @@ export function syncUrlWithSessionKey(host: SettingsHost, sessionKey: string, re
 export async function loadOverview(host: SettingsHost) {
   const app = host as unknown as MaumauApp;
   await Promise.allSettled([
+    loadConfig(app),
     loadChannels(app, false),
     loadPresence(app),
     loadSessions(app),

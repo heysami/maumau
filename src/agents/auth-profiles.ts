@@ -3,6 +3,7 @@ export type {
   AuthCredentialReasonCode,
   TokenExpiryState,
 } from "./auth-profiles/credential-state.js";
+export { hasUsableStoredCredential } from "./auth-profiles/credential-state.js";
 export type { AuthProfileEligibilityReasonCode } from "./auth-profiles/order.js";
 export { resolveAuthProfileDisplayLabel } from "./auth-profiles/display.js";
 export { formatAuthDoctorHint } from "./auth-profiles/doctor.js";
@@ -11,6 +12,7 @@ export { resolveAuthProfileEligibility, resolveAuthProfileOrder } from "./auth-p
 export { resolveAuthStorePathForDisplay } from "./auth-profiles/paths.js";
 export {
   dedupeProfileIds,
+  hasUsableProfileForProvider,
   listProfilesForProvider,
   markAuthProfileGood,
   setAuthProfileOrder,

@@ -3,6 +3,7 @@ import { resolveDefaultAgentWorkspaceDir } from "../agents/workspace.js";
 import { buildAuthChoiceGroups } from "../commands/auth-choice-options.js";
 import { readConfigFileSnapshot, writeConfigFile, type MaumauConfig } from "../config/config.js";
 import { resolveAgentModelPrimaryValue } from "../config/model-input.js";
+import { resolvePreferredProvidersForAuthChoices } from "../plugins/provider-auth-choice-preference.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "./prompts.js";
 
@@ -20,23 +21,6 @@ export type ModelAuthChoiceGroup = {
   options: ModelAuthChoiceOption[];
 };
 
-async function resolveProviderIdForChoice(params: {
-  choice: string;
-  config?: MaumauConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-}): Promise<string | undefined> {
-  const { resolvePreferredProviderForAuthChoice } = await import("../commands/auth-choice.js");
-  const providerId = await resolvePreferredProviderForAuthChoice({
-    choice: params.choice,
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env: params.env,
-  });
-  const trimmed = providerId?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
 export async function resolveModelAuthChoiceGroups(params?: {
   config?: MaumauConfig;
   workspaceDir?: string;
@@ -53,30 +37,27 @@ export async function resolveModelAuthChoiceGroups(params?: {
     workspaceDir: params?.workspaceDir,
     env: params?.env,
   }).groups.filter((group) => group.options.length > 0);
+  const providerIdsByChoice = await resolvePreferredProvidersForAuthChoices({
+    choices: groups.flatMap((group) => group.options.map((option) => option.value)),
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
 
-  return await Promise.all(
-    groups.map(async (group) => ({
-      value: group.value,
-      label: group.label,
-      ...(group.hint ? { hint: group.hint } : {}),
-      options: await Promise.all(
-        group.options.map(async (option) => {
-          const providerId = await resolveProviderIdForChoice({
-            choice: option.value,
-            config: params?.config,
-            workspaceDir: params?.workspaceDir,
-            env: params?.env,
-          });
-          return {
-            value: option.value,
-            label: option.label,
-            ...(option.hint ? { hint: option.hint } : {}),
-            ...(providerId ? { providerId } : {}),
-          };
-        }),
-      ),
-    })),
-  );
+  return groups.map((group) => ({
+    value: group.value,
+    label: group.label,
+    ...(group.hint ? { hint: group.hint } : {}),
+    options: group.options.map((option) => {
+      const providerId = providerIdsByChoice.get(option.value);
+      return {
+        value: option.value,
+        label: option.label,
+        ...(option.hint ? { hint: option.hint } : {}),
+        ...(providerId ? { providerId } : {}),
+      };
+    }),
+  }));
 }
 
 async function resolveRequestedModelAuthChoice(params: {
@@ -103,6 +84,7 @@ async function resolveRequestedModelAuthChoice(params: {
 export async function runModelAuthWizard(
   opts: {
     authChoice?: string;
+    setDefaultModel?: boolean;
   },
   runtime: RuntimeEnv,
   prompter: WizardPrompter,
@@ -118,6 +100,7 @@ export async function runModelAuthWizard(
   if (snapshot.exists && !snapshot.valid) {
     throw new Error("Config is invalid. Fix it in Settings -> Config, then try again.");
   }
+  const shouldSetDefaultModel = opts.setDefaultModel ?? true;
 
   let nextConfig: MaumauConfig = snapshot.valid ? snapshot.config : {};
   const workspaceDir =
@@ -131,19 +114,20 @@ export async function runModelAuthWizard(
   });
   const authChoice = requestedChoice
     ? requestedChoice
-    : await (
-        await import("../commands/auth-choice-prompt.js")
-      ).promptAuthChoiceGrouped({
-        prompter,
-        store: ensureAuthProfileStore(undefined, {
-          allowKeychainPrompt: false,
-        }),
-        includeSkip: false,
-        embedded: true,
-        includeRuntimeFallbackProviders: true,
-        config: nextConfig,
-        workspaceDir,
-      });
+    : await (async () => {
+        const { promptAuthChoiceGrouped } = await import("../commands/auth-choice-prompt.js");
+        return promptAuthChoiceGrouped({
+          prompter,
+          store: ensureAuthProfileStore(undefined, {
+            allowKeychainPrompt: false,
+          }),
+          includeSkip: false,
+          embedded: true,
+          includeRuntimeFallbackProviders: true,
+          config: nextConfig,
+          workspaceDir,
+        });
+      })();
 
   if (authChoice === "custom-api-key") {
     const { promptCustomApiConfig } = await import("../commands/onboard-custom.js");
@@ -159,11 +143,11 @@ export async function runModelAuthWizard(
       config: nextConfig,
       prompter,
       runtime,
-      setDefaultModel: true,
+      setDefaultModel: shouldSetDefaultModel,
     });
     nextConfig = authResult.config;
 
-    if (authResult.agentModelOverride) {
+    if (shouldSetDefaultModel && authResult.agentModelOverride) {
       nextConfig = applyPrimaryModel(nextConfig, authResult.agentModelOverride);
     }
   }
@@ -172,7 +156,8 @@ export async function runModelAuthWizard(
     resolveAgentModelPrimaryValue(nextConfig.agents?.defaults?.model),
   );
   const shouldPromptModelSelection =
-    authChoice === "ollama" || (authChoice !== "custom-api-key" && !hasConfiguredDefaultModel);
+    shouldSetDefaultModel &&
+    (authChoice === "ollama" || (authChoice !== "custom-api-key" && !hasConfiguredDefaultModel));
   if (shouldPromptModelSelection) {
     const preferredProvider = await resolvePreferredProviderForAuthChoice({
       choice: authChoice,

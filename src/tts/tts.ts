@@ -24,6 +24,7 @@ import type {
 } from "../config/types.tts.js";
 import { logVerbose } from "../globals.js";
 import { resolvePreferredMaumauTmpDir } from "../infra/tmp-maumau-dir.js";
+import { appendWalletEvent } from "../infra/wallet-events.js";
 import {
   OPENAI_DEFAULT_TTS_MODEL as DEFAULT_OPENAI_MODEL,
   OPENAI_DEFAULT_TTS_VOICE as DEFAULT_OPENAI_VOICE,
@@ -719,6 +720,15 @@ export async function synthesizeSpeech(params: {
         target,
         overrides: params.overrides,
       });
+      if (provider === "elevenlabs") {
+        await appendWalletEvent({
+          kind: "elevenlabs",
+          completedAtMs: Date.now(),
+          provider: "elevenlabs",
+          characters: params.text.length,
+          mode: "standard",
+        });
+      }
       return {
         success: true,
         audioBuffer: synthesis.audioBuffer,
@@ -772,6 +782,15 @@ export async function textToSpeechTelephony(params: {
         cfg: params.cfg,
         config,
       });
+      if (provider === "elevenlabs") {
+        await appendWalletEvent({
+          kind: "elevenlabs",
+          completedAtMs: Date.now(),
+          provider: "elevenlabs",
+          characters: params.text.length,
+          mode: "telephony",
+        });
+      }
 
       return {
         success: true,

@@ -194,6 +194,7 @@ async function finalizeAcpTurnOutput(params: {
   inboundAudio: boolean;
   sessionTtsAuto?: TtsAutoMode;
   ttsChannel?: string;
+  shouldRouteToOriginating: boolean;
   shouldEmitResolvedIdentityNotice: boolean;
 }): Promise<boolean> {
   let queuedFinal = false;
@@ -230,6 +231,7 @@ async function finalizeAcpTurnOutput(params: {
   // Some ACP parent surfaces only expose terminal replies, so block routing alone is not enough
   // to prove the final result was visible to the user.
   const shouldDeliverTextFallback =
+    params.shouldRouteToOriginating &&
     ttsMode !== "all" &&
     hasAccumulatedBlockText &&
     !finalMediaDelivered &&
@@ -404,6 +406,7 @@ export async function tryDispatchAcpReply(params: {
         inboundAudio: params.inboundAudio,
         sessionTtsAuto: params.sessionTtsAuto,
         ttsChannel: params.ttsChannel,
+        shouldRouteToOriginating: params.shouldRouteToOriginating,
         shouldEmitResolvedIdentityNotice,
       })) || queuedFinal;
 

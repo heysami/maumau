@@ -582,7 +582,7 @@ struct VoiceWakeSettings: View {
     private func friendlyName(for locale: Locale) -> String {
         let cleanedID = normalizeLocaleIdentifier(locale.identifier)
         let cleanLocale = Locale(identifier: cleanedID)
-        let displayLocale = self.language == .id ? Locale(identifier: "id_ID") : Locale.current
+        let displayLocale = macDisplayLocale(language: self.language)
 
         if let langCode = cleanLocale.language.languageCode?.identifier,
            let lang = displayLocale.localizedString(forLanguageCode: langCode),

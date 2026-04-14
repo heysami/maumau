@@ -36,6 +36,8 @@ type VoiceResponsePayload = {
   isReasoning?: boolean;
 };
 
+type AgentDefaultsModelConfig = string | { primary?: string } | null | undefined;
+
 const VOICE_SPOKEN_OUTPUT_CONTRACT = [
   "Output format requirements:",
   '- Return only valid JSON in this exact shape: {"spoken":"..."}',
@@ -43,6 +45,8 @@ const VOICE_SPOKEN_OUTPUT_CONTRACT = [
   '- Put exactly what should be spoken to the caller into "spoken".',
   '- If there is nothing to say, return {"spoken":""}.',
 ].join("\n");
+
+const LEGACY_VOICE_RESPONSE_MODEL = "openai/gpt-4o-mini";
 
 function normalizeSpokenText(value: string): string | null {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -169,6 +173,53 @@ function extractSpokenTextFromPayloads(payloads: VoiceResponsePayload[]): string
   return spokenSegments.length > 0 ? spokenSegments.join(" ").trim() : null;
 }
 
+function resolveConfiguredAgentPrimaryModel(coreConfig: CoreConfig): string | undefined {
+  const agents =
+    coreConfig.agents && typeof coreConfig.agents === "object" && !Array.isArray(coreConfig.agents)
+      ? (coreConfig.agents as Record<string, unknown>)
+      : undefined;
+  const defaults =
+    agents?.defaults && typeof agents.defaults === "object" && !Array.isArray(agents.defaults)
+      ? (agents.defaults as Record<string, unknown>)
+      : undefined;
+  const model = defaults?.model as AgentDefaultsModelConfig;
+  if (typeof model === "string") {
+    const trimmed = model.trim();
+    return trimmed || undefined;
+  }
+  if (!model || typeof model !== "object") {
+    return undefined;
+  }
+  const primary = typeof model.primary === "string" ? model.primary.trim() : "";
+  return primary || undefined;
+}
+
+function resolveVoiceResponseModelRef(params: {
+  voiceConfig: VoiceCallConfig;
+  coreConfig: CoreConfig;
+  agentRuntime: CoreAgentDeps;
+}): string {
+  const configuredDefaultModel = resolveConfiguredAgentPrimaryModel(params.coreConfig);
+  const fallbackRuntimeModel =
+    configuredDefaultModel ??
+    `${params.agentRuntime.defaults.provider}/${params.agentRuntime.defaults.model}`;
+  const configured = params.voiceConfig.responseModel?.trim();
+  if (!configured) {
+    return fallbackRuntimeModel;
+  }
+
+  // Backward compatibility: older voice-call configs defaulted to
+  // `openai/gpt-4o-mini`, which fails on Codex OAuth-only setups. If the main
+  // Maumau default now uses the Codex provider, inherit that instead of
+  // forcing direct OpenAI.
+  const fallbackProvider = fallbackRuntimeModel.split("/")[0];
+  if (configured === LEGACY_VOICE_RESPONSE_MODEL && fallbackProvider === "openai-codex") {
+    return fallbackRuntimeModel;
+  }
+
+  return configured;
+}
+
 /**
  * Generate a voice response using the embedded Pi agent with full tool support.
  * Uses the same agent infrastructure as messaging for consistent behavior.
@@ -216,8 +267,7 @@ export async function generateVoiceResponse(
   });
 
   // Resolve model from config
-  const modelRef =
-    voiceConfig.responseModel || `${agentRuntime.defaults.provider}/${agentRuntime.defaults.model}`;
+  const modelRef = resolveVoiceResponseModelRef({ voiceConfig, coreConfig: cfg, agentRuntime });
   const slashIndex = modelRef.indexOf("/");
   const provider =
     slashIndex === -1 ? agentRuntime.defaults.provider : modelRef.slice(0, slashIndex);

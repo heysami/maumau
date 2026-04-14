@@ -671,6 +671,60 @@ export async function verifyDeviceToken(params: {
   });
 }
 
+export async function verifyPairedOperatorToken(params: {
+  token: string;
+  requiredScopes?: string[];
+  baseDir?: string;
+}): Promise<{ ok: boolean; reason?: string; deviceId?: string; scopes?: string[] }> {
+  return await withLock(async () => {
+    const state = await loadState(params.baseDir);
+    const requestedScopes = normalizeDeviceAuthScopes(params.requiredScopes);
+
+    for (const device of Object.values(state.pairedByDeviceId)) {
+      const entry = device.tokens?.operator;
+      if (!entry || entry.revokedAtMs) {
+        continue;
+      }
+      if (!verifyPairingToken(params.token, entry.token)) {
+        continue;
+      }
+
+      const approvedScopes = resolveApprovedDeviceScopeBaseline(device);
+      if (
+        !scopesWithinApprovedDeviceBaseline({
+          role: "operator",
+          scopes: entry.scopes,
+          approvedScopes,
+        })
+      ) {
+        return { ok: false, reason: "scope-mismatch" };
+      }
+      if (
+        !roleScopesAllow({
+          role: "operator",
+          requestedScopes,
+          allowedScopes: entry.scopes,
+        })
+      ) {
+        return { ok: false, reason: "scope-mismatch" };
+      }
+
+      entry.lastUsedAtMs = Date.now();
+      device.tokens ??= {};
+      device.tokens.operator = entry;
+      state.pairedByDeviceId[device.deviceId] = device;
+      await persistState(state, params.baseDir);
+      return {
+        ok: true,
+        deviceId: device.deviceId,
+        scopes: entry.scopes,
+      };
+    }
+
+    return { ok: false, reason: "token-mismatch" };
+  });
+}
+
 export async function ensureDeviceToken(params: {
   deviceId: string;
   role: string;

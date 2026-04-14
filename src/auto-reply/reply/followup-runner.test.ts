@@ -896,6 +896,7 @@ describe("createFollowupRunner messaging tool dedupe", () => {
         to: "channel:C1",
         accountId: "work",
         threadId: "1739142736.000100",
+        mirror: false,
       }),
     );
     expect(onBlockReply).not.toHaveBeenCalled();

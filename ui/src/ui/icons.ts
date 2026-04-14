@@ -40,6 +40,56 @@ export const icons = {
       <line x1="10" x2="8" y1="9" y2="9" />
     </svg>
   `,
+  briefcase: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M3 12h18" />
+    </svg>
+  `,
+  creditCard: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+      <path d="M6 15h4" />
+    </svg>
+  `,
+  checkSquare: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  `,
+  calendarDays: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h18" />
+      <path d="M8 14h.01" />
+      <path d="M12 14h.01" />
+      <path d="M16 14h.01" />
+      <path d="M8 18h.01" />
+      <path d="M12 18h.01" />
+      <path d="M16 18h.01" />
+    </svg>
+  `,
+  repeat2: html`
+    <svg viewBox="0 0 24 24">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  `,
+  users: html`
+    <svg viewBox="0 0 24 24">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <circle cx="9.5" cy="7" r="3" />
+      <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 4.13a3 3 0 0 1 0 5.74" />
+    </svg>
+  `,
   zap: html`
     <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
   `,
@@ -170,6 +220,28 @@ export const icons = {
       <path d="m4.9 19.1 2.9-2.9" />
       <path d="M2 12h4" />
       <path d="m4.9 4.9 2.9 2.9" />
+    </svg>
+  `,
+  cursor: html`
+    <svg viewBox="0 0 24 24">
+      <path d="m4 3 7.5 16.5 2.58-6.42L20.5 10.5 4 3Z" />
+      <path d="m13 13 6 6" />
+    </svg>
+  `,
+  layoutGrid: html`
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M12 3v18" />
+      <path d="M3 12h18" />
+    </svg>
+  `,
+  bricks: html`
+    <svg viewBox="0 0 24 24">
+      <path d="M3 8h18" />
+      <path d="M3 16h18" />
+      <path d="M7 8v4" />
+      <path d="M17 8v4" />
+      <path d="M12 16v4" />
     </svg>
   `,
 
@@ -366,35 +438,82 @@ export const icons = {
       />
     </svg>
   `,
-  lobster: html`
+  cat: html`
     <svg viewBox="0 0 120 120" fill="none">
       <defs>
-        <linearGradient id="lob-g" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#ff4d4d" />
-          <stop offset="100%" stop-color="#991b1b" />
+        <linearGradient id="cat-g" x1="24" y1="18" x2="96" y2="102" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#ffb85c" />
+          <stop offset="0.55" stop-color="#f6a53a" />
+          <stop offset="1" stop-color="#d97b1e" />
         </linearGradient>
       </defs>
+      <path d="M30 42 23 17l21 12" fill="#f6a53a" />
+      <path d="M90 42 97 17 76 29" fill="#f6a53a" />
+      <path d="M35 34 28 22l13 8" fill="#ffe2b7" opacity="0.9" />
+      <path d="M85 34 92 22 79 30" fill="#ffe2b7" opacity="0.9" />
       <path
-        d="M60 10C30 10 15 35 15 55C15 75 30 95 45 100L45 110L55 110L55 100C55 100 60 102 65 100L65 110L75 110L75 100C90 95 105 75 105 55C105 35 90 10 60 10Z"
-        fill="url(#lob-g)"
+        d="M18 64C18 36 35 18 60 18S102 36 102 64C102 90 84 108 60 108S18 90 18 64Z"
+        fill="url(#cat-g)"
       />
-      <path d="M20 45C5 40 0 50 5 60C10 70 20 65 25 55C28 48 25 45 20 45Z" fill="url(#lob-g)" />
+      <path d="M34 77C39 91 49 98 60 98S81 91 86 77C79 81 70 83 60 83S41 81 34 77Z" fill="#fff4df" />
       <path
-        d="M100 45C115 40 120 50 115 60C110 70 100 65 95 55C92 48 95 45 100 45Z"
-        fill="url(#lob-g)"
+        d="M49 23c1 8 4 16 7 24"
+        stroke="#c9782a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.55"
       />
-      <path d="M45 15Q35 5 30 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round" />
-      <path d="M75 15Q85 5 90 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round" />
-      <circle cx="45" cy="35" r="6" fill="#050810" />
-      <circle cx="75" cy="35" r="6" fill="#050810" />
-      <circle cx="46" cy="34" r="2.5" fill="#00e5cc" />
-      <circle cx="76" cy="34" r="2.5" fill="#00e5cc" />
+      <path
+        d="M68 23c-1 8-3 16-5 24"
+        stroke="#c9782a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
+      <ellipse cx="41" cy="63" rx="9" ry="5" fill="#ff9c7e" opacity="0.75" />
+      <ellipse cx="79" cy="63" rx="9" ry="5" fill="#ff9c7e" opacity="0.75" />
+      <circle cx="45" cy="56" r="5.5" fill="#2b1604" />
+      <circle cx="75" cy="56" r="5.5" fill="#2b1604" />
+      <circle cx="47" cy="54" r="1.6" fill="#fffaf1" />
+      <circle cx="77" cy="54" r="1.6" fill="#fffaf1" />
+      <path d="M60 67 55 63h10l-5 4Z" fill="#dc6e59" />
+      <path d="M60 68c-3 5-8 7-13 5" stroke="#4a2410" stroke-width="3" stroke-linecap="round" />
+      <path d="M60 68c3 5 8 7 13 5" stroke="#4a2410" stroke-width="3" stroke-linecap="round" />
+      <path
+        d="M31 66h15M30 75h16M89 66H74M90 75H74"
+        stroke="#8a4a1b"
+        stroke-width="3"
+        stroke-linecap="round"
+        opacity="0.65"
+      />
+      <path
+        d="M44 85 60 95 76 85"
+        stroke="#fffaf1"
+        stroke-width="10"
+        stroke-linecap="round"
+        opacity="0.95"
+      />
+      <path d="M46 96 34 90l3 13 9-7Z" fill="#242228" />
+      <rect x="55" y="90" width="10" height="12" rx="2.5" fill="#242228" />
+      <path d="M74 96 86 90l-3 13-9-7Z" fill="#242228" />
     </svg>
   `,
   refresh: html`
     <svg viewBox="0 0 24 24">
       <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
       <path d="M21 3v5h-5" />
+    </svg>
+  `,
+  undo: html`
+    <svg viewBox="0 0 24 24">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M20 20a8 8 0 0 0-8-8H4" />
+    </svg>
+  `,
+  redo: html`
+    <svg viewBox="0 0 24 24">
+      <path d="m15 14 5-5-5-5" />
+      <path d="M4 20a8 8 0 0 1 8-8h8" />
     </svg>
   `,
   trash: html`

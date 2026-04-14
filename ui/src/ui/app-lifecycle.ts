@@ -9,6 +9,7 @@ import {
 } from "./app-polling.ts";
 import { observeTopbar, scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import {
+  applySettings,
   applySettingsFromUrl,
   attachThemeListener,
   detachThemeListener,
@@ -18,17 +19,20 @@ import {
 } from "./app-settings.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import type { Tab } from "./navigation.ts";
+import type { UiSettings } from "./storage.ts";
 
 type LifecycleHost = {
   basePath: string;
   client?: { stop: () => void } | null;
   connectGeneration: number;
   connected?: boolean;
+  settings: UiSettings;
   tab: Tab;
   assistantName: string;
   assistantAvatar: string | null;
   assistantAgentId: string | null;
   serverVersion: string | null;
+  secureDashboardUrl: string | null;
   chatHasAutoScrolled: boolean;
   chatManualRefreshInFlight: boolean;
   chatLoading: boolean;
@@ -46,7 +50,19 @@ export function handleConnected(host: LifecycleHost) {
   const connectGeneration = ++host.connectGeneration;
   host.basePath = inferBasePath();
   applySettingsFromUrl(host as unknown as Parameters<typeof applySettingsFromUrl>[0]);
-  const bootstrapReady = loadControlUiBootstrapConfig(host);
+  const bootstrapReady = loadControlUiBootstrapConfig(host).then((bootstrap) => {
+    if (host.connectGeneration !== connectGeneration) {
+      return;
+    }
+    const nextToken = bootstrap?.loopbackGatewayToken?.trim() ?? "";
+    if (!nextToken || nextToken === host.settings.token.trim()) {
+      return;
+    }
+    applySettings(host as unknown as Parameters<typeof applySettings>[0], {
+      ...host.settings,
+      token: nextToken,
+    });
+  });
   syncTabWithLocation(host as unknown as Parameters<typeof syncTabWithLocation>[0], true);
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   attachThemeListener(host as unknown as Parameters<typeof attachThemeListener>[0]);

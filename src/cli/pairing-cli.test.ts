@@ -4,6 +4,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 const listChannelPairingRequests = vi.fn();
 const approveChannelPairingCode = vi.fn();
 const notifyPairingApproved = vi.fn();
+const loadConfig = vi.fn();
+const writeConfigFile = vi.fn();
 const pairingIdLabels: Record<string, string> = {
   telegram: "telegramUserId",
   discord: "discordUserId",
@@ -41,7 +43,8 @@ vi.mock("../channels/plugins/index.js", () => ({
 }));
 
 vi.mock("../config/config.js", () => ({
-  loadConfig: vi.fn().mockReturnValue({}),
+  loadConfig,
+  writeConfigFile,
 }));
 
 describe("pairing cli", () => {
@@ -70,6 +73,10 @@ describe("pairing cli", () => {
     getPairingAdapter.mockClear();
     listPairingChannels.mockClear();
     notifyPairingApproved.mockResolvedValue(undefined);
+    loadConfig.mockReset();
+    loadConfig.mockReturnValue({});
+    writeConfigFile.mockReset();
+    writeConfigFile.mockResolvedValue(undefined);
   });
 
   function createProgram() {
@@ -219,6 +226,33 @@ describe("pairing cli", () => {
       code: "ABCDEFGH",
       accountId: "yy",
     });
+  });
+
+  it("bootstraps owner access on first approved pairing", async () => {
+    mockApprovedPairing();
+
+    await runPairing(["pairing", "approve", "--channel", "telegram", "ABCDEFGH"]);
+
+    expect(writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commands: {
+          ownerAllowFrom: ["telegram:123"],
+        },
+      }),
+    );
+  });
+
+  it("does not override an existing owner allowFrom during pairing bootstrap", async () => {
+    mockApprovedPairing();
+    loadConfig.mockReturnValue({
+      commands: {
+        ownerAllowFrom: ["telegram:999"],
+      },
+    });
+
+    await runPairing(["pairing", "approve", "--channel", "telegram", "ABCDEFGH"]);
+
+    expect(writeConfigFile).not.toHaveBeenCalled();
   });
 
   it("defaults approve to the sole available channel when only code is provided", async () => {

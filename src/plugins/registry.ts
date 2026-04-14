@@ -8,6 +8,7 @@ import type {
 } from "../gateway/server-methods/types.js";
 import { registerInternalHook } from "../hooks/internal-hooks.js";
 import type { HookEntry } from "../hooks/types.js";
+import { registerMemoryOverlayForOwner } from "../memory/overlay-registry.js";
 import { registerMemoryPromptSection } from "../memory/prompt-section.js";
 import { resolveUserPath } from "../utils.js";
 import { registerPluginCommand, validatePluginCommandDefinition } from "./command-registration.js";
@@ -18,7 +19,6 @@ import { normalizeRegisteredProvider } from "./provider-validation.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
 import { withPluginRuntimePluginIdScope } from "./runtime/gateway-request-scope.js";
 import type { PluginRuntime } from "./runtime/types.js";
-import { defaultSlotIdForKey } from "./slots.js";
 import {
   isPluginHookName,
   isPromptInjectionHookName,
@@ -36,6 +36,7 @@ import type {
   MaumauPluginHttpRouteHandler,
   MaumauPluginHttpRouteParams,
   MaumauPluginHookOptions,
+  MemoryOverlay,
   MediaUnderstandingProviderPlugin,
   ProviderPlugin,
   MaumauPluginService,
@@ -959,12 +960,12 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
         if (registrationMode !== "full") {
           return;
         }
-        if (id === defaultSlotIdForKey("contextEngine")) {
+        if (id === "legacy") {
           pushDiagnostic({
             level: "error",
             pluginId: record.id,
             source: record.source,
-            message: `context engine id reserved by core: ${id}`,
+            message: "context engine id reserved by core: legacy",
           });
           return;
         }
@@ -994,6 +995,22 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
           return;
         }
         registerMemoryPromptSection(builder);
+      },
+      registerMemoryOverlay: (overlay: MemoryOverlay) => {
+        if (registrationMode !== "full") {
+          return;
+        }
+        const result = registerMemoryOverlayForOwner(overlay, `plugin:${record.id}`, {
+          allowSameOwnerRefresh: true,
+        });
+        if (!result.ok) {
+          pushDiagnostic({
+            level: "error",
+            pluginId: record.id,
+            source: record.source,
+            message: `memory overlay already registered: ${overlay.id} (${result.existingOwner})`,
+          });
+        }
       },
       resolvePath: (input: string) => resolveUserPath(input),
       on: (hookName, handler, opts) =>

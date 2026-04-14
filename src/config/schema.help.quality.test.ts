@@ -17,6 +17,7 @@ const ROOT_SECTIONS = [
   "models",
   "nodeHost",
   "agents",
+  "teams",
   "tools",
   "bindings",
   "broadcast",

@@ -38,6 +38,10 @@ struct SettingsRootView: View {
                     .tabItem { Label(macLocalized("Channels", language: language), systemImage: "link") }
                     .tag(SettingsTab.channels)
 
+                PhoneCallsSettings(state: self.state)
+                    .tabItem { Label(macLocalized("Phone Calls", language: language), systemImage: "phone.badge.waveform") }
+                    .tag(SettingsTab.phoneCalls)
+
                 VoiceWakeSettings(state: self.state, isActive: self.selectedTab == .voiceWake)
                     .tabItem { Label(macLocalized("Voice Wake", language: language), systemImage: "waveform.circle") }
                     .tag(SettingsTab.voiceWake)
@@ -196,7 +200,7 @@ struct SettingsRootView: View {
 }
 
 enum SettingsTab: CaseIterable {
-    case general, models, channels, skills, plugins, sessions, cron, config, instances, voiceWake, permissions, debug, about
+    case general, models, channels, phoneCalls, skills, plugins, sessions, cron, config, instances, voiceWake, permissions, debug, about
     static let windowWidth: CGFloat = 824 // wider
     static let windowHeight: CGFloat = 790 // +10% (more room)
     func title(in language: OnboardingLanguage) -> String {
@@ -204,6 +208,7 @@ enum SettingsTab: CaseIterable {
         case .general: macLocalized("General", language: language)
         case .models: macLocalized("Models", language: language)
         case .channels: macLocalized("Channels", language: language)
+        case .phoneCalls: macLocalized("Phone Calls", language: language)
         case .skills: macLocalized("Skills", language: language)
         case .plugins: macLocalized("Plugins", language: language)
         case .sessions: macLocalized("Sessions", language: language)
@@ -222,6 +227,7 @@ enum SettingsTab: CaseIterable {
         case .general: "gearshape"
         case .models: "brain.head.profile"
         case .channels: "link"
+        case .phoneCalls: "phone.badge.waveform"
         case .skills: "sparkles"
         case .plugins: "puzzlepiece"
         case .sessions: "clock.arrow.circlepath"

@@ -1,4 +1,5 @@
 import Foundation
+import MaumauKit
 import Observation
 
 @MainActor
@@ -49,10 +50,14 @@ final class GatewayProcessManager {
     private var environmentRefreshTask: Task<Void, Never>?
     private var lastEnvironmentRefresh: Date?
     private var logRefreshTask: Task<Void, Never>?
+    private var readinessWait: (id: UUID, deadline: Date, task: Task<Bool, Never>)?
+    private var managedAuthRecoveryTask: Task<Bool, Never>?
     #if DEBUG
     private var testingConnection: GatewayConnection?
+    private var testingManagedAuthRecoveryHandler: ((Error) async -> Bool)?
     #endif
     private let logger = Logger(subsystem: "ai.maumau", category: "gateway.process")
+    private let readinessProbeConnection = GatewayConnection()
 
     private let logLimit = 20000 // characters to keep in-memory
     private let environmentRefreshMinInterval: TimeInterval = 30
@@ -63,12 +68,29 @@ final class GatewayProcessManager {
         return .shared
         #endif
     }
+    private var readinessConnection: GatewayConnection {
+        #if DEBUG
+        return self.testingConnection ?? self.readinessProbeConnection
+        #else
+        return self.readinessProbeConnection
+        #endif
+    }
 
     static func shouldDeferLaunchAgentAutoEnable(status: Status) -> Bool {
         if case .starting = status {
             return true
         }
         return false
+    }
+
+    static func shouldRefreshControlChannel(
+        state: ControlChannel.ConnectionState)
+        -> Bool
+    {
+        if case .connected = state {
+            return false
+        }
+        return true
     }
 
     func setActive(_ active: Bool) {
@@ -145,8 +167,14 @@ final class GatewayProcessManager {
         self.desiredActive = false
         self.existingGatewayDetails = nil
         self.lastFailureReason = nil
+        self.readinessWait?.task.cancel()
+        self.readinessWait = nil
         self.status = .stopped
         self.logger.info("gateway stop requested")
+        let readinessConnection = self.readinessConnection
+        Task {
+            await readinessConnection.shutdown()
+        }
         if CommandResolver.connectionModeIsRemote() {
             return
         }
@@ -250,6 +278,23 @@ final class GatewayProcessManager {
                             "gateway existing listener still warming up: \(error.localizedDescription, privacy: .public)")
                         return true
                     }
+                    if Self.shouldReplaceExistingManagedGatewayAfterAuthFailure(error, instance: instance) {
+                        self.existingGatewayDetails = instanceText
+                        self.clearLastFailure()
+                        self.status = .starting
+                        if let instance {
+                            let terminated = await PortGuardian.shared.terminate(pid: instance.pid)
+                            let action = terminated ? "terminated" : "could not terminate"
+                            self.appendLog(
+                                "[gateway] managed listener on port \(port) rejected auth; \(action) pid \(instance.pid) and reinstalling launchd gateway\n")
+                        } else {
+                            self.appendLog(
+                                "[gateway] managed listener on port \(port) rejected auth; reinstalling launchd gateway\n")
+                        }
+                        self.logger.notice(
+                            "gateway existing managed listener rejected auth; replacing listener on port \(port, privacy: .public)")
+                        return false
+                    }
                     let reason = self.describeAttachFailure(error, port: port, instance: instance)
                     self.existingGatewayDetails = instanceText
                     self.status = .failed(reason)
@@ -298,7 +343,7 @@ final class GatewayProcessManager {
         let ns = error as NSError
         let message = ns.localizedDescription.isEmpty ? "unknown error" : ns.localizedDescription
         let lower = message.lowercased()
-        if self.isGatewayAuthFailure(error) {
+        if Self.isGatewayAuthFailure(error) {
             return """
             Gateway on port \(port) rejected auth. Set gateway.auth.token to match the running gateway \
             (or clear it on the gateway) and retry.
@@ -317,14 +362,19 @@ final class GatewayProcessManager {
         return "Gateway listener found on port \(port) but health check failed: \(message)"
     }
 
-    private func isGatewayAuthFailure(_ error: Error) -> Bool {
-        if let urlError = error as? URLError, urlError.code == .dataNotAllowed {
-            return true
-        }
-        let ns = error as NSError
-        if ns.domain == "Gateway", ns.code == 1008 { return true }
-        let lower = ns.localizedDescription.lowercased()
-        return lower.contains("unauthorized") || lower.contains("auth")
+    private static func isGatewayAuthFailure(_ error: Error) -> Bool {
+        GatewayAuthFailureClassifier.isAuthFailure(error)
+    }
+
+    static func shouldReplaceExistingManagedGatewayAfterAuthFailure(
+        _ error: Error,
+        instance: PortGuardian.Descriptor?) -> Bool
+    {
+        guard Self.isGatewayAuthFailure(error) else { return false }
+        guard let instance else { return false }
+        return PortGuardian.isManagedLocalGatewayCandidate(
+            command: instance.command,
+            fullCommand: instance.fullCommand)
     }
 
     static func shouldTreatExistingListenerAttachFailureAsWarmup(_ error: Error) -> Bool {
@@ -361,6 +411,12 @@ final class GatewayProcessManager {
             return
         }
 
+        guard self.desiredActive else {
+            self.status = .stopped
+            self.logger.debug("gateway launchd enable canceled before start")
+            return
+        }
+
         if GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() {
             let message = "Launchd disabled; start the Gateway manually or disable attach-only."
             self.status = .failed(message)
@@ -379,6 +435,16 @@ final class GatewayProcessManager {
             self.status = .failed(err)
             self.lastFailureReason = err
             self.logger.error("gateway launchd enable failed: \(err)")
+            return
+        }
+        if !self.desiredActive {
+            self.status = .stopped
+            self.appendLog("[gateway] startup canceled after launchd enable; disabling launchd\n")
+            self.logger.info("gateway launchd enable canceled after start")
+            _ = await GatewayLaunchAgentManager.set(
+                enabled: false,
+                bundlePath: bundlePath,
+                port: port)
             return
         }
 
@@ -425,40 +491,144 @@ final class GatewayProcessManager {
     }
 
     private func refreshControlChannelIfNeeded(reason: String) {
-        switch ControlChannel.shared.state {
-        case .connected, .connecting:
+        let state = ControlChannel.shared.state
+        guard Self.shouldRefreshControlChannel(state: state) else {
             return
-        case .disconnected, .degraded:
-            break
         }
+        // A restart-time refresh can already be mid-flight when the gateway becomes ready.
+        // Kick one more refresh here so the ready signal can supersede any stale "connecting"
+        // attempt that started against the previous socket/token.
         self.appendLog("[gateway] refreshing control channel (\(reason))\n")
         self.logger.debug("gateway control channel refresh reason=\(reason)")
         Task { await ControlChannel.shared.configure() }
     }
 
     func waitForGatewayReady(timeout: TimeInterval = GatewayProcessManager.localGatewayStartupTimeout) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        let requestedDeadline = Date().addingTimeInterval(timeout)
+        if var wait = self.readinessWait {
+            if requestedDeadline > wait.deadline {
+                wait.deadline = requestedDeadline
+                self.readinessWait = wait
+            }
+            return await wait.task.value
+        }
+
+        let id = UUID()
+        let task = Task { [weak self] in
+            guard let self else { return false }
+            return await self.performSharedReadinessWait(id: id)
+        }
+        self.readinessWait = (id: id, deadline: requestedDeadline, task: task)
+        let ready = await task.value
+        if self.readinessWait?.id == id {
+            self.readinessWait = nil
+        }
+        return ready
+    }
+
+    private func performSharedReadinessWait(id: UUID) async -> Bool {
+        while true {
             if !self.desiredActive { return false }
+            guard let wait = self.readinessWait, wait.id == id else { return false }
+            if Date() >= wait.deadline {
+                self.appendLog("[gateway] readiness wait timed out\n")
+                self.logger.warning("gateway readiness wait timed out")
+                await self.readinessConnection.shutdown()
+                return false
+            }
+
             do {
-                _ = try await self.connection.requestRawWithoutRecovery(
-                    method: .health,
-                    timeoutMs: Self.readinessHealthTimeoutMs)
+                _ = try await AsyncTimeout.withTimeoutMs(
+                    timeoutMs: Int(Self.readinessHealthTimeoutMs),
+                    onTimeout: {
+                        NSError(
+                            domain: "Gateway",
+                            code: 5,
+                            userInfo: [NSLocalizedDescriptionKey: "gateway readiness probe timed out"])
+                    },
+                    operation: {
+                        try await self.readinessConnection.requestRawWithoutRecovery(
+                            method: .health,
+                            timeoutMs: Self.readinessHealthTimeoutMs)
+                    })
                 await self.markGatewayReady(reason: "gateway became ready")
                 return true
             } catch {
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                await self.readinessConnection.shutdown()
+                do {
+                    try await Task.sleep(nanoseconds: 300_000_000)
+                } catch {
+                    return false
+                }
             }
         }
-        self.appendLog("[gateway] readiness wait timed out\n")
-        self.logger.warning("gateway readiness wait timed out")
-        return false
     }
 
     func clearLog() {
         self.log = ""
         try? FileManager().removeItem(atPath: GatewayLaunchAgentManager.launchdGatewayLogPath())
         self.logger.debug("gateway log cleared")
+    }
+
+    func recoverManagedGatewayAfterAuthFailureIfNeeded(_ error: Error) async -> Bool {
+        if let recoveryTask = self.managedAuthRecoveryTask {
+            return await recoveryTask.value
+        }
+
+        guard !CommandResolver.connectionModeIsRemote() else { return false }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return false }
+            defer { self.managedAuthRecoveryTask = nil }
+
+            #if DEBUG
+            if let handler = self.testingManagedAuthRecoveryHandler {
+                return await handler(error)
+            }
+            #endif
+
+            guard !GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() else {
+                self.appendLog("[gateway] auth recovery skipped because launchd writes are disabled\n")
+                return false
+            }
+
+            let port = GatewayEnvironment.gatewayPort()
+            let instance = await PortGuardian.shared.describe(port: port)
+            guard Self.shouldReplaceExistingManagedGatewayAfterAuthFailure(error, instance: instance) else {
+                return false
+            }
+
+            self.existingGatewayDetails = instance.map { self.describe(instance: $0) }
+            self.status = .starting
+            self.clearLastFailure()
+            if let instance {
+                let terminated = await PortGuardian.shared.terminate(pid: instance.pid)
+                let action = terminated ? "terminated" : "could not terminate"
+                self.appendLog(
+                    "[gateway] managed listener on port \(port) rejected auth during recovery; \(action) pid \(instance.pid) before reinstalling launchd gateway\n")
+            } else {
+                self.appendLog(
+                    "[gateway] managed listener on port \(port) rejected auth during recovery; reinstalling launchd gateway\n")
+            }
+
+            let bundlePath = Bundle.main.bundleURL.path
+            if let launchdError = await GatewayLaunchAgentManager.set(
+                enabled: true,
+                bundlePath: bundlePath,
+                port: port)
+            {
+                self.lastFailureReason = launchdError
+                self.appendLog("[gateway] auth recovery failed: \(launchdError)\n")
+                self.logger.error("gateway auth recovery failed: \(launchdError, privacy: .public)")
+                return false
+            }
+
+            self.logger.notice(
+                "gateway auth recovery reinstalled managed listener on port \(port, privacy: .public)")
+            self.setActive(true)
+            return await self.waitForGatewayReady(timeout: Self.localGatewayStartupTimeout)
+        }
+        self.managedAuthRecoveryTask = task
+        return await task.value
     }
 
     func setProjectRoot(path: String) {
@@ -484,6 +654,10 @@ extension GatewayProcessManager {
         self.testingConnection = connection
     }
 
+    func setTestingManagedAuthRecoveryHandler(_ handler: ((Error) async -> Bool)?) {
+        self.testingManagedAuthRecoveryHandler = handler
+    }
+
     func setTestingStatus(_ status: Status) {
         self.status = status
     }
@@ -494,6 +668,10 @@ extension GatewayProcessManager {
 
     func setTestingLastFailureReason(_ reason: String?) {
         self.lastFailureReason = reason
+    }
+
+    func setTestingManagedAuthRecoveryTask(_ task: Task<Bool, Never>?) {
+        self.managedAuthRecoveryTask = task
     }
 }
 #endif

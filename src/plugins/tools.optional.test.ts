@@ -8,9 +8,21 @@ type MockRegistryToolEntry = {
 };
 
 const loadMaumauPluginsMock = vi.fn();
+const getActivePluginRegistryMock = vi.fn<
+  () => {
+    tools: unknown[];
+    diagnostics: unknown[];
+  } | null
+>(() => null);
+const getActivePluginRegistryKeyMock = vi.fn<() => string | null>(() => null);
 
 vi.mock("./loader.js", () => ({
   loadMaumauPlugins: (params: unknown) => loadMaumauPluginsMock(params),
+}));
+
+vi.mock("./runtime.js", () => ({
+  getActivePluginRegistry: () => getActivePluginRegistryMock(),
+  getActivePluginRegistryKey: () => getActivePluginRegistryKeyMock(),
 }));
 
 let resolvePluginTools: typeof import("./tools.js").resolvePluginTools;
@@ -94,6 +106,10 @@ describe("resolvePluginTools optional tools", () => {
   beforeEach(async () => {
     vi.resetModules();
     loadMaumauPluginsMock.mockClear();
+    getActivePluginRegistryMock.mockReset();
+    getActivePluginRegistryMock.mockReturnValue(null);
+    getActivePluginRegistryKeyMock.mockReset();
+    getActivePluginRegistryKeyMock.mockReturnValue(null);
     ({ resolvePluginTools } = await import("./tools.js"));
   });
 
@@ -190,5 +206,22 @@ describe("resolvePluginTools optional tools", () => {
         },
       }),
     );
+  });
+
+  it("reloads through the loader cache instead of trusting a stale active registry", () => {
+    setOptionalDemoRegistry();
+    getActivePluginRegistryKeyMock.mockReturnValue("stale-registry-key");
+    getActivePluginRegistryMock.mockReturnValue({
+      tools: [],
+      diagnostics: [],
+    });
+
+    const tools = resolvePluginTools({
+      context: createContext() as never,
+      toolAllowlist: ["optional_tool"],
+    });
+
+    expect(tools.map((tool) => tool.name)).toEqual(["optional_tool"]);
+    expect(loadMaumauPluginsMock).toHaveBeenCalledTimes(1);
   });
 });

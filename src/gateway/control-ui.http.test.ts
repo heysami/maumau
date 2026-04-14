@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "./control-ui-contract.js";
-import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
+import {
+  type ControlUiRequestOptions,
+  handleControlUiAvatarRequest,
+  handleControlUiHttpRequest,
+} from "./control-ui.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
 
 describe("handleControlUiHttpRequest", () => {
@@ -28,7 +32,13 @@ describe("handleControlUiHttpRequest", () => {
       assistantName: string;
       assistantAvatar: string;
       assistantAgentId: string;
+      loopbackGatewayToken?: string;
+      secureDashboardUrl?: string;
     };
+  }
+
+  async function waitForBootstrapPayload() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   function expectNotFoundResponse(params: {
@@ -47,14 +57,29 @@ describe("handleControlUiHttpRequest", () => {
     rootPath: string;
     basePath?: string;
     rootKind?: "resolved" | "bundled";
+    hostHeader?: string;
+    remoteAddress?: string;
+    config?: ControlUiRequestOptions["config"];
+    resolvedAuth?: ControlUiRequestOptions["resolvedAuth"];
+    trustedProxies?: string[];
+    allowRealIpFallback?: boolean;
   }) {
     const { res, end } = makeMockHttpResponse();
     const handled = handleControlUiHttpRequest(
-      { url: params.url, method: params.method } as IncomingMessage,
+      {
+        url: params.url,
+        method: params.method,
+        headers: params.hostHeader ? { host: params.hostHeader } : undefined,
+        socket: params.remoteAddress ? { remoteAddress: params.remoteAddress } : undefined,
+      } as IncomingMessage,
       res,
       {
         ...(params.basePath ? { basePath: params.basePath } : {}),
         root: { kind: params.rootKind ?? "resolved", path: params.rootPath },
+        config: params.config,
+        resolvedAuth: params.resolvedAuth,
+        trustedProxies: params.trustedProxies,
+        allowRealIpFallback: params.allowRealIpFallback,
       },
     );
     return { res, end, handled };
@@ -191,6 +216,7 @@ describe("handleControlUiHttpRequest", () => {
             },
           },
         );
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.basePath).toBe("");
@@ -217,12 +243,136 @@ describe("handleControlUiHttpRequest", () => {
             },
           },
         );
+        await waitForBootstrapPayload();
         expect(handled).toBe(true);
         const parsed = parseBootstrapPayload(end);
         expect(parsed.basePath).toBe("/maumau");
         expect(parsed.assistantName).toBe("Ops");
         expect(parsed.assistantAvatar).toBe("/maumau/avatar/main");
         expect(parsed.assistantAgentId).toBe("main");
+      },
+    });
+  });
+
+  it("includes a secure dashboard URL when tailscale access is available", async () => {
+    const previousTailnetDns = process.env.MAUMAU_TAILNET_DNS;
+    process.env.MAUMAU_TAILNET_DNS = "maumau.tailnet.ts.net";
+    try {
+      await withControlUiRoot({
+        fn: async (tmp) => {
+          const { end, handled } = runControlUiRequest({
+            url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+            method: "GET",
+            rootPath: tmp,
+            hostHeader: "127.0.0.1:18789",
+            remoteAddress: "127.0.0.1",
+            config: {
+              gateway: {
+                auth: { mode: "token", token: "loopback-secret" },
+                tailscale: { mode: "serve" },
+              },
+            },
+          });
+          await waitForBootstrapPayload();
+          expect(handled).toBe(true);
+          const parsed = parseBootstrapPayload(end);
+          expect(parsed.secureDashboardUrl).toBe(
+            "https://maumau.tailnet.ts.net/dashboard/today#token=loopback-secret",
+          );
+        },
+      });
+    } finally {
+      if (previousTailnetDns === undefined) {
+        delete process.env.MAUMAU_TAILNET_DNS;
+      } else {
+        process.env.MAUMAU_TAILNET_DNS = previousTailnetDns;
+      }
+    }
+  });
+
+  it("includes the current token for direct loopback bootstrap requests", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const { end, handled } = runControlUiRequest({
+          url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+          method: "GET",
+          rootPath: tmp,
+          hostHeader: "127.0.0.1:18789",
+          remoteAddress: "127.0.0.1",
+          config: {
+            gateway: { auth: { mode: "token", token: "loopback-secret" } },
+          },
+        });
+        await waitForBootstrapPayload();
+        expect(handled).toBe(true);
+        const parsed = parseBootstrapPayload(end);
+        expect(parsed.loopbackGatewayToken).toBe("loopback-secret");
+      },
+    });
+  });
+
+  it("prefers the active resolved auth token over newer config during bootstrap", async () => {
+    const previousTailnetDns = process.env.MAUMAU_TAILNET_DNS;
+    process.env.MAUMAU_TAILNET_DNS = "maumau.tailnet.ts.net";
+    try {
+      await withControlUiRoot({
+        fn: async (tmp) => {
+          const { end, handled } = runControlUiRequest({
+            url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+            method: "GET",
+            rootPath: tmp,
+            hostHeader: "127.0.0.1:18789",
+            remoteAddress: "127.0.0.1",
+            config: {
+              gateway: {
+                auth: { mode: "token", token: "future-config-token" },
+                tailscale: { mode: "serve" },
+              },
+            },
+            resolvedAuth: {
+              mode: "token",
+              token: "active-runtime-token",
+              password: undefined,
+              allowTailscale: false,
+            },
+          });
+          await waitForBootstrapPayload();
+          expect(handled).toBe(true);
+          const parsed = parseBootstrapPayload(end);
+          expect(parsed.loopbackGatewayToken).toBe("active-runtime-token");
+          expect(parsed.secureDashboardUrl).toBe(
+            "https://maumau.tailnet.ts.net/dashboard/today#token=active-runtime-token",
+          );
+        },
+      });
+    } finally {
+      if (previousTailnetDns === undefined) {
+        delete process.env.MAUMAU_TAILNET_DNS;
+      } else {
+        process.env.MAUMAU_TAILNET_DNS = previousTailnetDns;
+      }
+    }
+  });
+
+  it("omits the token for non-loopback bootstrap requests", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const { end, handled } = runControlUiRequest({
+          url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+          method: "GET",
+          rootPath: tmp,
+          hostHeader: "gateway.example.com",
+          remoteAddress: "10.0.0.20",
+          config: {
+            gateway: { auth: { mode: "token", token: "loopback-secret" } },
+          },
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        await waitForBootstrapPayload();
+        expect(handled).toBe(true);
+        const parsed = parseBootstrapPayload(end);
+        expect(parsed.loopbackGatewayToken).toBeUndefined();
       },
     });
   });

@@ -59,6 +59,18 @@ import {
 } from "./tool-policy.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
+const ORCHESTRATOR_EXECUTION_BLOCKED_TOOL_NAMES = new Set([
+  "apply_patch",
+  "browser",
+  "edit",
+  "exec",
+  "gateway",
+  "image_generate",
+  "nodes",
+  "process",
+  "write",
+]);
+
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-codex";
@@ -68,7 +80,7 @@ const TOOL_DENY_BY_MESSAGE_PROVIDER: Readonly<Record<string, readonly string[]>>
   voice: ["tts"],
 };
 const TOOL_DENY_FOR_XAI_PROVIDERS = new Set(["web_search"]);
-const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write"]);
+const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write", "memory_store"]);
 
 function normalizeMessageProvider(messageProvider?: string): string | undefined {
   const normalized = messageProvider?.trim().toLowerCase();
@@ -259,6 +271,7 @@ export function createMaumauCodingTools(options?: {
   senderName?: string | null;
   senderUsername?: string | null;
   senderE164?: string | null;
+  requesterTailscaleLogin?: string | null;
   /** Reply-to mode for Slack auto-threading. */
   replyToMode?: "off" | "first" | "all";
   /** Mutable ref to track if a reply was sent (for "first" mode). */
@@ -350,6 +363,13 @@ export function createMaumauCodingTools(options?: {
   const sandboxFsBridge = sandbox?.fsBridge;
   const allowWorkspaceWrites = sandbox?.workspaceAccess !== "ro";
   const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
+  const resolvedExecutionStyle =
+    options?.config && agentId
+      ? (resolveAgentConfig(options.config, agentId)?.executionStyle ??
+        (agentId === "main"
+          ? (options.config.agents?.defaults?.executionStyle ?? "orchestrator")
+          : undefined))
+      : undefined;
   const workspaceOnly = fsPolicy.workspaceOnly;
   const applyPatchConfig = execConfig.applyPatch;
   // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
@@ -539,15 +559,22 @@ export function createMaumauCodingTools(options?: {
       disableMessageTool: options?.disableMessageTool,
       requesterAgentIdOverride: agentId,
       requesterSenderId: options?.senderId,
+      senderName: options?.senderName,
+      senderUsername: options?.senderUsername,
+      requesterTailscaleLogin: options?.requesterTailscaleLogin,
       senderIsOwner: options?.senderIsOwner,
       sessionId: options?.sessionId,
       onYield: options?.onYield,
       allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
     }),
   ];
+  const executionStyleTools =
+    resolvedExecutionStyle === "orchestrator"
+      ? tools.filter((tool) => !ORCHESTRATOR_EXECUTION_BLOCKED_TOOL_NAMES.has(tool.name))
+      : tools;
   const toolsForMemoryFlush =
     isMemoryFlushRun && memoryFlushWritePath
-      ? tools.flatMap((tool) => {
+      ? executionStyleTools.flatMap((tool) => {
           if (!MEMORY_FLUSH_ALLOWED_TOOL_NAMES.has(tool.name)) {
             return [];
           }
@@ -566,7 +593,7 @@ export function createMaumauCodingTools(options?: {
           }
           return [tool];
         })
-      : tools;
+      : executionStyleTools;
   const toolsForMessageProvider = applyMessageProviderToolPolicy(
     toolsForMemoryFlush,
     options?.messageProvider,

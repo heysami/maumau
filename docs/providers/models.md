@@ -11,6 +11,10 @@ title: "Model Provider Quickstart"
 Maumau can use many LLM providers. Pick one, authenticate, then set the default
 model as `provider/model`.
 
+If you are choosing from onboarding and want the easiest or most common setup first,
+plus the prep steps for each method before you click it, see
+[Choose Providers](/start/choose-providers).
+
 ## Quick start (two steps)
 
 1. Authenticate with the provider (usually via `maumau onboard`).

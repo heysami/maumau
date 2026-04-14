@@ -28,7 +28,9 @@ export {
 export { resolveHeartbeatReplyPayload } from "../auto-reply/heartbeat-reply-payload.js";
 export { getReplyFromConfig } from "../auto-reply/reply.js";
 export { HEARTBEAT_TOKEN, isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
-export { isAbortRequestText } from "../auto-reply/reply/abort.js";
+// Keep the plugin reply-runtime surface on the lightweight predicate helper so
+// loading reply helpers doesn't pull in the full abort/session-control graph.
+export { isAbortRequestText } from "../auto-reply/reply/abort-primitives.js";
 export { isBtwRequestText } from "../auto-reply/reply/btw-command.js";
 export { resetInboundDedupe } from "../auto-reply/reply/inbound-dedupe.js";
 export { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";

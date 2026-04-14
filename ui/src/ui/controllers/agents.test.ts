@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_MEMORY_FILENAME, DEFAULT_SOUL_FILENAME } from "../agent-workspace-constants.ts";
+import { loadAgentFiles, loadPinnedAgentFiles, type AgentFilesState } from "./agent-files.ts";
 import { loadAgents, loadToolsCatalog, saveAgentsConfig } from "./agents.ts";
 import type { AgentsConfigSaveState, AgentsState } from "./agents.ts";
 
@@ -50,6 +52,30 @@ function createSaveState(): {
       configActiveSection: null,
       configActiveSubsection: null,
       lastError: null,
+    },
+    request,
+  };
+}
+
+function createAgentFilesState(): {
+  state: AgentFilesState;
+  request: ReturnType<typeof vi.fn>;
+} {
+  const request = vi.fn();
+  return {
+    state: {
+      client: {
+        request,
+      } as unknown as AgentFilesState["client"],
+      connected: true,
+      agentFilesLoading: false,
+      agentFilesError: null,
+      agentFilesTargetId: null,
+      agentFilesList: null,
+      agentFileContents: {},
+      agentFileDrafts: {},
+      agentFileActive: null,
+      agentFileSaving: false,
     },
     request,
   };
@@ -225,5 +251,101 @@ describe("saveAgentsConfig", () => {
     await saveAgentsConfig(state);
 
     expect(state.agentsSelectedId).toBe("main");
+  });
+});
+
+describe("agent file helpers", () => {
+  it("loads pinned dashboard files sequentially for the selected agent", async () => {
+    const { state, request } = createAgentFilesState();
+    request.mockImplementation(async (method: string, params: Record<string, string>) => {
+      if (method === "agents.files.list") {
+        return {
+          agentId: params.agentId,
+          workspace: `/tmp/${params.agentId}`,
+          files: [],
+        };
+      }
+      if (method === "agents.files.get") {
+        return {
+          agentId: params.agentId,
+          workspace: `/tmp/${params.agentId}`,
+          file: {
+            name: params.name,
+            path: `/tmp/${params.agentId}/${params.name}`,
+            missing: false,
+            content: `${params.agentId}:${params.name}`,
+          },
+        };
+      }
+      throw new Error(`unexpected method ${method}`);
+    });
+
+    await loadPinnedAgentFiles(state, "main", [DEFAULT_SOUL_FILENAME, DEFAULT_MEMORY_FILENAME], {
+      preserveDraft: true,
+    });
+
+    expect(
+      request.mock.calls.map(([method, params]) => [method, params.agentId, params.name ?? null]),
+    ).toEqual([
+      ["agents.files.list", "main", null],
+      ["agents.files.get", "main", DEFAULT_SOUL_FILENAME],
+      ["agents.files.get", "main", DEFAULT_MEMORY_FILENAME],
+    ]);
+    expect(state.agentFilesList?.agentId).toBe("main");
+    expect(state.agentFileContents).toEqual({
+      [DEFAULT_SOUL_FILENAME]: `main:${DEFAULT_SOUL_FILENAME}`,
+      [DEFAULT_MEMORY_FILENAME]: `main:${DEFAULT_MEMORY_FILENAME}`,
+    });
+    expect(state.agentFileDrafts).toEqual(state.agentFileContents);
+  });
+
+  it("ignores stale list responses after switching agents", async () => {
+    const { state, request } = createAgentFilesState();
+    const alphaDeferred: {
+      resolve?: (value: {
+        agentId: string;
+        workspace: string;
+        files: Array<Record<string, unknown>>;
+      }) => void;
+    } = {};
+    request.mockImplementation((method: string, params: Record<string, string>) => {
+      if (method !== "agents.files.list") {
+        throw new Error(`unexpected method ${method}`);
+      }
+      if (params.agentId === "alpha") {
+        return new Promise<{
+          agentId: string;
+          workspace: string;
+          files: Array<Record<string, unknown>>;
+        }>((resolve) => {
+          alphaDeferred.resolve = resolve;
+        });
+      }
+      return Promise.resolve({
+        agentId: "beta",
+        workspace: "/tmp/beta",
+        files: [],
+      });
+    });
+
+    const alphaPromise = loadAgentFiles(state, "alpha");
+    const betaPromise = loadAgentFiles(state, "beta");
+    expect(alphaDeferred.resolve).toBeTypeOf("function");
+    if (!alphaDeferred.resolve) {
+      throw new Error("alpha resolver was not captured");
+    }
+    alphaDeferred.resolve({
+      agentId: "alpha",
+      workspace: "/tmp/alpha",
+      files: [{ name: DEFAULT_SOUL_FILENAME, path: "/tmp/alpha/SOUL.md", missing: false }],
+    });
+    await Promise.all([alphaPromise, betaPromise]);
+
+    expect(state.agentFilesTargetId).toBe("beta");
+    expect(state.agentFilesList).toEqual({
+      agentId: "beta",
+      workspace: "/tmp/beta",
+      files: [],
+    });
   });
 });

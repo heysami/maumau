@@ -1,5 +1,6 @@
 import Foundation
 import MaumauDiscovery
+import MaumauKit
 import SwiftUI
 import Testing
 @testable import Maumau
@@ -24,22 +25,41 @@ struct OnboardingViewSmokeTests {
         #expect(!OnboardingController.shared.isPresented)
     }
 
-    @Test func `local page order adds private access before permissions and included tools`() {
+    @Test func `onboarding kickoff message includes secure dashboard URL when available`() {
+        let prompt = OnboardingView.onboardingKickoffMessage(
+            secureDashboardUrl: "https://maumau.tailnet.ts.net/dashboard/today#token=abc123")
+        #expect(prompt.contains("BOOTSTRAP.md"))
+        #expect(prompt.contains("https://maumau.tailnet.ts.net/dashboard/today#token=abc123"))
+        #expect(prompt.contains("secure dashboard on my phone"))
+    }
+
+    @Test func `local page order keeps private access before permissions and finishes on all set`() {
         let order = OnboardingView.pageOrder(for: .local, showOnboardingChat: false)
         #expect(order == [0, 1, 3, 10, 12, 5, 11, 9])
         let channelsIndex = order.firstIndex(of: 10)
         let privateAccessIndex = order.firstIndex(of: 12)
         let permissionsIndex = order.firstIndex(of: 5)
-        let toolsIndex = order.firstIndex(of: 11)
+        let automationIndex = order.firstIndex(of: 11)
         #expect(privateAccessIndex == channelsIndex.map { $0 + 1 })
         #expect(permissionsIndex == privateAccessIndex.map { $0 + 1 })
-        #expect(toolsIndex == permissionsIndex.map { $0 + 1 })
+        #expect(automationIndex == permissionsIndex.map { $0 + 1 })
+        #expect(order.last == 9)
+        #expect(!order.contains(13))
         #expect(!order.contains(6))
         #expect(!order.contains(7))
         #expect(!order.contains(8))
     }
 
-    @Test func `local onboarding step metadata marks required optional and prep elsewhere`() {
+    @Test func `local page order can skip gateway once this mac is already ready`() {
+        let order = OnboardingView.pageOrder(
+            for: .local,
+            showOnboardingChat: false,
+            showConnectionStep: false)
+        #expect(order == [0, 3, 10, 12, 5, 11, 9])
+        #expect(!order.contains(1))
+    }
+
+    @Test func `local onboarding step metadata marks required optional and voice prep`() {
         let state = AppState(preview: true)
         state.connectionMode = .local
         let view = OnboardingView(
@@ -54,6 +74,7 @@ struct OnboardingViewSmokeTests {
         #expect(steps.first(where: { $0.pageID == view.channelsSetupPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.privateAccessPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.permissionsPageIndex })?.badges == [.optional])
+        #expect(steps.first(where: { $0.pageID == view.conversationAutomationPageIndex })?.badges == [.optional, .needsPrep])
         #expect(steps.first(where: { $0.pageID == view.skillsSetupPageIndex })?.badges == [.optional])
     }
 
@@ -138,7 +159,767 @@ struct OnboardingViewSmokeTests {
     @Test func `language catalog defaults to english and supports indonesian`() {
         #expect(OnboardingLanguage.loadSelection(from: nil) == nil)
         #expect(OnboardingLanguage.loadSelection(from: "id") == .id)
+        #expect(OnboardingLanguage.loadSelection(from: " ID ") == .id)
+        #expect(OnboardingLanguage.loadSelection(from: " zh-cn ") == .zhCN)
+        #expect(OnboardingLanguage.loadSelection(from: " MS ") == .ms)
         #expect(AppState(preview: true).effectiveOnboardingLanguage == .en)
+    }
+
+    @Test func `mac onboarding languages use the shared localization catalog`() {
+        #expect(OnboardingLanguage.allCases.map { $0.rawValue } == SharedLocalizationCatalog.visibleMacLanguageIDs)
+        #expect(!OnboardingLanguage.allCases.contains(.bug))
+        #expect(!OnboardingLanguage.allCases.contains(.minahasa))
+        #expect(OnboardingLanguage.en.displayName == "English")
+        #expect(OnboardingLanguage.en.nativeName == "English")
+        #expect(OnboardingLanguage.id.displayName == "Indonesian")
+        #expect(OnboardingLanguage.id.nativeName == "Bahasa Indonesia")
+        #expect(OnboardingLanguage.id.replyLanguageID == "id")
+        #expect(OnboardingLanguage.id.controlUILocaleID == "id")
+        #expect(OnboardingLanguage.zhCN.displayName == "Chinese")
+        #expect(OnboardingLanguage.zhCN.nativeName == "中文")
+        #expect(OnboardingLanguage.ms.replyLanguageID == "ms")
+        #expect(OnboardingLanguage.minahasa.controlUILocaleID == "minahasa")
+    }
+
+    @Test func `app state loads persisted onboarding language ids from the shared catalog`() async {
+        await TestIsolation.withUserDefaultsValues([onboardingLanguageKey: "zh-CN"]) {
+            let state = AppState()
+            #expect(state.onboardingLanguage == .zhCN)
+            #expect(state.effectiveOnboardingLanguage.replyLanguageID == "zh-CN")
+            #expect(state.effectiveOnboardingLanguage.controlUILocaleID == "zh-CN")
+        }
+    }
+
+    @Test func `memory onboarding copy explains private and shared users model`() {
+        #expect(OnboardingStrings(language: .en).memorySubtitle.contains("private for each user"))
+        #expect(OnboardingStrings(language: .en).memorySubtitle.contains("Open Users later"))
+        #expect(OnboardingStrings(language: .id).memorySubtitle.contains("privat untuk tiap pengguna"))
+        #expect(OnboardingStrings(language: .id).memorySubtitle.contains("Buka Users nanti"))
+    }
+
+    @Test func `language page greeting keeps the friendly welcome copy`() {
+        #expect(OnboardingStrings(language: .en).languagePageGreeting == "Hi! Welcome to Maumau!")
+    }
+
+    @Test func `managed browser sign-in appears for local onboarding flows`() {
+        #expect(OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .local,
+            browserControlEnabled: false))
+        #expect(!OnboardingView.shouldOfferManagedBrowserSignIn(
+            mode: .remote,
+            browserControlEnabled: true))
+    }
+
+    @Test func `successful onboarding reconnects configured modes`() {
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .local) == .local)
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .remote) == .remote)
+        #expect(OnboardingView.reconnectModeAfterSuccessfulOnboarding(connectionMode: .unconfigured) == nil)
+    }
+
+    @Test func `finish waits for deferred onboarding restart before completing`() async throws {
+        let previousSeen = AppStateStore.shared.onboardingSeen
+        let previousSeenDefault = UserDefaults.standard.object(forKey: "maumau.onboardingSeen")
+        let previousVersionDefault = UserDefaults.standard.object(forKey: onboardingVersionKey)
+        defer {
+            AppStateStore.shared.onboardingSeen = previousSeen
+            if let previousSeenDefault {
+                UserDefaults.standard.set(previousSeenDefault, forKey: "maumau.onboardingSeen")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "maumau.onboardingSeen")
+            }
+            if let previousVersionDefault {
+                UserDefaults.standard.set(previousVersionDefault, forKey: onboardingVersionKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: onboardingVersionKey)
+            }
+        }
+        AppStateStore.shared.onboardingSeen = false
+        UserDefaults.standard.removeObject(forKey: "maumau.onboardingSeen")
+        UserDefaults.standard.removeObject(forKey: onboardingVersionKey)
+
+        var waitedForReload: ConfigStore.GatewaySaveReload?
+        var restartWaitCompleted = false
+        await ConfigStore._withTestOverrides(.init(
+            isRemoteMode: { false },
+            saveGateway: { _ in
+                ConfigStore.GatewaySaveResult(
+                    hash: "post-save-hash",
+                    reload: .init(restartExpected: true, debounceMs: 25, deferralTimeoutMs: 250))
+            },
+            waitForLocalGatewayRestart: { reload in
+                waitedForReload = reload
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                restartWaitCompleted = true
+            }))
+        {
+            let state = AppState(preview: true)
+            state.connectionMode = .unconfigured
+            let view = OnboardingView(
+                state: state,
+                permissionMonitor: PermissionMonitor.shared,
+                discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+            view.onboardingChannelsStore.replaceConfigDraft([
+                "channels": [
+                    "telegram": [
+                        "enabled": true,
+                        "botToken": "secret-token",
+                    ],
+                ],
+            ], dirty: true)
+
+            view.finish()
+            for _ in 0..<50 where waitedForReload == nil {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+
+            #expect(waitedForReload == .init(restartExpected: true, debounceMs: 25, deferralTimeoutMs: 250))
+            #expect(!restartWaitCompleted)
+            #expect(!AppStateStore.shared.onboardingSeen)
+
+            for _ in 0..<50 where !restartWaitCompleted {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+
+            #expect(restartWaitCompleted)
+            #expect(AppStateStore.shared.onboardingSeen)
+            #expect(view.onboardingChannelsStore.configDirty == false)
+        }
+    }
+
+    @Test func `successful onboarding only closes after gateway refresh succeeds`() async throws {
+        var events: [String] = []
+
+        try await OnboardingView.finalizeSuccessfulOnboarding(
+            reconnectMode: .local,
+            paused: false,
+            refreshGateway: { mode, paused in
+                #expect(mode == .local)
+                #expect(paused == false)
+                events.append("refresh-start")
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                events.append("refresh-end")
+            },
+            markSeen: {
+                events.append("mark-seen")
+            },
+            closeWindow: {
+                events.append("close")
+            })
+
+        #expect(events == ["refresh-start", "refresh-end", "mark-seen", "close"])
+    }
+
+    @Test func `failed onboarding refresh keeps completion pending`() async {
+        var didMarkSeen = false
+        var didCloseWindow = false
+
+        do {
+            try await OnboardingView.finalizeSuccessfulOnboarding(
+                reconnectMode: .local,
+                paused: false,
+                refreshGateway: { _, _ in
+                    throw NSError(
+                        domain: "OnboardingTests",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "refresh failed"])
+                },
+                markSeen: {
+                    didMarkSeen = true
+                },
+                closeWindow: {
+                    didCloseWindow = true
+                })
+            Issue.record("Expected onboarding finalization to throw when gateway refresh fails")
+        } catch {
+            #expect(error.localizedDescription == "refresh failed")
+        }
+
+        #expect(didMarkSeen == false)
+        #expect(didCloseWindow == false)
+    }
+
+    @Test func `onboarding status refresh times out instead of hanging`() async {
+        do {
+            try await OnboardingView.refreshStatusAfterSuccessfulOnboarding(
+                language: .en,
+                timeoutMs: 50,
+                refreshHealthStore: {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                },
+                currentHealthError: {
+                    nil
+                })
+            Issue.record("Expected onboarding status refresh to time out")
+        } catch {
+            #expect(error.localizedDescription == "Refreshing Maumau status timed out. Wait a moment, then press Finish again.")
+        }
+    }
+
+    @Test func `onboarding status refresh surfaces post refresh health errors`() async {
+        do {
+            try await OnboardingView.refreshStatusAfterSuccessfulOnboarding(
+                language: .en,
+                refreshHealthStore: {},
+                currentHealthError: {
+                    "gateway still warming up"
+                })
+            Issue.record("Expected onboarding status refresh to surface health errors")
+        } catch {
+            #expect(error.localizedDescription == "gateway still warming up")
+        }
+    }
+
+    @Test func `local onboarding uses a deferred config draft store`() {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        #expect(view.onboardingChannelsStore.defersConfigSaves)
+    }
+
+    @Test func `local onboarding workspace save stages config without persisting`() async {
+        var persistedSaveCount = 0
+        await ConfigStore._withTestOverrides(.init(
+            isRemoteMode: { false },
+            loadLocal: { [:] },
+            saveLocal: { _ in persistedSaveCount += 1 }))
+        {
+            let state = AppState(preview: true)
+            state.connectionMode = .local
+            let view = OnboardingView(
+                state: state,
+                permissionMonitor: PermissionMonitor.shared,
+                discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+            let saved = await view.saveAgentWorkspace("~/maumau-workspace")
+
+            #expect(saved)
+            #expect(persistedSaveCount == 0)
+            #expect(view.onboardingChannelsStore.configDirty)
+            #expect(
+                AgentWorkspaceConfig.workspace(from: view.onboardingChannelsStore.configDraft)
+                    == "~/maumau-workspace")
+        }
+    }
+
+    @Test func `conversation automation page prep does not overwrite earlier voice settings`() async {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        view.onboardingChannelsStore.replaceConfigDraft([
+            "messages": [
+                "tts": [
+                    "provider": "openai",
+                    "elevenlabs": [
+                        "modelId": "kept-model",
+                        "languageCode": "en",
+                    ],
+                ],
+            ],
+            "plugins": [
+                "entries": [
+                    "voice-call": [
+                        "enabled": true,
+                        "config": [
+                            "enabled": true,
+                            "mode": "self-hosted",
+                            "provider": "custom-provider",
+                            "inboundPolicy": "open",
+                            "allowFrom": ["+15551234567"],
+                            "streaming": [
+                                "enabled": true,
+                                "sttProvider": "deepgram",
+                                "languageCode": "en",
+                            ],
+                            "tts": [
+                                "provider": "openai",
+                                "elevenlabs": [
+                                    "modelId": "kept-model",
+                                    "languageCode": "en",
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], dirty: false)
+
+        await view.prepareConversationAutomationPage()
+
+        #expect(view.onboardingChannelsStore.configDirty == false)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("messages"), .key("tts"), .key("provider")]) as? String == "openai")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+    }
+
+    @Test func `conversation automation preset does not overwrite existing voice settings`() async {
+        let state = AppState(preview: true)
+        state.connectionMode = .local
+        let view = OnboardingView(
+            state: state,
+            permissionMonitor: PermissionMonitor.shared,
+            discoveryModel: GatewayDiscoveryModel(localDisplayName: InstanceIdentity.displayName))
+
+        view.onboardingChannelsStore.replaceConfigDraft([
+            "messages": [
+                "tts": [
+                    "provider": "openai",
+                    "elevenlabs": [
+                        "modelId": "kept-model",
+                        "languageCode": "en",
+                    ],
+                ],
+            ],
+            "plugins": [
+                "entries": [
+                    "voice-call": [
+                        "enabled": true,
+                        "config": [
+                            "enabled": true,
+                            "provider": "custom-provider",
+                            "inboundPolicy": "open",
+                            "allowFrom": ["+15551234567"],
+                            "streaming": [
+                                "enabled": true,
+                                "sttProvider": "deepgram",
+                                "languageCode": "en",
+                            ],
+                            "tts": [
+                                "provider": "openai",
+                                "elevenlabs": [
+                                    "modelId": "kept-model",
+                                    "languageCode": "en",
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], dirty: false)
+
+        await view.prepareConversationAutomationPage()
+
+        view.applyConversationAutomationPresetDraft(enabled: true)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")]) as? Bool == true)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) as? Bool == true)
+
+        view.applyConversationAutomationPresetDraft(enabled: false)
+
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("enabled")]) as? Bool == true)
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "custom-provider")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram")
+        #expect(view.onboardingChannelsStore.configValue(
+            at: [.key("plugins"), .key("entries"), .key("automation-runner"), .key("enabled")]) as? Bool == false)
+    }
+
+    @Test func `conversation automation advanced self-hosted draft writes telephony defaults`() {
+        let replyLanguageCode = OnboardingLanguage.ms.replyLanguageID
+        let deepgramUpdates = OnboardingView.conversationAutomationVoiceDraftUpdates(
+            mode: .advancedSelfHosted,
+            phoneAllowFrom: ["+15551234567"],
+            phoneProvider: .twilio,
+            selectedSttProvider: .deepgramRealtime,
+            webhookMode: .tailscaleFunnel,
+            replyLanguageCode: replyLanguageCode,
+            fromNumber: "+15557654321",
+            twilioAccountSID: "AC123",
+            twilioAuthToken: "twilio-token",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "deepgram-key",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "eleven-key",
+            elevenLabsVoiceID: "voice-123",
+            publicWebhookURL: "",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiFromNumber: "",
+            vapiPreferredLanguageCode: replyLanguageCode,
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiBridgeAuthToken: "")
+
+        func updateValue(
+            in updates: [ConversationAutomationVoiceDraftUpdate],
+            at path: ConfigPath) -> Any?
+        {
+            updates.first(where: { $0.path == path })?.value
+        }
+
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")]) as? String == "self-hosted")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) as? String == "twilio")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("inboundPolicy")]) as? String == "allowlist")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("allowFrom")]) as? [String] == ["+15551234567"])
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "deepgram-realtime")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("languageCode")]) as? String == replyLanguageCode)
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")]) as? String == "nova-3")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("provider")]) as? String == "elevenlabs")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("modelId")]) as? String == "eleven_multilingual_v2")
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("languageCode")]) as? String == replyLanguageCode)
+        #expect(updateValue(
+            in: deepgramUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("enabled")]) as? Bool == false)
+
+        let openAIUpdates = OnboardingView.conversationAutomationVoiceDraftUpdates(
+            mode: .advancedSelfHosted,
+            phoneAllowFrom: [],
+            phoneProvider: .twilio,
+            selectedSttProvider: .openaiRealtime,
+            webhookMode: .tailscaleFunnel,
+            replyLanguageCode: replyLanguageCode,
+            fromNumber: "+15557654321",
+            twilioAccountSID: "AC123",
+            twilioAuthToken: "twilio-token",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "sk-test",
+            elevenLabsAPIKey: "eleven-key",
+            elevenLabsVoiceID: "voice-123",
+            publicWebhookURL: "",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiFromNumber: "",
+            vapiPreferredLanguageCode: replyLanguageCode,
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiBridgeAuthToken: "")
+
+        #expect(updateValue(
+            in: openAIUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("sttProvider")]) as? String == "openai-realtime")
+        #expect(updateValue(
+            in: openAIUpdates,
+            at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("model")]) == nil)
+    }
+
+    @Test func `conversation automation defaults to the simple vapi path for new setups`() {
+        #expect(OnboardingView.resolveConversationAutomationVoiceMode(
+            configuredMode: nil,
+            hasSavedSelfHostedVoiceConfig: false) == .simpleVapi)
+        #expect(OnboardingView.resolveConversationAutomationVapiPreferredLanguage(
+            configuredLanguage: nil,
+            onboardingLanguage: .th) == .th)
+    }
+
+    @Test func `conversation automation preloads advanced self-hosted mode from existing config`() {
+        #expect(OnboardingView.resolveConversationAutomationVoiceMode(
+            configuredMode: .advancedSelfHosted,
+            hasSavedSelfHostedVoiceConfig: true) == .advancedSelfHosted)
+        #expect(OnboardingView.resolveConversationAutomationVoiceMode(
+            configuredMode: nil,
+            hasSavedSelfHostedVoiceConfig: true) == .advancedSelfHosted)
+    }
+
+    @Test func `conversation automation simple vapi draft writes vapi config and clears self-hosted fields`() {
+        let replyLanguageCode = OnboardingLanguage.zhCN.replyLanguageID
+        let updates = OnboardingView.conversationAutomationVoiceDraftUpdates(
+            mode: .simpleVapi,
+            phoneAllowFrom: [],
+            phoneProvider: .twilio,
+            selectedSttProvider: .deepgramRealtime,
+            webhookMode: .tailscaleFunnel,
+            replyLanguageCode: replyLanguageCode,
+            fromNumber: "",
+            twilioAccountSID: "AC123",
+            twilioAuthToken: "twilio-token",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "deepgram-key",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "xi-key",
+            elevenLabsVoiceID: "voice-123",
+            publicWebhookURL: "",
+            vapiAPIKey: "vapi-key",
+            vapiAssistantID: "assistant-1",
+            vapiPhoneNumberID: "phone-1",
+            vapiFromNumber: "+628123456789",
+            vapiPreferredLanguageCode: replyLanguageCode,
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiBridgeAuthToken: "bridge-secret")
+
+        func updateValue(at path: ConfigPath) -> Any? {
+            updates.first(where: { $0.path == path })?.value
+        }
+
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("mode")]) as? String == "vapi")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("apiKey")]) as? String == "vapi-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("assistantId")]) as? String == "assistant-1")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("phoneNumberId")]) as? String == "phone-1")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeMode")]) as? String == "auto")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("bridgeUrl")]) == nil)
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("provider")]) == nil)
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("twilio"), .key("accountSid")]) == nil)
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("enabled")]) == nil)
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("vapi"), .key("preferredLanguage")]) as? String == replyLanguageCode)
+    }
+
+    @Test func `conversation automation voice setup writes provider credentials and callback route`() {
+        let updates = OnboardingView.conversationAutomationVoiceDraftUpdates(
+            mode: .advancedSelfHosted,
+            phoneAllowFrom: [],
+            phoneProvider: .telnyx,
+            selectedSttProvider: .deepgramRealtime,
+            webhookMode: .publicUrl,
+            replyLanguageCode: "id",
+            fromNumber: "+628123456789",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "telnyx-key",
+            telnyxConnectionID: "CONN123",
+            telnyxPublicKey: "pub-key",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "deepgram-key",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "eleven-key",
+            elevenLabsVoiceID: "voice-123",
+            publicWebhookURL: "https://voice.example.com/voice/webhook",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiFromNumber: "",
+            vapiPreferredLanguageCode: "id",
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiBridgeAuthToken: "")
+
+        func updateValue(at path: ConfigPath) -> Any? {
+            updates.first(where: { $0.path == path })?.value
+        }
+
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("fromNumber")]) as? String == "+628123456789")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("apiKey")]) as? String == "telnyx-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("connectionId")]) as? String == "CONN123")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("telnyx"), .key("publicKey")]) as? String == "pub-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("publicUrl")]) as? String == "https://voice.example.com/voice/webhook")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tunnel"), .key("provider")]) as? String == "none")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("streaming"), .key("deepgram"), .key("apiKey")]) as? String == "deepgram-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("apiKey")]) as? String == "eleven-key")
+        #expect(updateValue(at: [.key("plugins"), .key("entries"), .key("voice-call"), .key("config"), .key("tts"), .key("elevenlabs"), .key("voiceId")]) as? String == "voice-123")
+    }
+
+    @Test func `conversation automation voice step blocks advance until required fields exist`() {
+        let strings = OnboardingStrings(language: .en)
+        let missing = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            mode: .advancedSelfHosted,
+            phoneProvider: .twilio,
+            sttProvider: .openaiRealtime,
+            webhookMode: .publicUrl,
+            fromNumber: "",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "",
+            publicWebhookURL: "",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiAutoBridgeURL: nil,
+            tailscaleInstalled: false,
+            tailscaleRunning: false,
+            tailscaleFunnelChecked: false,
+            tailscaleFunnelEnabled: false,
+            strings: strings)
+
+        #expect(!missing.isEmpty)
+
+        let ready = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            mode: .advancedSelfHosted,
+            phoneProvider: .twilio,
+            sttProvider: .openaiRealtime,
+            webhookMode: .publicUrl,
+            fromNumber: "+15551234567",
+            twilioAccountSID: "AC123",
+            twilioAuthToken: "twilio-token",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "sk-test",
+            elevenLabsAPIKey: "xi-test",
+            publicWebhookURL: "https://voice.example.com/voice/webhook",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiAutoBridgeURL: nil,
+            tailscaleInstalled: false,
+            tailscaleRunning: false,
+            tailscaleFunnelChecked: false,
+            tailscaleFunnelEnabled: false,
+            strings: strings)
+
+        #expect(ready.isEmpty)
+    }
+
+    @Test func `conversation automation simple vapi validation blocks until api key assistant number and bridge exist`() {
+        let strings = OnboardingStrings(language: .en)
+        let missing = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            mode: .simpleVapi,
+            phoneProvider: .twilio,
+            sttProvider: .deepgramRealtime,
+            webhookMode: .tailscaleFunnel,
+            fromNumber: "",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "",
+            publicWebhookURL: "",
+            vapiAPIKey: "",
+            vapiAssistantID: "",
+            vapiPhoneNumberID: "",
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiAutoBridgeURL: nil,
+            tailscaleInstalled: false,
+            tailscaleRunning: false,
+            tailscaleFunnelChecked: true,
+            tailscaleFunnelEnabled: false,
+            strings: strings)
+
+        #expect(!missing.isEmpty)
+
+        let ready = OnboardingView.conversationAutomationVoiceValidationMessages(
+            telephonyEnabled: true,
+            mode: .simpleVapi,
+            phoneProvider: .twilio,
+            sttProvider: .deepgramRealtime,
+            webhookMode: .tailscaleFunnel,
+            fromNumber: "",
+            twilioAccountSID: "",
+            twilioAuthToken: "",
+            telnyxAPIKey: "",
+            telnyxConnectionID: "",
+            telnyxPublicKey: "",
+            plivoAuthID: "",
+            plivoAuthToken: "",
+            deepgramAPIKey: "",
+            openAIAPIKey: "",
+            elevenLabsAPIKey: "",
+            publicWebhookURL: "",
+            vapiAPIKey: "vapi-key",
+            vapiAssistantID: "assistant-1",
+            vapiPhoneNumberID: "phone-1",
+            vapiBridgeMode: .autoBridge,
+            vapiManualBridgeURL: "",
+            vapiAutoBridgeURL: "https://demo.ts.net:8443/plugins/voice-call/vapi",
+            tailscaleInstalled: true,
+            tailscaleRunning: true,
+            tailscaleFunnelChecked: true,
+            tailscaleFunnelEnabled: true,
+            strings: strings)
+
+        #expect(ready.isEmpty)
+    }
+
+    @Test func `managed browser sign-in waits for the brain step to finish`() {
+        #expect(!OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .local,
+            wizardSatisfied: false,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .local,
+            wizardSatisfied: true,
+            browserControlEnabled: true))
+        #expect(!OnboardingView.shouldShowManagedBrowserSignInOnWizard(
+            mode: .remote,
+            wizardSatisfied: true,
+            browserControlEnabled: true))
+    }
+
+    @Test func `local wizard completion stays on the brain page for browser sign-in`() {
+        #expect(!OnboardingView.shouldAutoAdvanceAfterWizardCompletion(
+            mode: .local,
+            browserControlEnabled: true))
+        #expect(OnboardingView.shouldAutoAdvanceAfterWizardCompletion(
+            mode: .remote,
+            browserControlEnabled: true))
+    }
+
+    @Test func `managed browser sign-in request targets the managed profile`() {
+        let params = OnboardingView.managedBrowserStartParams()
+        #expect(params["method"] == AnyCodable("POST"))
+        #expect(params["path"] == AnyCodable("/start"))
+        #expect(params["query"] == AnyCodable([
+            "profile": AnyCodable("maumau"),
+        ]))
+        #expect(params["timeoutMs"] == AnyCodable(15000))
     }
 
     @Test func `wizard start waits until the wizard page is active`() {
@@ -171,11 +952,12 @@ struct OnboardingViewSmokeTests {
             pageIndex: 11))
     }
 
-    @Test func `fresh launch skips stale unconfigured startup apply`() {
+    @Test func `fresh launch defers startup apply until onboarding finishes`() {
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .unconfigured, onboardingSeen: false) == false)
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: false) == false)
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .remote, onboardingSeen: false) == false)
         #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .unconfigured, onboardingSeen: true))
-        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: false))
-        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .remote, onboardingSeen: false))
+        #expect(AppDelegate.shouldApplyInitialConnectionMode(mode: .local, onboardingSeen: true))
     }
 
     @Test func `fresh launch keeps retrying onboarding until it is visible or no longer needed`() {
@@ -192,6 +974,18 @@ struct OnboardingViewSmokeTests {
             seenVersion: 0,
             onboardingSeen: false,
             onboardingPresented: true))
+    }
+
+    @Test func `closing required onboarding only quits before completion`() {
+        #expect(OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: true,
+            onboardingSeen: false))
+        #expect(!OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: true,
+            onboardingSeen: true))
+        #expect(!OnboardingController.shouldTerminateAfterClosingOnboarding(
+            requiresCompletion: false,
+            onboardingSeen: false))
     }
 
     @Test func `local gateway setup requires cli or local project gateway`() throws {
@@ -323,60 +1117,40 @@ struct OnboardingViewSmokeTests {
             didAutoInstallCLI: true) == false)
     }
 
-    @Test func `default skill installs only auto run on first local onboarding skills page`() {
+    @Test func `default skill installs only auto run on first local onboarding`() {
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true))
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .remote,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: true,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 10,
-            skillsSetupPageIndex: 11,
-            didAutoInstallDefaultSkills: false,
-            isLoadingSkills: false,
-            hasSkills: true) == false)
-        #expect(OnboardingView.shouldAutoInstallDefaultSkills(
-            mode: .local,
-            onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: true,
             isLoadingSkills: false,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: true,
             hasSkills: true) == false)
         #expect(OnboardingView.shouldAutoInstallDefaultSkills(
             mode: .local,
             onboardingSeen: false,
-            activePageIndex: 11,
-            skillsSetupPageIndex: 11,
             didAutoInstallDefaultSkills: false,
             isLoadingSkills: false,
             hasSkills: false) == false)
@@ -485,5 +1259,52 @@ struct OnboardingViewSmokeTests {
             view.selectRemoteGateway(gateway)
             #expect(state.remoteTarget.isEmpty)
         }
+    }
+
+    @Test func `private access page blocks forward progress for blocked serve request`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "serve",
+                phase: .blocked,
+                requirements: [],
+                detail: "Install Tailscale on this Mac first.",
+                exposure: nil)))
+    }
+
+    @Test func `private access page blocks forward progress for blocked funnel request`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "funnel",
+                phase: .failed,
+                requirements: [],
+                detail: "Tailscale Funnel is not enabled on this tailnet yet.",
+                exposure: nil)))
+    }
+
+    @Test func `private access page stays optional when effective mode is off`() {
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .local,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .idle(appliedMode: "off")) == false)
+        #expect(OnboardingView.shouldBlockPrivateAccessAdvance(
+            mode: .remote,
+            activePageIndex: 12,
+            privateAccessPageIndex: 12,
+            accessFlow: .init(
+                appliedMode: "off",
+                requestedMode: "serve",
+                phase: .blocked,
+                requirements: [],
+                detail: "Install Tailscale on this Mac first.",
+                exposure: nil)) == false)
     }
 }

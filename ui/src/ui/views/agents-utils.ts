@@ -106,7 +106,11 @@ export const FALLBACK_TOOL_SECTIONS: AgentToolSection[] = [
   {
     id: "agents",
     label: "Agents",
-    tools: [{ id: "agents_list", label: "agents_list", description: "List agents" }],
+    tools: [
+      { id: "agents_list", label: "agents_list", description: "List agents" },
+      { id: "teams_list", label: "teams_list", description: "List teams" },
+      { id: "teams_run", label: "teams_run", description: "Run a team workflow" },
+    ],
   },
   {
     id: "media",
@@ -219,7 +223,7 @@ export function resolveAgentAvatarUrl(
 
 export function agentLogoUrl(basePath: string): string {
   const base = basePath?.trim() ? basePath.replace(/\/$/, "") : "";
-  return base ? `${base}/favicon.svg` : "favicon.svg";
+  return base ? `${base}/apple-touch-icon.png` : "apple-touch-icon.png";
 }
 
 function isLikelyEmoji(value: string) {

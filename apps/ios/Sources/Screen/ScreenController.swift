@@ -95,6 +95,13 @@ final class ScreenController {
             subtitle: self.debugStatusSubtitle)
     }
 
+    func applyHomeCanvasLocalizationIfNeeded() {
+        guard let webView = self.activeWebView else { return }
+        WebViewJavaScriptSupport.applyHomeCanvasLocalization(
+            webView: webView,
+            localeID: self.homeCanvasLocaleID)
+    }
+
     func updateHomeCanvasState(json: String?) {
         self.homeCanvasStateJSON = json
         self.applyHomeCanvasStateIfNeeded()
@@ -211,6 +218,7 @@ final class ScreenController {
     func attachWebView(_ webView: WKWebView) {
         self.activeWebView = webView
         self.reload()
+        self.applyHomeCanvasLocalizationIfNeeded()
         self.applyDebugStatusIfNeeded()
         self.applyHomeCanvasStateIfNeeded()
     }
@@ -235,6 +243,10 @@ final class ScreenController {
         name: "scaffold",
         ext: "html",
         subdirectory: "CanvasScaffold")
+
+    private var homeCanvasLocaleID: String {
+        Locale.preferredLanguages.first ?? Locale.current.identifier
+    }
 
     func isTrustedCanvasUIURL(_ url: URL) -> Bool {
         guard url.isFileURL else { return false }

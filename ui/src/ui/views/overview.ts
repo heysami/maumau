@@ -1,4 +1,19 @@
 import { html, nothing } from "lit";
+import {
+  CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_PLIVO,
+  CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_TELNYX,
+  CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_TWILIO,
+  CONVERSATION_AUTOMATION_STT_PROVIDER_DEEPGRAM,
+  CONVERSATION_AUTOMATION_STT_PROVIDER_OPENAI,
+  normalizeConversationAutomationAllowFrom,
+} from "../../../../src/commands/conversation-automation-preset.js";
+import type { ConversationAutomationPresetState } from "../../../../src/commands/conversation-automation-preset.js";
+import {
+  getLanguageEnglishName,
+  getLanguageNativeName,
+  LANGUAGE_CATALOG,
+  type LanguageId,
+} from "../../../../src/i18n/languages.js";
 import { t, i18n, SUPPORTED_LOCALES, type Locale, isSupportedLocale } from "../../i18n/index.ts";
 import type { EventLogEntry } from "../app-events.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
@@ -47,6 +62,17 @@ export type OverviewProps = {
   overviewLogLines: string[];
   showGatewayToken: boolean;
   showGatewayPassword: boolean;
+  conversationAutomationPreset: {
+    ready: boolean;
+    state: ConversationAutomationPresetState;
+    dirty: boolean;
+    saving: boolean;
+    applying: boolean;
+    onStateChange: (next: ConversationAutomationPresetState) => void;
+    onSave: () => void;
+    onApply: () => void;
+    onReload: () => void;
+  };
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
@@ -57,6 +83,201 @@ export type OverviewProps = {
   onNavigate: (tab: string) => void;
   onRefreshLogs: () => void;
 };
+
+function formatConversationAutomationAccessMode(state: ConversationAutomationPresetState): string {
+  if (!state.enabled) {
+    return t("common.disabled");
+  }
+  if (state.accessMode === "allowlist") {
+    return t("overview.preset.allowlistMode", {
+      count: String(state.allowFrom.length),
+    });
+  }
+  return t("overview.preset.ownerOnly");
+}
+
+function renderConversationAutomationPresetCard(
+  preset: OverviewProps["conversationAutomationPreset"],
+) {
+  const state = preset.state;
+  return html`
+    <div class="card">
+      <div class="card-title">${t("overview.preset.title")}</div>
+      <div class="card-sub">${t("overview.preset.subtitle")}</div>
+      <div class="ov-access-grid" style="margin-top: 16px;">
+        <label class="field ov-access-grid__full">
+          <span>${t("overview.preset.enabled")}</span>
+          <select
+            .value=${state.enabled ? "enabled" : "disabled"}
+            ?disabled=${!preset.ready || preset.saving || preset.applying}
+            @change=${(event: Event) => {
+              const nextEnabled = (event.target as HTMLSelectElement).value === "enabled";
+              preset.onStateChange({
+                ...state,
+                enabled: nextEnabled,
+                telephonyEnabled: nextEnabled ? state.telephonyEnabled : false,
+                accessMode: nextEnabled
+                  ? state.allowFrom.length > 0
+                    ? "allowlist"
+                    : "owner"
+                  : "disabled",
+              });
+            }}
+          >
+            <option value="enabled">${t("common.enabled")}</option>
+            <option value="disabled">${t("common.disabled")}</option>
+          </select>
+        </label>
+        <label class="field ov-access-grid__full">
+          <span>${t("overview.preset.allowFrom")}</span>
+          <textarea
+            rows="3"
+            style="width: 100%; resize: vertical;"
+            .value=${state.allowFrom.join(", ")}
+            ?disabled=${!preset.ready || preset.saving || preset.applying}
+            @input=${(event: Event) => {
+              const raw = (event.target as HTMLTextAreaElement).value;
+              const allowFrom = normalizeConversationAutomationAllowFrom(raw);
+              preset.onStateChange({
+                ...state,
+                allowFrom,
+                accessMode: !state.enabled
+                  ? "disabled"
+                  : allowFrom.length > 0
+                    ? "allowlist"
+                    : "owner",
+              });
+            }}
+          ></textarea>
+          <div class="muted" style="margin-top: 6px;">
+            ${t("overview.preset.allowFromHint")}
+          </div>
+        </label>
+        <label class="field">
+          <span>${t("overview.preset.telephony")}</span>
+          <select
+            .value=${state.telephonyEnabled ? "enabled" : "disabled"}
+            ?disabled=${!preset.ready || preset.saving || preset.applying || !state.enabled}
+            @change=${(event: Event) => {
+              preset.onStateChange({
+                ...state,
+                telephonyEnabled: (event.target as HTMLSelectElement).value === "enabled",
+              });
+            }}
+          >
+            <option value="enabled">${t("common.enabled")}</option>
+            <option value="disabled">${t("common.disabled")}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>${t("overview.preset.telephonyProvider")}</span>
+          <select
+            .value=${state.telephonyProvider}
+            ?disabled=${!preset.ready || preset.saving || preset.applying || !state.enabled || !state.telephonyEnabled}
+            @change=${(event: Event) => {
+              preset.onStateChange({
+                ...state,
+                telephonyProvider: (event.target as HTMLSelectElement)
+                  .value as ConversationAutomationPresetState["telephonyProvider"],
+              });
+            }}
+          >
+            <option value=${CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_TWILIO}>Twilio</option>
+            <option value=${CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_TELNYX}>Telnyx</option>
+            <option value=${CONVERSATION_AUTOMATION_TELEPHONY_PROVIDER_PLIVO}>Plivo</option>
+          </select>
+          <div class="muted" style="margin-top: 6px;">
+            ${t("overview.preset.telephonyProviderHint")}
+          </div>
+        </label>
+        <label class="field">
+          <span>${t("overview.preset.sttProvider")}</span>
+          <select
+            .value=${state.sttProvider}
+            ?disabled=${!preset.ready || preset.saving || preset.applying || !state.enabled || !state.telephonyEnabled}
+            @change=${(event: Event) => {
+              preset.onStateChange({
+                ...state,
+                sttProvider: (event.target as HTMLSelectElement)
+                  .value as ConversationAutomationPresetState["sttProvider"],
+              });
+            }}
+          >
+            <option value=${CONVERSATION_AUTOMATION_STT_PROVIDER_DEEPGRAM}>
+              ${t("overview.preset.sttProviderDeepgram")}
+            </option>
+            <option value=${CONVERSATION_AUTOMATION_STT_PROVIDER_OPENAI}>
+              ${t("overview.preset.sttProviderOpenAI")}
+            </option>
+          </select>
+          <div class="muted" style="margin-top: 6px;">
+            ${t("overview.preset.sttProviderHint")}
+          </div>
+        </label>
+        <label class="field">
+          <span>${t("overview.preset.language")}</span>
+          <select
+            .value=${state.languageId}
+            ?disabled=${!preset.ready || preset.saving || preset.applying || !state.enabled || !state.telephonyEnabled}
+            @change=${(event: Event) => {
+              preset.onStateChange({
+                ...state,
+                languageId: (event.target as HTMLSelectElement).value as LanguageId,
+              });
+            }}
+          >
+            ${LANGUAGE_CATALOG.map(
+              (language) => html`<option value=${language.id}>
+                ${getLanguageEnglishName(language.id)}
+              </option>`,
+            )}
+          </select>
+          <div class="muted" style="margin-top: 6px;">
+            ${t("overview.preset.languageHint")}
+          </div>
+        </label>
+      </div>
+      <div class="callout" style="margin-top: 14px;">
+        <div><strong>${t("overview.preset.browserLaneLabel")}</strong> ${t("overview.preset.browserLane")}</div>
+        <div style="margin-top: 6px;">
+          <strong>${t("overview.preset.desktopFallbackLabel")}</strong>
+          ${t("overview.preset.desktopFallback")}
+        </div>
+        <div style="margin-top: 6px;">
+          <strong>${t("overview.preset.approvalLabel")}</strong> ${t("overview.preset.approval")}
+        </div>
+      </div>
+      <div class="row" style="margin-top: 14px;">
+        <button
+          class="btn"
+          ?disabled=${!preset.ready || preset.saving || preset.applying}
+          @click=${() => preset.onSave()}
+        >
+          ${preset.saving ? t("overview.preset.saving") : t("overview.preset.save")}
+        </button>
+        <button
+          class="btn"
+          ?disabled=${!preset.ready || preset.saving || preset.applying}
+          @click=${() => preset.onApply()}
+        >
+          ${preset.applying ? t("overview.preset.applying") : t("overview.preset.apply")}
+        </button>
+        <button class="btn" ?disabled=${preset.saving || preset.applying} @click=${() => preset.onReload()}>
+          ${t("overview.preset.reload")}
+        </button>
+        <span class="muted">
+          ${
+            !preset.ready
+              ? t("overview.preset.unavailable")
+              : preset.dirty
+                ? t("overview.preset.unsaved")
+                : formatConversationAutomationAccessMode(state)
+          }
+        </span>
+      </div>
+    </div>
+  `;
+}
 
 export function renderOverview(props: OverviewProps) {
   const snapshot = props.hello?.snapshot as
@@ -296,9 +517,8 @@ export function renderOverview(props: OverviewProps) {
               }}
             >
               ${SUPPORTED_LOCALES.map((loc) => {
-                const key = loc.replace(/-([a-zA-Z])/g, (_, c) => c.toUpperCase());
                 return html`<option value=${loc} ?selected=${currentLocale === loc}>
-                  ${t(`languages.${key}`)}
+                  ${getLanguageNativeName(loc)}
                 </option>`;
               })}
             </select>
@@ -336,6 +556,8 @@ export function renderOverview(props: OverviewProps) {
             : nothing
         }
       </div>
+
+      ${renderConversationAutomationPresetCard(props.conversationAutomationPreset)}
 
       <div class="card">
         <div class="card-title">${t("overview.snapshot.title")}</div>

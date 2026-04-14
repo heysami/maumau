@@ -133,6 +133,7 @@ describe("agent-runner-utils", () => {
         Provider: "OpenAI",
         To: "channel-1",
         SenderId: "sender-1",
+        ChatType: "direct",
       },
       hasRepliedRef: undefined,
       provider: "anthropic",
@@ -148,6 +149,7 @@ describe("agent-runner-utils", () => {
       agentId: run.agentId,
       messageProvider: "openai",
       messageTo: "channel-1",
+      isGroup: false,
     });
     expect(resolved.senderContext).toEqual({
       senderId: "sender-1",
@@ -173,6 +175,24 @@ describe("agent-runner-utils", () => {
 
     expect(resolved.embeddedContext.messageProvider).toBe("telegram");
     expect(resolved.embeddedContext.messageTo).toBe("268300329");
+  });
+
+  it("marks non-direct chats as group contexts for embedded runs", () => {
+    const run = makeRun();
+
+    const resolved = buildEmbeddedRunContexts({
+      run,
+      sessionCtx: {
+        Provider: "telegram",
+        OriginatingChannel: "telegram",
+        OriginatingTo: "telegram:-100123",
+        ChatType: "group",
+      },
+      hasRepliedRef: undefined,
+      provider: "openai",
+    });
+
+    expect(resolved.embeddedContext.isGroup).toBe(true);
   });
 
   it("uses OriginatingTo for telegram native command tool context without implicit thread state", () => {

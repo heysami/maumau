@@ -15,6 +15,7 @@ import {
   browserStart,
   browserStatus,
   browserStop,
+  browserTabs,
 } from "../../browser/client.js";
 import { resolveBrowserConfig, resolveProfile } from "../../browser/config.js";
 import { DEFAULT_UPLOAD_DIR, resolveExistingPathsWithinRoot } from "../../browser/paths.js";
@@ -24,13 +25,16 @@ import {
   trackSessionBrowserTab,
   untrackSessionBrowserTab,
 } from "../../browser/session-tab-registry.js";
+import type { MaumauConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
+import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import {
   executeActAction,
   executeConsoleAction,
   executeSnapshotAction,
   executeTabsAction,
 } from "./browser-tool.actions.js";
+import { runGmailReceiptDigest } from "./browser-tool.receipts.js";
 import { BrowserToolSchema } from "./browser-tool.schema.js";
 import { type AnyAgentTool, imageResultFromFile, jsonResult, readStringParam } from "./common.js";
 import { callGatewayTool } from "./gateway.js";
@@ -55,6 +59,7 @@ const browserToolDeps = {
   browserStart,
   browserStatus,
   browserStop,
+  browserTabs,
   imageResultFromFile,
   loadConfig,
   listNodes,
@@ -79,6 +84,7 @@ export const __testing = {
       browserStart: typeof browserStart;
       browserStatus: typeof browserStatus;
       browserStop: typeof browserStop;
+      browserTabs: typeof browserTabs;
       imageResultFromFile: typeof imageResultFromFile;
       loadConfig: typeof loadConfig;
       listNodes: typeof listNodes;
@@ -102,6 +108,7 @@ export const __testing = {
     browserToolDeps.browserStart = overrides?.browserStart ?? browserStart;
     browserToolDeps.browserStatus = overrides?.browserStatus ?? browserStatus;
     browserToolDeps.browserStop = overrides?.browserStop ?? browserStop;
+    browserToolDeps.browserTabs = overrides?.browserTabs ?? browserTabs;
     browserToolDeps.imageResultFromFile = overrides?.imageResultFromFile ?? imageResultFromFile;
     browserToolDeps.loadConfig = overrides?.loadConfig ?? loadConfig;
     browserToolDeps.listNodes = overrides?.listNodes ?? listNodes;
@@ -202,12 +209,12 @@ function isBrowserNode(node: NodeListNode) {
 }
 
 async function resolveBrowserNodeTarget(params: {
+  cfg: MaumauConfig;
   requestedNode?: string;
   target?: "sandbox" | "host" | "node";
   sandboxBridgeUrl?: string;
 }): Promise<BrowserNodeTarget | null> {
-  const cfg = browserToolDeps.loadConfig();
-  const policy = cfg.gateway?.nodes?.browser;
+  const policy = params.cfg.gateway?.nodes?.browser;
   const mode = policy?.mode ?? "auto";
   if (mode === "off") {
     if (params.target === "node" || params.requestedNode) {
@@ -215,13 +222,7 @@ async function resolveBrowserNodeTarget(params: {
     }
     return null;
   }
-  if (params.sandboxBridgeUrl?.trim() && params.target !== "node" && !params.requestedNode) {
-    return null;
-  }
-  if (params.target && params.target !== "node") {
-    return null;
-  }
-  if (mode === "manual" && params.target !== "node" && !params.requestedNode) {
+  if (params.target !== "node" && !params.requestedNode) {
     return null;
   }
 
@@ -256,10 +257,6 @@ async function resolveBrowserNodeTarget(params: {
     throw new Error(
       `Multiple browser-capable nodes connected (${browserNodes.length}). Set gateway.nodes.browser.node or pass node=<id>.`,
     );
-  }
-
-  if (mode === "manual") {
-    return null;
   }
 
   if (selected) {
@@ -322,14 +319,14 @@ function applyProxyPaths(result: unknown, mapping: Map<string, string>) {
 }
 
 function resolveBrowserBaseUrl(params: {
+  cfg: MaumauConfig;
   target?: "sandbox" | "host";
   sandboxBridgeUrl?: string;
   allowHostControl?: boolean;
 }): string | undefined {
-  const cfg = loadConfig();
-  const resolved = resolveBrowserConfig(cfg.browser, cfg);
+  const resolved = resolveBrowserConfig(params.cfg.browser, params.cfg);
   const normalizedSandbox = params.sandboxBridgeUrl?.trim() ?? "";
-  const target = params.target ?? (normalizedSandbox ? "sandbox" : "host");
+  const target = params.target ?? "host";
 
   if (target === "sandbox") {
     if (!normalizedSandbox) {
@@ -351,70 +348,116 @@ function resolveBrowserBaseUrl(params: {
   return undefined;
 }
 
-function shouldPreferHostForProfile(profileName: string | undefined) {
+function resolveRequestedProfileCapabilities(cfg: MaumauConfig, profileName: string | undefined) {
   if (!profileName) {
-    return false;
+    return null;
   }
-  const cfg = browserToolDeps.loadConfig();
   const resolved = resolveBrowserConfig(cfg.browser, cfg);
   const profile = resolveProfile(resolved, profileName);
   if (!profile) {
-    return false;
+    return null;
   }
-  const capabilities = getBrowserProfileCapabilities(profile);
-  return capabilities.usesChromeMcp;
+  return getBrowserProfileCapabilities(profile);
 }
 
 export function createBrowserTool(opts?: {
+  config?: MaumauConfig;
   sandboxBridgeUrl?: string;
   allowHostControl?: boolean;
   agentSessionKey?: string;
+  agentChannel?: GatewayMessageChannel;
+  senderName?: string | null;
+  senderUsername?: string | null;
+  requesterTailscaleLogin?: string | null;
+  senderIsOwner?: boolean;
+  agentGroupId?: string | null;
+  agentGroupChannel?: string | null;
+  agentGroupSpace?: string | null;
 }): AnyAgentTool {
-  const targetDefault = opts?.sandboxBridgeUrl ? "sandbox" : "host";
   const hostHint =
     opts?.allowHostControl === false ? "Host target blocked by policy." : "Host target allowed.";
   return {
     label: "Browser",
     name: "browser",
+    ownerOnly: true,
     description: [
-      "Control the browser via Maumau's browser control server (status/start/stop/profiles/tabs/open/snapshot/screenshot/actions).",
-      "Browser choice: omit profile by default for the isolated Maumau-managed browser (`maumau`).",
-      'For the logged-in user browser on the local host, use profile="user". A supported Chromium-based browser (v144+) must be running. Use only when existing logins/cookies matter and the user is present.',
-      'When a node-hosted browser proxy is available, the tool may auto-route to it. Pin a node with node=<id|name> or target="node".',
+      "Control the browser via Maumau's browser control server (status/start/stop/profiles/receipt_digest/tabs/open/snapshot/screenshot/actions).",
+      "Use action=profiles to inspect available browser profiles. Omit profile to use the configured default profile.",
+      "Choose a local existing-session profile when you need live cookies or logins from a browser the user already has open. Choose a managed local profile for isolated automation.",
+      'Choose target="host" for the local host browser, target="sandbox" for the sandbox browser, and target="node" only when you intentionally want a remote node browser. If target is omitted, the tool stays on the local host browser.',
+      "Use action=receipt_digest for the Gmail receipt and spending summary workflow. It runs against one local host profile only. Pass profile when you want a specific Gmail session; otherwise it uses the configured default local profile. Set persistToWallet=true when you want normalized receipt spending saved into the wallet history for dashboard charts.",
       "When using refs from snapshot (e.g. e12), keep the same tab: prefer passing targetId from the snapshot response into subsequent actions (act/click/type/etc).",
       'For stable, self-resolving refs across calls, use snapshot with refs="aria" (Playwright aria-ref ids). Default refs="role" are role+name-based.',
       "Use snapshot+act for UI automation. Avoid act:wait by default; use only in exceptional cases when no reliable UI state exists.",
-      `target selects browser location (sandbox|host|node). Default: ${targetDefault}.`,
+      'If you need a node browser, set target="node" or pass node=<id|name> explicitly.',
       hostHint,
     ].join(" "),
     parameters: BrowserToolSchema,
     execute: async (_toolCallId, args) => {
+      if (
+        opts?.senderIsOwner !== true ||
+        opts?.agentGroupId ||
+        opts?.agentGroupChannel ||
+        opts?.agentGroupSpace
+      ) {
+        throw new Error("Browser automation is only available in owner direct chats.");
+      }
       const params = args as Record<string, unknown>;
       const action = readStringParam(params, "action", { required: true });
+      const cfg = opts?.config ?? browserToolDeps.loadConfig();
       const profile = readStringParam(params, "profile");
       const requestedNode = readStringParam(params, "node");
-      let target = readStringParam(params, "target") as "sandbox" | "host" | "node" | undefined;
+      const target = readStringParam(params, "target") as "sandbox" | "host" | "node" | undefined;
+
+      if (action === "receipt_digest") {
+        if (requestedNode || target === "node" || target === "sandbox") {
+          throw new Error(
+            'receipt_digest only supports local host browser profiles. Use target="host" or omit target.',
+          );
+        }
+        const result = await runGmailReceiptDigest({
+          cfg,
+          baseUrl: undefined,
+          deps: {
+            browserAct: browserToolDeps.browserAct,
+            browserNavigate: browserToolDeps.browserNavigate,
+            browserOpenTab: browserToolDeps.browserOpenTab,
+            browserStart: browserToolDeps.browserStart,
+            browserStatus: browserToolDeps.browserStatus,
+            browserTabs: browserToolDeps.browserTabs,
+          },
+          profile,
+          query: readStringParam(params, "query"),
+          lookbackDays:
+            typeof params.lookbackDays === "number" && Number.isFinite(params.lookbackDays)
+              ? params.lookbackDays
+              : undefined,
+          limit:
+            typeof params.limit === "number" && Number.isFinite(params.limit)
+              ? params.limit
+              : undefined,
+          persistToWallet: params.persistToWallet === true,
+        });
+        return jsonResult(result);
+      }
 
       if (requestedNode && target && target !== "node") {
         throw new Error('node is only supported with target="node".');
       }
-      // User-browser profiles (existing-session) are host-only.
-      const isUserBrowserProfile = shouldPreferHostForProfile(profile);
-      if (isUserBrowserProfile) {
+      const profileCapabilities = resolveRequestedProfileCapabilities(cfg, profile);
+      if (profileCapabilities?.usesChromeMcp) {
         if (requestedNode || target === "node") {
           throw new Error(`profile="${profile}" only supports the local host browser.`);
         }
         if (target === "sandbox") {
           throw new Error(
-            `profile="${profile}" cannot use the sandbox browser; use target="host" or omit target.`,
+            `profile="${profile}" cannot use the sandbox browser. Use target="host" or omit target.`,
           );
-        }
-        if (!target && !requestedNode) {
-          target = "host";
         }
       }
 
       const nodeTarget = await resolveBrowserNodeTarget({
+        cfg,
         requestedNode: requestedNode ?? undefined,
         target,
         sandboxBridgeUrl: opts?.sandboxBridgeUrl,
@@ -424,6 +467,7 @@ export function createBrowserTool(opts?: {
       const baseUrl = nodeTarget
         ? undefined
         : resolveBrowserBaseUrl({
+            cfg,
             target: resolvedTarget,
             sandboxBridgeUrl: opts?.sandboxBridgeUrl,
             allowHostControl: opts?.allowHostControl,

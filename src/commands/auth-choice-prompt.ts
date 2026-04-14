@@ -3,6 +3,7 @@ import type { MaumauConfig } from "../config/config.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { buildAuthChoiceGroups } from "./auth-choice-options.js";
 import type { AuthChoice } from "./onboard-types.js";
+import { buildEmbeddedAuthChoiceNote } from "./onboarding-choice-guides.js";
 
 const BACK_VALUE = "__back";
 
@@ -64,6 +65,10 @@ export async function promptAuthChoiceGrouped(params: {
     }
 
     if (group.options.length === 1) {
+      if (params.embedded) {
+        const note = buildEmbeddedAuthChoiceNote(group);
+        await params.prompter.note(note.message, note.title);
+      }
       return group.options[0].value;
     }
 

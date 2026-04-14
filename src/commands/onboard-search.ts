@@ -17,6 +17,11 @@ import { sortWebSearchProviders } from "../plugins/web-search-providers.shared.j
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import type { SecretInputMode } from "./onboard-types.js";
+import {
+  buildEmbeddedSearchProviderNote,
+  resolveEmbeddedSearchProviderHint,
+  sortEmbeddedSearchProviders,
+} from "./onboarding-choice-guides.js";
 
 export type SearchProvider = NonNullable<
   NonNullable<NonNullable<NonNullable<MaumauConfig["tools"]>["web"]>["search"]>["provider"]
@@ -280,6 +285,7 @@ function preserveDisabledState(original: MaumauConfig, result: MaumauConfig): Ma
 export type SetupSearchOptions = {
   quickstartDefaults?: boolean;
   secretInputMode?: SecretInputMode;
+  embedded?: boolean;
 };
 
 export async function setupSearch(
@@ -288,7 +294,9 @@ export async function setupSearch(
   prompter: WizardPrompter,
   opts?: SetupSearchOptions,
 ): Promise<MaumauConfig> {
-  const providerOptions = resolveSearchProviderOptions(config);
+  const providerOptions = opts?.embedded
+    ? sortEmbeddedSearchProviders([...resolveSearchProviderOptions(config)])
+    : resolveSearchProviderOptions(config);
   if (providerOptions.length === 0) {
     await prompter.note(
       [
@@ -301,24 +309,16 @@ export async function setupSearch(
     return config;
   }
 
-  await prompter.note(
-    [
-      "Web search lets your agent look things up online.",
-      "Choose a provider. Some providers need an API key, and some work key-free.",
-      "Docs: https://docs.maumau.ai/tools/web",
-    ].join("\n"),
-    "Web search",
-  );
-
   const existingProvider = config.tools?.web?.search?.provider;
 
   const options = providerOptions.map((entry) => {
+    const baseHint = opts?.embedded ? resolveEmbeddedSearchProviderHint(entry) : entry.hint;
     const hint =
       entry.requiresCredential === false
-        ? `${entry.hint} · key-free`
+        ? baseHint
         : providerIsReady(config, entry)
-          ? `${entry.hint} · configured`
-          : entry.hint;
+          ? `${baseHint} · configured`
+          : baseHint;
     return { value: entry.id, label: entry.label, hint };
   });
 
@@ -333,18 +333,40 @@ export async function setupSearch(
     return providerOptions[0].id;
   })();
 
-  const choice = await prompter.select({
-    message: "Search provider",
-    options: [
-      ...options,
-      {
-        value: "__skip__" as const,
-        label: "Skip for now",
-        hint: "Configure later with maumau configure --section web",
-      },
-    ],
-    initialValue: defaultProvider,
-  });
+  const defaultEntry = providerOptions.find((entry) => entry.id === defaultProvider);
+  const embeddedAutoChoice =
+    opts?.embedded &&
+    opts?.quickstartDefaults &&
+    defaultEntry &&
+    providerIsReady(config, defaultEntry)
+      ? defaultProvider
+      : undefined;
+
+  if (!embeddedAutoChoice) {
+    await prompter.note(
+      [
+        "Web search lets your agent look things up online.",
+        "Choose a provider. Some providers need an API key, and some work key-free.",
+        "Docs: https://docs.maumau.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+  }
+
+  const choice =
+    embeddedAutoChoice ??
+    (await prompter.select({
+      message: "Search provider",
+      options: [
+        ...options,
+        {
+          value: "__skip__" as const,
+          label: "Skip for now",
+          hint: "Configure later with maumau configure --section web",
+        },
+      ],
+      initialValue: defaultProvider,
+    }));
 
   if (choice === "__skip__") {
     return config;
@@ -355,6 +377,12 @@ export async function setupSearch(
   if (!entry) {
     return config;
   }
+
+  if (opts?.embedded && !embeddedAutoChoice) {
+    const note = buildEmbeddedSearchProviderNote(entry);
+    await prompter.note(note.message, note.title);
+  }
+
   const credentialLabel = resolveSearchProviderCredentialLabel(entry);
   const existingKey = resolveExistingKey(config, choice);
   const keyConfigured = hasExistingKey(config, choice);
@@ -369,14 +397,16 @@ export async function setupSearch(
   }
 
   if (!needsCredential) {
-    await prompter.note(
-      [
-        `${entry.label} works without an API key.`,
-        "Maumau will enable the plugin and use it as your web_search provider.",
-        `Docs: ${entry.docsUrl ?? "https://docs.maumau.ai/tools/web"}`,
-      ].join("\n"),
-      "Web search",
-    );
+    if (!opts?.embedded) {
+      await prompter.note(
+        [
+          `${entry.label} works without an API key.`,
+          "Maumau will enable the plugin and use it as your web_search provider.",
+          `Docs: ${entry.docsUrl ?? "https://docs.maumau.ai/tools/web"}`,
+        ].join("\n"),
+        "Web search",
+      );
+    }
     return preserveDisabledState(config, applySearchProviderSelection(config, choice));
   }
 

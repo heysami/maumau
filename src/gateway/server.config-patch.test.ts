@@ -99,7 +99,14 @@ describe("gateway config methods", () => {
     const res = await rpcReq<{
       ok?: boolean;
       path?: string;
+      hash?: string;
       config?: Record<string, unknown>;
+      reload?: {
+        restartExpected?: boolean;
+        debounceMs?: number;
+        deferralTimeoutMs?: number;
+        restartReasons?: string[];
+      };
     }>(requireWs(), "config.set", {
       raw: JSON.stringify(current.payload?.config ?? {}, null, 2),
       baseHash: current.payload?.hash,
@@ -107,7 +114,12 @@ describe("gateway config methods", () => {
 
     expect(res.ok).toBe(true);
     expect(res.payload?.path).toBe(createConfigIO().configPath);
+    expect(typeof res.payload?.hash).toBe("string");
     expect(res.payload?.config).toBeTruthy();
+    expect(typeof res.payload?.reload?.restartExpected).toBe("boolean");
+    expect(typeof res.payload?.reload?.debounceMs).toBe("number");
+    expect(typeof res.payload?.reload?.deferralTimeoutMs).toBe("number");
+    expect(Array.isArray(res.payload?.reload?.restartReasons)).toBe(true);
   });
 
   it("returns config.set validation details in the top-level error message", async () => {
@@ -231,6 +243,48 @@ describe("gateway config methods", () => {
     });
     expect(res.ok).toBe(false);
     expect(res.error?.message ?? "").toContain("raw must be an object");
+  });
+
+  it("accepts MauOffice zone sign props with zoneId through config.patch", async () => {
+    const res = await rpcReq<{
+      ok?: boolean;
+      config?: {
+        ui?: {
+          mauOffice?: {
+            scene?: {
+              props?: Array<{ id: string; zoneId?: string }>;
+            };
+          };
+        };
+      };
+    }>(requireWs(), "config.patch", {
+      raw: JSON.stringify({
+        ui: {
+          mauOffice: {
+            scene: {
+              props: [
+                {
+                  id: "zone-sign-1",
+                  itemId: "zone-sign",
+                  tileX: 2,
+                  tileY: 1,
+                  zoneId: "telephony",
+                },
+              ],
+            },
+          },
+        },
+      }),
+      baseHash: await getConfigHash(),
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.payload?.config?.ui?.mauOffice?.scene?.props).toMatchObject([
+      {
+        id: "zone-sign-1",
+        zoneId: "telephony",
+      },
+    ]);
   });
 });
 

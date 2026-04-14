@@ -9,6 +9,12 @@ import {
   formatStaticAuthChoiceChoicesForCli,
 } from "./auth-choice-options.static.js";
 import type { AuthChoice, AuthChoiceGroupId } from "./onboard-types.js";
+import {
+  compareEmbeddedAuthChoiceGroups,
+  compareEmbeddedAuthChoiceOptions,
+  resolveEmbeddedAuthChoiceGroupHint,
+  resolveEmbeddedAuthChoiceOptionHint,
+} from "./onboarding-choice-guides.js";
 
 const DEFAULT_AUTH_CHOICE_ONBOARDING_SCOPE = "text-inference" as const;
 const EMBEDDED_UNSUPPORTED_AUTH_CHOICES = new Set<AuthChoice>(["github-copilot"]);
@@ -124,9 +130,23 @@ export function buildAuthChoiceOptions(params: {
     }
   }
 
+  const sortOptions = params.embedded ? compareEmbeddedAuthChoiceOptions : compareOptionLabels;
+
   const options: AuthChoiceOption[] = Array.from(optionByValue.values())
     .filter((option) => !shouldHideAuthChoiceInEmbeddedOnboarding(option.value, params.embedded))
-    .toSorted(compareOptionLabels);
+    .map((option) => {
+      if (!params.embedded) {
+        return option;
+      }
+      const hint = resolveEmbeddedAuthChoiceOptionHint(option);
+      const groupHint = resolveEmbeddedAuthChoiceGroupHint(option.groupId, option.groupHint);
+      return {
+        ...option,
+        ...(hint ? { hint } : {}),
+        ...(groupHint ? { groupHint } : {}),
+      };
+    })
+    .toSorted(sortOptions);
 
   if (params.includeSkip) {
     options.push({ value: "skip", label: "Skip for now" });
@@ -172,9 +192,11 @@ export function buildAuthChoiceGroups(params: {
   const groups = Array.from(groupsById.values())
     .map((group) => ({
       ...group,
-      options: [...group.options].toSorted(compareOptionLabels),
+      options: [...group.options].toSorted(
+        params.embedded ? compareEmbeddedAuthChoiceOptions : compareOptionLabels,
+      ),
     }))
-    .toSorted(compareGroupLabels);
+    .toSorted(params.embedded ? compareEmbeddedAuthChoiceGroups : compareGroupLabels);
 
   const skipOption = params.includeSkip
     ? ({ value: "skip", label: "Skip for now" } satisfies AuthChoiceOption)

@@ -224,7 +224,11 @@ extension CronSettings {
                     HStack(spacing: 8) {
                         if let thinking, !thinking.isEmpty {
                             StatusPill(
-                                text: self.language == .id ? "pikir \(thinking)" : "think \(thinking)",
+                                text: macLocalizedHelper(
+                                    "thinkingFlag",
+                                    language: self.language,
+                                    parameters: ["value": thinking],
+                                    fallback: "think {value}"),
                                 tint: .secondary)
                         }
                         if let timeoutSeconds { StatusPill(text: "\(timeoutSeconds)s", tint: .secondary) }

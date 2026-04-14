@@ -1,16 +1,26 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import type { MaumauConfig } from "../config/config.js";
 import { resolveMemoryBackendConfig } from "./backend-config.js";
 
+const BUNDLED_QMD_COMMAND = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../scripts/qmd-bundled.mjs",
+);
+
 describe("resolveMemoryBackendConfig", () => {
-  it("defaults to builtin backend when config missing", () => {
+  it("defaults to the bundled qmd backend when config missing", () => {
     const cfg = { agents: { defaults: { workspace: "/tmp/memory-test" } } } as MaumauConfig;
     const resolved = resolveMemoryBackendConfig({ cfg, agentId: "main" });
-    expect(resolved.backend).toBe("builtin");
+    expect(resolved.backend).toBe("qmd");
     expect(resolved.citations).toBe("auto");
-    expect(resolved.qmd).toBeUndefined();
+    expect(resolved.qmd?.command).toBe(BUNDLED_QMD_COMMAND);
+    const names = new Set((resolved.qmd?.collections ?? []).map((collection) => collection.name));
+    expect(names.has("memory-root-main")).toBe(true);
+    expect(names.has("corpus-dir-main")).toBe(true);
+    expect(names.has("reviews-dir-main")).toBe(true);
   });
 
   it("resolves qmd backend with default collections", () => {
@@ -23,8 +33,8 @@ describe("resolveMemoryBackendConfig", () => {
     } as MaumauConfig;
     const resolved = resolveMemoryBackendConfig({ cfg, agentId: "main" });
     expect(resolved.backend).toBe("qmd");
-    expect(resolved.qmd?.collections.length).toBeGreaterThanOrEqual(3);
-    expect(resolved.qmd?.command).toBe("qmd");
+    expect(resolved.qmd?.collections.length).toBeGreaterThanOrEqual(5);
+    expect(resolved.qmd?.command).toBe(BUNDLED_QMD_COMMAND);
     expect(resolved.qmd?.searchMode).toBe("search");
     expect(resolved.qmd?.update.intervalMs).toBeGreaterThan(0);
     expect(resolved.qmd?.update.waitForBootSync).toBe(false);
@@ -35,6 +45,8 @@ describe("resolveMemoryBackendConfig", () => {
     expect(names.has("memory-root-main")).toBe(true);
     expect(names.has("memory-alt-main")).toBe(true);
     expect(names.has("memory-dir-main")).toBe(true);
+    expect(names.has("corpus-dir-main")).toBe(true);
+    expect(names.has("reviews-dir-main")).toBe(true);
   });
 
   it("parses quoted qmd command paths", () => {

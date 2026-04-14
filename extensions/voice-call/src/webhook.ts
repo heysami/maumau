@@ -16,7 +16,9 @@ import type { CallManager } from "./manager.js";
 import type { MediaStreamConfig } from "./media-stream.js";
 import { MediaStreamHandler } from "./media-stream.js";
 import type { VoiceCallProvider } from "./providers/base.js";
+import { DeepgramRealtimeSTTProvider } from "./providers/stt-deepgram-realtime.js";
 import { OpenAIRealtimeSTTProvider } from "./providers/stt-openai-realtime.js";
+import type { RealtimeSTTProvider } from "./providers/stt-realtime.js";
 import type { TwilioProvider } from "./providers/twilio.js";
 import type { CallRecord, NormalizedEvent, WebhookContext } from "./types.js";
 import { startStaleCallReaper } from "./webhook/stale-call-reaper.js";
@@ -25,6 +27,37 @@ const MAX_WEBHOOK_BODY_BYTES = WEBHOOK_BODY_READ_DEFAULTS.preAuth.maxBytes;
 const WEBHOOK_BODY_TIMEOUT_MS = WEBHOOK_BODY_READ_DEFAULTS.preAuth.timeoutMs;
 const STREAM_DISCONNECT_HANGUP_GRACE_MS = 2000;
 const TRANSCRIPT_LOG_MAX_CHARS = 200;
+
+function buildRealtimeSttProvider(config: VoiceCallConfig): RealtimeSTTProvider | null {
+  const streaming = config.streaming;
+  if (streaming.sttProvider === "deepgram-realtime") {
+    const apiKey = streaming.deepgram.apiKey ?? process.env.DEEPGRAM_API_KEY;
+    if (!apiKey) {
+      console.warn("[voice-call] Streaming enabled but no Deepgram API key found");
+      return null;
+    }
+    return new DeepgramRealtimeSTTProvider({
+      apiKey,
+      model: streaming.deepgram.model,
+      languageCode: streaming.languageCode,
+      endpointingMs: streaming.deepgram.endpointingMs,
+      interimResults: streaming.deepgram.interimResults,
+    });
+  }
+
+  const apiKey = streaming.openai.apiKey ?? process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.warn("[voice-call] Streaming enabled but no OpenAI API key found");
+    return null;
+  }
+  return new OpenAIRealtimeSTTProvider({
+    apiKey,
+    model: streaming.openai.model,
+    languageCode: streaming.languageCode,
+    silenceDurationMs: streaming.openai.silenceDurationMs,
+    vadThreshold: streaming.openai.vadThreshold,
+  });
+}
 
 type WebhookHeaderGateResult =
   | { ok: true }
@@ -48,6 +81,25 @@ type WebhookResponsePayload = {
   statusCode: number;
   body: string;
   headers?: Record<string, string>;
+};
+
+type WalletRealtimeSession = {
+  provider: "deepgram-realtime";
+  streamSid: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+};
+
+type WalletRealtimeActiveSession = {
+  provider: "deepgram-realtime";
+  streamSid: string;
+  startedAt: number;
+};
+
+type WalletRealtimeSttState = {
+  sessions: WalletRealtimeSession[];
+  activeSession?: WalletRealtimeActiveSession;
 };
 
 function buildRequestUrl(
@@ -125,6 +177,180 @@ export class VoiceCallWebhookServer {
     this.pendingDisconnectHangups.delete(providerCallId);
   }
 
+  private shouldTrackRealtimeWallet(): boolean {
+    return (
+      this.config.streaming.enabled && this.config.streaming.sttProvider === "deepgram-realtime"
+    );
+  }
+
+  private readRealtimeWalletState(call: CallRecord): WalletRealtimeSttState {
+    const raw = call.metadata?.walletRealtimeStt;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return { sessions: [] };
+    }
+    const walletMetadata = raw as {
+      sessions?: unknown;
+      activeSession?: unknown;
+    };
+
+    const sessions = Array.isArray(walletMetadata.sessions)
+      ? walletMetadata.sessions.flatMap((entry: unknown): WalletRealtimeSession[] => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return [];
+          }
+          const sessionEntry = entry as {
+            streamSid?: unknown;
+            startedAt?: unknown;
+            endedAt?: unknown;
+            durationMs?: unknown;
+          };
+          const streamSid =
+            typeof sessionEntry.streamSid === "string" && sessionEntry.streamSid.trim()
+              ? sessionEntry.streamSid
+              : null;
+          const startedAt =
+            typeof sessionEntry.startedAt === "number" && Number.isFinite(sessionEntry.startedAt)
+              ? sessionEntry.startedAt
+              : null;
+          const endedAt =
+            typeof sessionEntry.endedAt === "number" && Number.isFinite(sessionEntry.endedAt)
+              ? sessionEntry.endedAt
+              : null;
+          const durationMs =
+            typeof sessionEntry.durationMs === "number" && Number.isFinite(sessionEntry.durationMs)
+              ? sessionEntry.durationMs
+              : null;
+          if (!streamSid || startedAt === null || endedAt === null || durationMs === null) {
+            return [];
+          }
+          return [
+            {
+              provider: "deepgram-realtime",
+              streamSid,
+              startedAt,
+              endedAt,
+              durationMs,
+            },
+          ];
+        })
+      : [];
+
+    const activeRaw = walletMetadata.activeSession;
+    if (!activeRaw || typeof activeRaw !== "object" || Array.isArray(activeRaw)) {
+      return { sessions };
+    }
+    const activeSession = activeRaw as {
+      streamSid?: unknown;
+      startedAt?: unknown;
+    };
+    const streamSid =
+      typeof activeSession.streamSid === "string" && activeSession.streamSid.trim()
+        ? activeSession.streamSid
+        : null;
+    const startedAt =
+      typeof activeSession.startedAt === "number" && Number.isFinite(activeSession.startedAt)
+        ? activeSession.startedAt
+        : null;
+    if (!streamSid || startedAt === null) {
+      return { sessions };
+    }
+    return {
+      sessions,
+      activeSession: {
+        provider: "deepgram-realtime",
+        streamSid,
+        startedAt,
+      },
+    };
+  }
+
+  private persistRealtimeWalletState(call: CallRecord, state: WalletRealtimeSttState): void {
+    const metadata: Record<string, unknown> = {
+      ...(call.metadata ?? {}),
+      walletRealtimeStt:
+        state.activeSession || state.sessions.length > 0
+          ? {
+              sessions: state.sessions,
+              ...(state.activeSession ? { activeSession: state.activeSession } : {}),
+            }
+          : undefined,
+    };
+    if (metadata.walletRealtimeStt === undefined) {
+      delete metadata.walletRealtimeStt;
+    }
+    const nextCall: CallRecord = {
+      ...call,
+      metadata,
+    };
+    this.manager.persistCall(nextCall);
+  }
+
+  private trackRealtimeWalletConnect(providerCallId: string, streamSid: string): void {
+    if (!this.shouldTrackRealtimeWallet()) {
+      return;
+    }
+    const call = this.manager.getCallByProviderCallId(providerCallId);
+    if (!call) {
+      return;
+    }
+
+    const wallet = this.readRealtimeWalletState(call);
+    if (wallet.activeSession?.streamSid === streamSid) {
+      return;
+    }
+
+    const now = Date.now();
+    const sessions = [...wallet.sessions];
+    if (wallet.activeSession) {
+      sessions.push({
+        provider: "deepgram-realtime",
+        streamSid: wallet.activeSession.streamSid,
+        startedAt: wallet.activeSession.startedAt,
+        endedAt: now,
+        durationMs: Math.max(0, now - wallet.activeSession.startedAt),
+      });
+    }
+
+    this.persistRealtimeWalletState(call, {
+      sessions,
+      activeSession: {
+        provider: "deepgram-realtime",
+        streamSid,
+        startedAt: now,
+      },
+    });
+  }
+
+  private trackRealtimeWalletDisconnect(providerCallId: string, streamSid: string): void {
+    if (!this.shouldTrackRealtimeWallet()) {
+      return;
+    }
+    const call = this.manager.getCallByProviderCallId(providerCallId);
+    if (!call) {
+      return;
+    }
+
+    const wallet = this.readRealtimeWalletState(call);
+    const activeSession = wallet.activeSession;
+    if (!activeSession || activeSession.streamSid !== streamSid) {
+      return;
+    }
+
+    const endedAt = Math.min(Date.now(), call.endedAt ?? Number.POSITIVE_INFINITY);
+    this.persistRealtimeWalletState(call, {
+      sessions: [
+        ...wallet.sessions,
+        {
+          provider: "deepgram-realtime",
+          streamSid,
+          startedAt: activeSession.startedAt,
+          endedAt,
+          durationMs: Math.max(0, endedAt - activeSession.startedAt),
+        },
+      ],
+    });
+  }
+
   private shouldSuppressBargeInForInitialMessage(call: CallRecord | undefined): boolean {
     if (!call || call.direction !== "outbound") {
       return false;
@@ -147,23 +373,14 @@ export class VoiceCallWebhookServer {
   }
 
   /**
-   * Initialize media streaming with OpenAI Realtime STT.
+   * Initialize media streaming with the configured realtime STT provider.
    */
   private initializeMediaStreaming(): void {
     const streaming = this.config.streaming;
-    const apiKey = streaming.openaiApiKey ?? process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-      console.warn("[voice-call] Streaming enabled but no OpenAI API key found");
+    const sttProvider = buildRealtimeSttProvider(this.config);
+    if (!sttProvider) {
       return;
     }
-
-    const sttProvider = new OpenAIRealtimeSTTProvider({
-      apiKey,
-      model: streaming.sttModel,
-      silenceDurationMs: streaming.silenceDurationMs,
-      vadThreshold: streaming.vadThreshold,
-    });
 
     const streamConfig: MediaStreamConfig = {
       sttProvider,
@@ -246,6 +463,7 @@ export class VoiceCallWebhookServer {
       onConnect: (callId, streamSid) => {
         console.log(`[voice-call] Media stream connected: ${callId} -> ${streamSid}`);
         this.clearPendingDisconnectHangup(callId);
+        this.trackRealtimeWalletConnect(callId, streamSid);
 
         // Register stream with provider for TTS routing
         if (this.provider.name === "twilio") {
@@ -259,6 +477,7 @@ export class VoiceCallWebhookServer {
       },
       onDisconnect: (callId, streamSid) => {
         console.log(`[voice-call] Media stream disconnected: ${callId} (${streamSid})`);
+        this.trackRealtimeWalletDisconnect(callId, streamSid);
         if (this.provider.name === "twilio") {
           (this.provider as TwilioProvider).unregisterCallStream(callId, streamSid);
         }

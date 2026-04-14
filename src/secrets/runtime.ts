@@ -12,6 +12,7 @@ import {
   setRuntimeConfigSnapshot,
   type MaumauConfig,
 } from "../config/config.js";
+import { readStateDirDotEnvVars } from "../config/state-dir-dotenv.js";
 import { resolveUserPath } from "../utils.js";
 import {
   collectCommandSecretAssignmentsFromSnapshot,
@@ -131,6 +132,21 @@ function mergeSecretsRuntimeEnv(
   return merged;
 }
 
+function resolveRefreshRuntimeEnv(
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const merged = mergeSecretsRuntimeEnv(env);
+  for (const [key, value] of Object.entries(readStateDirDotEnvVars(merged))) {
+    merged[key] = value;
+  }
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === "string" && value.length > 0) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
 export async function prepareSecretsRuntimeSnapshot(params: {
   config: MaumauConfig;
   env?: NodeJS.ProcessEnv;
@@ -217,9 +233,10 @@ export function activateSecretsRuntimeSnapshot(snapshot: PreparedSecretsRuntimeS
       if (!activeSnapshot || !activeRefreshContext) {
         return false;
       }
+      const refreshEnv = resolveRefreshRuntimeEnv(activeRefreshContext.env);
       const refreshed = await prepareSecretsRuntimeSnapshot({
         config: sourceConfig,
-        env: activeRefreshContext.env,
+        env: refreshEnv,
         agentDirs: resolveRefreshAgentDirs(sourceConfig, activeRefreshContext),
         loadAuthStore: activeRefreshContext.loadAuthStore,
       });

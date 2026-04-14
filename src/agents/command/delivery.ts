@@ -6,6 +6,7 @@ import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
 import { createOutboundSendDeps, type CliDeps } from "../../cli/outbound-send-deps.js";
 import type { MaumauConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import { maybeBuildPreviewReceiptPayloads as maybeBuildSharedPreviewReceiptPayloads } from "../../gateway/preview-delivery.js";
 import {
   resolveAgentDeliveryPlan,
   resolveAgentOutboundTarget,
@@ -64,6 +65,46 @@ function logNestedOutput(
     }
     runtime.log(`${prefix} ${line}`);
   }
+}
+
+function isDirectOwnerRoute(opts: AgentCommandOpts): boolean {
+  const groupId = opts.runContext?.groupId ?? opts.groupId;
+  const groupChannel = opts.runContext?.groupChannel ?? opts.groupChannel;
+  const groupSpace = opts.runContext?.groupSpace ?? opts.groupSpace;
+  return opts.senderIsOwner === true && !groupId && !groupChannel && !groupSpace;
+}
+
+async function maybeBuildPreviewReceiptPayloads(params: {
+  cfg: MaumauConfig;
+  opts: AgentCommandOpts;
+  payloads: readonly ReplyPayload[];
+  deliveryChannel?: string;
+  runtime: RuntimeEnv;
+}): Promise<ReplyPayload[]> {
+  if (!params.deliveryChannel || isInternalMessageChannel(params.deliveryChannel)) {
+    return [];
+  }
+  if (!isDirectOwnerRoute(params.opts)) {
+    return [];
+  }
+  return await maybeBuildSharedPreviewReceiptPayloads({
+    cfg: params.cfg,
+    payloads: params.payloads,
+    workspaceDir: params.opts.workspaceDir ?? undefined,
+    messageChannel:
+      params.opts.runContext?.messageChannel ??
+      params.opts.messageChannel ??
+      params.deliveryChannel,
+    senderIsOwner: params.opts.senderIsOwner,
+    senderName: params.opts.senderName ?? undefined,
+    senderUsername: params.opts.senderUsername ?? undefined,
+    requesterTailscaleLogin: params.opts.requesterTailscaleLogin ?? undefined,
+    groupId: params.opts.runContext?.groupId ?? params.opts.groupId ?? undefined,
+    groupChannel: params.opts.runContext?.groupChannel ?? params.opts.groupChannel ?? undefined,
+    groupSpace: params.opts.runContext?.groupSpace ?? params.opts.groupSpace ?? undefined,
+    createdBySessionId: params.opts.sessionId,
+    onError: (message) => params.runtime.error?.(message),
+  });
 }
 
 export function normalizeAgentCommandReplyPayloads(params: {
@@ -139,6 +180,7 @@ export async function deliverAgentCommandResult(params: {
   payloads: RunResult["payloads"];
 }) {
   const { cfg, deps, runtime, opts, outboundSession, sessionEntry, payloads, result } = params;
+  const rawPayloads = payloads ?? [];
   const effectiveSessionKey = outboundSession?.key ?? opts.sessionKey;
   const deliver = opts.deliver === true;
   const bestEffortDeliver = opts.bestEffortDeliver === true;
@@ -239,11 +281,19 @@ export async function deliverAgentCommandResult(params: {
     }
   }
 
+  const previewReceiptPayloads = await maybeBuildPreviewReceiptPayloads({
+    cfg,
+    opts,
+    payloads: rawPayloads,
+    deliveryChannel,
+    runtime,
+  });
+
   const normalizedReplyPayloads = normalizeAgentCommandReplyPayloads({
     cfg,
     opts,
     outboundSession,
-    payloads,
+    payloads: [...rawPayloads, ...previewReceiptPayloads],
     result,
     deliveryChannel,
     accountId: resolvedAccountId,
@@ -266,7 +316,7 @@ export async function deliverAgentCommandResult(params: {
     }
   }
 
-  if (!payloads || payloads.length === 0) {
+  if (rawPayloads.length === 0) {
     runtime.log("No reply from agent.");
     return { payloads: [], meta: result.meta };
   }

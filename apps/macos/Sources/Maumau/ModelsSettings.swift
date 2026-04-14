@@ -36,9 +36,131 @@ struct ModelSettingsOption: Identifiable, Hashable {
     }
 }
 
+struct ImageGenerationProviderCatalogEntry: Identifiable, Equatable {
+    let id: String
+    let label: String?
+    let defaultModel: String?
+    let models: [String]
+    let configured: Bool
+}
+
 struct BackgroundAutomationSettingsDraft: Equatable {
     let modelRef: String
     let thinking: String
+}
+
+private func dedupeModelSettingsValues(_ values: [String]) -> [String] {
+    var seen = Set<String>()
+    var deduped: [String] = []
+    for rawValue in values {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { continue }
+        guard seen.insert(value).inserted else { continue }
+        deduped.append(value)
+    }
+    return deduped
+}
+
+func buildImageGenerationProviderCatalogEntries(
+    from result: ModelsImageGenerationProvidersResult
+) -> [ImageGenerationProviderCatalogEntry] {
+    result.providers.compactMap { provider in
+        let providerId = provider.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !providerId.isEmpty else { return nil }
+        return ImageGenerationProviderCatalogEntry(
+            id: providerId,
+            label: provider.label?.trimmingCharacters(in: .whitespacesAndNewlines),
+            defaultModel: provider.defaultmodel?.trimmingCharacters(in: .whitespacesAndNewlines),
+            models: dedupeModelSettingsValues(provider.models),
+            configured: provider.configured)
+    }
+}
+
+func buildImageGenerationModelSettingsOptions(
+    providers: [ImageGenerationProviderCatalogEntry],
+    savedRefs: [String]
+) -> [ModelSettingsOption] {
+    var mergedByRef: [String: ModelSettingsOption] = [:]
+    let configuredProviderIds = Set(providers.filter(\.configured).map(\.id))
+
+    for provider in providers where provider.configured {
+        let modelIds = dedupeModelSettingsValues((provider.defaultModel.map { [$0] } ?? []) + provider.models)
+        for modelId in modelIds {
+            let ref = buildModelSettingsRef(providerId: provider.id, modelId: modelId)
+            guard let option = makeModelOption(
+                ref: ref,
+                displayName: modelId,
+                contextWindow: nil,
+                reasoning: false,
+                synthetic: false)
+            else {
+                continue
+            }
+            mergedByRef[ref] = option
+        }
+    }
+
+    for ref in savedRefs {
+        guard modelSettingsProviderId(for: ref) != nil else { continue }
+        guard mergedByRef[ref] == nil else { continue }
+        if let synthetic = makeModelOption(
+            ref: ref,
+            displayName: modelSettingsModelId(for: ref),
+            contextWindow: nil,
+            reasoning: false,
+            synthetic: true)
+        {
+            mergedByRef[ref] = synthetic
+        }
+    }
+
+    return sortModelSettingsOptions(
+        Array(mergedByRef.values),
+        connectedProviderIds: configuredProviderIds)
+}
+
+func filterModelAuthChoiceGroups(
+    groups: [ModelAuthChoiceGroup],
+    allowedProviderIds: Set<String>
+) -> [ModelAuthChoiceGroup] {
+    guard !allowedProviderIds.isEmpty else { return [] }
+
+    return groups.compactMap { group in
+        let filteredOptions = group.options.filter { option in
+            guard let providerId = option.providerId?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                return false
+            }
+            return allowedProviderIds.contains(providerId)
+        }
+        guard !filteredOptions.isEmpty else { return nil }
+        return ModelAuthChoiceGroup(
+            id: group.id,
+            label: group.label,
+            hint: group.hint,
+            options: filteredOptions)
+    }
+}
+
+func resolveImageGenerationProviderConnectGroups(
+    groups: [ModelAuthChoiceGroup],
+    supportedProviderIds: Set<String>,
+    fallbackToGenericChoices: Bool
+) -> [ModelAuthChoiceGroup] {
+    let filteredGroups = filterModelAuthChoiceGroups(
+        groups: groups,
+        allowedProviderIds: supportedProviderIds)
+    if !filteredGroups.isEmpty || !supportedProviderIds.isEmpty || !fallbackToGenericChoices {
+        return filteredGroups
+    }
+    return groups
+}
+
+func shouldSkipFollowupGatewayCatalogLoad(after error: Error) -> Bool {
+    // Auth failures are sticky until the endpoint/token changes, so a second
+    // gateway catalog request just repeats the same error. Transport hiccups
+    // and timeouts often recover by the very next request, so keep the
+    // follow-up image-generation load retryable.
+    GatewayAuthFailureClassifier.isAuthFailure(error)
 }
 
 func modelSettingsProviderId(for ref: String?) -> String? {
@@ -334,6 +456,7 @@ private struct ModelsSettingsStatusState {
 
 private struct ModelsSettingsDraftState {
     let selection: ModelSettingsSelection
+    let imageGenerationPrimaryRef: String
     let backgroundModelRef: String
     let backgroundThinking: String
 }
@@ -380,6 +503,7 @@ struct ModelsSettings: View {
     private enum ProviderConnectIntent {
         case generic
         case fallback
+        case imageGeneration
     }
 
     @Bindable var store: ChannelsStore
@@ -397,6 +521,11 @@ struct ModelsSettings: View {
     @State private var customFallbackProviderDrafts: [Int: String] = [:]
     @State private var didHydrateSelection = false
     @State private var prefersCustomPrimaryEntry = false
+    @State private var imageGenerationProvidersError: String?
+    @State private var imageGenerationProviders: [ImageGenerationProviderCatalogEntry] = []
+    @State private var imageGenerationSelectedProviderId: String = ""
+    @State private var imageGenerationPrimaryRef: String = ""
+    @State private var imageGenerationPrefersCustomPrimaryEntry = false
     @State private var backgroundModelRef: String = ""
     @State private var backgroundThinking: String = ""
     @State private var providerConnectSheetPresented = false
@@ -412,6 +541,9 @@ struct ModelsSettings: View {
     @State private var providerConnectRequestedProviderId: String?
 
     private let modelConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("model")]
+    private let imageGenerationModelConfigPath: ConfigPath = [
+        .key("agents"), .key("defaults"), .key("imageGenerationModel"),
+    ]
     private let backgroundConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background")]
     private let backgroundModelConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background"), .key("model")]
     private let backgroundThinkingConfigPath: ConfigPath = [.key("agents"), .key("defaults"), .key("background"), .key("thinking")]
@@ -434,6 +566,7 @@ struct ModelsSettings: View {
     private var draftState: ModelsSettingsDraftState {
         ModelsSettingsDraftState(
             selection: self.draftSelection,
+            imageGenerationPrimaryRef: self.imageGenerationPrimaryRef.trimmingCharacters(in: .whitespacesAndNewlines),
             backgroundModelRef: self.backgroundModelRef.trimmingCharacters(in: .whitespacesAndNewlines),
             backgroundThinking: self.backgroundThinking.trimmingCharacters(in: .whitespacesAndNewlines))
     }
@@ -483,6 +616,86 @@ struct ModelsSettings: View {
 
     private var orderedConnectedProviderIds: [String] {
         orderProviderIds(self.connectedProviderIds, preferredProviderId: self.selectedProviderId)
+    }
+
+    private var supportedImageGenerationProviderIds: Set<String> {
+        Set(self.imageGenerationProviders.map(\.id))
+    }
+
+    private var usesImageGenerationCatalogFallback: Bool {
+        self.supportedImageGenerationProviderIds.isEmpty &&
+            !(self.imageGenerationProvidersError?.isEmpty ?? true)
+    }
+
+    private var configuredImageGenerationProviderIds: Set<String> {
+        Set(self.imageGenerationProviders.filter(\.configured).map(\.id))
+    }
+
+    private var imageGenerationProviderIds: [String] {
+        var providerIds = self.configuredImageGenerationProviderIds
+        if let currentProvider = modelSettingsProviderId(for: self.imageGenerationPrimaryRef) {
+            providerIds.insert(currentProvider)
+        }
+        let preferredProvider = !self.imageGenerationSelectedProviderId.isEmpty
+            ? self.imageGenerationSelectedProviderId
+            : (modelSettingsProviderId(for: self.imageGenerationPrimaryRef) ?? "")
+        return orderProviderIds(providerIds, preferredProviderId: preferredProvider)
+    }
+
+    private var imageGenerationOptions: [ModelSettingsOption] {
+        buildImageGenerationModelSettingsOptions(
+            providers: self.imageGenerationProviders,
+            savedRefs: [self.imageGenerationPrimaryRef])
+    }
+
+    private var imageGenerationPrimaryOptions: [ModelSettingsOption] {
+        filterPrimaryModelSettingsOptions(
+            selectedProviderId: self.imageGenerationSelectedProviderId,
+            currentPrimaryRef: self.imageGenerationPrimaryRef,
+            options: self.imageGenerationOptions)
+    }
+
+    private var orderedConfiguredImageGenerationProviderIds: [String] {
+        orderProviderIds(
+            self.configuredImageGenerationProviderIds,
+            preferredProviderId: self.imageGenerationSelectedProviderId)
+    }
+
+    private var imageGenerationProviderConnectGroups: [ModelAuthChoiceGroup] {
+        resolveImageGenerationProviderConnectGroups(
+            groups: self.providerConnectGroups,
+            supportedProviderIds: self.supportedImageGenerationProviderIds,
+            fallbackToGenericChoices: self.usesImageGenerationCatalogFallback)
+    }
+
+    private var canPresentImageGenerationConnectFlow: Bool {
+        !self.imageGenerationProviderConnectGroups.isEmpty
+    }
+
+    private var shouldShowImageGenerationConnectAction: Bool {
+        !self.supportedImageGenerationProviderIds.isEmpty ||
+            self.usesImageGenerationCatalogFallback ||
+            !self.imageGenerationPrimaryRef.isEmpty
+    }
+
+    private var availableProviderConnectGroups: [ModelAuthChoiceGroup] {
+        switch self.providerConnectIntent {
+        case .imageGeneration:
+            return self.imageGenerationProviderConnectGroups
+        case .generic, .fallback:
+            return self.providerConnectGroups
+        }
+    }
+
+    private var providerConnectConnectedProviderIds: Set<String> {
+        switch self.providerConnectIntent {
+        case .imageGeneration:
+            return self.usesImageGenerationCatalogFallback
+                ? self.connectedProviderIds
+                : self.configuredImageGenerationProviderIds
+        case .generic, .fallback:
+            return self.connectedProviderIds
+        }
     }
 
     private var isRefreshingSettings: Bool {
@@ -582,6 +795,75 @@ struct ModelsSettings: View {
         return self.primaryRef
     }
 
+    private var usesImageGenerationManualModelEntry: Bool {
+        self.imageGenerationPrefersCustomPrimaryEntry || self.imageGenerationPrimaryOptions.isEmpty
+    }
+
+    private var manualImageGenerationProviderId: String? {
+        if !self.imageGenerationSelectedProviderId.isEmpty {
+            return self.imageGenerationSelectedProviderId
+        }
+        if let current = modelSettingsProviderId(for: self.imageGenerationPrimaryRef) {
+            return current
+        }
+        return self.imageGenerationProviderIds.first
+    }
+
+    private var manualImageGenerationModelIdBinding: Binding<String> {
+        Binding(
+            get: {
+                displayedPrimaryModelIdForEditing(
+                    providerId: self.manualImageGenerationProviderId,
+                    primaryRef: self.imageGenerationPrimaryRef)
+            },
+            set: { newValue in
+                guard let providerId = self.manualImageGenerationProviderId else {
+                    self.imageGenerationPrimaryRef = ""
+                    return
+                }
+                self.imageGenerationPrimaryRef = buildModelSettingsRef(
+                    providerId: providerId,
+                    modelId: newValue)
+            })
+    }
+
+    private var imageGenerationModelReferenceBinding: Binding<String> {
+        Binding(
+            get: { self.imageGenerationPrimaryRef },
+            set: { newValue in
+                self.imageGenerationPrimaryRef = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            })
+    }
+
+    private var imageGenerationPrimaryPickerSelectionBinding: Binding<String> {
+        Binding(
+            get: {
+                displayedPrimaryPickerSelection(
+                    selectedProviderId: self.imageGenerationSelectedProviderId,
+                    primaryRef: self.imageGenerationPrimaryRef)
+            },
+            set: { newValue in
+                self.imageGenerationPrimaryRef = newValue
+            })
+    }
+
+    private var isSelectingReplacementImageGenerationPrimary: Bool {
+        !self.imageGenerationPrimaryRef.isEmpty &&
+        !primaryModelMatchesSelectedProvider(
+            selectedProviderId: self.imageGenerationSelectedProviderId,
+            primaryRef: self.imageGenerationPrimaryRef)
+    }
+
+    private var currentImageGenerationPrimarySummary: String {
+        guard !self.imageGenerationPrimaryRef.isEmpty else {
+            return macLocalized("Not set", language: self.language)
+        }
+        if let option = self.imageGenerationOptions.first(where: { $0.ref == self.imageGenerationPrimaryRef }) {
+            return option.menuLabel
+        }
+        return self.imageGenerationPrimaryRef
+    }
+
     private var backgroundModelPickerSelection: Binding<String> {
         Binding(
             get: {
@@ -623,6 +905,7 @@ struct ModelsSettings: View {
                 self.actionRow
                 self.defaultsSection
                 self.fallbackSection
+                self.imageGenerationSection
                 self.backgroundSection
                 Spacer(minLength: 0)
             }
@@ -637,8 +920,8 @@ struct ModelsSettings: View {
             ModelProviderConnectSheet(
                 wizard: self.providerConnectWizard,
                 language: self.language,
-                groups: self.providerConnectGroups,
-                connectedProviderIds: self.connectedProviderIds,
+                groups: self.availableProviderConnectGroups,
+                connectedProviderIds: self.providerConnectConnectedProviderIds,
                 isLoadingChoices: self.providerConnectLoading,
                 choicesError: self.providerConnectError,
                 selectedGroupId: self.$providerConnectSelectedGroupId,
@@ -666,6 +949,11 @@ struct ModelsSettings: View {
             }
             self.syncSelectedProviderFromPrimary()
             self.syncDraftFromSelection()
+        }
+        .onChange(of: self.imageGenerationPrimaryRef) { _, _ in
+            guard self.didHydrateSelection else { return }
+            self.syncSelectedImageGenerationProviderFromPrimary()
+            self.syncImageGenerationDraft()
         }
         .onChange(of: self.providerConnectWizard.status) { _, newValue in
             guard newValue == "done" else { return }
@@ -895,6 +1183,175 @@ struct ModelsSettings: View {
         }
     }
 
+    private var imageGenerationSection: some View {
+        self.sectionCard(
+            title: macLocalized("Image generation", language: self.language),
+            subtitle: macLocalized(
+                "Pick the default provider/model Maumau should use when generating or editing images.",
+                language: self.language))
+        {
+            if self.shouldShowImageGenerationConnectAction {
+                self.connectProviderButton(intent: .imageGeneration)
+            }
+        } content: {
+            if self.imageGenerationProviderIds.isEmpty {
+                if self.usesImageGenerationCatalogFallback {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if let imageGenerationProvidersError = self.imageGenerationProvidersError,
+                           !imageGenerationProvidersError.isEmpty
+                        {
+                            self.insetSurface {
+                                Text(imageGenerationProvidersError)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        self.fieldBlock(
+                            macLocalized("Model reference", language: self.language),
+                            help: macLocalized(
+                                "Enter a full provider/model reference directly while the image provider list is unavailable.",
+                                language: self.language))
+                        {
+                            TextField(
+                                macLocalized("Model reference", language: self.language),
+                                text: self.imageGenerationModelReferenceBinding,
+                                prompt: Text("google/gemini-3-pro-image-preview"))
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(self.controlsDisabled)
+                        }
+
+                        if self.shouldShowImageGenerationConnectAction {
+                            self.emptyState(
+                                message: macLocalized(
+                                    "You can also connect another provider now and come back to choose from its catalog once the gateway refreshes.",
+                                    language: self.language),
+                                actionLabel: macLocalized("Connect image provider", language: self.language),
+                                intent: .imageGeneration)
+                        }
+                    }
+                } else if self.shouldShowImageGenerationConnectAction {
+                    self.emptyState(
+                        message: macLocalized(
+                            "Connect an image-generation provider before choosing a model.",
+                            language: self.language),
+                        actionLabel: macLocalized("Connect image provider", language: self.language),
+                        intent: .imageGeneration)
+                } else {
+                    self.insetSurface {
+                        Text(macLocalized(
+                            "No image-generation providers are available right now.",
+                            language: self.language))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let imageGenerationProvidersError = self.imageGenerationProvidersError,
+                       !imageGenerationProvidersError.isEmpty
+                    {
+                        Text(imageGenerationProvidersError)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    self.imageGenerationConfiguredProvidersBlock
+
+                    if self.imageGenerationProviderIds.count > 1 {
+                        self.fieldBlock(macLocalized("Provider", language: self.language)) {
+                            Picker("", selection: self.$imageGenerationSelectedProviderId) {
+                                ForEach(self.imageGenerationProviderIds, id: \.self) { providerId in
+                                    Text(displayProviderName(providerId)).tag(providerId)
+                                }
+                            }
+                            .labelsHidden()
+                            .disabled(self.controlsDisabled)
+                        }
+                    }
+
+                    if self.isSelectingReplacementImageGenerationPrimary {
+                        self.insetSurface {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(macLocalized("Current primary", language: self.language))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(self.currentImageGenerationPrimarySummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(macLocalized(
+                                    "Choosing a model here will replace the current image-generation primary.",
+                                    language: self.language))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    if self.usesImageGenerationManualModelEntry {
+                        if let manualProviderId = self.manualImageGenerationProviderId {
+                            self.fieldBlock(
+                                macLocalized("Primary model", language: self.language),
+                                help: macLocalized(
+                                    "This only changes the model ID for the selected provider.",
+                                    language: self.language))
+                            {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    StatusPill(text: displayProviderName(manualProviderId), tint: .accentColor)
+
+                                    TextField(
+                                        macLocalized("Model ID", language: self.language),
+                                        text: self.manualImageGenerationModelIdBinding,
+                                        prompt: Text("gpt-image-1"))
+                                        .textFieldStyle(.roundedBorder)
+                                        .disabled(self.controlsDisabled)
+                                }
+                            }
+
+                            if !self.imageGenerationPrimaryOptions.isEmpty {
+                                Button(macLocalized("Choose from catalog", language: self.language)) {
+                                    self.switchImageGenerationPrimaryEntryMode(useCustom: false)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(self.controlsDisabled)
+                            }
+                        }
+                    } else {
+                        self.fieldBlock(macLocalized("Primary model", language: self.language)) {
+                            Picker("", selection: self.imageGenerationPrimaryPickerSelectionBinding) {
+                                Text(macLocalized("Not set", language: self.language)).tag("")
+                                ForEach(self.imageGenerationPrimaryOptions) { option in
+                                    Text(option.menuLabel).tag(option.ref)
+                                }
+                            }
+                            .labelsHidden()
+                            .disabled(self.controlsDisabled)
+                        }
+
+                        Button(macLocalized("Use custom model ID", language: self.language)) {
+                            self.switchImageGenerationPrimaryEntryMode(useCustom: true)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(self.controlsDisabled)
+                    }
+
+                    if self.imageGenerationPrimaryOptions.isEmpty &&
+                        !self.modelsLoading &&
+                        !self.imageGenerationProviderIds.isEmpty
+                    {
+                        Text(macLocalized(
+                            "No image-generation models available for this provider.",
+                            language: self.language))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
     private var backgroundSection: some View {
         self.sectionCard(
             title: macLocalized("Background automation", language: self.language),
@@ -962,6 +1419,21 @@ struct ModelsSettings: View {
                         StatusPill(
                             text: displayProviderName(providerId),
                             tint: providerId == self.selectedProviderId ? .accentColor : .secondary)
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+    }
+
+    private var imageGenerationConfiguredProvidersBlock: some View {
+        self.fieldBlock(macLocalized("Configured", language: self.language)) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(self.imageGenerationProviderIds, id: \.self) { providerId in
+                        StatusPill(
+                            text: displayProviderName(providerId),
+                            tint: providerId == self.imageGenerationSelectedProviderId ? .accentColor : .secondary)
                     }
                 }
                 .padding(.vertical, 1)
@@ -1322,10 +1794,31 @@ struct ModelsSettings: View {
         }
     }
 
+    private func switchImageGenerationPrimaryEntryMode(useCustom: Bool) {
+        if useCustom {
+            self.imageGenerationPrefersCustomPrimaryEntry = true
+            return
+        }
+
+        guard !self.imageGenerationPrimaryOptions.isEmpty else { return }
+        self.imageGenerationPrefersCustomPrimaryEntry = false
+        if !self.imageGenerationPrimaryRef.isEmpty &&
+            !self.imageGenerationPrimaryOptions.contains(where: { $0.ref == self.imageGenerationPrimaryRef })
+        {
+            self.imageGenerationPrimaryRef = ""
+        }
+    }
+
     private func syncDraftFromSelection() {
         guard self.didHydrateSelection else { return }
         let payload = buildModelSettingsPayload(primaryRef: self.primaryRef, fallbackRefs: self.fallbackRefs)
         self.store.updateConfigValue(path: self.modelConfigPath, value: payload)
+    }
+
+    private func syncImageGenerationDraft() {
+        guard self.didHydrateSelection else { return }
+        let payload = buildModelSettingsPayload(primaryRef: self.imageGenerationPrimaryRef, fallbackRefs: [])
+        self.store.updateConfigValue(path: self.imageGenerationModelConfigPath, value: payload)
     }
 
     private func syncBackgroundDraft() {
@@ -1343,6 +1836,10 @@ struct ModelsSettings: View {
 
     private func initialSelection() -> ModelSettingsSelection {
         resolveModelSettingsSelection(from: self.store.configValue(at: self.modelConfigPath))
+    }
+
+    private func initialImageGenerationSelection() -> ModelSettingsSelection {
+        resolveModelSettingsSelection(from: self.store.configValue(at: self.imageGenerationModelConfigPath))
     }
 
     private func hydrateSelectionFromConfig() {
@@ -1367,6 +1864,21 @@ struct ModelsSettings: View {
                 selectedProviderId: preferredProvider,
                 currentPrimaryRef: self.primaryRef,
                 options: options).contains(where: { $0.ref == self.primaryRef })
+        let imageGenerationSelection = self.initialImageGenerationSelection()
+        let preferredImageGenerationProvider = imageGenerationSelection.providerId.isEmpty
+            ? (self.imageGenerationProviderIds.first ?? "")
+            : imageGenerationSelection.providerId
+        let imageGenerationOptions = buildImageGenerationModelSettingsOptions(
+            providers: self.imageGenerationProviders,
+            savedRefs: [imageGenerationSelection.primaryRef])
+        self.imageGenerationSelectedProviderId = preferredImageGenerationProvider
+        self.imageGenerationPrimaryRef = imageGenerationSelection.primaryRef
+        self.imageGenerationPrefersCustomPrimaryEntry =
+            !self.imageGenerationPrimaryRef.isEmpty &&
+            !filterPrimaryModelSettingsOptions(
+                selectedProviderId: preferredImageGenerationProvider,
+                currentPrimaryRef: self.imageGenerationPrimaryRef,
+                options: imageGenerationOptions).contains(where: { $0.ref == self.imageGenerationPrimaryRef })
         let backgroundDraft = resolveBackgroundAutomationSettingsDraft(
             modelRaw: self.store.configValue(at: self.backgroundModelConfigPath),
             thinkingRaw: self.store.configValue(at: self.backgroundThinkingConfigPath))
@@ -1381,11 +1893,17 @@ struct ModelsSettings: View {
         self.selectedProviderId = providerId
     }
 
+    private func syncSelectedImageGenerationProviderFromPrimary() {
+        guard let providerId = modelSettingsProviderId(for: self.imageGenerationPrimaryRef) else { return }
+        guard providerId != self.imageGenerationSelectedProviderId else { return }
+        self.imageGenerationSelectedProviderId = providerId
+    }
+
     @MainActor
     private func presentProviderConnectSheet(intent: ProviderConnectIntent = .generic) async {
         self.preservedDraftSelectionBeforeProviderConnect = self.store.configDirty ? self.draftState : nil
         self.providerConnectIntent = intent
-        self.providerConnectStartingConnectedProviderIds = self.connectedProviderIds
+        self.providerConnectStartingConnectedProviderIds = self.providerConnectConnectedProviderIds
         self.providerConnectRequestedProviderId = nil
         await self.providerConnectWizard.cancelIfRunning()
         self.providerConnectWizard.reset()
@@ -1422,10 +1940,11 @@ struct ModelsSettings: View {
             let response: ModelAuthChoicesResponse = try await GatewayConnection.shared.requestDecoded(
                 method: .modelsAuthChoices,
                 params: nil,
-                timeoutMs: 10000)
+                timeoutMs: 15000)
             self.providerConnectGroups = response.groups
+            let availableGroups = self.availableProviderConnectGroups
             if let selection = resolveModelAuthSelection(
-                groups: response.groups,
+                groups: availableGroups,
                 preferredGroupId: self.providerConnectSelectedGroupId,
                 preferredChoiceId: self.providerConnectSelectedChoiceId)
             {
@@ -1435,9 +1954,16 @@ struct ModelsSettings: View {
                 self.providerConnectSelectedGroupId = ""
                 self.providerConnectSelectedChoiceId = ""
             }
-            self.providerConnectError = response.groups.isEmpty
-                ? macLocalized("No provider choices are available right now.", language: self.language)
-                : nil
+            switch self.providerConnectIntent {
+            case .imageGeneration:
+                self.providerConnectError = availableGroups.isEmpty
+                    ? macLocalized("No image-generation provider choices are available right now.", language: self.language)
+                    : nil
+            case .generic, .fallback:
+                self.providerConnectError = availableGroups.isEmpty
+                    ? macLocalized("No provider choices are available right now.", language: self.language)
+                    : nil
+            }
         } catch {
             self.providerConnectError = macLocalized(error.localizedDescription, language: self.language)
         }
@@ -1446,7 +1972,7 @@ struct ModelsSettings: View {
     @MainActor
     private func startProviderConnectWizard() async {
         guard let selection = resolveModelAuthSelection(
-            groups: self.providerConnectGroups,
+            groups: self.availableProviderConnectGroups,
             preferredGroupId: self.providerConnectSelectedGroupId,
             preferredChoiceId: self.providerConnectSelectedChoiceId)
         else {
@@ -1454,13 +1980,15 @@ struct ModelsSettings: View {
         }
         self.providerConnectSelectedGroupId = selection.groupId
         self.providerConnectSelectedChoiceId = selection.choiceId
-        self.providerConnectRequestedProviderId = self.providerConnectGroups
+        self.providerConnectRequestedProviderId = self.availableProviderConnectGroups
             .first(where: { $0.id == selection.groupId })?
             .options
             .first(where: { $0.id == selection.choiceId })?
             .providerId
         self.providerConnectError = nil
-        await self.providerConnectWizard.startModelAuthIfNeeded(authChoice: selection.choiceId)
+        await self.providerConnectWizard.startModelAuthIfNeeded(
+            authChoice: selection.choiceId,
+            setDefaultModel: false)
     }
 
     @MainActor
@@ -1475,6 +2003,7 @@ struct ModelsSettings: View {
         self.hydrateSelectionFromConfig()
         if let preservedDraft {
             self.restoreDraftSelection(preservedDraft.selection)
+            self.restoreImageGenerationDraft(primaryRef: preservedDraft.imageGenerationPrimaryRef)
             self.backgroundModelRef = preservedDraft.backgroundModelRef
             self.backgroundThinking = preservedDraft.backgroundThinking
             self.syncBackgroundDraft()
@@ -1527,6 +2056,21 @@ struct ModelsSettings: View {
         self.syncDraftFromSelection()
     }
 
+    private func restoreImageGenerationDraft(primaryRef: String) {
+        let trimmedPrimaryRef = primaryRef.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredProvider = modelSettingsProviderId(for: trimmedPrimaryRef) ?? (self.imageGenerationProviderIds.first ?? "")
+        self.imageGenerationSelectedProviderId = preferredProvider
+        self.imageGenerationPrimaryRef = trimmedPrimaryRef
+        self.imageGenerationPrefersCustomPrimaryEntry =
+            !trimmedPrimaryRef.isEmpty &&
+            !filterPrimaryModelSettingsOptions(
+                selectedProviderId: preferredProvider,
+                currentPrimaryRef: trimmedPrimaryRef,
+                options: self.imageGenerationOptions).contains(where: { $0.ref == trimmedPrimaryRef })
+        self.didHydrateSelection = true
+        self.syncImageGenerationDraft()
+    }
+
     @MainActor
     private func initialLoadIfNeeded() async {
         guard !self.hasLoaded else { return }
@@ -1554,6 +2098,7 @@ struct ModelsSettings: View {
     @MainActor
     private func saveSettingsState() async {
         self.syncDraftFromSelection()
+        self.syncImageGenerationDraft()
         self.syncBackgroundDraft()
         await self.store.saveConfigDraft()
         self.didHydrateSelection = false
@@ -1564,9 +2109,11 @@ struct ModelsSettings: View {
     private func reloadModelCatalog() async {
         self.modelsLoading = true
         self.modelsError = nil
+        self.imageGenerationProvidersError = nil
         defer { self.modelsLoading = false }
 
         var gatewayLoadFailed = false
+        var shouldSkipImageGenerationProviderLoad = false
         do {
             let result: ModelsListResult = try await GatewayConnection.shared.requestDecoded(
                 method: .modelsList,
@@ -1582,6 +2129,7 @@ struct ModelsSettings: View {
             }
         } catch {
             gatewayLoadFailed = true
+            shouldSkipImageGenerationProviderLoad = shouldSkipFollowupGatewayCatalogLoad(after: error)
             self.modelOptions = []
         }
 
@@ -1605,6 +2153,26 @@ struct ModelsSettings: View {
 
         if gatewayLoadFailed && !self.catalogOptions.isEmpty {
             self.modelsError = nil
+        }
+
+        if shouldSkipImageGenerationProviderLoad {
+            self.imageGenerationProviders = []
+            self.imageGenerationProvidersError = macLocalized(
+                "Could not load image-generation providers. Reload settings or reconnect the gateway. You can still change them in the Config tab.",
+                language: self.language)
+        } else {
+            do {
+                let result: ModelsImageGenerationProvidersResult = try await GatewayConnection.shared.requestDecoded(
+                    method: .modelsImageGenerationProviders,
+                    params: nil,
+                    timeoutMs: 15000)
+                self.imageGenerationProviders = buildImageGenerationProviderCatalogEntries(from: result)
+            } catch {
+                self.imageGenerationProviders = []
+                self.imageGenerationProvidersError = macLocalized(
+                    "Could not load image-generation providers. Reload settings or reconnect the gateway. You can still change them in the Config tab.",
+                    language: self.language)
+            }
         }
     }
 }

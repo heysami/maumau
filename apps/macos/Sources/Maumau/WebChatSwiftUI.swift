@@ -107,16 +107,12 @@ struct MacGatewayChatTransport: MaumauChatTransport {
         idempotencyKey: String,
         attachments: [MaumauChatAttachmentPayload]) async throws -> MaumauChatSendResponse
     {
-        let replyLanguage = await MainActor.run {
-            AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID
-        }
         return try await GatewayConnection.shared.chatSend(
             sessionKey: sessionKey,
             message: message,
             thinking: thinking,
             idempotencyKey: idempotencyKey,
-            attachments: attachments,
-            replyLanguage: replyLanguage)
+            attachments: attachments)
     }
 
     func requestHealth(timeoutMs: Int) async throws -> Bool {
@@ -243,10 +239,12 @@ final class WebChatSwiftUIWindowController {
                 UserDefaults.standard.set(level, forKey: webChatThinkingLevelDefaultsKey)
             })
         let accent = Self.color(fromHex: AppStateStore.shared.seamColorHex)
+        let localeID = AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID
         self.hosting = NSHostingController(rootView: MaumauChatView(
             viewModel: vm,
             showsSessionSwitcher: true,
-            userAccent: accent))
+            userAccent: accent,
+            localeID: localeID))
         self.contentController = Self.makeContentController(for: presentation, hosting: self.hosting)
         self.window = Self.makeWindow(for: presentation, contentViewController: self.contentController)
     }
@@ -356,12 +354,16 @@ final class WebChatSwiftUIWindowController {
     {
         switch presentation {
         case .window:
+            let localeID = AppStateStore.shared.effectiveOnboardingLanguage.replyLanguageID
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: WebChatSwiftUILayout.windowSize),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered,
                 defer: false)
-            window.title = "Maumau Chat"
+            window.title = MaumauSharedLocalization.fallbackString(
+                path: ["shared", "chat", "windowTitle"],
+                localeID: localeID,
+                fallback: "Maumau Chat")
             window.contentViewController = contentViewController
             window.isReleasedWhenClosed = false
             window.titleVisibility = .visible

@@ -1,16 +1,21 @@
 import type { MaumauConfig } from "../../../config/config.js";
+import { ensureControlUiAllowedOriginsForNonLoopbackBind } from "../../../config/gateway-control-ui-origins.js";
 import { isValidEnvSecretRefId } from "../../../config/types.secrets.js";
+import { maybeAddTailnetOriginToControlUiAllowedOrigins } from "../../../gateway/gateway-config-prompts.shared.js";
+import { findTailscaleBinary } from "../../../infra/tailscale.js";
 import type { RuntimeEnv } from "../../../runtime.js";
 import { resolveDefaultSecretProviderAlias } from "../../../secrets/ref-contract.js";
+import { applyOnboardingTailscaleGatewayAuth } from "../../onboard-gateway-tailscale-auth.js";
 import { normalizeGatewayTokenInput, randomToken } from "../../onboard-helpers.js";
 import type { OnboardOptions } from "../../onboard-types.js";
 
-export function applyNonInteractiveGatewayConfig(params: {
+export async function applyNonInteractiveGatewayConfig(params: {
   nextConfig: MaumauConfig;
   opts: OnboardOptions;
   runtime: RuntimeEnv;
   defaultPort: number;
-}): {
+  detectedTailscaleMode?: "off" | "serve" | "funnel";
+}): Promise<{
   nextConfig: MaumauConfig;
   port: number;
   bind: string;
@@ -18,7 +23,7 @@ export function applyNonInteractiveGatewayConfig(params: {
   tailscaleMode: string;
   tailscaleResetOnExit: boolean;
   gatewayToken?: string;
-} | null {
+} | null> {
   const { opts, runtime } = params;
 
   const hasGatewayPort = opts.gatewayPort !== undefined;
@@ -37,7 +42,7 @@ export function applyNonInteractiveGatewayConfig(params: {
     return null;
   }
   let authMode = authModeRaw;
-  const tailscaleMode = opts.tailscale ?? "off";
+  const tailscaleMode = opts.tailscale ?? params.detectedTailscaleMode ?? "off";
   const tailscaleResetOnExit = Boolean(opts.tailscaleResetOnExit);
 
   // Tighten config to safe combos:
@@ -145,6 +150,23 @@ export function applyNonInteractiveGatewayConfig(params: {
       },
     },
   };
+  nextConfig = applyOnboardingTailscaleGatewayAuth({
+    cfg: nextConfig,
+    tailscaleMode,
+    authMode: authMode as "token" | "password",
+  });
+  nextConfig = ensureControlUiAllowedOriginsForNonLoopbackBind(nextConfig, {
+    requireControlUiEnabled: true,
+  }).config;
+  const tailscaleBin =
+    tailscaleMode === "serve" || tailscaleMode === "funnel"
+      ? await findTailscaleBinary()
+      : undefined;
+  nextConfig = await maybeAddTailnetOriginToControlUiAllowedOrigins({
+    config: nextConfig,
+    tailscaleMode,
+    tailscaleBin,
+  });
 
   return {
     nextConfig,

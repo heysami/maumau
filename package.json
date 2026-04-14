@@ -1,6 +1,6 @@
 {
   "name": "maumau",
-  "version": "2026.3.29-beta.2",
+  "version": "2026.4.14",
   "description": "Multi-channel AI gateway with extensible messaging integrations",
   "keywords": [],
   "homepage": "https://github.com/maumau/maumau#readme",
@@ -252,6 +252,10 @@
     "./plugin-sdk/device-bootstrap": {
       "types": "./dist/plugin-sdk/device-bootstrap.d.ts",
       "default": "./dist/plugin-sdk/device-bootstrap.js"
+    },
+    "./plugin-sdk/device-identity": {
+      "types": "./dist/plugin-sdk/device-identity.d.ts",
+      "default": "./dist/plugin-sdk/device-identity.js"
     },
     "./plugin-sdk/diagnostics-otel": {
       "types": "./dist/plugin-sdk/diagnostics-otel.d.ts",
@@ -674,6 +678,8 @@
     "mac:open": "open dist/Maumau.app",
     "mac:package": "bash scripts/package-mac-app.sh",
     "mac:restart": "bash scripts/restart-mac.sh",
+    "mau-office:probe": "node scripts/mau-office-live-probe.mjs",
+    "mau-office:qa": "node --import tsx scripts/generate-mau-office-qa.ts",
     "maumau": "node scripts/run-node.mjs",
     "maumau:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
     "moltbot:rpc": "node scripts/run-node.mjs agent --mode rpc --json",

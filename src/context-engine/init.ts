@@ -3,9 +3,9 @@ import { registerLegacyContextEngine } from "./legacy.js";
 /**
  * Ensures all built-in context engines are registered exactly once.
  *
- * The legacy engine is always registered as a safe fallback so that
- * `resolveContextEngine()` can resolve the default "legacy" slot without
- * callers needing to remember manual registration.
+ * The legacy engine is always registered as a safe fallback so callers can
+ * explicitly select `"legacy"` even when bundled/plugin-provided engines own
+ * the default slot.
  *
  * Additional engines are registered by their own plugins via
  * `api.registerContextEngine()` during plugin load.
@@ -18,6 +18,6 @@ export function ensureContextEnginesInitialized(): void {
   }
   initialized = true;
 
-  // Always available – safe fallback for the "legacy" slot default.
+  // Always available as the explicit legacy escape hatch.
   registerLegacyContextEngine();
 }

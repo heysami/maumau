@@ -20,7 +20,10 @@ enum MaumauConfigFile {
     }
 
     static func loadDict() -> [String: Any] {
-        let url = self.url()
+        self.loadDict(at: self.url())
+    }
+
+    static func loadDict(at url: URL) -> [String: Any] {
         guard FileManager().fileExists(atPath: url.path) else { return [:] }
         do {
             let data = try Data(contentsOf: url)

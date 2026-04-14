@@ -497,6 +497,37 @@ describe("config plugin validation", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("accepts voice-call Vapi mode config fields", async () => {
+    const res = validateInSuite({
+      agents: { list: [{ id: "pi" }] },
+      plugins: {
+        enabled: true,
+        load: { paths: [voiceCallSchemaPluginDir] },
+        entries: {
+          "voice-call-schema-fixture": {
+            config: {
+              mode: "vapi",
+              vapi: {
+                enabled: true,
+                apiKey: "vapi-test-key",
+                assistantId: "assistant-123",
+                phoneNumberId: "phone-number-123",
+                telephonyProvider: "twilio",
+                preferredLanguage: "id-ID",
+                bridgeMode: "manual-public-url",
+                bridgeUrl: "https://demo.ts.net/plugins/voice-call/vapi",
+                bridgePath: "/plugins/voice-call/vapi",
+                bridgeAuthToken: "bridge-secret",
+                baseUrl: "https://api.vapi.ai",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(res.ok).toBe(true);
+  });
+
   it("accepts known plugin ids and valid channel/heartbeat enums", async () => {
     const res = validateInSuite({
       agents: {

@@ -142,6 +142,9 @@ export async function ensureMaumauModelsJson(
   const resolved = resolveModelsConfigInput(config);
   const cfg = resolved.config;
   const agentDir = agentDirOverride?.trim() ? agentDirOverride.trim() : resolveMaumauAgentDir();
+  if (process.env.MAUMAU_MODELS_JSON_READONLY === "1") {
+    return { agentDir, wrote: false };
+  }
   const targetPath = path.join(agentDir, "models.json");
   const fingerprint = await buildModelsJsonFingerprint({
     config: cfg,

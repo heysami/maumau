@@ -7,6 +7,8 @@ const listAgentSessionDirs = vi.fn();
 const removeMacAppStateArtifacts = vi.fn();
 const removeStateAndLinkedPaths = vi.fn();
 const removeWorkspaceDirs = vi.fn();
+const stopRunningMacAppIfPresent = vi.fn();
+const clearMacLaunchctlGatewayEnvOverrides = vi.fn();
 const uninstallGatewayServiceIfPresent = vi.fn();
 
 vi.mock("../config/config.js", () => ({
@@ -18,11 +20,13 @@ vi.mock("./cleanup-plan.js", () => ({
 }));
 
 vi.mock("./cleanup-utils.js", () => ({
+  clearMacLaunchctlGatewayEnvOverrides,
   removePath,
   listAgentSessionDirs,
   removeMacAppStateArtifacts,
   removeStateAndLinkedPaths,
   removeWorkspaceDirs,
+  stopRunningMacAppIfPresent,
 }));
 
 vi.mock("./gateway-service-cleanup.js", () => ({
@@ -49,6 +53,8 @@ describe("resetCommand", () => {
     removeMacAppStateArtifacts.mockResolvedValue(undefined);
     removeStateAndLinkedPaths.mockResolvedValue(undefined);
     removeWorkspaceDirs.mockResolvedValue(undefined);
+    stopRunningMacAppIfPresent.mockResolvedValue(undefined);
+    clearMacLaunchctlGatewayEnvOverrides.mockResolvedValue(undefined);
     uninstallGatewayServiceIfPresent.mockResolvedValue(true);
     vi.spyOn(runtime, "log").mockImplementation(() => {});
     vi.spyOn(runtime, "error").mockImplementation(() => {});
@@ -85,6 +91,8 @@ describe("resetCommand", () => {
     });
 
     expect(uninstallGatewayServiceIfPresent).toHaveBeenCalledWith(runtime, { dryRun: true });
+    expect(stopRunningMacAppIfPresent).toHaveBeenCalledWith(runtime, { dryRun: true });
+    expect(clearMacLaunchctlGatewayEnvOverrides).toHaveBeenCalledWith(runtime, { dryRun: true });
     expect(removeStateAndLinkedPaths).toHaveBeenCalledWith(
       expect.objectContaining({ stateDir: "/tmp/.maumau" }),
       runtime,
@@ -105,5 +113,7 @@ describe("resetCommand", () => {
     });
 
     expect(removeMacAppStateArtifacts).not.toHaveBeenCalled();
+    expect(stopRunningMacAppIfPresent).not.toHaveBeenCalled();
+    expect(clearMacLaunchctlGatewayEnvOverrides).not.toHaveBeenCalled();
   });
 });

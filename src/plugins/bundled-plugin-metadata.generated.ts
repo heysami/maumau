@@ -200,6 +200,59 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
     },
   },
   {
+    dirName: "automation-runner",
+    idHint: "automation-runner",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/automation-runner",
+    packageVersion: "2026.3.22",
+    packageDescription: "Maumau bounded browser-first automation plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "automation-runner",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          enabled: {
+            type: "boolean",
+            default: false,
+          },
+          accessPolicy: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              mode: {
+                type: "string",
+                enum: ["disabled", "owner", "allowlist"],
+                default: "owner",
+              },
+              allowFrom: {
+                type: "array",
+                items: {
+                  type: "string",
+                },
+              },
+            },
+          },
+          requireApproval: {
+            type: "boolean",
+            default: true,
+          },
+        },
+      },
+      enabledByDefault: true,
+      skills: ["./skills"],
+      name: "Automation Runner",
+      description:
+        "Bounded browser-first automation with sender allowlists and approval-gated side effects.",
+    },
+  },
+  {
     dirName: "bluebubbles",
     idHint: "bluebubbles",
     source: {
@@ -1547,6 +1600,32 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
     },
   },
   {
+    dirName: "lossless-claw",
+    idHint: "lossless-claw",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/lossless-claw",
+    packageVersion: "2026.3.22",
+    packageDescription: "Maumau lossless transcript continuity context engine plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "lossless-claw",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      enabledByDefault: true,
+      kind: "context-engine",
+      name: "Lossless Claw",
+      description: "Lossless transcript continuity across compaction and spawned agents.",
+    },
+  },
+  {
     dirName: "matrix",
     idHint: "matrix",
     source: {
@@ -2115,6 +2194,285 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         properties: {},
       },
       channels: ["msteams"],
+    },
+  },
+  {
+    dirName: "multi-user-memory",
+    idHint: "multi-user-memory",
+    source: {
+      source: "./index.ts",
+      built: "index.js",
+    },
+    packageName: "@maumau/multi-user-memory",
+    packageVersion: "2026.3.22",
+    packageDescription: "Maumau multi-user scoped memory plugin",
+    packageManifest: {
+      extensions: ["./index.ts"],
+    },
+    manifest: {
+      id: "multi-user-memory",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          enabled: {
+            type: "boolean",
+            default: true,
+          },
+          autoDiscover: {
+            type: "boolean",
+            default: true,
+          },
+          defaultLanguage: {
+            type: "string",
+            default: "en",
+          },
+          approvalCenterBaseUrl: {
+            type: "string",
+          },
+          approvalDelivery: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              mode: {
+                type: "string",
+                enum: ["same_session", "same_channel", "disabled"],
+                default: "same_session",
+              },
+              channelId: {
+                type: "string",
+              },
+              accountId: {
+                type: "string",
+              },
+              to: {
+                type: "string",
+              },
+            },
+          },
+          curatorAgentId: {
+            type: "string",
+          },
+          adminUserIds: {
+            type: "array",
+            items: {
+              type: "string",
+            },
+            default: [],
+          },
+          users: {
+            type: "object",
+            default: {},
+            additionalProperties: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                displayName: {
+                  type: "string",
+                },
+                preferredLanguage: {
+                  type: "string",
+                },
+                identities: {
+                  type: "array",
+                  default: [],
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      label: {
+                        type: "string",
+                      },
+                      channelId: {
+                        type: "string",
+                      },
+                      accountId: {
+                        type: "string",
+                      },
+                      senderId: {
+                        type: "string",
+                      },
+                      senderName: {
+                        type: "string",
+                      },
+                      senderUsername: {
+                        type: "string",
+                      },
+                    },
+                    required: ["channelId", "senderId"],
+                  },
+                },
+                active: {
+                  type: "boolean",
+                  default: true,
+                },
+                notes: {
+                  type: "string",
+                },
+              },
+            },
+          },
+          groups: {
+            type: "object",
+            default: {},
+            additionalProperties: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                label: {
+                  type: "string",
+                },
+                parentGroupIds: {
+                  type: "array",
+                  default: [],
+                  items: {
+                    type: "string",
+                  },
+                },
+                memberUserIds: {
+                  type: "array",
+                  default: [],
+                  items: {
+                    type: "string",
+                  },
+                },
+                active: {
+                  type: "boolean",
+                  default: true,
+                },
+                description: {
+                  type: "string",
+                },
+              },
+            },
+          },
+        },
+      },
+      enabledByDefault: true,
+      name: "Multi-User Memory",
+      description:
+        "Scoped memory with curated users, shared groups, approvals, and per-user language defaults.",
+      uiHints: {
+        enabled: {
+          label: "Enable Multi-User Memory",
+          help: "Turns on scoped user and group memory overlays for the default memory stack.",
+        },
+        autoDiscover: {
+          label: "Auto-Discover New Senders",
+          help: "Unknown senders become provisional users in the runtime store until an admin curates them in config.",
+        },
+        defaultLanguage: {
+          label: "Default Reply Language",
+          help: "Fallback language when a matched user does not have a preferred language.",
+        },
+        approvalCenterBaseUrl: {
+          label: "Approval Center Base URL",
+          help: "Optional HTTPS base URL for the approval center page. Leave blank to auto-detect from Tailscale Serve or the gateway bind when possible.",
+        },
+        "approvalDelivery.mode": {
+          label: "Approval Delivery Mode",
+          help: "How proposal approvals should be requested in v1.",
+        },
+        "approvalDelivery.channelId": {
+          label: "Approval Channel Override",
+          help: "Optional channel override for approval requests when not using the current session.",
+        },
+        "approvalDelivery.accountId": {
+          label: "Approval Account Override",
+          help: "Optional account override for approval requests.",
+        },
+        "approvalDelivery.to": {
+          label: "Approval Target Override",
+          help: "Optional explicit target for approval requests.",
+        },
+        curatorAgentId: {
+          label: "Curator Agent Id",
+          help: "Agent id allowed to run the curation workflow without owner privileges.",
+        },
+        adminUserIds: {
+          label: "Admin User Ids",
+          help: "Canonical user ids that should be treated as multi-user-memory admins.",
+          tags: ["admin"],
+        },
+        users: {
+          label: "Users",
+          help: "Curated user catalog keyed by canonical user id.",
+          tags: ["directory"],
+        },
+        "users.*.displayName": {
+          label: "Display Name",
+          help: "Human-readable name shown in admin tooling and curation output.",
+        },
+        "users.*.preferredLanguage": {
+          label: "Preferred Language",
+          help: "Language used for replies and plugin-generated notices for this user.",
+        },
+        "users.*.identities": {
+          label: "Channel Identities",
+          help: "Exact channel/account/sender identities that map to this user.",
+        },
+        "users.*.identities.*.label": {
+          label: "Identity Label",
+          help: "Optional admin label for this channel identity.",
+        },
+        "users.*.identities.*.channelId": {
+          label: "Channel Id",
+          help: "Exact channel id, for example whatsapp, telegram, or discord.",
+        },
+        "users.*.identities.*.accountId": {
+          label: "Account Id",
+          help: "Optional account id when a channel has multiple configured accounts.",
+        },
+        "users.*.identities.*.senderId": {
+          label: "Sender Id",
+          help: "Trusted sender id to match for this identity.",
+        },
+        "users.*.identities.*.senderName": {
+          label: "Sender Name",
+          help: "Optional display name captured for admin reference.",
+          advanced: true,
+        },
+        "users.*.identities.*.senderUsername": {
+          label: "Sender Username",
+          help: "Optional username captured for admin reference.",
+          advanced: true,
+        },
+        "users.*.active": {
+          label: "Active User",
+          help: "Inactive users are ignored for curated identity matching.",
+        },
+        "users.*.notes": {
+          label: "Admin Notes",
+          help: "Optional operator notes for this user.",
+          advanced: true,
+        },
+        groups: {
+          label: "Groups",
+          help: "Shared memory groups keyed by group id.",
+          tags: ["sharing"],
+        },
+        "groups.*.label": {
+          label: "Group Label",
+          help: "Human-readable group name.",
+        },
+        "groups.*.parentGroupIds": {
+          label: "Parent Group Ids",
+          help: "Broader groups that inherit this group's members upward.",
+        },
+        "groups.*.memberUserIds": {
+          label: "Member User Ids",
+          help: "Canonical users that belong directly to this group.",
+        },
+        "groups.*.active": {
+          label: "Active Group",
+          help: "Inactive groups are ignored for memory visibility and curation.",
+        },
+        "groups.*.description": {
+          label: "Description",
+          help: "Optional admin description for the group.",
+          advanced: true,
+        },
+      },
     },
   },
   {
@@ -3320,9 +3678,54 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
           enabled: {
             type: "boolean",
           },
+          mode: {
+            type: "string",
+            enum: ["self-hosted", "vapi"],
+          },
           provider: {
             type: "string",
             enum: ["telnyx", "twilio", "plivo", "mock"],
+          },
+          vapi: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              enabled: {
+                type: "boolean",
+              },
+              apiKey: {
+                type: "string",
+              },
+              assistantId: {
+                type: "string",
+              },
+              phoneNumberId: {
+                type: "string",
+              },
+              telephonyProvider: {
+                type: "string",
+                enum: ["twilio"],
+              },
+              preferredLanguage: {
+                type: "string",
+              },
+              bridgeMode: {
+                type: "string",
+                enum: ["auto", "manual-public-url"],
+              },
+              bridgeUrl: {
+                type: "string",
+              },
+              bridgePath: {
+                type: "string",
+              },
+              bridgeAuthToken: {
+                type: "string",
+              },
+              baseUrl: {
+                type: "string",
+              },
+            },
           },
           telnyx: {
             type: "object",
@@ -3501,7 +3904,10 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
               },
               sttProvider: {
                 type: "string",
-                enum: ["openai-realtime"],
+                enum: ["openai-realtime", "deepgram-realtime"],
+              },
+              languageCode: {
+                type: "string",
               },
               openaiApiKey: {
                 type: "string",
@@ -3517,6 +3923,46 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
                 type: "number",
                 minimum: 0,
                 maximum: 1,
+              },
+              openai: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  apiKey: {
+                    type: "string",
+                  },
+                  model: {
+                    type: "string",
+                  },
+                  silenceDurationMs: {
+                    type: "integer",
+                    minimum: 1,
+                  },
+                  vadThreshold: {
+                    type: "number",
+                    minimum: 0,
+                    maximum: 1,
+                  },
+                },
+              },
+              deepgram: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  apiKey: {
+                    type: "string",
+                  },
+                  model: {
+                    type: "string",
+                  },
+                  endpointingMs: {
+                    type: "integer",
+                    minimum: 1,
+                  },
+                  interimResults: {
+                    type: "boolean",
+                  },
+                },
               },
               streamPath: {
                 type: "string",
@@ -3762,6 +4208,48 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         },
       },
       uiHints: {
+        mode: {
+          label: "Voice Mode",
+          help: "Use vapi for the simple guided setup or self-hosted for direct provider webhooks.",
+        },
+        "vapi.apiKey": {
+          label: "Vapi API Key",
+          sensitive: true,
+        },
+        "vapi.assistantId": {
+          label: "Vapi Assistant ID",
+        },
+        "vapi.phoneNumberId": {
+          label: "Vapi Phone Number ID",
+        },
+        "vapi.telephonyProvider": {
+          label: "Vapi Telephony Provider",
+          help: 'Use "twilio" for imported international numbers.',
+        },
+        "vapi.preferredLanguage": {
+          label: "Preferred Language",
+        },
+        "vapi.bridgeMode": {
+          label: "Vapi Bridge Mode",
+          help: 'Use "auto" for the managed Tailscale Funnel bridge or "manual-public-url" to keep a fixed public callback URL.',
+        },
+        "vapi.bridgeUrl": {
+          label: "Maumau Bridge URL",
+          advanced: true,
+        },
+        "vapi.bridgePath": {
+          label: "Maumau Bridge Path",
+          advanced: true,
+        },
+        "vapi.bridgeAuthToken": {
+          label: "Maumau Bridge Auth Token",
+          sensitive: true,
+          advanced: true,
+        },
+        "vapi.baseUrl": {
+          label: "Vapi API Base URL",
+          advanced: true,
+        },
         provider: {
           label: "Provider",
           help: "Use twilio, telnyx, or mock for dev/no-network.",
@@ -3847,13 +4335,30 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
           label: "Enable Streaming",
           advanced: true,
         },
-        "streaming.openaiApiKey": {
+        "streaming.sttProvider": {
+          label: "Realtime STT Provider",
+          advanced: true,
+        },
+        "streaming.languageCode": {
+          label: "Realtime Language Code",
+          advanced: true,
+        },
+        "streaming.openai.apiKey": {
           label: "OpenAI Realtime API Key",
           sensitive: true,
           advanced: true,
         },
-        "streaming.sttModel": {
-          label: "Realtime STT Model",
+        "streaming.openai.model": {
+          label: "OpenAI Realtime Model",
+          advanced: true,
+        },
+        "streaming.deepgram.apiKey": {
+          label: "Deepgram Realtime API Key",
+          sensitive: true,
+          advanced: true,
+        },
+        "streaming.deepgram.model": {
+          label: "Deepgram Realtime Model",
           advanced: true,
         },
         "streaming.streamPath": {
@@ -3909,6 +4414,7 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         },
         responseModel: {
           label: "Response Model",
+          help: "Leave blank to inherit the main Maumau agent model.",
           advanced: true,
         },
         responseSystemPrompt: {

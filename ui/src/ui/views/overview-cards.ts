@@ -102,6 +102,13 @@ export function renderOverviewCards(props: OverviewCardsProps) {
 
   const cards: StatCard[] = [
     {
+      kind: "dashboard",
+      tab: "dashboardToday",
+      label: "Operations Dashboard",
+      value: t("tabs.dashboardToday"),
+      hint: "Open the standalone Today, Tasks, Workshop, and Memory workspace.",
+    },
+    {
       kind: "cost",
       tab: "usage",
       label: t("overview.cards.cost"),

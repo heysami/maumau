@@ -1,4 +1,4 @@
-import { loadConfig } from "../config/config.js";
+import { createConfigIO, getRuntimeConfigSnapshot } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveBrowserConfig } from "./config.js";
 import { ensureBrowserControlAuth } from "./control-auth.js";
@@ -25,7 +25,9 @@ export async function startBrowserControlServiceFromConfig(): Promise<BrowserSer
     return state;
   }
 
-  const cfg = loadConfig();
+  // Browser startup can be triggered immediately after a local config write from the macOS app.
+  // Bypass the shared config cache here so the first start attempt sees that fresh on-disk change.
+  const cfg = getRuntimeConfigSnapshot() ?? createConfigIO().loadConfig();
   const resolved = resolveBrowserConfig(cfg.browser, cfg);
   if (!resolved.enabled) {
     return null;

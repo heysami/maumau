@@ -7,10 +7,11 @@ export const TAB_GROUPS = [
     label: "control",
     tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
   },
-  { label: "agent", tabs: ["agents", "skills", "nodes"] },
+  { label: "agent", tabs: ["agents", "teams", "skills", "nodes"] },
   {
     label: "settings",
     tabs: [
+      "users",
       "config",
       "communications",
       "appearance",
@@ -23,17 +24,52 @@ export const TAB_GROUPS = [
   },
 ] as const;
 
+export const DASHBOARD_PAGE_ORDER = [
+  "today",
+  "wallet",
+  "mau-office",
+  "tasks",
+  "workshop",
+  "calendar",
+  "routines",
+  "business",
+  "projects",
+  "profile",
+  "teams",
+  "user-channels",
+  "agents",
+  "memories",
+] as const;
+
+export type DashboardPage = (typeof DASHBOARD_PAGE_ORDER)[number];
+
 export type Tab =
   | "agents"
+  | "teams"
   | "overview"
   | "channels"
   | "instances"
   | "sessions"
   | "usage"
   | "cron"
+  | "dashboardToday"
+  | "dashboardWallet"
+  | "dashboardMauOffice"
+  | "dashboardTasks"
+  | "dashboardWorkshop"
+  | "dashboardCalendar"
+  | "dashboardRoutines"
+  | "dashboardBusiness"
+  | "dashboardProjects"
+  | "dashboardProfile"
+  | "dashboardTeams"
+  | "dashboardUserChannels"
+  | "dashboardAgents"
+  | "dashboardMemories"
   | "skills"
   | "nodes"
   | "chat"
+  | "users"
   | "config"
   | "communications"
   | "appearance"
@@ -45,15 +81,31 @@ export type Tab =
 
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
+  teams: "/teams",
   overview: "/overview",
   channels: "/channels",
   instances: "/instances",
   sessions: "/sessions",
   usage: "/usage",
   cron: "/cron",
+  dashboardToday: "/dashboard/today",
+  dashboardWallet: "/dashboard/wallet",
+  dashboardMauOffice: "/dashboard/mau-office",
+  dashboardTasks: "/dashboard/tasks",
+  dashboardWorkshop: "/dashboard/workshop",
+  dashboardCalendar: "/dashboard/calendar",
+  dashboardRoutines: "/dashboard/routines",
+  dashboardBusiness: "/dashboard/business",
+  dashboardProjects: "/dashboard/projects",
+  dashboardProfile: "/dashboard/profile",
+  dashboardTeams: "/dashboard/teams",
+  dashboardUserChannels: "/dashboard/user-channels",
+  dashboardAgents: "/dashboard/agents",
+  dashboardMemories: "/dashboard/memory-notes",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
+  users: "/users",
   config: "/config",
   communications: "/communications",
   appearance: "/appearance",
@@ -64,7 +116,45 @@ const TAB_PATHS: Record<Tab, string> = {
   logs: "/logs",
 };
 
-const PATH_TO_TAB = new Map(Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab]));
+const DASHBOARD_PAGE_TO_TAB: Record<DashboardPage, Tab> = {
+  today: "dashboardToday",
+  wallet: "dashboardWallet",
+  "mau-office": "dashboardMauOffice",
+  tasks: "dashboardTasks",
+  workshop: "dashboardWorkshop",
+  calendar: "dashboardCalendar",
+  routines: "dashboardRoutines",
+  business: "dashboardBusiness",
+  projects: "dashboardProjects",
+  profile: "dashboardProfile",
+  teams: "dashboardTeams",
+  "user-channels": "dashboardUserChannels",
+  agents: "dashboardAgents",
+  memories: "dashboardMemories",
+};
+
+const LEGACY_TAB_ALIASES: Array<[string, Tab]> = [
+  ["/mau-office", "dashboardMauOffice"],
+  ["/dashboard/memories", "dashboardMemories"],
+];
+
+const PATH_TO_TAB = new Map<string, Tab>([
+  ...Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab] as const),
+  ...LEGACY_TAB_ALIASES,
+]);
+
+export function tabForDashboardPage(page: DashboardPage): Tab {
+  return DASHBOARD_PAGE_TO_TAB[page];
+}
+
+export function dashboardPageForTab(tab: Tab): DashboardPage | null {
+  const entry = Object.entries(DASHBOARD_PAGE_TO_TAB).find(([, value]) => value === tab);
+  return (entry?.[0] as DashboardPage | undefined) ?? null;
+}
+
+export function isDashboardTab(tab: Tab): boolean {
+  return dashboardPageForTab(tab) !== null;
+}
 
 export function normalizeBasePath(basePath: string): string {
   if (!basePath) {
@@ -149,6 +239,8 @@ export function iconForTab(tab: Tab): IconName {
   switch (tab) {
     case "agents":
       return "folder";
+    case "teams":
+      return "folder";
     case "chat":
       return "messageSquare";
     case "overview":
@@ -163,12 +255,42 @@ export function iconForTab(tab: Tab): IconName {
       return "barChart";
     case "cron":
       return "loader";
+    case "dashboardToday":
+      return "sun";
+    case "dashboardWallet":
+      return "creditCard";
+    case "dashboardMauOffice":
+      return "briefcase";
+    case "dashboardTasks":
+      return "checkSquare";
+    case "dashboardWorkshop":
+      return "monitor";
+    case "dashboardCalendar":
+      return "calendarDays";
+    case "dashboardRoutines":
+      return "repeat2";
+    case "dashboardBusiness":
+      return "briefcase";
+    case "dashboardProjects":
+      return "monitor";
+    case "dashboardProfile":
+      return "book";
+    case "dashboardTeams":
+      return "users";
+    case "dashboardUserChannels":
+      return "link";
+    case "dashboardAgents":
+      return "folder";
+    case "dashboardMemories":
+      return "brain";
     case "skills":
       return "zap";
     case "nodes":
       return "monitor";
     case "config":
       return "settings";
+    case "users":
+      return "folder";
     case "communications":
       return "send";
     case "appearance":

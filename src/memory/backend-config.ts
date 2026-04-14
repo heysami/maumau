@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
 import type { MaumauConfig } from "../config/config.js";
@@ -69,7 +70,7 @@ export type ResolvedQmdConfig = {
   scope?: SessionSendPolicyConfig;
 };
 
-const DEFAULT_BACKEND: MemoryBackend = "builtin";
+const DEFAULT_BACKEND: MemoryBackend = "qmd";
 const DEFAULT_CITATIONS: MemoryCitationsMode = "auto";
 const DEFAULT_QMD_INTERVAL = "5m";
 const DEFAULT_QMD_DEBOUNCE_MS = 15_000;
@@ -102,6 +103,11 @@ const DEFAULT_QMD_SCOPE: SessionSendPolicyConfig = {
     },
   ],
 };
+
+const DEFAULT_BUNDLED_QMD_COMMAND = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../scripts/qmd-bundled.mjs",
+);
 
 function sanitizeName(input: string): string {
   const lower = input.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
@@ -285,6 +291,8 @@ function resolveDefaultCollections(
     { path: workspaceDir, pattern: "MEMORY.md", base: "memory-root" },
     { path: workspaceDir, pattern: "memory.md", base: "memory-alt" },
     { path: path.join(workspaceDir, "memory"), pattern: "**/*.md", base: "memory-dir" },
+    { path: path.join(workspaceDir, "corpus"), pattern: "**/*.md", base: "corpus-dir" },
+    { path: path.join(workspaceDir, "reviews"), pattern: "**/*.md", base: "reviews-dir" },
   ];
   return entries.map((entry) => ({
     name: ensureUniqueName(scopeCollectionBase(entry.base, agentId), existing),
@@ -313,7 +321,7 @@ export function resolveMemoryBackendConfig(params: {
     ...resolveCustomPaths(qmdCfg?.paths, workspaceDir, nameSet, params.agentId),
   ];
 
-  const rawCommand = qmdCfg?.command?.trim() || "qmd";
+  const rawCommand = qmdCfg?.command?.trim() || DEFAULT_BUNDLED_QMD_COMMAND;
   const parsedCommand = splitShellArgs(rawCommand);
   const command = parsedCommand?.[0] || rawCommand.split(/\s+/)[0] || "qmd";
   const resolved: ResolvedQmdConfig = {

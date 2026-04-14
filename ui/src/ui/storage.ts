@@ -18,12 +18,18 @@ type PersistedUiSettings = Omit<UiSettings, "token" | "sessionKey" | "lastActive
   sessionKey?: string;
   lastActiveSessionKey?: string;
   sessionsByGateway?: Record<string, ScopedSessionSelection>;
+  themePreferenceVersion?: number;
 };
 
 import { isSupportedLocale } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { inferBasePathFromPathname, normalizeBasePath } from "./navigation.ts";
-import { parseThemeSelection, type ThemeMode, type ThemeName } from "./theme.ts";
+import {
+  normalizeStoredThemeSelection,
+  THEME_PREFERENCE_VERSION,
+  type ThemeMode,
+  type ThemeName,
+} from "./theme.ts";
 
 export const BORDER_RADIUS_STOPS = [0, 25, 50, 75, 100] as const;
 export type BorderRadiusStop = (typeof BORDER_RADIUS_STOPS)[number];
@@ -121,6 +127,14 @@ function tokenSessionKeyForGateway(gatewayUrl: string): string {
   return `${TOKEN_SESSION_KEY_PREFIX}${normalizeGatewayTokenScope(gatewayUrl)}`;
 }
 
+function readQueryLocaleOverride(): string | undefined {
+  if (typeof location === "undefined" || typeof location.search !== "string") {
+    return undefined;
+  }
+  const locale = new URLSearchParams(location.search).get("locale");
+  return isSupportedLocale(locale) ? locale : undefined;
+}
+
 function resolveScopedSessionSelection(
   gatewayUrl: string,
   parsed: PersistedUiSettings,
@@ -191,6 +205,7 @@ function persistSessionToken(gatewayUrl: string, token: string) {
 
 export function loadSettings(): UiSettings {
   const { pageUrl: pageDerivedUrl, effectiveUrl: defaultUrl } = deriveDefaultGatewayUrl();
+  const queryLocaleOverride = readQueryLocaleOverride();
   const storage = getSafeLocalStorage();
 
   const defaults: UiSettings = {
@@ -198,8 +213,8 @@ export function loadSettings(): UiSettings {
     token: loadSessionToken(defaultUrl),
     sessionKey: "main",
     lastActiveSessionKey: "main",
-    theme: "claw",
-    themeMode: "system",
+    theme: "dash",
+    themeMode: "light",
     chatFocusMode: false,
     chatShowThinking: true,
     chatShowToolCalls: true,
@@ -218,7 +233,7 @@ export function loadSettings(): UiSettings {
       storage?.getItem(SETTINGS_KEY_PREFIX + "default") ??
       storage?.getItem(LEGACY_SETTINGS_KEY);
     if (!raw) {
-      return defaults;
+      return queryLocaleOverride == null ? defaults : { ...defaults, locale: queryLocaleOverride };
     }
     const parsed = JSON.parse(raw) as PersistedUiSettings;
     const parsedGatewayUrl =
@@ -227,10 +242,12 @@ export function loadSettings(): UiSettings {
         : defaults.gatewayUrl;
     const gatewayUrl = parsedGatewayUrl === pageDerivedUrl ? defaultUrl : parsedGatewayUrl;
     const scopedSessionSelection = resolveScopedSessionSelection(gatewayUrl, parsed, defaults);
-    const { theme, mode } = parseThemeSelection(
+    const { theme, mode, migrated } = normalizeStoredThemeSelection(
       (parsed as { theme?: unknown }).theme,
       (parsed as { themeMode?: unknown }).themeMode,
+      (parsed as { themePreferenceVersion?: unknown }).themePreferenceVersion,
     );
+    const persistedLocale = isSupportedLocale(parsed.locale) ? parsed.locale : undefined;
     const settings = {
       gatewayUrl,
       // Gateway auth is intentionally in-memory only; scrub any legacy persisted token on load.
@@ -271,14 +288,18 @@ export function loadSettings(): UiSettings {
         parsed.borderRadius <= 100
           ? snapBorderRadius(parsed.borderRadius)
           : defaults.borderRadius,
-      locale: isSupportedLocale(parsed.locale) ? parsed.locale : undefined,
+      // An explicit dashboard deep-link locale should win for that page load.
+      // The app launcher uses `?locale=` to carry the user's selected language
+      // into the standalone dashboard, so do not let older persisted settings
+      // silently override it.
+      locale: queryLocaleOverride ?? persistedLocale,
     };
-    if ("token" in parsed) {
+    if ("token" in parsed || migrated) {
       persistSettings(settings);
     }
     return settings;
   } catch {
-    return defaults;
+    return queryLocaleOverride == null ? defaults : { ...defaults, locale: queryLocaleOverride };
   }
 }
 
@@ -323,6 +344,7 @@ function persistSettings(next: UiSettings) {
     gatewayUrl: next.gatewayUrl,
     theme: next.theme,
     themeMode: next.themeMode,
+    themePreferenceVersion: THEME_PREFERENCE_VERSION,
     chatFocusMode: next.chatFocusMode,
     chatShowThinking: next.chatShowThinking,
     chatShowToolCalls: next.chatShowToolCalls,

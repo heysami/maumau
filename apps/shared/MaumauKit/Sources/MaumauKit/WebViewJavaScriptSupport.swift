@@ -3,6 +3,28 @@ import WebKit
 
 public enum WebViewJavaScriptSupport {
     @MainActor
+    public static func applyHomeCanvasLocalization(webView: WKWebView, localeID: String?) {
+        let strings = MaumauSharedLocalization.object(path: ["shared", "canvasHome"], localeID: localeID)
+            ?? MaumauSharedLocalization.object(
+                path: ["shared", "canvasHome"],
+                localeID: MaumauSharedLocalization.fallbackLanguageID)
+            ?? [:]
+        let js = """
+        (() => {
+          try {
+            const strings = \(self.jsObject(strings));
+            globalThis.__maumauLocaleStrings = strings;
+            const api = globalThis.__maumau;
+            if (api && typeof api.setLocaleStrings === 'function') {
+              api.setLocaleStrings(strings);
+            }
+          } catch (_) {}
+        })()
+        """
+        webView.evaluateJavaScript(js) { _, _ in }
+    }
+
+    @MainActor
     public static func applyDebugStatus(
         webView: WKWebView,
         enabled: Bool,
@@ -53,5 +75,14 @@ public enum WebViewJavaScriptSupport {
             return String(encoded.dropFirst().dropLast())
         }
         return "null"
+    }
+
+    public static func jsObject(_ value: [String: String]) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: value),
+              let encoded = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return encoded
     }
 }

@@ -165,6 +165,8 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
     focusMode: false,
     assistantName: "Maumau",
     assistantAvatar: null,
+    onboarding: false,
+    secureDashboardUrl: null,
     onRefresh: () => undefined,
     onToggleFocusMode: () => undefined,
     onDraftChange: () => undefined,
@@ -217,6 +219,26 @@ function createOverviewProps(overrides: Partial<OverviewProps> = {}): OverviewPr
     overviewLogLines: [],
     showGatewayToken: false,
     showGatewayPassword: false,
+    conversationAutomationPreset: {
+      ready: true,
+      state: {
+        enabled: false,
+        active: false,
+        telephonyEnabled: false,
+        telephonyProvider: "telnyx",
+        sttProvider: "deepgram-realtime",
+        languageId: "en",
+        allowFrom: [],
+        accessMode: "disabled",
+      },
+      dirty: false,
+      saving: false,
+      applying: false,
+      onStateChange: () => undefined,
+      onSave: () => undefined,
+      onApply: () => undefined,
+      onReload: () => undefined,
+    },
     onSettingsChange: () => undefined,
     onPasswordChange: () => undefined,
     onSessionKeyChange: () => undefined,
@@ -387,7 +409,7 @@ describe("chat view", () => {
     );
     expect(welcomeImage).toBeNull();
     expect(logoImage).not.toBeNull();
-    expect(logoImage?.getAttribute("src")).toBe("favicon.svg");
+    expect(logoImage?.getAttribute("src")).toBe("apple-touch-icon.png");
   });
 
   it("keeps the welcome logo fallback under the mounted base path", () => {
@@ -408,7 +430,33 @@ describe("chat view", () => {
       ".agent-chat__welcome .agent-chat__avatar--logo img",
     );
     expect(logoImage).not.toBeNull();
-    expect(logoImage?.getAttribute("src")).toBe("/maumau/favicon.svg");
+    expect(logoImage?.getAttribute("src")).toBe("/maumau/apple-touch-icon.png");
+  });
+
+  it("shows the secure dashboard URL during onboarding chat", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          onboarding: true,
+          secureDashboardUrl: "https://tailnet.example/dashboard/today#token=abc123",
+          messages: [
+            {
+              role: "assistant",
+              content: "Onboarding is ready.",
+              timestamp: 1000,
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    expect(container.textContent).toContain("Open the secure dashboard on your phone here:");
+    const link = container.querySelector<HTMLAnchorElement>(
+      'a[href="https://tailnet.example/dashboard/today#token=abc123"]',
+    );
+    expect(link).not.toBeNull();
   });
 
   it("keeps grouped assistant avatar fallbacks under the mounted base path", () => {
@@ -436,7 +484,7 @@ describe("chat view", () => {
       ".chat-group.assistant .chat-avatar--logo",
     );
     expect(groupedLogo).not.toBeNull();
-    expect(groupedLogo?.getAttribute("src")).toBe("/maumau/favicon.svg");
+    expect(groupedLogo?.getAttribute("src")).toBe("/maumau/apple-touch-icon.png");
   });
 
   it("keeps the persisted overview locale selected before i18n hydration finishes", async () => {

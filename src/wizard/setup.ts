@@ -126,9 +126,9 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
       ? config.wizard.lastRunMode.trim().toLowerCase()
       : "";
 
-  // Embedded onboarding can persist partial local setup before the final
-  // completion metadata is written. If that session later retries, treat that
-  // incomplete wizard marker as fresh setup instead of "existing config".
+  // Older embedded onboarding builds persisted a partial local setup marker
+  // before the final completion metadata was written. Keep treating that shape
+  // as fresh setup so interrupted upgrades can still resume cleanly.
   if (!wizardLastRunAt && wizardLastRunCommand === "onboard" && wizardLastRunMode === "local") {
     return true;
   }
@@ -170,31 +170,6 @@ function shouldTreatEmbeddedGatewayBootstrapAsFreshSetup(
   }
 
   return hasToken !== hasPassword;
-}
-
-function applyEmbeddedLocalWizardInProgressMetadata(
-  opts: OnboardOptions,
-  mode: OnboardMode,
-  config: MaumauConfig,
-): MaumauConfig {
-  if (!opts.embedded || mode !== "local") {
-    return config;
-  }
-
-  const wizardLastRunAt =
-    typeof config.wizard?.lastRunAt === "string" ? config.wizard.lastRunAt.trim() : "";
-  if (wizardLastRunAt) {
-    return config;
-  }
-
-  return {
-    ...config,
-    wizard: {
-      ...config.wizard,
-      lastRunCommand: "onboard",
-      lastRunMode: "local",
-    },
-  };
 }
 
 async function resolveRetainedGatewaySettings(params: {
@@ -408,6 +383,16 @@ export async function runSetupWizard(
     }
   }
   const shouldKeepExistingConfig = existingConfigAction === "keep";
+  const shouldCreateStarterTeam =
+    !snapshot.exists || treatBootstrapOnlyEmbeddedConfigAsFresh || existingConfigAction === "reset";
+  const detectedFreshInstallTailscaleMode =
+    shouldCreateStarterTeam &&
+    (opts.mode ?? (flow === "quickstart" ? "local" : undefined)) === "local"
+      ? await (async () => {
+          const { detectFreshInstallTailscaleMode } = await import("../commands/onboard-config.js");
+          return await detectFreshInstallTailscaleMode(baseConfig);
+        })()
+      : resolveSavedTailscaleMode(baseConfig);
 
   const quickstartGateway: QuickstartGatewayDefaults = (() => {
     const hasExisting =
@@ -445,7 +430,9 @@ export async function runSetupWizard(
     const tailscaleMode =
       tailscaleRaw === "off" || tailscaleRaw === "serve" || tailscaleRaw === "funnel"
         ? tailscaleRaw
-        : "off";
+        : hasExisting
+          ? "off"
+          : detectedFreshInstallTailscaleMode;
 
     return {
       hasExisting,
@@ -491,6 +478,12 @@ export async function runSetupWizard(
       }
       return "Funnel";
     };
+    const formatTailscaleWithSource = (value: "off" | "serve" | "funnel") =>
+      !quickstartGateway.hasExisting &&
+      value === detectedFreshInstallTailscaleMode &&
+      value !== "off"
+        ? `${formatTailscale(value)} (detected)`
+        : formatTailscale(value);
     const quickstartLines = quickstartGateway.hasExisting
       ? [
           "Keeping your current gateway settings:",
@@ -500,14 +493,14 @@ export async function runSetupWizard(
             ? [`Gateway custom IP: ${quickstartGateway.customBindHost}`]
             : []),
           `Gateway auth: ${formatAuth(quickstartGateway.authMode)}`,
-          `Tailscale exposure: ${formatTailscale(quickstartGateway.tailscaleMode)}`,
+          `Tailscale exposure: ${formatTailscaleWithSource(quickstartGateway.tailscaleMode)}`,
           "Direct to chat channels.",
         ]
       : [
           `Gateway port: ${DEFAULT_GATEWAY_PORT}`,
           "Gateway bind: Loopback (127.0.0.1)",
           "Gateway auth: Token (default)",
-          "Tailscale exposure: Off",
+          `Tailscale exposure: ${formatTailscaleWithSource(quickstartGateway.tailscaleMode)}`,
           "Direct to chat channels.",
         ];
     await prompter.note(quickstartLines.join("\n"), "QuickStart");
@@ -624,6 +617,10 @@ export async function runSetupWizard(
         secretInputMode: opts.secretInputMode,
       });
     }
+    const { applyStarterTeamOnFreshInstall } = await import("../teams/presets.js");
+    nextConfig = applyStarterTeamOnFreshInstall(nextConfig, {
+      freshInstall: shouldCreateStarterTeam,
+    });
     nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
     await writeConfigFile(nextConfig);
     logConfigUpdated(runtime);
@@ -649,15 +646,11 @@ export async function runSetupWizard(
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
   const { applyLocalSetupWorkspaceConfig } = await import("../commands/onboard-config.js");
-  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir);
+  let nextConfig: MaumauConfig = applyLocalSetupWorkspaceConfig(baseConfig, workspaceDir, {
+    freshInstall: shouldCreateStarterTeam,
+  });
   let settings: GatewayWizardSettings;
   const { logConfigUpdated } = await import("../config/logging.js");
-  const writeLocalSetupProgressConfig = async (config: MaumauConfig): Promise<MaumauConfig> => {
-    const configWithProgress = applyEmbeddedLocalWizardInProgressMetadata(opts, mode, config);
-    await writeConfigFile(configWithProgress);
-    logConfigUpdated(runtime);
-    return configWithProgress;
-  };
 
   async function repairRetainedDefaultModelIfNeeded(config: MaumauConfig): Promise<MaumauConfig> {
     if (resolveAgentModelPrimaryValue(config.agents?.defaults?.model)) {
@@ -673,7 +666,7 @@ export async function runSetupWizard(
     });
 
     if (resolveAgentModelPrimaryValue(repaired.agents?.defaults?.model)) {
-      return await writeLocalSetupProgressConfig(repaired);
+      return repaired;
     }
 
     return repaired;
@@ -811,13 +804,21 @@ export async function runSetupWizard(
         secretInputMode: opts.secretInputMode,
       });
     }
-
-    nextConfig = await writeLocalSetupProgressConfig(nextConfig);
   }
 
   await onboardHelpers.ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
   });
+
+  if (!opts.embedded && (!shouldKeepExistingConfig || opts.preset === "conversation-automation")) {
+    const { maybeApplyConversationAutomationPreset } =
+      await import("./setup.conversation-automation.js");
+    nextConfig = await maybeApplyConversationAutomationPreset({
+      config: nextConfig,
+      opts,
+      prompter,
+    });
+  }
 
   if (!shouldKeepExistingConfig) {
     if (!opts.skipSearch) {
@@ -825,6 +826,7 @@ export async function runSetupWizard(
       nextConfig = await setupSearch(nextConfig, runtime, prompter, {
         quickstartDefaults: flow === "quickstart",
         secretInputMode: opts.secretInputMode,
+        embedded: opts.embedded,
       });
     }
 
@@ -843,6 +845,73 @@ export async function runSetupWizard(
   nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
   logConfigUpdated(runtime);
+  const { ensureOnboardedMultiUserMemoryArtifacts } =
+    await import("../commands/onboard-multi-user-memory.js");
+  await ensureOnboardedMultiUserMemoryArtifacts({
+    config: nextConfig,
+    runtime,
+  });
+  const { ensureOnboardedReflectionReviewerArtifacts } =
+    await import("../commands/onboard-reflection-reviewer.js");
+  await ensureOnboardedReflectionReviewerArtifacts({
+    config: nextConfig,
+    runtime,
+  });
+  const { ensureLifeImprovementRoutineArtifacts } =
+    await import("../teams/life-improvement-routine.js");
+  await ensureLifeImprovementRoutineArtifacts({
+    config: nextConfig,
+  });
+  if (mode === "local" && shouldCreateStarterTeam) {
+    const { maybeAutoLinkFreshInstallMauworld } =
+      await import("../commands/onboard-mauworld.js");
+    await maybeAutoLinkFreshInstallMauworld({
+      config: nextConfig,
+      runtime,
+    });
+  }
+
+  if (mode === "local" && shouldCreateStarterTeam) {
+    const { ensureFreshInstallBundledTools } = await import("../commands/onboard-bundled-tools.js");
+    const progress = prompter.progress("Included tools");
+    let bundledToolsDoneMessage = "Included tools checked.";
+    const bundledTools = await (async () => {
+      try {
+        progress.update("Installing Google Chrome and Clawd Cursor…");
+        const result = await ensureFreshInstallBundledTools({
+          freshInstall: true,
+          config: nextConfig,
+          runtime: {
+            log: (message) => progress.update(String(message)),
+          },
+        });
+        bundledToolsDoneMessage = result.fullyReady
+          ? "Included tools are ready."
+          : result.ok
+            ? "Included tools were installed, but some still need setup."
+            : "Included tools need attention.";
+        return result;
+      } finally {
+        progress.stop(bundledToolsDoneMessage);
+      }
+    })();
+    if (!bundledTools.fullyReady) {
+      await prompter.note(
+        [
+          "Fresh-install bundled tool setup needs attention:",
+          ...bundledTools.results
+            .filter(
+              (result) =>
+                result.status === "failed" ||
+                result.status === "installed" ||
+                (result.id === "clawd-cursor" && result.status !== "configured"),
+            )
+            .map((result) => `- ${result.id}: ${result.detail}`),
+        ].join("\n"),
+        "Included tools",
+      );
+    }
+  }
 
   const { finalizeSetupWizard } = await import("./setup.finalize.js");
   const { launchedTui } = await finalizeSetupWizard({

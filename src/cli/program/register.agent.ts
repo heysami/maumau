@@ -219,7 +219,7 @@ ${theme.muted("Docs:")} ${formatDocsLink("/cli/agent", "docs.maumau.ai/cli/agent
         `
 ${theme.heading("Examples:")}
 ${formatHelpExamples([
-  ['maumau agents set-identity --agent main --name "Maumau" --emoji "🦞"', "Set name + emoji."],
+  ['maumau agents set-identity --agent main --name "Maumau" --emoji "😼"', "Set name + emoji."],
   ["maumau agents set-identity --agent main --avatar avatars/maumau.png", "Set avatar path."],
   [
     "maumau agents set-identity --workspace ~/.maumau/workspace --from-identity",

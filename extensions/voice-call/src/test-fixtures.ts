@@ -6,7 +6,16 @@ export function createVoiceCallBaseConfig(params?: {
 }): VoiceCallConfig {
   return {
     enabled: true,
+    mode: "self-hosted",
     provider: params?.provider ?? "mock",
+    vapi: {
+      enabled: true,
+      telephonyProvider: "twilio",
+      preferredLanguage: "en",
+      bridgeMode: "auto",
+      bridgePath: "/plugins/voice-call/vapi",
+      baseUrl: "https://api.vapi.ai",
+    },
     fromNumber: "+15550001234",
     inboundPolicy: "disabled",
     allowFrom: [],
@@ -31,9 +40,16 @@ export function createVoiceCallBaseConfig(params?: {
     streaming: {
       enabled: false,
       sttProvider: "openai-realtime",
-      sttModel: "gpt-4o-transcribe",
-      silenceDurationMs: 800,
-      vadThreshold: 0.5,
+      openai: {
+        model: "gpt-4o-transcribe",
+        silenceDurationMs: 800,
+        vadThreshold: 0.5,
+      },
+      deepgram: {
+        model: "nova-3",
+        endpointingMs: 300,
+        interimResults: true,
+      },
       streamPath: "/voice/stream",
       preStartTimeoutMs: 5000,
       maxPendingConnections: 32,
@@ -46,7 +62,6 @@ export function createVoiceCallBaseConfig(params?: {
       provider: "openai",
       openai: { model: "gpt-4o-mini-tts", voice: "coral" },
     },
-    responseModel: "openai/gpt-4o-mini",
     responseTimeoutMs: 30000,
   };
 }

@@ -18,6 +18,7 @@ actor PortGuardian {
     struct Descriptor {
         let pid: Int32
         let command: String
+        let fullCommand: String
         let executablePath: String?
     }
 
@@ -132,7 +133,19 @@ actor PortGuardian {
     func describe(port: Int) async -> Descriptor? {
         guard let listener = await self.listeners(on: port).first else { return nil }
         let path = Self.executablePath(for: listener.pid)
-        return Descriptor(pid: listener.pid, command: listener.command, executablePath: path)
+        return Descriptor(
+            pid: listener.pid,
+            command: listener.command,
+            fullCommand: listener.fullCommand,
+            executablePath: path)
+    }
+
+    func terminate(pid: Int32) async -> Bool {
+        let killed = await self.kill(pid)
+        if killed {
+            self.removeRecord(pid: pid)
+        }
+        return killed
     }
 
     // MARK: - Internals
@@ -361,24 +374,30 @@ actor PortGuardian {
     }
 
     private static func isExpected(_ listener: Listener, port: Int, mode: AppState.ConnectionMode) -> Bool {
-        let cmd = listener.command.lowercased()
-        let full = listener.fullCommand.lowercased()
         switch mode {
         case .remote:
             if port == GatewayEnvironment.gatewayPort() { return true }
             return false
         case .local:
-            // launchd can surface the managed gateway as `node` in lsof while argv[0]
-            // is the wrapper name (`maumau-gateway`). Treat both shapes as expected.
-            if full.contains("maumau-gateway") { return true }
-            // The gateway daemon may listen as `maumau` or as its runtime (`node`, `bun`, etc).
-            if full.contains("gateway-daemon") { return true }
-            // If args are unavailable, treat a CLI listener as expected.
-            if cmd.contains("maumau"), full == cmd { return true }
-            return false
+            return self.isManagedLocalGatewayCandidate(
+                command: listener.command,
+                fullCommand: listener.fullCommand)
         case .unconfigured:
             return false
         }
+    }
+
+    static func isManagedLocalGatewayCandidate(command: String, fullCommand: String) -> Bool {
+        let cmd = command.lowercased()
+        let full = fullCommand.lowercased()
+        // launchd can surface the managed gateway as `node` in lsof while argv[0]
+        // is the wrapper name (`maumau-gateway`). Treat both shapes as expected.
+        if full.contains("maumau-gateway") { return true }
+        // The gateway daemon may listen as `maumau` or as its runtime (`node`, `bun`, etc).
+        if full.contains("gateway-daemon") { return true }
+        // If args are unavailable, treat a CLI listener as expected.
+        if cmd.contains("maumau"), full == cmd { return true }
+        return false
     }
 
     private func probeGatewayHealthIfNeeded(
@@ -424,6 +443,10 @@ extension PortGuardian {
     {
         let listener = Listener(pid: 0, command: command, fullCommand: fullCommand, user: nil)
         return Self.isExpected(listener, port: port, mode: mode)
+    }
+
+    static func _testIsManagedLocalGatewayCandidate(command: String, fullCommand: String) -> Bool {
+        self.isManagedLocalGatewayCandidate(command: command, fullCommand: fullCommand)
     }
 
     static func _testBuildReport(

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../agents/workspace.js";
+import { DEFAULT_MAUMAU_BROWSER_PROFILE_NAME } from "../browser/constants.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import {
   buildGatewayInstallPlan,
@@ -16,6 +17,7 @@ import { healthCommand } from "../commands/health.js";
 import {
   detectBrowserOpenSupport,
   formatControlUiSshHint,
+  openManagedBrowserProfile,
   openUrl,
   probeGatewayReachable,
   waitForGatewayReachable,
@@ -457,6 +459,65 @@ export async function finalizeSetupWizard(
     ),
     "Workspace backup",
   );
+
+  const shouldOfferManagedBrowserSignIn =
+    (nextConfig.gateway?.mode ?? "local") === "local" &&
+    gatewayProbe.ok &&
+    (nextConfig.browser?.enabled ?? true);
+  if (shouldOfferManagedBrowserSignIn) {
+    const managedBrowserProfile = DEFAULT_MAUMAU_BROWSER_PROFILE_NAME;
+    await prompter.note(
+      [
+        `Browser automation uses Maumau's own browser profile: ${managedBrowserProfile}.`,
+        "It is separate from your everyday browser profile.",
+        "Sign in once there to the sites you want automation to reuse later.",
+        "You can close it later; Maumau will reopen the same profile when needed.",
+        "You only need to sign in again if the profile is reset or the site logs you out.",
+      ].join("\n"),
+      "Automation browser",
+    );
+
+    const openManagedBrowserNow = await prompter.confirm({
+      message: "Open Maumau's automation browser now (recommended)",
+      initialValue: true,
+    });
+    if (openManagedBrowserNow) {
+      try {
+        const opened = await openManagedBrowserProfile({
+          config: nextConfig,
+          token: settings.authMode === "token" ? settings.gatewayToken : undefined,
+          password: settings.authMode === "password" ? resolvedGatewayPassword : undefined,
+          profile: managedBrowserProfile,
+        });
+        await prompter.note(
+          [
+            `Opened profile: ${opened.profile}`,
+            "Sign in there to any sites you want browser automation to use later.",
+            "You can close that browser afterward; Maumau will reopen it when needed.",
+          ].join("\n"),
+          "Automation browser",
+        );
+      } catch (error) {
+        await prompter.note(
+          [
+            "Could not open Maumau's automation browser automatically.",
+            error instanceof Error ? error.message : String(error),
+            `Open it later with: ${formatCliCommand(
+              `maumau browser --browser-profile ${managedBrowserProfile} start`,
+            )}`,
+          ].join("\n"),
+          "Automation browser",
+        );
+      }
+    } else {
+      await prompter.note(
+        `Open it later with: ${formatCliCommand(
+          `maumau browser --browser-profile ${managedBrowserProfile} start`,
+        )}`,
+        "Automation browser",
+      );
+    }
+  }
 
   await prompter.note(
     "Running agents on your computer is risky — harden your setup: https://docs.maumau.ai/security",

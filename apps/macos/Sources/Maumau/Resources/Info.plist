@@ -15,9 +15,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2026.3.29-beta.2</string>
+    <string>2026.4.14</string>
     <key>CFBundleVersion</key>
-    <string>2026032902</string>
+    <string>2026041490</string>
     <key>CFBundleIconFile</key>
     <string>Maumau</string>
     <key>CFBundleURLTypes</key>
@@ -39,6 +39,8 @@
     <key>MaumauBuildTimestamp</key>
     <string></string>
     <key>MaumauGitCommit</key>
+    <string></string>
+    <key>MaumauGitHubURL</key>
     <string></string>
 
     <key>NSUserNotificationUsageDescription</key>

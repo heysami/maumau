@@ -3,6 +3,7 @@ import {
   countActiveRunsForSessionFromRuns,
   countPendingDescendantRunsExcludingRunFromRuns,
   countPendingDescendantRunsFromRuns,
+  hasRequesterCompletionDeliveryRunStartedSinceFromRuns,
   listRunsForRequesterFromRuns,
   resolveRequesterForChildSessionFromRuns,
   shouldIgnorePostCompletionAnnounceForSessionFromRuns,
@@ -481,5 +482,52 @@ describe("subagent registry query regressions", () => {
     ]);
 
     expect(shouldIgnorePostCompletionAnnounceForSessionFromRuns(runs, childSessionKey)).toBe(false);
+  });
+
+  it("detects requester completion handoffs started during the current turn", () => {
+    const runs = toRunMap([
+      makeRun({
+        runId: "run-old",
+        requesterSessionKey: "agent:main:telegram:direct:1",
+        createdAt: 50,
+        expectsCompletionMessage: true,
+      }),
+      makeRun({
+        runId: "run-sync-waited",
+        requesterSessionKey: "agent:main:telegram:direct:1",
+        createdAt: 120,
+        expectsCompletionMessage: true,
+        suppressRequesterAnnounce: true,
+      }),
+      makeRun({
+        runId: "run-current-handoff",
+        requesterSessionKey: "agent:main:telegram:direct:1",
+        createdAt: 130,
+        expectsCompletionMessage: true,
+        suppressRequesterAnnounce: false,
+      }),
+    ]);
+
+    expect(
+      hasRequesterCompletionDeliveryRunStartedSinceFromRuns(
+        runs,
+        "agent:main:telegram:direct:1",
+        100,
+      ),
+    ).toBe(true);
+    expect(
+      hasRequesterCompletionDeliveryRunStartedSinceFromRuns(
+        runs,
+        "agent:main:telegram:direct:1",
+        131,
+      ),
+    ).toBe(false);
+    expect(
+      hasRequesterCompletionDeliveryRunStartedSinceFromRuns(
+        runs,
+        "agent:main:telegram:direct:2",
+        100,
+      ),
+    ).toBe(false);
   });
 });

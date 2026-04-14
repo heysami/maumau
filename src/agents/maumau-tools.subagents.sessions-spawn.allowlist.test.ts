@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "./test-helpers/fast-core-tools.js";
 import {
+  createStarterTeamAgents,
+  createStarterTeamConfig,
+  MAIN_WORKER_AGENT_ID,
+} from "../teams/presets.js";
+import {
   getCallGatewayMock,
   getSessionsSpawnTool,
   resetSessionsSpawnConfigOverride,
@@ -205,6 +210,94 @@ describe("maumau-tools: subagents (sessions_spawn allowlist)", () => {
       callId: "call10",
       acceptedAt: 5200,
     });
+  });
+
+  it("defaults bare orchestrator spawns to the configured execution worker", async () => {
+    setSessionsSpawnConfigOverride({
+      session: {
+        mainKey: "main",
+        scope: "per-sender",
+      },
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: "main-worker",
+        },
+        list: [
+          {
+            id: "main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: "main-worker",
+            subagents: {
+              allowAgents: ["main-worker"],
+            },
+          },
+          {
+            id: "main-worker",
+          },
+        ],
+      },
+    });
+    const getChildSessionKey = mockAcceptedSpawn(5300);
+
+    const tool = await getSessionsSpawnTool({
+      agentSessionKey: "main",
+      agentChannel: "whatsapp",
+    });
+    const result = await tool.execute("call10-default-worker", {
+      task: "do thing",
+    });
+
+    expect(result.details).toMatchObject({
+      status: "accepted",
+      runId: "run-1",
+    });
+    expect(getChildSessionKey()?.startsWith("agent:main-worker:subagent:")).toBe(true);
+  });
+
+  it("requires vibe-coder team routing for UI and human-facing build tasks", async () => {
+    setSessionsSpawnConfigOverride({
+      session: {
+        mainKey: "main",
+        scope: "per-sender",
+      },
+      agents: {
+        defaults: {
+          executionStyle: "orchestrator",
+          executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+        },
+        list: [
+          {
+            id: "main",
+            executionStyle: "orchestrator",
+            executionWorkerAgentId: MAIN_WORKER_AGENT_ID,
+            subagents: {
+              allowAgents: [MAIN_WORKER_AGENT_ID],
+            },
+          },
+          {
+            id: MAIN_WORKER_AGENT_ID,
+          },
+          ...createStarterTeamAgents(),
+        ],
+      },
+      teams: {
+        list: [createStarterTeamConfig()],
+      },
+    });
+
+    const tool = await getSessionsSpawnTool({
+      agentSessionKey: "main",
+      agentChannel: "telegram",
+    });
+    const result = await tool.execute("call-ui-team-route", {
+      task: "Build a polished responsive web app with visual design and accessibility review.",
+    });
+    const details = result.details as { status?: string; error?: string };
+
+    expect(details.status).toBe("forbidden");
+    expect(details.error).toContain('teams_run with teamId="vibe-coder"');
+    expect(callGatewayMock).not.toHaveBeenCalled();
   });
 
   it("forbids sandboxed cross-agent spawns that would unsandbox the child", async () => {

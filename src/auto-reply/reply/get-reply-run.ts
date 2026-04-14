@@ -30,6 +30,7 @@ import {
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { applySessionHints } from "./body.js";
+import { buildBootstrapSecureDashboardSystemPrompt } from "./bootstrap-secure-dashboard.js";
 import type { buildCommandContext } from "./commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
 import { buildGroupChatContext, buildGroupIntro } from "./groups.js";
@@ -289,8 +290,20 @@ export async function runPreparedReply(
   const inboundMetaPrompt = buildInboundMetaSystemPrompt(
     isNewSession ? sessionCtx : { ...sessionCtx, ThreadStarterBody: undefined },
   );
+  const bootstrapSecureDashboardPrompt = await buildBootstrapSecureDashboardSystemPrompt({
+    cfg,
+    workspaceDir,
+    isFirstTurnInSession,
+    originatingChannel: ctx.OriginatingChannel ?? sessionCtx.OriginatingChannel,
+    chatType: sessionCtx.ChatType,
+    senderIsOwner: command.senderIsOwner,
+    requesterSenderIsOwner: sessionEntry?.requesterSenderIsOwner,
+    ctx,
+    commandAuthorized,
+  });
   const extraSystemPromptParts = [
     inboundMetaPrompt,
+    bootstrapSecureDashboardPrompt,
     groupChatContext,
     groupIntro,
     groupSystemPrompt,

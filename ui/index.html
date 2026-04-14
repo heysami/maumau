@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Maumau Control</title>
     <meta name="color-scheme" content="dark light" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <script>
       (function () {
         var THEMES = { claw: 1, knot: 1, dash: 1 };
         var MODES = { system: 1, light: 1, dark: 1 };
+        var THEME_PREFERENCE_VERSION = 2;
         var LEGACY = {
           dark: "claw:dark",
           light: "claw:light",
@@ -22,22 +23,27 @@
         };
         try {
           var keys = Object.keys(localStorage);
-          var raw;
+          var raw = null;
           for (var i = 0; i < keys.length; i++) {
             if (keys[i].indexOf("maumau.control.settings.v1") === 0) {
               raw = localStorage.getItem(keys[i]);
               if (raw) break;
             }
           }
-          if (!raw) return;
-          var s = JSON.parse(raw);
+          var s = raw ? JSON.parse(raw) : null;
           var t = s && s.theme;
           var m = s && s.themeMode;
           if (typeof t !== "string") t = "";
           if (typeof m !== "string") m = "";
+          var v = s && s.themePreferenceVersion;
+          if (typeof v !== "number") v = 0;
           var legacy = LEGACY[t];
-          var theme = THEMES[t] ? t : legacy ? legacy.split(":")[0] : "claw";
-          var mode = MODES[m] ? m : legacy ? legacy.split(":")[1] : "system";
+          var theme = THEMES[t] ? t : legacy ? legacy.split(":")[0] : "dash";
+          var mode = MODES[m] ? m : legacy ? legacy.split(":")[1] : "light";
+          if (v < THEME_PREFERENCE_VERSION && theme === "claw" && mode === "system") {
+            theme = "dash";
+            mode = "light";
+          }
           if (mode === "system") {
             mode = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
           }
@@ -58,6 +64,8 @@
             "data-theme-mode",
             resolved.indexOf("light") !== -1 ? "light" : "dark",
           );
+          document.documentElement.style.colorScheme =
+            resolved.indexOf("light") !== -1 ? "light" : "dark";
         } catch (e) {}
       })();
     </script>

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ensureAuthProfileStore, type AuthProfileStore } from "../agents/auth-profiles.js";
+import { upsertAuthProfile } from "../agents/auth-profiles.js";
 import {
   clearConfigCache,
   loadConfig,
@@ -10,6 +11,7 @@ import {
   writeConfigFile,
 } from "../config/config.js";
 import { withTempHome } from "../config/home-env.test-harness.js";
+import { buildApiKeyCredential } from "../plugins/provider-auth-helpers.js";
 import { captureEnv, withEnvAsync } from "../test-utils/env.js";
 import {
   activateSecretsRuntimeSnapshot,
@@ -40,13 +42,19 @@ describe("secrets runtime snapshot integration", () => {
 
   beforeEach(() => {
     envSnapshot = captureEnv([
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY",
       "MAUMAU_BUNDLED_PLUGINS_DIR",
       "MAUMAU_DISABLE_PLUGIN_DISCOVERY_CACHE",
       "MAUMAU_VERSION",
+      "WEB_SEARCH_GEMINI_API_KEY",
     ]);
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
     delete process.env.MAUMAU_BUNDLED_PLUGINS_DIR;
     process.env.MAUMAU_DISABLE_PLUGIN_DISCOVERY_CACHE = "1";
     delete process.env.MAUMAU_VERSION;
+    delete process.env.WEB_SEARCH_GEMINI_API_KEY;
   });
 
   afterEach(() => {
@@ -179,6 +187,49 @@ describe("secrets runtime snapshot integration", () => {
       expect(ensureAuthProfileStore(agentDir).profiles["openai:default"]).toMatchObject({
         type: "api_key",
         key: "sk-file-runtime",
+      });
+    });
+  });
+
+  it("refreshes env-backed auth refs from the current process env after provider setup writes", async () => {
+    await withTempHome("maumau-secrets-runtime-provider-env-refresh-", async (home) => {
+      const agentDir = path.join(home, ".maumau", "agents", "main", "agent");
+      await fs.mkdir(agentDir, { recursive: true });
+
+      const prepared = await prepareSecretsRuntimeSnapshot({
+        config: asConfig({}),
+        env: {},
+      });
+
+      activateSecretsRuntimeSnapshot(prepared);
+      expect(ensureAuthProfileStore(agentDir).profiles["google:default"]).toBeUndefined();
+
+      upsertAuthProfile({
+        profileId: "google:default",
+        credential: buildApiKeyCredential("google", "sk-gemini-runtime-refresh"),
+        agentDir,
+      });
+
+      await writeConfigFile({
+        auth: {
+          profiles: {
+            "google:default": {
+              provider: "google",
+              mode: "api_key",
+            },
+          },
+        },
+      });
+
+      expect(ensureAuthProfileStore(agentDir).profiles["google:default"]).toMatchObject({
+        type: "api_key",
+        provider: "google",
+        key: "sk-gemini-runtime-refresh",
+        keyRef: { source: "env", provider: "default", id: "GEMINI_API_KEY" },
+      });
+      expect(loadConfig().auth?.profiles?.["google:default"]).toEqual({
+        provider: "google",
+        mode: "api_key",
       });
     });
   });

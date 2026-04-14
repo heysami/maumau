@@ -527,6 +527,379 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
             },
             additionalProperties: false,
           },
+          mauOffice: {
+            type: "object",
+            properties: {
+              enabled: {
+                type: "boolean",
+              },
+              maxVisibleWorkers: {
+                type: "integer",
+                minimum: 1,
+                maximum: 12,
+              },
+              idlePackages: {
+                type: "object",
+                properties: {
+                  enabled: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                },
+                additionalProperties: false,
+              },
+              scene: {
+                type: "object",
+                properties: {
+                  version: {
+                    type: "number",
+                    const: 1,
+                  },
+                  zoneRows: {
+                    type: "array",
+                    items: {
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            type: "string",
+                            const: "desk",
+                          },
+                          {
+                            type: "string",
+                            const: "meeting",
+                          },
+                          {
+                            type: "string",
+                            const: "browser",
+                          },
+                          {
+                            type: "string",
+                            const: "break",
+                          },
+                          {
+                            type: "string",
+                            const: "support",
+                          },
+                          {
+                            type: "string",
+                            const: "telephony",
+                          },
+                          {
+                            type: "string",
+                            const: "hall",
+                          },
+                          {
+                            type: "string",
+                            const: "outside",
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  wallRows: {
+                    type: "array",
+                    items: {
+                      type: "array",
+                      items: {
+                        type: "boolean",
+                      },
+                    },
+                  },
+                  props: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        itemId: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        tileX: {
+                          type: "number",
+                        },
+                        tileY: {
+                          type: "number",
+                        },
+                        zoneId: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "desk",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting",
+                            },
+                            {
+                              type: "string",
+                              const: "browser",
+                            },
+                            {
+                              type: "string",
+                              const: "break",
+                            },
+                            {
+                              type: "string",
+                              const: "support",
+                            },
+                            {
+                              type: "string",
+                              const: "telephony",
+                            },
+                          ],
+                        },
+                        mirrored: {
+                          type: "boolean",
+                        },
+                        mountOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "floor",
+                            },
+                            {
+                              type: "string",
+                              const: "wall",
+                            },
+                            {
+                              type: "string",
+                              const: "underlay",
+                            },
+                          ],
+                        },
+                        zOffsetOverride: {
+                          type: "number",
+                        },
+                        collisionOverride: {
+                          type: "boolean",
+                        },
+                        loopId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["id", "itemId", "tileX", "tileY"],
+                      additionalProperties: false,
+                    },
+                  },
+                  autotiles: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        itemId: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        cells: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              tileX: {
+                                type: "number",
+                              },
+                              tileY: {
+                                type: "number",
+                              },
+                            },
+                            required: ["tileX", "tileY"],
+                            additionalProperties: false,
+                          },
+                        },
+                        mountOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "floor",
+                            },
+                            {
+                              type: "string",
+                              const: "wall",
+                            },
+                            {
+                              type: "string",
+                              const: "underlay",
+                            },
+                          ],
+                        },
+                        zOffsetOverride: {
+                          type: "number",
+                        },
+                        collisionOverride: {
+                          type: "boolean",
+                        },
+                        loopId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["id", "itemId"],
+                      additionalProperties: false,
+                    },
+                  },
+                  markers: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        role: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "spawn.office",
+                            },
+                            {
+                              type: "string",
+                              const: "spawn.support",
+                            },
+                            {
+                              type: "string",
+                              const: "desk.board",
+                            },
+                            {
+                              type: "string",
+                              const: "desk.workerSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting.presenter",
+                            },
+                            {
+                              type: "string",
+                              const: "meeting.seat",
+                            },
+                            {
+                              type: "string",
+                              const: "browser.workerSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "support.staff",
+                            },
+                            {
+                              type: "string",
+                              const: "support.customer",
+                            },
+                            {
+                              type: "string",
+                              const: "telephony.staff",
+                            },
+                            {
+                              type: "string",
+                              const: "break.arcade",
+                            },
+                            {
+                              type: "string",
+                              const: "break.snack",
+                            },
+                            {
+                              type: "string",
+                              const: "break.volley",
+                            },
+                            {
+                              type: "string",
+                              const: "break.tableSeat",
+                            },
+                            {
+                              type: "string",
+                              const: "break.chase",
+                            },
+                            {
+                              type: "string",
+                              const: "break.game",
+                            },
+                            {
+                              type: "string",
+                              const: "break.jukebox",
+                            },
+                            {
+                              type: "string",
+                              const: "break.reading",
+                            },
+                          ],
+                        },
+                        tileX: {
+                          type: "number",
+                        },
+                        tileY: {
+                          type: "number",
+                        },
+                        pose: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "stand",
+                            },
+                            {
+                              type: "string",
+                              const: "sit",
+                            },
+                          ],
+                        },
+                        layer: {
+                          type: "integer",
+                          minimum: -9007199254740991,
+                          maximum: 9007199254740991,
+                        },
+                        facingOverride: {
+                          anyOf: [
+                            {
+                              type: "string",
+                              const: "north",
+                            },
+                            {
+                              type: "string",
+                              const: "east",
+                            },
+                            {
+                              type: "string",
+                              const: "south",
+                            },
+                            {
+                              type: "string",
+                              const: "west",
+                            },
+                          ],
+                        },
+                        footprintTiles: {
+                          type: "object",
+                          properties: {
+                            width: {
+                              type: "number",
+                            },
+                            height: {
+                              type: "number",
+                            },
+                          },
+                          required: ["width", "height"],
+                          additionalProperties: false,
+                        },
+                      },
+                      required: ["id", "role", "tileX", "tileY", "pose", "layer"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+            additionalProperties: false,
+          },
         },
         additionalProperties: false,
       },
@@ -1476,6 +1849,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 },
               },
               workspace: {
+                type: "string",
+              },
+              executionStyle: {
+                type: "string",
+                enum: ["direct", "hybrid", "orchestrator"],
+              },
+              executionWorkerAgentId: {
                 type: "string",
               },
               repoRoot: {
@@ -3376,6 +3756,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 agentDir: {
                   type: "string",
                 },
+                executionStyle: {
+                  type: "string",
+                  enum: ["direct", "hybrid", "orchestrator"],
+                },
+                executionWorkerAgentId: {
+                  type: "string",
+                },
                 model: {
                   anyOf: [
                     {
@@ -4941,6 +5328,306 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                 },
               },
               required: ["id"],
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+      teams: {
+        type: "object",
+        properties: {
+          list: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                },
+                name: {
+                  type: "string",
+                },
+                description: {
+                  type: "string",
+                },
+                managerAgentId: {
+                  type: "string",
+                },
+                implicitForManagerSessions: {
+                  type: "boolean",
+                },
+                members: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      agentId: {
+                        type: "string",
+                      },
+                      role: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                    },
+                    required: ["agentId", "role"],
+                    additionalProperties: false,
+                  },
+                },
+                crossTeamLinks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      type: {
+                        anyOf: [
+                          {
+                            type: "string",
+                            const: "team",
+                          },
+                          {
+                            type: "string",
+                            const: "agent",
+                          },
+                        ],
+                      },
+                      targetId: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                    },
+                    required: ["type", "targetId"],
+                    additionalProperties: false,
+                  },
+                },
+                workflows: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                      managerPrompt: {
+                        type: "string",
+                      },
+                      synthesisPrompt: {
+                        type: "string",
+                      },
+                      lifecycle: {
+                        type: "object",
+                        properties: {
+                          stages: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id: {
+                                  type: "string",
+                                },
+                                name: {
+                                  type: "string",
+                                },
+                                status: {
+                                  anyOf: [
+                                    {
+                                      type: "string",
+                                      const: "blocked",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "in_progress",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "review",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "done",
+                                    },
+                                    {
+                                      type: "string",
+                                      const: "idle",
+                                    },
+                                  ],
+                                },
+                                roles: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              },
+                              required: ["id"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        additionalProperties: false,
+                      },
+                      contract: {
+                        type: "object",
+                        properties: {
+                          requiredRoles: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                            },
+                          },
+                          requiredQaRoles: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                            },
+                          },
+                          requireDelegation: {
+                            type: "boolean",
+                          },
+                        },
+                        additionalProperties: false,
+                      },
+                      default: {
+                        type: "boolean",
+                      },
+                      id: {
+                        type: "string",
+                      },
+                    },
+                    required: ["id"],
+                    additionalProperties: false,
+                  },
+                },
+                workflow: {
+                  type: "object",
+                  properties: {
+                    name: {
+                      type: "string",
+                    },
+                    description: {
+                      type: "string",
+                    },
+                    managerPrompt: {
+                      type: "string",
+                    },
+                    synthesisPrompt: {
+                      type: "string",
+                    },
+                    lifecycle: {
+                      type: "object",
+                      properties: {
+                        stages: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              id: {
+                                type: "string",
+                              },
+                              name: {
+                                type: "string",
+                              },
+                              status: {
+                                anyOf: [
+                                  {
+                                    type: "string",
+                                    const: "blocked",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "in_progress",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "review",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "done",
+                                  },
+                                  {
+                                    type: "string",
+                                    const: "idle",
+                                  },
+                                ],
+                              },
+                              roles: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                },
+                              },
+                            },
+                            required: ["id"],
+                            additionalProperties: false,
+                          },
+                        },
+                      },
+                      additionalProperties: false,
+                    },
+                    contract: {
+                      type: "object",
+                      properties: {
+                        requiredRoles: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                          },
+                        },
+                        requiredQaRoles: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                          },
+                        },
+                        requireDelegation: {
+                          type: "boolean",
+                        },
+                      },
+                      additionalProperties: false,
+                    },
+                    default: {
+                      type: "boolean",
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                preset: {
+                  type: "object",
+                  properties: {
+                    id: {
+                      type: "string",
+                    },
+                    source: {
+                      anyOf: [
+                        {
+                          type: "string",
+                          const: "bundled",
+                        },
+                        {
+                          type: "string",
+                          const: "user",
+                        },
+                      ],
+                    },
+                    version: {
+                      type: "integer",
+                      exclusiveMinimum: 0,
+                      maximum: 9007199254740991,
+                    },
+                  },
+                  required: ["id"],
+                  additionalProperties: false,
+                },
+              },
+              required: ["id", "managerAgentId"],
               additionalProperties: false,
             },
           },
@@ -11695,6 +12382,13 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: "Agent runtime configuration root covering defaults and explicit agent entries used for routing and execution context. Keep this section explicit so model/tool behavior stays predictable across multi-agent workflows.",
       tags: ["advanced"],
     },
+    teams: {
+      label: "Teams",
+      group: "Teams",
+      order: 45,
+      help: "Reusable team definitions that compose existing agents into manager-plus-specialists workflows. Use teams to keep orchestration editable as config while preserving agent reuse across multiple workflows.",
+      tags: ["advanced"],
+    },
     tools: {
       label: "Tools",
       group: "Tools",
@@ -12052,6 +12746,176 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       label: "Cache Trace Include System",
       help: "Include system prompt in trace output (default: true).",
       tags: ["observability", "storage"],
+    },
+    "teams.list": {
+      label: "Team List",
+      help: "Ordered list of team definitions. Each team points at existing agent IDs, declares one manager, and optionally adds specialist metadata plus explicit cross-team links.",
+      tags: ["advanced"],
+    },
+    "teams.list[].id": {
+      label: "Team ID",
+      help: "Stable team identifier used by teams_run, cross-team links, and generated OpenProse previews. Keep IDs lowercase and durable so automation and links do not drift.",
+      tags: ["advanced"],
+    },
+    "teams.list[].name": {
+      label: "Team Name",
+      help: "Human-readable team name shown in the Control UI and preview surfaces. Use a short descriptive label that makes the team's purpose obvious.",
+      tags: ["advanced"],
+    },
+    "teams.list[].description": {
+      label: "Team Description",
+      help: "Short summary of the team's purpose and when it should be invoked. Keep this user-facing and specific enough to distinguish similar teams.",
+      tags: ["advanced"],
+    },
+    "teams.list[].managerAgentId": {
+      label: "Team Manager Agent",
+      help: "Agent ID that acts as the team's coordinating manager at runtime. This agent stays responsible for planning, delegation, and synthesis.",
+      tags: ["advanced"],
+    },
+    "teams.list[].implicitForManagerSessions": {
+      label: "Implicit Manager Team Sessions",
+      help: "When true, sessions owned by the manager agent automatically inherit this team context unless they were explicitly assigned to a different team. Use this for root entrypoint teams whose manager is the default chat agent.",
+      tags: ["storage"],
+    },
+    "teams.list[].members": {
+      label: "Team Specialists",
+      help: "Ordered list of specialist agent references for this team. Keep manager separate and use member order to express the default specialist ordering in previews.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].agentId": {
+      label: "Specialist Agent",
+      help: "Existing agent ID reused as a specialist inside this team. The same agent can appear in multiple teams with different role metadata.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].role": {
+      label: "Specialist Role",
+      help: "Team-local specialist role label used in previews, generated OpenProse, and Control UI workflow descriptions. Keep roles short and distinct within a team.",
+      tags: ["advanced"],
+    },
+    "teams.list[].members[].description": {
+      label: "Specialist Guidance",
+      help: "Optional team-local guidance for how this specialist should approach work within this team. Use this for role-specific nuance without mutating the underlying agent identity.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks": {
+      label: "Cross-Team Links",
+      help: "Explicit outbound links that let this team talk to other teams or named external agents. Without these links, cross-team delegation is blocked by default.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].type": {
+      label: "Cross-Team Link Type",
+      help: 'Link target kind: "team" allows teams_run into another team, while "agent" allows direct specialist access to one external agent.',
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].targetId": {
+      label: "Cross-Team Link Target",
+      help: "Target team ID or agent ID allowed by this explicit cross-team link. Keep links sparse and intentional so team boundaries stay understandable.",
+      tags: ["advanced"],
+    },
+    "teams.list[].crossTeamLinks[].description": {
+      label: "Cross-Team Link Description",
+      help: "Optional note describing why this cross-team link exists. Use this to document team topology for future operators.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows": {
+      label: "Team Workflows",
+      help: "Ordered list of workflow definitions available to this team. Use multiple workflows when the same manager and specialist roster needs different objectives, prompts, or defaults.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].id": {
+      label: "Workflow ID",
+      help: "Stable workflow identifier used by teams_run and generated OpenProse output paths. Keep IDs durable so callers can target the right workflow explicitly.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].name": {
+      label: "Workflow Name",
+      help: "Human-readable workflow name shown in the Control UI and preview surfaces. Use a short label that distinguishes this workflow's objective from the team's other workflows.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].description": {
+      label: "Workflow Description",
+      help: "Short explanation of the workflow's objective and when to invoke it. Use this to clarify why this workflow exists beyond the shared team roster.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].default": {
+      label: "Default Workflow",
+      help: "Marks the default workflow for this team when callers omit workflowId. Set this on the workflow most users should reach first.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].managerPrompt": {
+      label: "Manager Workflow Prompt",
+      help: "Additional guidance injected into the generated manager workflow prompt for this workflow. Use this to steer planning style, division of labor, or manager behavior.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].synthesisPrompt": {
+      label: "Synthesis Workflow Prompt",
+      help: "Additional guidance injected into the manager's final synthesis step for this workflow. Use this to tune the shape and emphasis of the final combined response.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle": {
+      label: "Workflow Lifecycle",
+      help: "Optional structured lifecycle definition for this workflow. Use stages to make planning, execution, review, and completion visible as ordered workflow progress instead of collapsing everything into one generic task status.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages": {
+      label: "Workflow Lifecycle Stages",
+      help: "Ordered lifecycle stages for this workflow. Each stage becomes part of the runtime progress contract and dashboard rollup used for root-task progress bars and detailed team-run drill-down.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].id": {
+      label: "Lifecycle Stage ID",
+      help: "Stable lifecycle stage identifier used in runtime WORK_ITEM updates and dashboard rollups. Keep IDs short, lowercase, and durable so stored progress remains understandable across edits.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].name": {
+      label: "Lifecycle Stage Name",
+      help: "Human-readable lifecycle stage label shown in dashboard progress and team-run detail. Use clear names like Planning, Execution, QA, or Manager Confirmation.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].status": {
+      label: "Lifecycle Stage Status",
+      help: 'Coarse task-status bucket for this stage: "in_progress", "review", "done", "blocked", or "idle". This controls how the dashboard maps the active stage into the global task board.',
+      tags: ["advanced"],
+    },
+    "teams.list[].workflows[].lifecycle.stages[].roles": {
+      label: "Lifecycle Stage Roles",
+      help: "Team role labels that primarily participate in this stage. Use normalized role names from this team's members so dashboard detail can map specialist sessions into the right lifecycle phase.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow": {
+      label: "Legacy Team Workflow",
+      help: "Deprecated compatibility alias for a single team workflow. Prefer teams.list[].workflows so one team can expose multiple workflows.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow.managerPrompt": {
+      label: "Legacy Manager Workflow Prompt",
+      help: "Deprecated compatibility alias for the single-workflow manager prompt. Prefer teams.list[].workflows[].managerPrompt.",
+      tags: ["advanced"],
+    },
+    "teams.list[].workflow.synthesisPrompt": {
+      label: "Legacy Synthesis Workflow Prompt",
+      help: "Deprecated compatibility alias for the single-workflow synthesis prompt. Prefer teams.list[].workflows[].synthesisPrompt.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset": {
+      label: "Team Preset Metadata",
+      help: "Preset metadata that records whether the team came from a bundled preset or a user-defined template. Keep this so bundled presets can be recreated safely.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.id": {
+      label: "Preset ID",
+      help: "Preset identifier for bundled or user-defined team templates. Use durable IDs so bundled-preset upgrades can recognize prior derivations.",
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.source": {
+      label: "Preset Source",
+      help: 'Preset origin marker: "bundled" for Maumau bundled presets or "user" for locally-authored templates.',
+      tags: ["advanced"],
+    },
+    "teams.list[].preset.version": {
+      label: "Preset Version",
+      help: "Preset schema/content version used to track bundled-preset upgrades. Increment this when bundled preset semantics change in a way that UI or migrations may care about.",
+      tags: ["advanced"],
     },
     "agents.list.*.identity.avatar": {
       label: "Identity Avatar",
@@ -14323,6 +15187,69 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       help: "Assistant avatar image source used in UI surfaces (URL, path, or data URI depending on runtime support). Use trusted assets and consistent branding dimensions for clean rendering.",
       tags: ["advanced"],
     },
+    "ui.mauOffice": {
+      label: "MauOffice",
+      help: "Control UI MauOffice settings for enabling the pixel office scene, limiting visible workers, and choosing which built-in idle activity packages are eligible.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.enabled": {
+      label: "MauOffice Enabled",
+      help: "Enables the MauOffice Control UI tab and pixel office renderer. Disable this to hide the scene while keeping the rest of the dashboard available.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.maxVisibleWorkers": {
+      label: "MauOffice Max Visible Workers",
+      help: "Maximum number of persistent workers shown in the office before extra agents are summarized as offsite. Keep this low enough that the scene stays readable on desktop and mobile.",
+      placeholder: "12",
+      tags: ["performance"],
+    },
+    "ui.mauOffice.idlePackages": {
+      label: "MauOffice Idle Packages",
+      help: "Idle package selection for break-room behaviors such as arcade, snacks, reading, chess, and group play. Use this to curate which built-in activities the idle scheduler can assign.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.idlePackages.enabled": {
+      label: "MauOffice Enabled Idle Packages",
+      help: "List of built-in idle package ids enabled for MauOffice scheduling. Unknown ids are ignored at runtime, so keep this list aligned with the shipped package names.",
+      placeholder:
+        "jukebox_floor, reading_nook, arcade_corner, snack_table, chess_table, passing_ball_court",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene": {
+      label: "MauOffice Scene",
+      help: "Authored MauOffice scene data stored as editable room zones, autotile brushes, prop placements, and typed semantic markers. This is the persisted source of truth used by the in-product MauOffice editor and scene compiler.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.version": {
+      label: "MauOffice Scene Version",
+      help: "Scene schema version for the authored MauOffice editor payload. Keep this at the current supported scene version unless an explicit migration updates it.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.zoneRows": {
+      label: "MauOffice Scene Zone Rows",
+      help: "Two-dimensional authored floor-zone grid describing which room, hall, or exterior area each logical office tile belongs to. Edit through the MauOffice editor when possible so room bounds, walkability, and semantic validation stay coherent.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.wallRows": {
+      label: "MauOffice Scene Wall Rows",
+      help: "Two-dimensional authored wall grid describing which logical tiles render wall edges or hall caps. Walls are authored separately from floor zones so layout painting and wall painting do not fight each other.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.props": {
+      label: "MauOffice Scene Props",
+      help: "Single-placement MauOffice catalog items positioned on the office grid, including optional layer, collision, and animation overrides per placement.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.autotiles": {
+      label: "MauOffice Scene Autotiles",
+      help: "Brush-authored MauOffice autotile regions that expand built-in 9-slice or 3-slice assets automatically from painted cells instead of manual tile-by-tile slice selection.",
+      tags: ["advanced"],
+    },
+    "ui.mauOffice.scene.markers": {
+      label: "MauOffice Scene Markers",
+      help: "Typed semantic MauOffice markers that define action spots, spawn points, seating, and break-room choreography anchors used by runtime behavior and validation.",
+      tags: ["advanced"],
+    },
     "browser.evaluateEnabled": {
       label: "Browser Evaluate Enabled",
       help: "Enables browser-side evaluate helpers for runtime script evaluation capabilities where supported. Keep disabled unless your workflows require evaluate semantics beyond snapshots/navigation.",
@@ -16332,6 +17259,6 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       tags: ["security", "auth"],
     },
   },
-  version: "2026.3.28-beta.3",
+  version: "2026.4.14",
   generatedAt: "2026-03-22T21:17:33.302Z",
 } as const satisfies BaseConfigSchemaResponse;

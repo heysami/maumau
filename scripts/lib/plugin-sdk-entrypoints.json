@@ -53,6 +53,7 @@
   "boolean-param",
   "command-auth",
   "device-bootstrap",
+  "device-identity",
   "diagnostics-otel",
   "diffs",
   "discord",

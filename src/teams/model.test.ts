@@ -1,0 +1,148 @@
+import { describe, expect, it } from "vitest";
+import type { MaumauConfig } from "../config/types.maumau.js";
+import type { TeamConfig } from "../config/types.teams.js";
+import {
+  canTeamUseAgent,
+  canTeamUseTeam,
+  findTeamWorkflow,
+  listAccessibleTeams,
+  listTeamWorkflows,
+  resolveDefaultTeamWorkflowId,
+} from "./model.js";
+
+const TEST_CONFIG = {
+  teams: {
+    list: [
+      {
+        id: "alpha",
+        managerAgentId: "alpha-manager",
+        members: [{ agentId: "alpha-coder", role: "coder" }],
+        crossTeamLinks: [
+          { type: "team" as const, targetId: "beta" },
+          { type: "agent" as const, targetId: "shared-reviewer" },
+        ],
+      },
+      {
+        id: "beta",
+        managerAgentId: "beta-manager",
+        members: [],
+      },
+      {
+        id: "gamma",
+        managerAgentId: "gamma-manager",
+        members: [],
+      },
+    ],
+  },
+} satisfies MaumauConfig;
+
+describe("team model access rules", () => {
+  it("allows intra-team agents and explicit linked agents only", () => {
+    expect(
+      canTeamUseAgent({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetAgentId: "alpha-coder",
+      }),
+    ).toBe(true);
+    expect(
+      canTeamUseAgent({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetAgentId: "shared-reviewer",
+      }),
+    ).toBe(true);
+    expect(
+      canTeamUseAgent({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetAgentId: "gamma-manager",
+      }),
+    ).toBe(false);
+  });
+
+  it("allows same-team runs plus explicit cross-team links only", () => {
+    expect(
+      canTeamUseTeam({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetTeamId: "alpha",
+      }),
+    ).toBe(true);
+    expect(
+      canTeamUseTeam({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetTeamId: "beta",
+      }),
+    ).toBe(true);
+    expect(
+      canTeamUseTeam({
+        cfg: TEST_CONFIG,
+        sourceTeamId: "alpha",
+        targetTeamId: "gamma",
+      }),
+    ).toBe(false);
+  });
+
+  it("marks runnable teams from the current team's explicit link graph", () => {
+    expect(listAccessibleTeams(TEST_CONFIG, "alpha")).toEqual([
+      expect.objectContaining({ team: expect.objectContaining({ id: "alpha" }), runnable: true }),
+      expect.objectContaining({ team: expect.objectContaining({ id: "beta" }), runnable: true }),
+      expect.objectContaining({ team: expect.objectContaining({ id: "gamma" }), runnable: false }),
+    ]);
+  });
+
+  it("supports multiple workflows per team and resolves default selection", () => {
+    const team = {
+      id: "alpha",
+      managerAgentId: "alpha-manager",
+      members: [],
+      workflows: [
+        { id: "default", name: "Default Workflow", default: true },
+        { id: "design-review", name: "Design Review" },
+      ],
+    };
+
+    expect(listTeamWorkflows(team)).toHaveLength(2);
+    expect(resolveDefaultTeamWorkflowId(team)).toBe("default");
+    expect(findTeamWorkflow(team, "design-review")).toMatchObject({
+      id: "design-review",
+      name: "Design Review",
+    });
+  });
+
+  it("normalizes structured lifecycle stages and preserves fallback workflows", () => {
+    const team = {
+      id: "alpha",
+      managerAgentId: "alpha-manager",
+      members: [{ agentId: "alpha-coder", role: "Coder" }],
+      workflows: [
+        {
+          id: "feature-build",
+          lifecycle: {
+            stages: [
+              { id: " Planning ", name: "Planning", status: "in_progress" as const },
+              {
+                id: "Execution",
+                status: "review" as const,
+                roles: ["Coder", "Coder", "  "],
+              },
+              { id: "Execution", status: "blocked" as const },
+            ],
+          },
+        },
+      ],
+    } satisfies TeamConfig;
+
+    expect(listTeamWorkflows(team)[0]).toMatchObject({
+      id: "feature-build",
+      lifecycle: {
+        stages: [
+          { id: "planning", name: "Planning", status: "in_progress", roles: [] },
+          { id: "execution", name: "Execution", status: "review", roles: ["coder"] },
+        ],
+      },
+    });
+  });
+});

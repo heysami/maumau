@@ -86,8 +86,10 @@ export function buildMaumauChromeLaunchArgs(params: {
   resolved: ResolvedBrowserConfig;
   profile: ResolvedBrowserProfile;
   userDataDir: string;
+  headlessOverride?: boolean;
 }): string[] {
-  const { resolved, profile, userDataDir } = params;
+  const { resolved, profile, userDataDir, headlessOverride } = params;
+  const effectiveHeadless = headlessOverride ?? resolved.headless;
   const args: string[] = [
     `--remote-debugging-port=${profile.cdpPort}`,
     `--user-data-dir=${userDataDir}`,
@@ -102,7 +104,7 @@ export function buildMaumauChromeLaunchArgs(params: {
     "--password-store=basic",
   ];
 
-  if (resolved.headless) {
+  if (effectiveHeadless) {
     args.push("--headless=new");
     args.push("--disable-gpu");
   }
@@ -314,11 +316,14 @@ export async function launchMaumauChrome(
   );
 
   // First launch to create preference files if missing, then decorate and relaunch.
-  const spawnOnce = () => {
+  const spawnOnce = (options?: { headlessOverride?: boolean }) => {
     const args = buildMaumauChromeLaunchArgs({
       resolved,
       profile,
       userDataDir,
+      ...(options?.headlessOverride !== undefined
+        ? { headlessOverride: options.headlessOverride }
+        : {}),
     });
     // stdio tuple: discard stdout to prevent buffer saturation in constrained
     // environments (e.g. Docker), while keeping stderr piped for diagnostics.
@@ -343,7 +348,9 @@ export async function launchMaumauChrome(
   // If the profile doesn't exist yet, bootstrap it once so Chrome creates defaults.
   // Then decorate (if needed) before the "real" run.
   if (needsBootstrap) {
-    const bootstrap = spawnOnce();
+    // Keep the one-time prefs bootstrap invisible so first-run onboarding
+    // does not flash a temporary undecorated browser window before relaunch.
+    const bootstrap = spawnOnce({ headlessOverride: true });
     const deadline = Date.now() + CHROME_BOOTSTRAP_PREFS_TIMEOUT_MS;
     while (Date.now() < deadline) {
       if (exists(localStatePath) && exists(preferencesPath)) {
@@ -371,7 +378,7 @@ export async function launchMaumauChrome(
         name: profile.name,
         color: profile.color,
       });
-      log.info(`🦞 maumau browser profile decorated (${profile.color})`);
+      log.info(`😼 maumau browser profile decorated (${profile.color})`);
     } catch (err) {
       log.warn(`maumau browser profile decoration failed: ${String(err)}`);
     }
@@ -428,7 +435,7 @@ export async function launchMaumauChrome(
 
   const pid = proc.pid ?? -1;
   log.info(
-    `🦞 maumau browser started (${exe.kind}) profile "${profile.name}" on 127.0.0.1:${profile.cdpPort} (pid ${pid})`,
+    `😼 maumau browser started (${exe.kind}) profile "${profile.name}" on 127.0.0.1:${profile.cdpPort} (pid ${pid})`,
   );
 
   return {

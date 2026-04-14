@@ -94,8 +94,9 @@ extension ChannelsStore {
                     [],
                     successMessage: "WhatsApp linked. Direct messages are open so it replies right away.")
                 if saved {
-                    self.whatsappLoginMessage =
-                        "WhatsApp linked. Direct messages are open so it replies right away."
+                    self.whatsappLoginMessage = self.defersConfigSaves
+                        ? "WhatsApp linked. Maumau will apply the recommended direct-message defaults when you finish setup."
+                        : "WhatsApp linked. Direct messages are open so it replies right away."
                 }
             }
         } catch {

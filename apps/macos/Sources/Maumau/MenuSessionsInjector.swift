@@ -692,9 +692,10 @@ extension MenuSessionsInjector {
 
         guard self.isControlChannelConnected else {
             if self.cachedSnapshot != nil {
-                self.cachedErrorText = self.language == .id
-                    ? "Gateway terputus (menampilkan cache)"
-                    : "Gateway disconnected (showing cached)"
+                self.cachedErrorText = macLocalizedHelper(
+                    "gatewayDisconnectedShowingCached",
+                    language: self.language,
+                    fallback: "Gateway disconnected (showing cached)")
             } else {
                 self.cachedErrorText = nil
             }
@@ -760,7 +761,9 @@ extension MenuSessionsInjector {
 
     private func compactUsageError(_ error: Error) -> String {
         let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        if message.isEmpty { return self.language == .id ? "Penggunaan tidak tersedia" : "Usage unavailable" }
+        if message.isEmpty {
+            return macLocalizedHelper("usageUnavailable", language: self.language, fallback: "Usage unavailable")
+        }
         if message.count > 90 { return "\(message.prefix(87))…" }
         return message
     }
@@ -769,12 +772,21 @@ extension MenuSessionsInjector {
         if let loadError = error as? SessionLoadError {
             switch loadError {
             case .gatewayUnavailable:
-                return self.language == .id ? "Tidak ada koneksi ke gateway" : "No connection to gateway"
+                return macLocalizedHelper(
+                    "noGatewayConnection",
+                    language: self.language,
+                    fallback: "No connection to gateway")
             case .decodeFailed:
-                return self.language == .id ? "Sesi tidak tersedia" : "Sessions unavailable"
+                return macLocalizedHelper(
+                    "sessionsUnavailable",
+                    language: self.language,
+                    fallback: "Sessions unavailable")
             }
         }
-        return self.language == .id ? "Sesi tidak tersedia" : "Sessions unavailable"
+        return macLocalizedHelper(
+            "sessionsUnavailable",
+            language: self.language,
+            fallback: "Sessions unavailable")
     }
 }
 
@@ -1044,9 +1056,11 @@ extension MenuSessionsInjector {
     private func resetSession(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         Task { @MainActor in
-            let message = self.language == .id
-                ? "Memulai ID sesi baru untuk “\(key)”."
-                : "Starts a new session id for “\(key)”."
+            let message = macLocalizedHelper(
+                "resetSessionMessage",
+                language: self.language,
+                parameters: ["key": key],
+                fallback: "Starts a new session id for “{key}”.")
             guard SessionActions.confirmDestructiveAction(
                 title: "Reset session?",
                 message: message,
@@ -1068,9 +1082,10 @@ extension MenuSessionsInjector {
         Task { @MainActor in
             guard SessionActions.confirmDestructiveAction(
                 title: "Compact session log?",
-                message: self.language == .id
-                    ? "Menyimpan 400 baris terakhir; file lama diarsipkan."
-                    : "Keeps the last 400 lines; archives the old file.",
+                message: macLocalizedHelper(
+                    "compactSessionMessage",
+                    language: self.language,
+                    fallback: "Keeps the last 400 lines; archives the old file."),
                 action: "Compact")
             else { return }
 
@@ -1087,9 +1102,11 @@ extension MenuSessionsInjector {
     private func deleteSession(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         Task { @MainActor in
-            let message = self.language == .id
-                ? "Menghapus entri “\(key)” dan mengarsipkan transkripnya."
-                : "Deletes the “\(key)” entry and archives its transcript."
+            let message = macLocalizedHelper(
+                "deleteSessionMessage",
+                language: self.language,
+                parameters: ["key": key],
+                fallback: "Deletes the “{key}” entry and archives its transcript.")
             guard SessionActions.confirmDestructiveAction(
                 title: "Delete session?",
                 message: message,

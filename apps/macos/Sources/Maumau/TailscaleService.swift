@@ -8,6 +8,98 @@ import os
 @Observable
 @MainActor
 final class TailscaleService {
+    struct ExposureStatus: Equatable {
+        let mode: String
+        let checked: Bool
+        let featureEnabled: Bool
+        let active: Bool
+        let detail: String?
+        let enableURL: String?
+
+        static func idle(mode: String) -> ExposureStatus {
+            ExposureStatus(
+                mode: mode,
+                checked: false,
+                featureEnabled: false,
+                active: false,
+                detail: nil,
+                enableURL: nil)
+        }
+    }
+
+    enum AccessRequirementKind: String, Equatable {
+        case install
+        case signIn
+        case enableFeature
+        case password
+    }
+
+    struct AccessRequirement: Equatable, Identifiable {
+        let kind: AccessRequirementKind
+        let mode: String
+        let enableURL: String?
+
+        var id: String {
+            "\(self.mode):\(self.kind.rawValue)"
+        }
+    }
+
+    enum AccessFlowPhase: Equatable {
+        case idle
+        case blocked
+        case activating
+        case active
+        case failed
+    }
+
+    struct AccessReadiness: Equatable {
+        let mode: String
+        let requirements: [AccessRequirement]
+        let exposure: ExposureStatus?
+        let detail: String?
+
+        var isReady: Bool {
+            self.requirements.isEmpty
+        }
+
+        var isActive: Bool {
+            self.exposure?.active == true
+        }
+
+        var enableURL: String? {
+            self.requirements.first(where: { $0.kind == .enableFeature })?.enableURL
+                ?? self.exposure?.enableURL
+        }
+    }
+
+    struct AccessFlowState: Equatable {
+        let appliedMode: String
+        let requestedMode: String
+        let phase: AccessFlowPhase
+        let requirements: [AccessRequirement]
+        let detail: String?
+        let exposure: ExposureStatus?
+
+        var enableURL: String? {
+            self.requirements.first(where: { $0.kind == .enableFeature })?.enableURL
+                ?? self.exposure?.enableURL
+        }
+
+        var blocksOnboardingAdvance: Bool {
+            self.requestedMode != "off" && self.phase != .idle && self.phase != .active
+        }
+
+        static func idle(appliedMode: String) -> AccessFlowState {
+            AccessFlowState(
+                appliedMode: appliedMode,
+                requestedMode: appliedMode,
+                phase: .idle,
+                requirements: [],
+                detail: nil,
+                exposure: nil)
+        }
+    }
+
     struct ActionOutcome {
         let success: Bool
         let message: String
@@ -38,6 +130,10 @@ final class TailscaleService {
     /// Error message if status check fails.
     private(set) var statusError: String?
 
+    private(set) var serveExposure = ExposureStatus.idle(mode: "serve")
+    private(set) var funnelExposure = ExposureStatus.idle(mode: "funnel")
+    private(set) var accessFlow = AccessFlowState.idle(appliedMode: "off")
+
     private init() {
         Task { await self.checkTailscaleStatus() }
     }
@@ -48,13 +144,19 @@ final class TailscaleService {
         isRunning: Bool,
         tailscaleHostname: String? = nil,
         tailscaleIP: String? = nil,
-        statusError: String? = nil)
+        statusError: String? = nil,
+        serveExposure: ExposureStatus = .idle(mode: "serve"),
+        funnelExposure: ExposureStatus = .idle(mode: "funnel"),
+        accessFlow: AccessFlowState = .idle(appliedMode: "off"))
     {
         self.isInstalled = isInstalled
         self.isRunning = isRunning
         self.tailscaleHostname = tailscaleHostname
         self.tailscaleIP = tailscaleIP
         self.statusError = statusError
+        self.serveExposure = serveExposure
+        self.funnelExposure = funnelExposure
+        self.accessFlow = accessFlow
     }
     #endif
 
@@ -113,6 +215,7 @@ final class TailscaleService {
             self.tailscaleHostname = nil
             self.tailscaleIP = nil
             self.statusError = "Tailscale is not installed"
+            self.resetExposureStatuses()
         } else if let apiResponse = await fetchTailscaleStatus() {
             self.isRunning = apiResponse.status.lowercased() == "running"
 
@@ -130,10 +233,12 @@ final class TailscaleService {
 
                 self.logger.info(
                     "Tailscale running host=\(self.tailscaleHostname ?? "nil") ip=\(self.tailscaleIP ?? "nil")")
+                await self.refreshExposureStatuses()
             } else {
                 self.tailscaleHostname = nil
                 self.tailscaleIP = nil
                 self.statusError = "Tailscale is not running"
+                self.resetExposureStatuses()
             }
         } else {
             self.isRunning = false
@@ -141,6 +246,7 @@ final class TailscaleService {
             self.tailscaleIP = nil
             self.statusError = "Please start the Tailscale app"
             self.logger.info("Tailscale API not responding; app likely not running")
+            self.resetExposureStatuses()
         }
 
         if self.tailscaleIP == nil, let fallback = TailscaleNetwork.detectTailnetIPv4() {
@@ -157,6 +263,123 @@ final class TailscaleService {
         }
     }
 
+    func exposureStatus(for mode: String) -> ExposureStatus {
+        switch mode {
+        case "funnel":
+            return self.funnelExposure
+        default:
+            return self.serveExposure
+        }
+    }
+
+    func readinessForSelection(
+        mode: String,
+        requiresPassword: Bool,
+        password: String,
+        refreshStatus: Bool = false) async -> AccessReadiness
+    {
+        if refreshStatus {
+            await self.checkTailscaleStatus()
+        }
+        let exposure = mode == "serve" || mode == "funnel" ? self.exposureStatus(for: mode) : nil
+        return Self.classifyAccessReadiness(
+            mode: mode,
+            isInstalled: self.isInstalled,
+            isRunning: self.isRunning,
+            exposure: exposure,
+            requiresPassword: requiresPassword,
+            password: password)
+    }
+
+    func updateAccessFlow(
+        appliedMode: String,
+        requestedMode: String,
+        phase: AccessFlowPhase,
+        requirements: [AccessRequirement] = [],
+        detail: String? = nil,
+        exposure: ExposureStatus? = nil)
+    {
+        self.accessFlow = AccessFlowState(
+            appliedMode: appliedMode,
+            requestedMode: requestedMode,
+            phase: phase,
+            requirements: requirements,
+            detail: detail,
+            exposure: exposure)
+    }
+
+    func clearAccessFlow(appliedMode: String) {
+        self.accessFlow = .idle(appliedMode: appliedMode)
+    }
+
+    func canPersistExposureSelection(mode: String) async -> (ok: Bool, message: String?) {
+        guard mode == "serve" || mode == "funnel" else {
+            return (true, nil)
+        }
+        let status = await Self.probeExposureStatus(mode: mode, binaryPath: self.installedBinaryPath())
+        if status.checked, !status.featureEnabled {
+            return (false, status.detail ?? "Tailscale exposure is not enabled on this tailnet yet.")
+        }
+        return (true, nil)
+    }
+
+    func applyExposureSelection(mode: String, port: Int) async -> (ok: Bool, message: String?) {
+        guard let binaryPath = self.installedBinaryPath() else {
+            return (false, "Install Tailscale on this Mac first.")
+        }
+
+        switch mode {
+        case "serve":
+            let result = await ShellExecutor.runDetailed(
+                command: [binaryPath, "serve", "--bg", "--yes", "\(port)"],
+                cwd: nil,
+                env: nil,
+                timeout: 15)
+            guard result.success else {
+                return (false, self.summarizeExposureApplyFailure(mode: mode, result: result))
+            }
+        case "funnel":
+            let result = await ShellExecutor.runDetailed(
+                command: [binaryPath, "funnel", "--bg", "--yes", "\(port)"],
+                cwd: nil,
+                env: nil,
+                timeout: 15)
+            guard result.success else {
+                return (false, self.summarizeExposureApplyFailure(mode: mode, result: result))
+            }
+        default:
+            _ = await ShellExecutor.runDetailed(
+                command: [binaryPath, "serve", "reset"],
+                cwd: nil,
+                env: nil,
+                timeout: 10)
+            _ = await ShellExecutor.runDetailed(
+                command: [binaryPath, "funnel", "reset"],
+                cwd: nil,
+                env: nil,
+                timeout: 10)
+        }
+
+        await self.checkTailscaleStatus()
+
+        guard mode == "serve" || mode == "funnel" else {
+            return (true, nil)
+        }
+
+        let status = self.exposureStatus(for: mode)
+        if status.checked, status.active {
+            return (true, nil)
+        }
+
+        return (
+            false,
+            status.detail ??
+                (mode == "serve"
+                    ? "Tailscale Serve is selected, but it is not active on this Mac yet."
+                    : "Tailscale Funnel is selected, but it is not active on this Mac yet.")
+        )
+    }
+
     func openTailscaleApp() {
         NSWorkspace.shared.open(URL(fileURLWithPath: TailscaleInstaller.standaloneAppPath))
     }
@@ -165,6 +388,12 @@ final class TailscaleService {
         if let url = URL(string: "https://tailscale.com/kb/1017/install/") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    func openExternalURL(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+        NSWorkspace.shared.open(url)
+        return true
     }
 
     func installOnThisMac() async -> ActionOutcome {
@@ -258,6 +487,192 @@ final class TailscaleService {
         return nil
     }
 
+    private func resetExposureStatuses() {
+        self.serveExposure = .idle(mode: "serve")
+        self.funnelExposure = .idle(mode: "funnel")
+    }
+
+    private func refreshExposureStatuses() async {
+        let binaryPath = self.installedBinaryPath()
+        async let serveStatus = Self.probeExposureStatus(mode: "serve", binaryPath: binaryPath)
+        async let funnelStatus = Self.probeExposureStatus(mode: "funnel", binaryPath: binaryPath)
+        self.serveExposure = await serveStatus
+        self.funnelExposure = await funnelStatus
+    }
+
+    private static func probeExposureStatus(mode: String, binaryPath: String?) async -> ExposureStatus {
+        guard let binaryPath else {
+            return .idle(mode: mode)
+        }
+        let command: [String]
+        if mode == "funnel" {
+            command = [binaryPath, "funnel", "status", "--json"]
+        } else {
+            command = [binaryPath, "serve", "status"]
+        }
+        let result = await ShellExecutor.runDetailed(
+            command: command,
+            cwd: nil,
+            env: nil,
+            timeout: 5)
+        return self.parseExposureStatus(
+            mode: mode,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            success: result.success,
+            errorMessage: result.errorMessage)
+    }
+
+    static func classifyAccessReadiness(
+        mode: String,
+        isInstalled: Bool,
+        isRunning: Bool,
+        exposure: ExposureStatus?,
+        requiresPassword: Bool,
+        password: String) -> AccessReadiness
+    {
+        guard mode == "serve" || mode == "funnel" else {
+            return AccessReadiness(mode: mode, requirements: [], exposure: nil, detail: nil)
+        }
+
+        var requirements: [AccessRequirement] = []
+        if !isInstalled {
+            requirements.append(AccessRequirement(kind: .install, mode: mode, enableURL: nil))
+        } else if !isRunning {
+            requirements.append(AccessRequirement(kind: .signIn, mode: mode, enableURL: nil))
+        } else if let exposure, exposure.checked, !exposure.featureEnabled {
+            requirements.append(AccessRequirement(kind: .enableFeature, mode: mode, enableURL: exposure.enableURL))
+        }
+
+        if requiresPassword,
+           password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            requirements.append(AccessRequirement(kind: .password, mode: mode, enableURL: nil))
+        }
+
+        let detail: String?
+        if let firstRequirement = requirements.first {
+            switch firstRequirement.kind {
+            case .install:
+                detail = "Install Tailscale on this Mac first."
+            case .signIn:
+                detail = "Sign in to Tailscale on this Mac first."
+            case .enableFeature:
+                detail = mode == "serve"
+                    ? "Tailscale Serve is not enabled on this tailnet yet."
+                    : "Tailscale Funnel is not enabled on this tailnet yet."
+            case .password:
+                detail = "Password required for this mode."
+            }
+        } else if let exposure, !exposure.active {
+            detail = exposure.detail
+        } else {
+            detail = nil
+        }
+
+        return AccessReadiness(
+            mode: mode,
+            requirements: requirements,
+            exposure: exposure,
+            detail: detail)
+    }
+
+    static func parseExposureStatus(
+        mode: String,
+        stdout: String,
+        stderr: String,
+        success: Bool,
+        errorMessage: String?) -> ExposureStatus
+    {
+        let combined = [stdout, stderr, errorMessage ?? ""]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
+        let lower = combined.lowercased()
+
+        if mode == "serve" {
+            if lower.contains("serve is not enabled on your tailnet") {
+                return ExposureStatus(
+                    mode: mode,
+                    checked: true,
+                    featureEnabled: false,
+                    active: false,
+                    detail: "Tailscale Serve is not enabled on this tailnet yet.",
+                    enableURL: TailscaleInstaller.extractFirstHTTPSURL(from: combined))
+            }
+            if lower.contains("no serve config") || combined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return ExposureStatus(
+                    mode: mode,
+                    checked: true,
+                    featureEnabled: true,
+                    active: false,
+                    detail: "Tailscale Serve is selected, but it is not active on this Mac yet.",
+                    enableURL: nil)
+            }
+            if success {
+                return ExposureStatus(
+                    mode: mode,
+                    checked: true,
+                    featureEnabled: true,
+                    active: true,
+                    detail: nil,
+                    enableURL: nil)
+            }
+            return ExposureStatus(
+                mode: mode,
+                checked: false,
+                featureEnabled: true,
+                active: false,
+                detail: self.lastNonEmptyLine(in: combined)
+                    ?? "Could not verify Tailscale Serve status on this Mac.",
+                enableURL: TailscaleInstaller.extractFirstHTTPSURL(from: combined))
+        }
+
+        if lower.contains("funnel is not enabled") || lower.contains("enable in admin console") {
+            return ExposureStatus(
+                mode: mode,
+                checked: true,
+                featureEnabled: false,
+                active: false,
+                detail: "Tailscale Funnel is not enabled on this tailnet yet.",
+                enableURL: TailscaleInstaller.extractFirstHTTPSURL(from: combined))
+        }
+        let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        if success, !trimmedStdout.isEmpty, trimmedStdout != "{}" {
+            return ExposureStatus(
+                mode: mode,
+                checked: true,
+                featureEnabled: true,
+                active: true,
+                detail: nil,
+                enableURL: nil)
+        }
+        if success {
+            return ExposureStatus(
+                mode: mode,
+                checked: true,
+                featureEnabled: true,
+                active: false,
+                detail: "Tailscale Funnel is selected, but it is not active on this Mac yet.",
+                enableURL: nil)
+        }
+        return ExposureStatus(
+            mode: mode,
+            checked: false,
+            featureEnabled: true,
+            active: false,
+            detail: self.lastNonEmptyLine(in: combined)
+                ?? "Could not verify Tailscale Funnel status on this Mac.",
+            enableURL: TailscaleInstaller.extractFirstHTTPSURL(from: combined))
+    }
+
+    private static func lastNonEmptyLine(in text: String) -> String? {
+        text
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .reversed()
+            .first(where: { !$0.isEmpty })
+    }
+
     private func runPrivilegedShell(_ command: String) -> ActionOutcome {
         let escapedCommand = TailscaleInstaller.appleScriptEscape(command)
         let source = """
@@ -298,6 +713,35 @@ final class TailscaleService {
             return resultError
         }
         return fallback
+    }
+
+    private func summarizeExposureApplyFailure(mode: String, result: ShellExecutor.ShellResult) -> String {
+        let combined = [result.stdout, result.stderr, result.errorMessage ?? ""]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
+        let lower = combined.lowercased()
+
+        if mode == "serve", lower.contains("serve is not enabled on your tailnet") {
+            if let url = TailscaleInstaller.extractFirstHTTPSURL(from: combined) {
+                return "Tailscale Serve is not enabled on this tailnet yet. Enable it here: \(url)"
+            }
+            return "Tailscale Serve is not enabled on this tailnet yet."
+        }
+
+        if mode == "funnel",
+           lower.contains("funnel is not enabled") || lower.contains("enable in admin console")
+        {
+            if let url = TailscaleInstaller.extractFirstHTTPSURL(from: combined) {
+                return "Tailscale Funnel is not enabled on this tailnet yet. Enable it here: \(url)"
+            }
+            return "Tailscale Funnel is not enabled on this tailnet yet."
+        }
+
+        return self.summarizeShellFailure(
+            result,
+            fallback: mode == "serve"
+                ? "Could not activate Tailscale Serve on this Mac."
+                : "Could not activate Tailscale Funnel on this Mac.")
     }
 
     private func lastNonEmptyLine(in text: String) -> String? {

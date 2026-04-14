@@ -1,5 +1,6 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { DEFAULT_LANGUAGE_ID, type LanguageId } from "../../../src/i18n/languages.ts";
 import { i18n, I18nController, isSupportedLocale } from "../i18n/index.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
@@ -55,14 +56,39 @@ import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { exportChatMarkdown } from "./chat/export.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import { clearScheduledDashboardReload } from "./controllers/dashboard.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import {
+  normalizeSceneSelection,
+  redoSceneHistory,
+  type MauOfficeEditorBrushMode,
+  type MauOfficeEditorSelection,
+  type MauOfficeEditorTool,
+  undoSceneHistory,
+} from "./controllers/mau-office-editor.ts";
+import { advanceMauOfficeState, createEmptyMauOfficeState } from "./controllers/mau-office.ts";
+import type {
+  MultiUserMemoryAdminSnapshot,
+  MultiUserMemoryIdentity,
+} from "./controllers/multi-user-memory.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
+import type {
+  MauOfficeMarkerRole,
+  MauOfficeSceneConfig,
+  MauOfficeZoneId,
+} from "./mau-office-scene.ts";
 import type { Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
-import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
+import {
+  resolveTheme,
+  VALID_THEME_NAMES,
+  type ResolvedTheme,
+  type ThemeMode,
+  type ThemeName,
+} from "./theme.ts";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
@@ -73,6 +99,10 @@ import type {
   CronJob,
   CronRunLogEntry,
   CronStatus,
+  DashboardCalendarResult,
+  DashboardTaskFilter,
+  DashboardSnapshot,
+  DashboardTeamSnapshotsResult,
   HealthSummary,
   LogEntry,
   LogLevel,
@@ -97,6 +127,18 @@ declare global {
 
 const bootAssistantIdentity = normalizeAssistantIdentity({});
 
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
+  );
+}
+
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
     return false;
@@ -108,6 +150,16 @@ function resolveOnboardingMode(): boolean {
   }
   const normalized = raw.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatLocalDateOffset(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return formatLocalDate(date);
 }
 
 @customElement("maumau-app")
@@ -128,9 +180,9 @@ export class MaumauApp extends LitElement {
   @state() tab: Tab = "chat";
   @state() onboarding = resolveOnboardingMode();
   @state() connected = false;
-  @state() theme: ThemeName = this.settings.theme ?? "claw";
-  @state() themeMode: ThemeMode = this.settings.themeMode ?? "system";
-  @state() themeResolved: ResolvedTheme = "dark";
+  @state() theme: ThemeName = this.settings.theme ?? "dash";
+  @state() themeMode: ThemeMode = this.settings.themeMode ?? "light";
+  @state() themeResolved: ResolvedTheme = resolveTheme(this.theme, this.themeMode);
   @state() themeOrder: ThemeName[] = this.buildThemeOrder(this.theme);
   @state() hello: GatewayHelloOk | null = null;
   @state() lastError: string | null = null;
@@ -144,6 +196,7 @@ export class MaumauApp extends LitElement {
   @state() assistantAvatar = bootAssistantIdentity.avatar;
   @state() assistantAgentId = bootAssistantIdentity.agentId ?? null;
   @state() serverVersion: string | null = null;
+  @state() secureDashboardUrl: string | null = null;
 
   @state() sessionKey = this.settings.sessionKey;
   @state() chatLoading = false;
@@ -235,6 +288,16 @@ export class MaumauApp extends LitElement {
   @state() aiAgentsSearchQuery = "";
   @state() aiAgentsActiveSection: string | null = null;
   @state() aiAgentsActiveSubsection: string | null = null;
+  @state() multiUserMemoryLoading = false;
+  @state() multiUserMemoryError: string | null = null;
+  @state() multiUserMemoryAdmin: MultiUserMemoryAdminSnapshot | null = null;
+  @state() multiUserMemoryActiveTab: "overview" | "users" | "groups" | "settings" = "overview";
+  @state() multiUserMemoryNewUserId = "";
+  @state() multiUserMemoryNewUserDisplayName = "";
+  @state() multiUserMemoryNewUserLanguage: LanguageId = DEFAULT_LANGUAGE_ID;
+  @state() multiUserMemoryNewUserIdentities: MultiUserMemoryIdentity[] = [];
+  @state() multiUserMemoryNewGroupId = "";
+  @state() multiUserMemoryNewGroupLabel = "";
 
   @state() channelsLoading = false;
   @state() channelsSnapshot: ChannelsStatusSnapshot | null = null;
@@ -256,12 +319,25 @@ export class MaumauApp extends LitElement {
   @state() agentsList: AgentsListResult | null = null;
   @state() agentsError: string | null = null;
   @state() agentsSelectedId: string | null = null;
+  @state() teamsSelectedId: string | null = null;
+  @state() teamsSelectedWorkflowId: string | null = null;
+  @state() teamPromptDialogOpen = false;
+  @state() teamPromptTeamId: string | null = null;
+  @state() teamPromptTeamLabel = "";
+  @state() teamPromptWorkflowId: string | null = null;
+  @state() teamPromptWorkflowLabel = "";
+  @state() teamPromptDraft = "";
+  @state() teamPromptBusy = false;
+  @state() teamPromptError: string | null = null;
+  @state() teamPromptSummary: string | null = null;
+  @state() teamPromptWarnings: string[] = [];
   @state() toolsCatalogLoading = false;
   @state() toolsCatalogError: string | null = null;
   @state() toolsCatalogResult: ToolsCatalogResult | null = null;
   @state() agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" = "files";
   @state() agentFilesLoading = false;
   @state() agentFilesError: string | null = null;
+  @state() agentFilesTargetId: string | null = null;
   @state() agentFilesList: AgentsFilesListResult | null = null;
   @state() agentFileContents: Record<string, string> = {};
   @state() agentFileDrafts: Record<string, string> = {};
@@ -289,6 +365,98 @@ export class MaumauApp extends LitElement {
   @state() sessionsPage = 0;
   @state() sessionsPageSize = 25;
   @state() sessionsSelectedKeys: Set<string> = new Set();
+  @state() dashboardLoading = false;
+  @state() dashboardError: string | null = null;
+  @state() dashboardSnapshot: DashboardSnapshot | null = null;
+  @state() dashboardWalletLoading = false;
+  @state() dashboardWalletError: string | null = null;
+  @state() dashboardWalletResult: import("./types.js").DashboardWalletResult | null = null;
+  @state() dashboardWalletStartDate = formatLocalDateOffset(-29);
+  @state() dashboardWalletEndDate = formatLocalDateOffset(0);
+  @state() dashboardWalletTimeZone: "local" | "utc" = "local";
+  @state() dashboardWalletGranularity: import("./types.js").DashboardWalletSpendGranularity = "day";
+  @state() dashboardWalletBreakdown: import("./types.js").DashboardWalletSpendBreakdown =
+    "category";
+  @state() dashboardWalletCurrency: string | null = null;
+  @state() dashboardCalendarResult: DashboardCalendarResult | null = null;
+  @state() dashboardCalendarAnchorAtMs: number | null = null;
+  @state() dashboardBusinessResult: import("./types.js").DashboardBusinessResult | null = null;
+  @state() dashboardProjectsResult: import("./types.js").DashboardProjectsResult | null = null;
+  @state() dashboardUserChannelsResult: import("./types.js").DashboardUserChannelsResult | null =
+    null;
+  @state() dashboardUserChannelId: string | null = null;
+  @state() dashboardUserChannelAccountId: string | null = null;
+  @state() dashboardTeamsLoading = false;
+  @state() dashboardTeamsError: string | null = null;
+  @state() dashboardTeamSnapshots: DashboardTeamSnapshotsResult | null = null;
+  @state() dashboardTeamRunsLoading = false;
+  @state() dashboardTeamRunsError: string | null = null;
+  @state() dashboardTeamRuns: import("./types.js").DashboardTeamRunsResult | null = null;
+  @state() dashboardTaskFilter: DashboardTaskFilter = null;
+  @state() dashboardTaskGroupSelection: string | null = null;
+  @state() dashboardDoneFromDate = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  @state() dashboardDoneToDate = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  @state() dashboardWorkshopSelectedId: string | null = null;
+  @state() dashboardWorkshopTab: "saved" | "recent" | "agent-apps" = "recent";
+  @state() dashboardWorkshopSelectedIds: Set<string> = new Set();
+  @state() dashboardWorkshopProjectDraft = "";
+  @state() dashboardWorkshopSaving = false;
+  @state() dashboardWorkshopSaveError: string | null = null;
+  @state() dashboardCalendarView: "month" | "week" | "day" = "month";
+  @state() dashboardCalendarFilters: import("./types.js").DashboardCalendarFilters = {
+    cron: true,
+    userActivity: true,
+    groupActivity: true,
+    approvals: true,
+  };
+  @state() dashboardRoutineSelection: string | null = null;
+  @state() dashboardBusinessSelection: string | null = null;
+  @state() dashboardProfileSelection: string | null = null;
+  @state() dashboardProjectSelection: string | null = null;
+  @state() dashboardTeamSelection: string | null = null;
+  @state() dashboardMemoryAgentId: string | null = null;
+  @state() dashboardAgentPanel: "memory" | "scope" = "memory";
+  @state() mauOfficeLoading = false;
+  @state() mauOfficeError: string | null = null;
+  @state() mauOfficeState = createEmptyMauOfficeState();
+  @state() mauOfficeEditorOpen = false;
+  @state() mauOfficeEditorDraft: MauOfficeSceneConfig | null = null;
+  @state() mauOfficeEditorUndoStack: MauOfficeSceneConfig[] = [];
+  @state() mauOfficeEditorRedoStack: MauOfficeSceneConfig[] = [];
+  @state() mauOfficeEditorTool: MauOfficeEditorTool = "select";
+  @state() mauOfficeEditorToolPanelOpen = true;
+  @state() mauOfficeEditorBrushMode: MauOfficeEditorBrushMode = "paint";
+  @state() mauOfficeEditorZoneBrush: MauOfficeZoneId = "desk";
+  @state() mauOfficeEditorPropItemId = "desk-wide";
+  @state() mauOfficeEditorAutotileItemId = "meeting-table";
+  @state() mauOfficeEditorMarkerRole: MauOfficeMarkerRole = "desk.workerSeat";
+  @state() mauOfficeEditorSelection: MauOfficeEditorSelection = null;
+  @state() mauOfficeEditorDragSelection: MauOfficeEditorSelection = null;
+  @state() mauOfficeEditorHoverTileX: number | null = null;
+  @state() mauOfficeEditorHoverTileY: number | null = null;
+  @state() mauOfficeChatOpen = false;
+  @state() mauOfficeChatMinimized = false;
+  @state() mauOfficeChatActorId: string | null = null;
+  @state() mauOfficeChatActorLabel = "";
+  @state() mauOfficeChatSessionKey = "";
+  @state() mauOfficeChatLoading = false;
+  @state() mauOfficeChatSending = false;
+  @state() mauOfficeChatMessage = "";
+  @state() mauOfficeChatMessages: unknown[] = [];
+  @state() mauOfficeChatThinkingLevel: string | null = null;
+  @state() mauOfficeChatAttachments: ChatAttachment[] = [];
+  @state() mauOfficeChatRunId: string | null = null;
+  @state() mauOfficeChatStream: string | null = null;
+  @state() mauOfficeChatStreamStartedAt: number | null = null;
+  @state() mauOfficeChatError: string | null = null;
+  @state() mauOfficeChatPositionX: number | null = null;
+  @state() mauOfficeChatPositionY: number | null = null;
 
   @state() usageLoading = false;
   @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
@@ -344,6 +512,7 @@ export class MaumauApp extends LitElement {
 
   // Non-reactive (don’t trigger renders just for timer bookkeeping).
   usageQueryDebounceTimer: number | null = null;
+  dashboardWalletDateDebounceTimer: number | null = null;
 
   @state() cronLoading = false;
   @state() cronJobsLoadingMore = false;
@@ -442,15 +611,75 @@ export class MaumauApp extends LitElement {
   private nodesPollInterval: number | null = null;
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;
+  private mauOfficeTicker: number | null = null;
+  private mauOfficeTickerLastStepAt: number | null = null;
   private logsScrollFrame: number | null = null;
   private toolStreamById = new Map<string, ToolStreamEntry>();
   private toolStreamOrder: string[] = [];
   refreshSessionsAfterChat = new Set<string>();
   basePath = "";
+  mauOfficeReloadTimer: number | null = null;
+  dashboardReloadTimer: number | null = null;
   private popStateHandler = () =>
     onPopStateInternal(this as unknown as Parameters<typeof onPopStateInternal>[0]);
   private topbarObserver: ResizeObserver | null = null;
+  private visibilityChangeHandler = () => {
+    this.syncMauOfficeTicker();
+  };
   private globalKeydownHandler = (e: KeyboardEvent) => {
+    const lowerKey = e.key.toLowerCase();
+    const canUseMauOfficeHistoryShortcuts =
+      this.tab === "dashboardMauOffice" &&
+      this.mauOfficeEditorOpen &&
+      !e.altKey &&
+      !isEditableKeyTarget(e.target) &&
+      (e.metaKey || e.ctrlKey);
+    if (canUseMauOfficeHistoryShortcuts) {
+      const isUndoShortcut = lowerKey === "z" && !e.shiftKey;
+      const isRedoShortcut =
+        (lowerKey === "z" && e.shiftKey) || (lowerKey === "y" && e.ctrlKey && !e.metaKey);
+      const currentDraft = this.mauOfficeEditorDraft ?? this.mauOfficeState.scene.authored;
+      if (isUndoShortcut) {
+        e.preventDefault();
+        const result = undoSceneHistory({
+          draft: currentDraft,
+          undo: this.mauOfficeEditorUndoStack,
+          redo: this.mauOfficeEditorRedoStack,
+        });
+        if (result) {
+          this.mauOfficeEditorDraft = result.draft;
+          this.mauOfficeEditorUndoStack = result.undo;
+          this.mauOfficeEditorRedoStack = result.redo;
+          this.mauOfficeEditorSelection = normalizeSceneSelection(
+            result.draft,
+            this.mauOfficeEditorSelection,
+          );
+          this.mauOfficeEditorHoverTileX = null;
+          this.mauOfficeEditorHoverTileY = null;
+        }
+        return;
+      }
+      if (isRedoShortcut) {
+        e.preventDefault();
+        const result = redoSceneHistory({
+          draft: currentDraft,
+          undo: this.mauOfficeEditorUndoStack,
+          redo: this.mauOfficeEditorRedoStack,
+        });
+        if (result) {
+          this.mauOfficeEditorDraft = result.draft;
+          this.mauOfficeEditorUndoStack = result.undo;
+          this.mauOfficeEditorRedoStack = result.redo;
+          this.mauOfficeEditorSelection = normalizeSceneSelection(
+            result.draft,
+            this.mauOfficeEditorSelection,
+          );
+          this.mauOfficeEditorHoverTileX = null;
+          this.mauOfficeEditorHoverTileY = null;
+        }
+        return;
+      }
+    }
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "k") {
       e.preventDefault();
       this.paletteOpen = !this.paletteOpen;
@@ -481,6 +710,7 @@ export class MaumauApp extends LitElement {
       }
     };
     document.addEventListener("keydown", this.globalKeydownHandler);
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
   }
 
@@ -490,6 +720,9 @@ export class MaumauApp extends LitElement {
 
   disconnectedCallback() {
     document.removeEventListener("keydown", this.globalKeydownHandler);
+    document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
+    this.stopMauOfficeTicker();
+    clearScheduledDashboardReload(this);
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -723,6 +956,48 @@ export class MaumauApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  private stopMauOfficeTicker() {
+    if (this.mauOfficeTicker == null) {
+      return;
+    }
+    window.cancelAnimationFrame(this.mauOfficeTicker);
+    this.mauOfficeTicker = null;
+    this.mauOfficeTickerLastStepAt = null;
+  }
+
+  syncMauOfficeTicker() {
+    const pageVisible =
+      typeof document === "undefined" ? true : document.visibilityState !== "hidden";
+    const active = this.tab === "dashboardMauOffice" && pageVisible;
+    if (!active) {
+      this.stopMauOfficeTicker();
+      return;
+    }
+    if (this.mauOfficeTicker != null) {
+      return;
+    }
+    const stepIntervalMs = 1000 / 30;
+    const tick = (frameAt: number) => {
+      if (this.tab !== "dashboardMauOffice" || !this.mauOfficeState.loaded) {
+        this.mauOfficeTicker = window.requestAnimationFrame(tick);
+        return;
+      }
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        this.mauOfficeTicker = window.requestAnimationFrame(tick);
+        return;
+      }
+      const previousStepAt = this.mauOfficeTickerLastStepAt ?? frameAt - stepIntervalMs;
+      const elapsedMs = frameAt - previousStepAt;
+      if (elapsedMs >= stepIntervalMs) {
+        // Preserve a stable cadence even when a frame lands late.
+        this.mauOfficeTickerLastStepAt = frameAt - (elapsedMs % stepIntervalMs);
+        this.mauOfficeState = advanceMauOfficeState(this.mauOfficeState, Date.now());
+      }
+      this.mauOfficeTicker = window.requestAnimationFrame(tick);
+    };
+    this.mauOfficeTicker = window.requestAnimationFrame(tick);
   }
 
   render() {

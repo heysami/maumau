@@ -15,6 +15,33 @@ const gatewayClientCalls: Array<{
   onClose?: (code: number, reason: string) => void;
 }> = [];
 const ensureWorkspaceAndSessionsMock = vi.fn(async (..._args: unknown[]) => {});
+const applyLocalSetupMultiUserMemoryDefaultsMock = vi.hoisted(() => vi.fn((cfg) => cfg));
+const ensureOnboardedMultiUserMemoryArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
+const applyLocalSetupReflectionReviewerDefaultsMock = vi.hoisted(() => vi.fn((cfg) => cfg));
+const ensureOnboardedReflectionReviewerArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
+const ensureLifeImprovementRoutineArtifactsMock = vi.hoisted(() => vi.fn(async () => {}));
+const maybeAutoLinkFreshInstallMauworldMock = vi.hoisted(() =>
+  vi.fn(async () => ({ status: "linked", installationId: "inst_auto_1" })),
+);
+const ensureFreshInstallBundledToolsMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    attempted: true,
+    ok: true,
+    fullyReady: true,
+    results: [
+      {
+        id: "chrome",
+        status: "installed",
+        detail: "Installed Google Chrome.",
+      },
+      {
+        id: "clawd-cursor",
+        status: "configured",
+        detail: "Configured Clawd Cursor.",
+      },
+    ],
+  })),
+);
 type InstallGatewayDaemonResult = Awaited<ReturnType<typeof installGatewayDaemonNonInteractive>>;
 const installGatewayDaemonNonInteractiveMock = vi.hoisted(() =>
   vi.fn(async (): Promise<InstallGatewayDaemonResult> => ({ installed: true })),
@@ -80,6 +107,28 @@ vi.mock("./onboard-helpers.js", async (importOriginal) => {
 
 vi.mock("./onboard-non-interactive/local/daemon-install.js", () => ({
   installGatewayDaemonNonInteractive: installGatewayDaemonNonInteractiveMock,
+}));
+
+vi.mock("./onboard-multi-user-memory.js", () => ({
+  applyLocalSetupMultiUserMemoryDefaults: applyLocalSetupMultiUserMemoryDefaultsMock,
+  ensureOnboardedMultiUserMemoryArtifacts: ensureOnboardedMultiUserMemoryArtifactsMock,
+}));
+
+vi.mock("./onboard-reflection-reviewer.js", () => ({
+  applyLocalSetupReflectionReviewerDefaults: applyLocalSetupReflectionReviewerDefaultsMock,
+  ensureOnboardedReflectionReviewerArtifacts: ensureOnboardedReflectionReviewerArtifactsMock,
+}));
+
+vi.mock("../teams/life-improvement-routine.js", () => ({
+  ensureLifeImprovementRoutineArtifacts: ensureLifeImprovementRoutineArtifactsMock,
+}));
+
+vi.mock("./onboard-mauworld.js", () => ({
+  maybeAutoLinkFreshInstallMauworld: maybeAutoLinkFreshInstallMauworldMock,
+}));
+
+vi.mock("../commands/onboard-bundled-tools.js", () => ({
+  ensureFreshInstallBundledTools: ensureFreshInstallBundledToolsMock,
 }));
 
 vi.mock("../daemon/service.js", () => ({
@@ -226,6 +275,13 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
   afterEach(() => {
     waitForGatewayReachableMock = undefined;
     installGatewayDaemonNonInteractiveMock.mockClear();
+    applyLocalSetupMultiUserMemoryDefaultsMock.mockClear();
+    ensureOnboardedMultiUserMemoryArtifactsMock.mockClear();
+    applyLocalSetupReflectionReviewerDefaultsMock.mockClear();
+    ensureOnboardedReflectionReviewerArtifactsMock.mockClear();
+    ensureLifeImprovementRoutineArtifactsMock.mockClear();
+    maybeAutoLinkFreshInstallMauworldMock.mockClear();
+    ensureFreshInstallBundledToolsMock.mockClear();
     gatewayServiceMock.isLoaded.mockClear();
     gatewayServiceMock.readRuntime.mockClear();
     readLastGatewayErrorLineMock.mockClear();
@@ -266,6 +322,44 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       expect(cfg?.gateway?.auth?.token).toBe(token);
     });
   }, 60_000);
+
+  it("includes bundled tool provisioning in successful fresh-install JSON output", async () => {
+    await withStateDir("state-bundled-tools-json-", async (stateDir) => {
+      const { runtimeWithCapture, readCapturedJson } = createJsonCaptureRuntime();
+
+      await runNonInteractiveSetup(
+        {
+          nonInteractive: true,
+          mode: "local",
+          workspace: path.join(stateDir, "maumau"),
+          authChoice: "skip",
+          skipSkills: true,
+          skipHealth: true,
+          installDaemon: false,
+          json: true,
+        },
+        runtimeWithCapture,
+      );
+
+      expect(ensureFreshInstallBundledToolsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ freshInstall: true }),
+      );
+      expect(maybeAutoLinkFreshInstallMauworldMock).toHaveBeenCalledWith({
+        config: expect.any(Object),
+        runtime: runtimeWithCapture,
+      });
+
+      const parsed = JSON.parse(readCapturedJson()) as {
+        ok: boolean;
+        bundledTools?: Array<{ id?: string; status?: string }>;
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.bundledTools).toEqual([
+        expect.objectContaining({ id: "chrome", status: "installed" }),
+        expect.objectContaining({ id: "clawd-cursor", status: "configured" }),
+      ]);
+    });
+  });
 
   it("uses MAUMAU_GATEWAY_TOKEN when --gateway-token is omitted", async () => {
     await withStateDir("state-env-token-", async (stateDir) => {
@@ -583,6 +677,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
           installDaemon: false,
           gatewayPort: port,
           gatewayBind: "lan",
+          tailscale: "off",
         },
         runtime,
       );

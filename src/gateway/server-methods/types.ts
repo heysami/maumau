@@ -25,6 +25,7 @@ export type GatewayClient = {
   /** Internal-only auth context that cannot be supplied through gateway RPC payloads. */
   internal?: {
     allowModelOverride?: boolean;
+    requesterTailscaleLogin?: string;
   };
 };
 
@@ -102,6 +103,7 @@ export type GatewayRequestContext = {
   modelAuthWizardRunner: (
     opts: {
       authChoice?: string;
+      setDefaultModel?: boolean;
     },
     runtime: import("../../runtime.js").RuntimeEnv,
     prompter: import("../../wizard/prompts.js").WizardPrompter,

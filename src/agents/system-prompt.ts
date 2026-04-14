@@ -88,6 +88,96 @@ function buildTimeSection(params: { userTimezone?: string }) {
   return ["## Current Date & Time", `Time zone: ${params.userTimezone}`, ""];
 }
 
+function extractMarkdownSection(content: string, heading: string): string | null {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const headingIndex = normalized.indexOf(heading);
+  if (headingIndex < 0) {
+    return null;
+  }
+  const sectionStart = normalized.indexOf("\n", headingIndex);
+  if (sectionStart < 0) {
+    return "";
+  }
+  const remaining = normalized.slice(sectionStart + 1);
+  const nextHeadingMatch = remaining.match(/\n##\s+/u);
+  const nextRuleMatch = remaining.match(/\n---\s*(?:\n|$)/u);
+  const endIndexCandidates = [
+    nextHeadingMatch?.index,
+    nextRuleMatch?.index,
+    remaining.length,
+  ].filter((value): value is number => typeof value === "number");
+  const endIndex = Math.min(...endIndexCandidates);
+  return remaining.slice(0, endIndex);
+}
+
+function isUserLifeSnapshotEmpty(content: string): boolean {
+  const section = extractMarkdownSection(content, "## Life Snapshot");
+  if (!section) {
+    return false;
+  }
+  let currentFieldHasValue = false;
+  for (const rawLine of section.split(/\r?\n/u)) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("_(")) {
+      continue;
+    }
+    const fieldMatch = trimmed.match(/^-\s+\*\*[^*]+:\*\*\s*(.*)$/u);
+    if (fieldMatch) {
+      currentFieldHasValue = Boolean(fieldMatch[1]?.trim());
+      if (currentFieldHasValue) {
+        return false;
+      }
+      continue;
+    }
+    if (currentFieldHasValue) {
+      return false;
+    }
+    if (!trimmed.startsWith("- **")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function buildLifeSnapshotNudgeSection(params: {
+  contextFiles: EmbeddedContextFile[];
+  isMinimal: boolean;
+}) {
+  if (params.isMinimal) {
+    return [];
+  }
+  const hasBootstrap = params.contextFiles.some((file) => {
+    const normalizedPath = file.path?.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath?.split("/").pop()?.toLowerCase();
+    return baseName === "bootstrap.md";
+  });
+  if (hasBootstrap) {
+    return [];
+  }
+  const userFile = params.contextFiles.find((file) => {
+    const normalizedPath = file.path?.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath?.split("/").pop()?.toLowerCase();
+    return baseName === "user.md";
+  });
+  if (!userFile?.content || !isUserLifeSnapshotEmpty(userFile.content)) {
+    return [];
+  }
+  return [
+    "## User Snapshot",
+    "USER.md still has an empty Life Snapshot.",
+    "When the moment is natural, guide the user through it instead of dropping a tiny intake note at the end of a long unrelated reply.",
+    "Start with one focused, skippable prompt about what their normal day or week looks like.",
+    "If they engage, use later turns to move naturally into hobbies, exercise, and the shape of their work or study life.",
+    "Only later, if it feels welcome and useful, ask about family context such as siblings, parents, partner, or other important people.",
+    "Reflect back what you learned before moving to the next step, and keep it to one focused step at a time.",
+    "When they give real profile facts, update USER.md in the same turn before you claim it is locked in, saved, or remembered.",
+    "Do not interrupt an urgent concrete task just to do this; finish the current help first.",
+    'If they skip or say "not now," respect that and move on.',
+    "",
+  ];
+}
+
 function buildReplyTagsSection(isMinimal: boolean) {
   if (isMinimal) {
     return [];
@@ -153,6 +243,19 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
     return [];
   }
   return ["## Voice (TTS)", hint, ""];
+}
+
+function buildTruthfulnessSection() {
+  return [
+    "## Truthfulness & Scope",
+    "Never claim actions, edits, delegated sessions, approvals, tests, previews, links, or capability paths unless they actually happened in this session.",
+    "If something is only planned, suggested, inferred, or still blocked, say that explicitly.",
+    "If a tool or team returned blocked, forbidden, unavailable, timeout, error, or contract_failed, treat the task as not completed and report the blocker plainly.",
+    "If a tool or team returned accepted for delegated/background work, say that the work has started, briefly name what is being worked on, and tell the user a follow-up reply will arrive when it finishes.",
+    "If a tool or team returned waiting_timed_out, report that you stopped waiting and that the delegated run is still active; do not call it completed or failed.",
+    "Stay inside your current role and authority. Do not impersonate other agents, specialists, managers, or QA reviewers.",
+    "",
+  ];
 }
 
 function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
@@ -245,6 +348,13 @@ export function buildAgentSystemPrompt(params: {
     agents_list: acpSpawnRuntimeEnabled
       ? 'List Maumau agent ids allowed for sessions_spawn when runtime="subagent" (not ACP harness ids)'
       : "List Maumau agent ids allowed for sessions_spawn",
+    capabilities_list:
+      "List truthful capability readiness for tools, teams, browser lanes, preview delivery, and desktop fallbacks",
+    preview_publish:
+      "Publish a workspace artifact as a durable private preview or explicit temporary public share",
+    teams_list: "List configured Maumau teams and whether this session can run them",
+    teams_run:
+      "Run a configured Maumau team by spawning its manager agent with the generated OpenProse workflow",
     sessions_list: "List other sessions (incl. sub-agents) with filters/last",
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
@@ -277,6 +387,10 @@ export function buildAgentSystemPrompt(params: {
     "message",
     "gateway",
     "agents_list",
+    "capabilities_list",
+    "preview_publish",
+    "teams_list",
+    "teams_run",
     "sessions_list",
     "sessions_history",
     "sessions_send",
@@ -433,6 +547,7 @@ export function buildAgentSystemPrompt(params: {
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
     `For long waits, avoid rapid poll loops: use ${execToolName} with enough yieldMs or ${processToolName}(action=poll, timeout=<ms>).`,
     "If a task is more complex or takes longer, spawn a sub-agent. Completion is push-based: it will auto-announce when done.",
+    "If you hand work off to a sub-agent or linked team and then wait or yield, send one brief user-facing status line first so the requester knows work is underway.",
     ...(acpHarnessSpawnAllowed
       ? [
           'For requests like "do this in codex/claude code/gemini", treat it as ACP harness intent and call `sessions_spawn` with `runtime: "acp"`.',
@@ -453,6 +568,7 @@ export function buildAgentSystemPrompt(params: {
     "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
     "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
     "",
+    ...buildTruthfulnessSection(),
     ...safetySection,
     "## Maumau CLI Quick Reference",
     "Maumau is controlled via subcommands. Do not invent commands.",
@@ -602,6 +718,13 @@ export function buildAgentSystemPrompt(params: {
   const validContextFiles = contextFiles.filter(
     (file) => typeof file.path === "string" && file.path.trim().length > 0,
   );
+  const lifeSnapshotNudgeSection = buildLifeSnapshotNudgeSection({
+    contextFiles: validContextFiles,
+    isMinimal,
+  });
+  if (lifeSnapshotNudgeSection.length > 0) {
+    lines.push(...lifeSnapshotNudgeSection);
+  }
   if (validContextFiles.length > 0) {
     lines.push("# Project Context", "");
     if (validContextFiles.length > 0) {

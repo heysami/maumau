@@ -1,6 +1,9 @@
 import { Type } from "@sinclair/typebox";
+import type { MaumauConfig } from "../../config/config.js";
+import { normalizeAgentId } from "../../routing/session-key.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import { ACP_SPAWN_MODES, ACP_SPAWN_STREAM_TARGETS, spawnAcpDirect } from "../acp-spawn.js";
+import { resolveAgentConfig, resolveSessionAgentIds } from "../agent-scope.js";
 import { optionalStringEnum } from "../schema/typebox.js";
 import type { SpawnedToolContext } from "../spawned-context.js";
 import { SUBAGENT_SPAWN_MODES, spawnSubagentDirect } from "../subagent-spawn.js";
@@ -19,6 +22,61 @@ const UNSUPPORTED_SESSIONS_SPAWN_PARAM_KEYS = [
   "replyTo",
   "reply_to",
 ] as const;
+
+function normalizeOptionalAgentId(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? normalizeAgentId(trimmed) : undefined;
+}
+
+function resolveExecutionWorkerRuntimeCorrection(params: {
+  requestedRuntime: "subagent" | "acp";
+  requestedAgentId?: string;
+  requesterSessionKey?: string;
+  requesterAgentIdOverride?: string;
+  config?: MaumauConfig;
+  hasAcpOnlyParams: boolean;
+}):
+  | { effectiveRuntime: "subagent" | "acp" }
+  | { effectiveRuntime: "subagent" | "acp"; note: string }
+  | { effectiveRuntime: "subagent" | "acp"; error: string } {
+  if (params.requestedRuntime !== "acp" || !params.config) {
+    return { effectiveRuntime: params.requestedRuntime };
+  }
+
+  const targetAgentId = normalizeOptionalAgentId(params.requestedAgentId);
+  if (!targetAgentId) {
+    return { effectiveRuntime: params.requestedRuntime };
+  }
+
+  const { sessionAgentId: requesterAgentId } = resolveSessionAgentIds({
+    sessionKey: params.requesterSessionKey,
+    config: params.config,
+    agentId: params.requesterAgentIdOverride,
+  });
+  const executionWorkerAgentId = normalizeOptionalAgentId(
+    resolveAgentConfig(params.config, requesterAgentId)?.executionWorkerAgentId,
+  );
+
+  if (!executionWorkerAgentId || executionWorkerAgentId !== targetAgentId) {
+    return { effectiveRuntime: params.requestedRuntime };
+  }
+
+  if (params.hasAcpOnlyParams) {
+    return {
+      effectiveRuntime: params.requestedRuntime,
+      error:
+        `agentId "${targetAgentId}" is the configured execution worker for agent "${requesterAgentId}". ` +
+        'Spawn it with runtime="subagent" (or omit runtime) because ACP-only params do not apply to Maumau subagents.',
+    };
+  }
+
+  return {
+    effectiveRuntime: "subagent",
+    note:
+      `Requested runtime="acp" for configured execution worker "${targetAgentId}". ` +
+      'Using runtime="subagent" instead.',
+  };
+}
 
 const SessionsSpawnToolSchema = Type.Object({
   task: Type.String(),
@@ -72,9 +130,12 @@ export function createSessionsSpawnTool(
     agentAccountId?: string;
     agentTo?: string;
     agentThreadId?: string | number;
+    senderIsOwner?: boolean;
+    requesterTailscaleLogin?: string | null;
     sandboxed?: boolean;
     /** Explicit agent ID override for cron/hook sessions where session key parsing may not work. */
     requesterAgentIdOverride?: string;
+    config?: MaumauConfig;
   } & SpawnedToolContext,
 ): AnyAgentTool {
   return {
@@ -126,22 +187,37 @@ export function createSessionsSpawnTool(
             mimeType?: string;
           }>)
         : undefined;
-
-      if (streamTo && runtime !== "acp") {
+      const runtimeCorrection = resolveExecutionWorkerRuntimeCorrection({
+        requestedRuntime: runtime,
+        requestedAgentId,
+        requesterSessionKey: opts?.agentSessionKey,
+        requesterAgentIdOverride: opts?.requesterAgentIdOverride,
+        config: opts?.config,
+        hasAcpOnlyParams: Boolean(streamTo || resumeSessionId),
+      });
+      if ("error" in runtimeCorrection) {
         return jsonResult({
           status: "error",
-          error: `streamTo is only supported for runtime=acp; got runtime=${runtime}`,
+          error: runtimeCorrection.error,
+        });
+      }
+      const effectiveRuntime = runtimeCorrection.effectiveRuntime;
+
+      if (streamTo && effectiveRuntime !== "acp") {
+        return jsonResult({
+          status: "error",
+          error: `streamTo is only supported for runtime=acp; got runtime=${effectiveRuntime}`,
         });
       }
 
-      if (resumeSessionId && runtime !== "acp") {
+      if (resumeSessionId && effectiveRuntime !== "acp") {
         return jsonResult({
           status: "error",
-          error: `resumeSessionId is only supported for runtime=acp; got runtime=${runtime}`,
+          error: `resumeSessionId is only supported for runtime=acp; got runtime=${effectiveRuntime}`,
         });
       }
 
-      if (runtime === "acp") {
+      if (effectiveRuntime === "acp") {
         if (Array.isArray(attachments) && attachments.length > 0) {
           return jsonResult({
             status: "error",
@@ -167,6 +243,8 @@ export function createSessionsSpawnTool(
             agentAccountId: opts?.agentAccountId,
             agentTo: opts?.agentTo,
             agentThreadId: opts?.agentThreadId,
+            senderIsOwner: opts?.senderIsOwner,
+            requesterTailscaleLogin: opts?.requesterTailscaleLogin,
             sandboxed: opts?.sandboxed,
           },
         );
@@ -201,12 +279,23 @@ export function createSessionsSpawnTool(
           agentGroupId: opts?.agentGroupId,
           agentGroupChannel: opts?.agentGroupChannel,
           agentGroupSpace: opts?.agentGroupSpace,
+          senderIsOwner: opts?.senderIsOwner,
+          requesterTailscaleLogin: opts?.requesterTailscaleLogin,
           requesterAgentIdOverride: opts?.requesterAgentIdOverride,
           workspaceDir: opts?.workspaceDir,
         },
       );
 
-      return jsonResult(result);
+      return jsonResult(
+        "note" in runtimeCorrection
+          ? {
+              ...result,
+              note: runtimeCorrection.note,
+              requestedRuntime: runtime,
+              effectiveRuntime,
+            }
+          : result,
+      );
     },
   };
 }
