@@ -9,7 +9,9 @@ set -euo pipefail
 # - dist/Maumau-<version>.dmg
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_ROOT="$ROOT_DIR/apps/macos/.build"
+# Match the app packager's dedicated SwiftPM build root so dSYM collection
+# works for release packaging without relying on the default SwiftPM layout.
+BUILD_ROOT="${MAUMAU_MAC_PACKAGE_BUILD_ROOT:-$ROOT_DIR/apps/macos/.build-package}"
 PRODUCT="Maumau"
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
 APP_VERSION_INPUT="${APP_VERSION:-$(cd "$ROOT_DIR" && node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")}"
