@@ -29,7 +29,7 @@ describe("collectDashboardLifeProfile", () => {
 - **Name:** Taylor Example
 - **What to call them:** Taylor
 - **Pronouns:** _(optional)_
-- **Timezone:** Asia/Singapore
+- **Timezone:** UTC
 
 ## Life Snapshot
 

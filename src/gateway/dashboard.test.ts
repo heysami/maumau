@@ -292,9 +292,9 @@ describe("dashboard aggregations", () => {
       path.join(workspaceDir, "USER.md"),
       `# USER.md - About Your Human
 
-- **Name:** Sam
-- **What to call them:** Sam
-- **Timezone:** Asia/Singapore
+- **Name:** Taylor
+- **What to call them:** Taylor
+- **Timezone:** UTC
 
 ## Life Snapshot
 
@@ -1171,7 +1171,7 @@ describe("dashboard aggregations", () => {
             schedule: {
               kind: "cron",
               expr: "0 10 * * *",
-              tz: "Asia/Singapore",
+              tz: "UTC",
             },
             nextRunAtMs: Date.UTC(2026, 3, 13, 2, 0, 0),
           }),
@@ -1184,7 +1184,7 @@ describe("dashboard aggregations", () => {
             schedule: {
               kind: "cron",
               expr: "15 8 * * *",
-              tz: "Asia/Singapore",
+              tz: "UTC",
             },
             nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
           }),
@@ -1254,7 +1254,7 @@ describe("dashboard aggregations", () => {
             schedule: {
               kind: "cron",
               expr: "0 10 * * *",
-              tz: "Asia/Singapore",
+              tz: "UTC",
             },
             nextRunAtMs: Date.UTC(2026, 3, 13, 2, 0, 0),
           }),
@@ -1267,7 +1267,7 @@ describe("dashboard aggregations", () => {
             schedule: {
               kind: "cron",
               expr: "15 8 * * *",
-              tz: "Asia/Singapore",
+              tz: "UTC",
             },
             nextRunAtMs: Date.UTC(2026, 3, 13, 0, 15, 0),
           }),
@@ -1302,9 +1302,9 @@ describe("dashboard aggregations", () => {
       path.join(workspaceDir, "USER.md"),
       `# USER.md - About Your Human
 
-- **Name:** Sami
-- **What to call them:** Sami
-- **Timezone:** Asia/Singapore
+- **Name:** Taylor Example
+- **What to call them:** Taylor
+- **Timezone:** UTC
 
 ## Life Snapshot
 
