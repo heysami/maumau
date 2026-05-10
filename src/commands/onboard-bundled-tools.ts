@@ -4,7 +4,7 @@ import { request } from "node:https";
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { fetchOllamaModels, resolveOllamaApiBase } from "../agents/ollama-models.js";
+import { fetchOllamaModels } from "../agents/ollama-models.js";
 import { resolveGoogleChromeExecutableForPlatform } from "../browser/chrome.executables.js";
 import type { MaumauConfig } from "../config/config.js";
 import { resolveAgentModelPrimaryValue } from "../config/model-input.js";

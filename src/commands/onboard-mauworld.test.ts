@@ -23,7 +23,7 @@ function createConfig(overrides?: Record<string, unknown>): MaumauConfig {
             autoLinkOnFreshInstall: true,
             timeoutMs: 15_000,
             displayName: "Main Mau Agent",
-            ...(overrides ?? {}),
+            ...overrides,
           },
         },
       },

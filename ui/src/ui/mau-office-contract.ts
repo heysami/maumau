@@ -452,8 +452,8 @@ function makeFloorTiles(): MauOfficeTilePlacement[] {
         id: `tile:${tileX}:${tileY}`,
         asset:
           roomId === "hall"
-            ? HALL_FLOOR_VARIANTS[(tileX + tileY) % HALL_FLOOR_VARIANTS.length]!
-            : ROOM_FLOOR_VARIANTS[(tileX * 3 + tileY) % ROOM_FLOOR_VARIANTS.length]!,
+            ? HALL_FLOOR_VARIANTS[(tileX + tileY) % HALL_FLOOR_VARIANTS.length]
+            : ROOM_FLOOR_VARIANTS[(tileX * 3 + tileY) % ROOM_FLOOR_VARIANTS.length],
         tileX,
         tileY,
         layer: "floor",

@@ -165,9 +165,7 @@ export function applyConversationAutomationPresetConfig(
       ? "allowlist"
       : "owner";
   const telephonyEnabled =
-    options.telephonyEnabled === undefined
-      ? undefined
-      : enabled && options.telephonyEnabled === true;
+    options.telephonyEnabled === undefined ? undefined : enabled && options.telephonyEnabled;
   const telephonyProvider = resolveConversationAutomationTelephonyProvider(
     options.telephonyProvider,
   );

@@ -456,7 +456,7 @@ function collectDeepgramRealtimeCard(params: {
   let totalValue = 0;
   for (const call of params.calls) {
     const walletRealtime = isObject(call.metadata?.walletRealtimeStt)
-      ? (call.metadata?.walletRealtimeStt as Record<string, unknown>)
+      ? call.metadata?.walletRealtimeStt
       : null;
     if (!walletRealtime) {
       continue;
@@ -759,7 +759,7 @@ function dedupeExpenseEvents(
       deduped.set(event.fingerprint, event);
     }
   }
-  return Array.from(deduped.values()).sort(
+  return Array.from(deduped.values()).toSorted(
     (left, right) => resolveWalletSpendEventAtMs(left) - resolveWalletSpendEventAtMs(right),
   );
 }
@@ -813,7 +813,7 @@ function buildWalletSpendCharts(params: {
       }
       const topKeys = new Set(
         [...totalsBySegment.entries()]
-          .sort((left, right) => right[1].totalValue - left[1].totalValue)
+          .toSorted((left, right) => right[1].totalValue - left[1].totalValue)
           .slice(0, MAX_WALLET_SPEND_SEGMENTS)
           .map(([key]) => key),
       );
@@ -878,7 +878,7 @@ function buildWalletSpendCharts(params: {
 
         const finalizedBars: DashboardWalletSpendBar[] = bucketStarts.map((startAtMs) => {
           const bar = bars.get(String(startAtMs));
-          const segments = [...(bar?.segments.values() ?? [])].sort(
+          const segments = [...(bar?.segments.values() ?? [])].toSorted(
             (left, right) => right.totalValue - left.totalValue,
           );
           return {
@@ -900,7 +900,9 @@ function buildWalletSpendCharts(params: {
           totalRecords: currencyEvents.length,
           maxBarValue: Math.max(...finalizedBars.map((bar) => bar.totalValue), 0),
           bars: finalizedBars,
-          legend: [...legend.values()].sort((left, right) => right.totalValue - left.totalValue),
+          legend: [...legend.values()].toSorted(
+            (left, right) => right.totalValue - left.totalValue,
+          ),
         });
       }
     }
@@ -909,7 +911,7 @@ function buildWalletSpendCharts(params: {
   return {
     records: expenses.length,
     lastRecordedAtMs: Math.max(...expenses.map((event) => event.completedAtMs)),
-    currencies: [...groupedByCurrency.keys()].sort(),
+    currencies: [...groupedByCurrency.keys()].toSorted(),
     charts,
     note:
       fallbackDateCount > 0

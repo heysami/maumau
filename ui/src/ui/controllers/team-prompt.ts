@@ -1,5 +1,4 @@
 import type { AgentConfig } from "../../../../src/config/types.agents.js";
-import type { MaumauConfig } from "../../../../src/config/types.maumau.js";
 import type { TeamConfig, TeamWorkflowConfig } from "../../../../src/config/types.teams.js";
 import { listTeamWorkflows, resolveDefaultTeamWorkflowId } from "../../../../src/teams/model.js";
 import type { GatewayBrowserClient } from "../gateway.ts";
@@ -220,7 +219,7 @@ function applyPromptEditResult(
     throw new Error(`Team "${target.teamId}" no longer exists in the current draft.`);
   }
   const teamsList = cloneConfigObject(
-    (((nextRoot.teams ?? {}) as { list?: TeamConfig[] }).list ?? []) as TeamConfig[],
+    ((nextRoot.teams ?? {}) as { list?: TeamConfig[] }).list ?? [],
   );
   let nextTeam = cloneConfigObject(teamsList[teamIndex]);
   nextTeam = applyTeamPatch(nextTeam, result);

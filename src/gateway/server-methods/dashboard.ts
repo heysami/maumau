@@ -284,7 +284,10 @@ export const dashboardHandlers: GatewayRequestHandlers = {
         channelId: typeof params.channelId === "string" ? params.channelId : "",
         fields: isPlainRecord(params.fields)
           ? Object.fromEntries(
-              Object.entries(params.fields).map(([key, value]) => [key, String(value ?? "")]),
+              Object.entries(params.fields).map(([key, value]) => [
+                key,
+                typeof value === "string" ? value : "",
+              ]),
             )
           : undefined,
         dmPolicy: typeof params.dmPolicy === "string" ? params.dmPolicy : undefined,

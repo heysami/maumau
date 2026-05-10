@@ -78,7 +78,7 @@ const USER_CHANNEL_QUICK_SETUP_CONFIG_BY_LOCALE = {
 
 export const USER_CHANNEL_INLINE_QUICK_SETUP_IDS = Object.freeze([
   ...USER_CHANNEL_QUICK_SETUP_CONFIG.channelOrder,
-]) as readonly UserChannelInlineQuickSetupId[];
+]);
 
 export function isUserChannelInlineQuickSetupId(
   value: string,

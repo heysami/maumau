@@ -14,7 +14,7 @@ function createSkillEntriesFromSnapshot(skills?: SkillSnapshot["resolvedSkills"]
     frontmatter: {},
     invocation: {
       userInvocable: true,
-      disableModelInvocation: skill.disableModelInvocation === true,
+      disableModelInvocation: skill.disableModelInvocation,
     },
   }));
 }

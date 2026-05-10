@@ -20,13 +20,13 @@ export function applyFreshInstallPluginDefaults(config: MaumauConfig): MaumauCon
     plugins: {
       ...config.plugins,
       entries: {
-        ...(config.plugins?.entries ?? {}),
+        ...config.plugins?.entries,
         mauworld: {
           ...DEFAULT_MAUWORLD_PLUGIN_ENTRY,
           ...existingMauworldEntry,
           config: {
-            ...(DEFAULT_MAUWORLD_PLUGIN_ENTRY.config ?? {}),
-            ...(existingMauworldEntry?.config ?? {}),
+            ...DEFAULT_MAUWORLD_PLUGIN_ENTRY.config,
+            ...existingMauworldEntry?.config,
           },
         },
       },

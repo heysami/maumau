@@ -37,7 +37,7 @@ function resolveConfiguredRoleFallback(params: {
   );
   const uniqueRoles = Array.from(new Set(matchingRoles.map((role) => role.trim()).filter(Boolean)));
   if (uniqueRoles.length === 1) {
-    return { kind: "specialist", role: uniqueRoles[0]! };
+    return { kind: "specialist", role: uniqueRoles[0] };
   }
   return undefined;
 }

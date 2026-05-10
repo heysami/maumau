@@ -357,7 +357,10 @@ function renderQuickSetupForm(
         }
         const data = new FormData(form);
         const fields = Object.fromEntries(
-          channel.fields.map((field) => [field.key, String(data.get(field.key) ?? "")]),
+          channel.fields.map((field) => {
+            const value = data.get(field.key);
+            return [field.key, typeof value === "string" ? value : ""];
+          }),
         );
         props.onConnectChannel({
           channelId: channel.channelId,
@@ -662,12 +665,15 @@ function renderEditableListCard(params: {
                 </label>
               `,
               onSubmit: (form) => {
+                const data = new FormData(form);
+                const policy = data.get("policy");
+                const entries = data.get("entries");
                 params.onSaveChats!(
-                  String(new FormData(form).get("policy") ?? "allowlist") as
+                  (typeof policy === "string" ? policy : "allowlist") as
                     | "allowlist"
                     | "open"
                     | "disabled",
-                  String(new FormData(form).get("entries") ?? ""),
+                  typeof entries === "string" ? entries : "",
                 );
               },
             })
@@ -677,7 +683,8 @@ function renderEditableListCard(params: {
               subtitle: params.subtitle,
               list: params.list,
               onSubmit: (form) => {
-                params.onSaveAllowlist?.(String(new FormData(form).get("entries") ?? ""));
+                const entries = new FormData(form).get("entries");
+                params.onSaveAllowlist?.(typeof entries === "string" ? entries : "");
               },
             })
       }

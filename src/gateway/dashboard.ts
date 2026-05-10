@@ -72,7 +72,6 @@ import type {
   DashboardWorkItem,
   DashboardWorkItemBlockerLink,
   DashboardWorkItemSessionLink,
-  DashboardWorkItemVisibilityScope,
 } from "./dashboard-types.js";
 import {
   buildSavedWorkshopEmbedPath,
@@ -213,17 +212,6 @@ function clampWords(text: string, maxWords: number): string {
     return words.join(" ");
   }
   return `${words.slice(0, maxWords).join(" ")}…`;
-}
-
-function createTodayBounds(nowMs: number) {
-  const start = new Date(nowMs);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start.getTime());
-  end.setDate(end.getDate() + 1);
-  return {
-    startAtMs: start.getTime(),
-    endAtMs: end.getTime(),
-  };
 }
 
 function startOfLocalDay(ms: number): number {
@@ -400,7 +388,7 @@ function resolveLatestPrimaryUserSessionEntry(params: {
       }
       return normalizeText((entry as { channel?: string }).channel).toLowerCase() !== "internal";
     })
-    .sort((left, right) => (right[1].updatedAt ?? 0) - (left[1].updatedAt ?? 0))[0]?.[1];
+    .toSorted((left, right) => (right[1].updatedAt ?? 0) - (left[1].updatedAt ?? 0))[0]?.[1];
 }
 
 function extractRecentRoutineTemplateText(params: {
@@ -647,7 +635,7 @@ function inferRoutinePreviewView(job: CronJob, nowMs: number): DashboardRoutineP
   if (upcoming.length >= 2) {
     const intervals = upcoming
       .slice(1)
-      .map((timestamp, index) => timestamp - upcoming[index]!)
+      .map((timestamp, index) => timestamp - upcoming[index])
       .filter((interval) => interval > 0);
     const averageIntervalMs =
       intervals.reduce((sum, interval) => sum + interval, 0) / Math.max(1, intervals.length);
@@ -1060,7 +1048,7 @@ async function readStoredTeamSnapshotStore(params?: {
         typeof parsed.teamsConfigFingerprint === "string"
           ? parsed.teamsConfigFingerprint
           : undefined,
-      snapshots: parsed.snapshots as DashboardTeamSnapshot[],
+      snapshots: parsed.snapshots,
     };
   } catch {
     return null;
@@ -1705,7 +1693,7 @@ async function readStoredDashboardWorkItems(params?: {
     return {
       version: 1,
       updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : 0,
-      items: Array.isArray(parsed.items) ? (parsed.items as DashboardWorkItem[]) : [],
+      items: Array.isArray(parsed.items) ? parsed.items : [],
     };
   } catch {
     return {
@@ -1734,9 +1722,7 @@ async function readDashboardRoutineVisibilityStore(params?: {
     return {
       version: 1,
       updatedAtMs: typeof parsed.updatedAtMs === "number" ? parsed.updatedAtMs : 0,
-      preferences: isObject(parsed.preferences)
-        ? (parsed.preferences as DashboardRoutineVisibilityStore["preferences"])
-        : {},
+      preferences: isObject(parsed.preferences) ? parsed.preferences : {},
     };
   } catch {
     return {
@@ -3278,7 +3264,7 @@ function buildSavedWorkshopItems(params: {
   });
   return params.savedRecords
     .slice()
-    .sort((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
+    .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0))
     .map((record) => ({
       id: record.id,
       title: record.title,
@@ -3952,7 +3938,7 @@ export async function saveDashboardWorkshop(
         projectKey: workspaceProject.key,
       };
     })
-    .sort((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0));
+    .toSorted((left, right) => (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0));
 
   await writeDashboardWorkshopStore(
     {

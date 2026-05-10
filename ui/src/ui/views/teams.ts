@@ -129,7 +129,9 @@ function resolveAgentOptions(
     addOption("main", "Main");
   }
 
-  return Array.from(options.values()).sort((left, right) => left.label.localeCompare(right.label));
+  return Array.from(options.values()).toSorted((left, right) =>
+    left.label.localeCompare(right.label),
+  );
 }
 
 function resolveSelectedTeam(

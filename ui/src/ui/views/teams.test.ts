@@ -128,8 +128,6 @@ describe("renderTeams", () => {
 
     expect(container.querySelector(".team-prompt-editor")).not.toBeNull();
     expect(container.textContent).toContain("Prompt Team Changes");
-    expect((container.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe(
-      "Add a manager confirmation note.",
-    );
+    expect(container.querySelector("textarea")?.value).toBe("Add a manager confirmation note.");
   });
 });

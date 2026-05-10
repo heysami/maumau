@@ -17,7 +17,9 @@ type LazyLocaleRegistration = {
 
 export const DEFAULT_LOCALE: Locale = "en";
 
-const LAZY_LOCALES = DASHBOARD_LOCALE_IDS.filter((locale): locale is LazyLocale => locale !== "en");
+const LAZY_LOCALES = new Set(
+  DASHBOARD_LOCALE_IDS.filter((locale): locale is LazyLocale => locale !== "en"),
+);
 
 const LAZY_LOCALE_REGISTRY: Record<LazyLocale, LazyLocaleRegistration> = {
   id: {
@@ -109,7 +111,7 @@ export function isSupportedLocale(value: string | null | undefined): value is Lo
 }
 
 function isLazyLocale(locale: Locale): locale is LazyLocale {
-  return LAZY_LOCALES.includes(locale as LazyLocale);
+  return LAZY_LOCALES.has(locale as LazyLocale);
 }
 
 export function resolveNavigatorLocale(navLang: string): Locale {

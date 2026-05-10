@@ -14,7 +14,7 @@ type DashboardTestHost = Parameters<typeof loadDashboardData>[0] & {
 
 function setClientRequest(
   host: DashboardTestHost,
-  implementation: (...args: unknown[]) => Promise<unknown>,
+  implementation: (method: string, ...args: unknown[]) => Promise<unknown>,
 ) {
   host.client.request = vi.fn(implementation) as DashboardTestHost["client"]["request"];
 }

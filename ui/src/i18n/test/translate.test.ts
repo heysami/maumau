@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DASHBOARD_LOCALE_IDS, MAC_LANGUAGE_IDS } from "../../../../src/i18n/languages.ts";
 import { de } from "../locales/de.ts";
-import { en } from "../locales/en.ts";
 import { es } from "../locales/es.ts";
 import { id } from "../locales/id.ts";
 import { ms } from "../locales/ms.ts";
@@ -45,24 +44,6 @@ function createStorageMock(): Storage {
       store.set(key, String(value));
     },
   };
-}
-
-function flattenTranslationKeys(
-  map: Record<string, string | Record<string, unknown>>,
-  prefix = "",
-): string[] {
-  const keys: string[] = [];
-  for (const [key, value] of Object.entries(map)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === "string") {
-      keys.push(path);
-      continue;
-    }
-    keys.push(
-      ...flattenTranslationKeys(value as Record<string, string | Record<string, unknown>>, path),
-    );
-  }
-  return keys;
 }
 
 function loadSharedLocale(localeId: string): SharedLocaleFile {

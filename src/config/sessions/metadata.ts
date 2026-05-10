@@ -166,12 +166,7 @@ export function deriveSessionMetaPatch(params: {
     commandAuthorized: params.ctx.CommandAuthorized === true,
   });
   const requesterTailscaleLogin = params.ctx.RequesterTailscaleLogin?.trim() || undefined;
-  if (
-    !groupPatch &&
-    !origin &&
-    auth.senderIsOwner === false &&
-    requesterTailscaleLogin === undefined
-  ) {
+  if (!groupPatch && !origin && !auth.senderIsOwner && requesterTailscaleLogin === undefined) {
     return null;
   }
 

@@ -128,9 +128,7 @@ export async function configureGatewayForSetup(
     if (!tailscaleBin) {
       await prompter.note(TAILSCALE_MISSING_BIN_NOTE_LINES.join("\n"), "Tailscale Warning");
     } else {
-      const exposure = await probeTailscaleExposure(tailscaleMode as "serve" | "funnel").catch(
-        () => null,
-      );
+      const exposure = await probeTailscaleExposure(tailscaleMode).catch(() => null);
       if (exposure?.blockedReason === "doctor_failed") {
         const label = tailscaleMode === "funnel" ? "Funnel" : "Serve";
         await prompter.note(
@@ -312,7 +310,7 @@ export async function configureGatewayForSetup(
   };
   nextConfig = applyOnboardingTailscaleGatewayAuth({
     cfg: nextConfig,
-    tailscaleMode: tailscaleMode as "off" | "serve" | "funnel",
+    tailscaleMode: tailscaleMode,
     authMode,
   });
 

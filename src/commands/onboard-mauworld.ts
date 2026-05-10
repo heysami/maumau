@@ -17,7 +17,7 @@ function flattenMauworldPluginConfig(config: MaumauConfig): Record<string, unkno
   const entry = config.plugins?.entries?.mauworld;
   return {
     enabled: entry?.enabled,
-    ...(entry?.config ?? {}),
+    ...entry?.config,
   };
 }
 

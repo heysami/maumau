@@ -801,7 +801,7 @@ async function applyDashboardQuickSetupChannel(params: {
   fields: Record<string, string>;
 }): Promise<void> {
   const { snapshot, writeOptions } = await readConfigFileSnapshotForWrite();
-  const next = structuredClone(snapshot.config as MaumauConfig);
+  const next = structuredClone(snapshot.config);
   const enableFailure = enableBundledChannelPluginForQuickSetup(next, params.channelId);
   if (enableFailure) {
     throw new Error(`Cannot enable ${params.channelId}: ${enableFailure}.`);
@@ -835,14 +835,14 @@ export async function connectDashboardUserChannel(params: {
       fields: Object.fromEntries(
         Object.entries(
           requirePlainRecord(params.fields ?? {}, "dashboard.userChannels.connect fields"),
-        ).map(([key, value]) => [key, String(value ?? "")]),
+        ).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
       ),
     });
     return;
   }
   const { plugin, wizard } = resolveConnectTarget(channelId);
   const { snapshot, writeOptions } = await readConfigFileSnapshotForWrite();
-  const baseConfig = structuredClone(snapshot.config as MaumauConfig);
+  const baseConfig = structuredClone(snapshot.config);
   const accountIds = plugin.config.listAccountIds(baseConfig);
   const accountId = resolveChannelDefaultAccountId({ plugin, cfg: baseConfig, accountIds });
   const fields = requirePlainRecord(params.fields ?? {}, "dashboard.userChannels.connect fields");
@@ -852,7 +852,7 @@ export async function connectDashboardUserChannel(params: {
     cfg: baseConfig,
     accountId,
     fields: Object.fromEntries(
-      Object.entries(fields).map(([key, value]) => [key, String(value ?? "")]),
+      Object.entries(fields).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
     ),
   });
   let next = configured.cfg;
@@ -938,7 +938,7 @@ export async function setDashboardUserChannelAllowlist(params: {
   }
   const plugin = resolveAllowlistTarget(channelId);
   const { snapshot, writeOptions } = await readConfigFileSnapshotForWrite();
-  const cfg = snapshot.config as MaumauConfig;
+  const cfg = snapshot.config;
   const readConfig = await plugin.allowlist!.readConfig!({
     cfg,
     accountId,
@@ -953,7 +953,7 @@ export async function setDashboardUserChannelAllowlist(params: {
     if (desiredEntries.includes(entry)) {
       continue;
     }
-    plugin.allowlist!.applyConfigEdit?.({
+    await plugin.allowlist!.applyConfigEdit?.({
       cfg,
       parsedConfig,
       accountId,
@@ -966,7 +966,7 @@ export async function setDashboardUserChannelAllowlist(params: {
     if (currentEntries.includes(entry)) {
       continue;
     }
-    plugin.allowlist!.applyConfigEdit?.({
+    await plugin.allowlist!.applyConfigEdit?.({
       cfg,
       parsedConfig,
       accountId,
@@ -995,7 +995,7 @@ export async function setDashboardUserChannelChats(params: {
     throw new Error(`channel ${channelId} does not expose editable chat access`);
   }
   const { snapshot, writeOptions } = await readConfigFileSnapshotForWrite();
-  let next = structuredClone(snapshot.config as MaumauConfig);
+  let next = structuredClone(snapshot.config);
   next = wizard.groupAccess.setPolicy({
     cfg: next,
     accountId,

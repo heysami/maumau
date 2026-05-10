@@ -329,6 +329,7 @@ async function interpretTeamPrompt(params: {
   } catch (error) {
     throw new Error(
       `model returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
   const normalized = normalizePromptEditResult(parsed);

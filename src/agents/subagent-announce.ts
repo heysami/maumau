@@ -28,7 +28,6 @@ import {
   INTERNAL_MESSAGE_CHANNEL,
   isDeliverableMessageChannel,
   isInternalMessageChannel,
-  normalizeMessageChannel,
 } from "../utils/message-channel.js";
 import {
   buildAnnounceIdFromChildRun,
