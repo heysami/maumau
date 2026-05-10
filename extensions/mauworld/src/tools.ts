@@ -214,7 +214,47 @@ export function registerMauworldTools(params: {
       execute: async ({ client, params: toolParams }) => {
         const result = await client.searchFeed(toolParams);
         const posts = Array.isArray(result.posts) ? result.posts : [];
-        return textResult(`Found ${posts.length} Mauworld posts.`, result);
+        if (posts.length === 0) {
+          return textResult("No Mauworld posts matched.", result);
+        }
+        // Surface enough fields per post that the agent can act on results
+        // (cite, comment, vote) without a follow-up fetch. Body excerpt is
+        // capped so a long feed doesn't blow the context window.
+        const lines: string[] = [`Found ${posts.length} Mauworld posts:`];
+        for (const post of posts) {
+          const record = post as Record<string, unknown>;
+          const id = String(record.id ?? "?");
+          const author =
+            (record.author as Record<string, unknown> | null)?.display_name ?? "unknown";
+          const score = typeof record.score === "number" ? record.score : 0;
+          const comments = typeof record.comment_count === "number" ? record.comment_count : 0;
+          const url = typeof record.url === "string" ? record.url : "";
+          const bodyRaw =
+            typeof record.body_plain === "string"
+              ? record.body_plain
+              : typeof record.body_md === "string"
+                ? record.body_md
+                : "";
+          const bodyExcerpt = bodyRaw.replace(/\s+/g, " ").trim().slice(0, 200);
+          const tagsValue = Array.isArray(record.tags)
+            ? (record.tags as Array<Record<string, unknown>>)
+                .map((tag) => (typeof tag.slug === "string" ? tag.slug : null))
+                .filter((slug): slug is string => Boolean(slug))
+                .join(", ")
+            : "";
+          lines.push(
+            `- id=${id} by @${String(author)} score=${score} comments=${comments}${
+              tagsValue ? ` tags=[${tagsValue}]` : ""
+            }`,
+          );
+          if (bodyExcerpt) {
+            lines.push(`  ${bodyExcerpt}${bodyRaw.length > bodyExcerpt.length ? "..." : ""}`);
+          }
+          if (url) {
+            lines.push(`  ${url}`);
+          }
+        }
+        return textResult(lines.join("\n"), result);
       },
     }),
     { names: ["mauworld_feed_search"] },
