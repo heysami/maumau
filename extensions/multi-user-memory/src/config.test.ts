@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVisibleScopeKeys,
+  DEFAULT_DAILY_TTL_DAYS,
+  DEFAULT_DURABLE_TTL_DAYS,
+  DEFAULT_PRUNE_INTERVAL_MS,
   pickNarrowestGroup,
   resolveConfiguredUserMatch,
   resolveEffectiveGroupIds,
   resolveGroupsContainingUsers,
   resolveMultiUserMemoryConfig,
+  resolveRetentionPolicy,
 } from "./config.js";
 
 describe("multi-user-memory config", () => {
@@ -136,5 +140,54 @@ describe("multi-user-memory config", () => {
       "private:dad",
       "provisional:prov-1",
     ]);
+  });
+
+  it("applies retention defaults and honors overrides", () => {
+    const defaults = resolveMultiUserMemoryConfig({
+      plugins: { entries: { "multi-user-memory": { config: {} } } },
+    } as never);
+    expect(defaults.retention.dailyTtlDays).toBe(DEFAULT_DAILY_TTL_DAYS);
+    expect(defaults.retention.durableTtlDays).toBe(DEFAULT_DURABLE_TTL_DAYS);
+    expect(defaults.retention.pruneIntervalMs).toBe(DEFAULT_PRUNE_INTERVAL_MS);
+
+    const policy = resolveRetentionPolicy(defaults);
+    expect(policy.dailyTtlMs).toBe(DEFAULT_DAILY_TTL_DAYS * 86_400_000);
+    expect(policy.durableTtlMs).toBe(0);
+
+    const overridden = resolveMultiUserMemoryConfig({
+      plugins: {
+        entries: {
+          "multi-user-memory": {
+            config: {
+              retention: {
+                dailyTtlDays: 7,
+                durableTtlDays: 365,
+                pruneIntervalMs: 1_000,
+              },
+            },
+          },
+        },
+      },
+    } as never);
+    expect(overridden.retention).toEqual({
+      dailyTtlDays: 7,
+      durableTtlDays: 365,
+      pruneIntervalMs: 1_000,
+    });
+
+    const negative = resolveMultiUserMemoryConfig({
+      plugins: {
+        entries: {
+          "multi-user-memory": {
+            config: {
+              retention: { dailyTtlDays: -5, durableTtlDays: "bad", pruneIntervalMs: NaN },
+            },
+          },
+        },
+      },
+    } as never);
+    expect(negative.retention.dailyTtlDays).toBe(DEFAULT_DAILY_TTL_DAYS);
+    expect(negative.retention.durableTtlDays).toBe(DEFAULT_DURABLE_TTL_DAYS);
+    expect(negative.retention.pruneIntervalMs).toBe(DEFAULT_PRUNE_INTERVAL_MS);
   });
 });

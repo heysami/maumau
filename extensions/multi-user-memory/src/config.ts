@@ -33,6 +33,16 @@ export type MultiUserApprovalDelivery = {
   to?: string;
 };
 
+export type MultiUserRetentionConfig = {
+  dailyTtlDays: number;
+  durableTtlDays: number;
+  pruneIntervalMs: number;
+};
+
+export const DEFAULT_DAILY_TTL_DAYS = 30;
+export const DEFAULT_DURABLE_TTL_DAYS = 0;
+export const DEFAULT_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+
 export type MultiUserMemoryConfig = {
   enabled: boolean;
   autoDiscover: boolean;
@@ -43,6 +53,7 @@ export type MultiUserMemoryConfig = {
   adminUserIds: string[];
   users: Record<string, MultiUserConfigUser>;
   groups: Record<string, MultiUserConfigGroup>;
+  retention: MultiUserRetentionConfig;
 };
 
 export type IdentityMatchParams = {
@@ -65,6 +76,25 @@ function normalizeTrimmedString(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function normalizeNonNegativeNumber(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return fallback;
+  }
+  return value;
+}
+
+function normalizeRetention(value: unknown): MultiUserRetentionConfig {
+  const record =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    dailyTtlDays: normalizeNonNegativeNumber(record.dailyTtlDays, DEFAULT_DAILY_TTL_DAYS),
+    durableTtlDays: normalizeNonNegativeNumber(record.durableTtlDays, DEFAULT_DURABLE_TTL_DAYS),
+    pruneIntervalMs: normalizeNonNegativeNumber(record.pruneIntervalMs, DEFAULT_PRUNE_INTERVAL_MS),
+  };
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -181,6 +211,18 @@ export function resolveMultiUserMemoryConfig(cfg: MaumauConfig): MultiUserMemory
     adminUserIds: normalizeStringArray(record.adminUserIds),
     users: normalizeUsers(record.users),
     groups: normalizeGroups(record.groups),
+    retention: normalizeRetention(record.retention),
+  };
+}
+
+export function resolveRetentionPolicy(config: MultiUserMemoryConfig): {
+  dailyTtlMs: number;
+  durableTtlMs: number;
+} {
+  const dayMs = 86_400_000;
+  return {
+    dailyTtlMs: config.retention.dailyTtlDays * dayMs,
+    durableTtlMs: config.retention.durableTtlDays * dayMs,
   };
 }
 

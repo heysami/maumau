@@ -26,13 +26,37 @@ import {
   resolveConfiguredUserMatch,
   resolveEffectiveGroupIds,
   resolveGroupsContainingUsers,
+  resolveRetentionPolicy,
   type MultiUserMemoryConfig,
 } from "./src/config.js";
 import { isCorpusPath, resolveCorpusRelativePathForItem, syncScopedCorpus } from "./src/corpus.js";
 import { maybeBootstrapFirstObservedUser } from "./src/first-user.js";
 import { DEFAULT_LANGUAGE_ID, normalizeLanguageId, translate } from "./src/language.js";
 import { resolveCurrentMultiUserMemoryConfig } from "./src/runtime-config.js";
-import { MultiUserMemoryStore, resolveDefaultStorePath, type ProposalRecord } from "./src/store.js";
+import {
+  MultiUserMemoryStore,
+  resolveDefaultStorePath,
+  type ForgetReason,
+  type ProposalRecord,
+  type ScopedMemoryItem,
+} from "./src/store.js";
+
+const LAST_PRUNE_KEY = "last_prune_at";
+
+const FORGET_SCHEMA = Type.Object(
+  {
+    itemId: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
+const ADMIN_FORGET_SCHEMA = Type.Object(
+  {
+    itemId: Type.String(),
+    reason: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
 
 const LIST_PROVISIONAL_SCHEMA = Type.Object({}, { additionalProperties: false });
 
@@ -1165,6 +1189,148 @@ async function handleOverlayStore(params: {
   };
 }
 
+function canPrincipalForgetItem(params: {
+  item: ScopedMemoryItem;
+  pluginConfig: MultiUserMemoryConfig;
+  principal: ActivePrincipal | null;
+  senderIsOwner: boolean;
+  agentId?: string;
+}): boolean {
+  switch (params.item.scopeType) {
+    case "private":
+      return Boolean(params.principal?.scopeKeys.includes(`private:${params.item.scopeId}`));
+    case "provisional":
+      return Boolean(params.principal?.scopeKeys.includes(`provisional:${params.item.scopeId}`));
+    case "group":
+    case "global":
+      return isCuratorAllowed({
+        pluginConfig: params.pluginConfig,
+        principal: params.principal,
+        senderIsOwner: params.senderIsOwner,
+        agentId: params.agentId,
+      });
+  }
+}
+
+async function performForget(params: {
+  api: MaumauPluginApi;
+  store: MultiUserMemoryStore;
+  itemId: string;
+  reason: ForgetReason;
+}): Promise<{ status: "forgotten" | "already" | "missing"; item?: ScopedMemoryItem }> {
+  const result = params.store.forgetMemoryItem({ itemId: params.itemId, reason: params.reason });
+  if (!result) {
+    return { status: "missing" };
+  }
+  if (!result.wasActive) {
+    return { status: "already", item: result.item };
+  }
+  await syncScopedCorpusSafe(params.api, params.store);
+  return { status: "forgotten", item: result.item };
+}
+
+async function pruneIfDue(params: {
+  api: MaumauPluginApi;
+  store: MultiUserMemoryStore;
+  pluginConfig: MultiUserMemoryConfig;
+  now?: number;
+}): Promise<{ ran: boolean; expired: number }> {
+  const now = params.now ?? Date.now();
+  const interval = params.pluginConfig.retention.pruneIntervalMs;
+  if (interval > 0) {
+    const last = params.store.getRetentionState(LAST_PRUNE_KEY);
+    if (last !== null && now - last < interval) {
+      return { ran: false, expired: 0 };
+    }
+  }
+  const policy = resolveRetentionPolicy(params.pluginConfig);
+  const result = params.store.pruneExpiredItems({ policy, now });
+  params.store.setRetentionState(LAST_PRUNE_KEY, now);
+  if (result.expired > 0) {
+    await syncScopedCorpusSafe(params.api, params.store).catch((err: unknown) => {
+      params.api.logger.warn?.(`multi-user-memory: failed corpus sync after prune: ${String(err)}`);
+    });
+    params.api.logger.info?.(`multi-user-memory: pruned ${result.expired} expired memory item(s)`);
+  }
+  return { ran: true, expired: result.expired };
+}
+
+function buildForgetTools(params: {
+  api: MaumauPluginApi;
+  store: MultiUserMemoryStore;
+  toolCtx: MaumauPluginToolContext;
+}): AnyAgentTool[] {
+  const pluginConfig = resolveCurrentMultiUserMemoryConfig(params.api);
+  const principal = resolveToolPrincipal({
+    api: params.api,
+    store: params.store,
+    pluginConfig,
+    toolCtx: params.toolCtx,
+  });
+  const senderIsOwner = params.toolCtx.senderIsOwner === true;
+
+  return [
+    {
+      name: "multi_user_memory_forget",
+      label: "Multi-User Memory: Forget",
+      description:
+        "Forget one scoped memory item by itemId. Private/provisional items can be forgotten by the owning user; group/global items require curator or admin access. Forgotten items stop appearing in search and are removed from the rendered corpus on next sync.",
+      parameters: FORGET_SCHEMA,
+      async execute(_toolCallId, rawParams) {
+        const itemId = readStringParam(rawParams, "itemId", { required: true });
+        const item = params.store.getMemoryItemById(itemId);
+        if (!item) {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "forgetNotFound", {
+              itemId,
+            }),
+            forgotten: false,
+            reason: "not-found",
+          });
+        }
+        if (
+          !canPrincipalForgetItem({
+            item,
+            pluginConfig,
+            principal,
+            senderIsOwner,
+            agentId: params.toolCtx.agentId,
+          })
+        ) {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "forgetDenied"),
+            forgotten: false,
+            reason: "denied",
+          });
+        }
+        const outcome = await performForget({
+          api: params.api,
+          store: params.store,
+          itemId,
+          reason: "user-request",
+        });
+        if (outcome.status === "already") {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "forgetAlreadyForgotten", {
+              itemId,
+            }),
+            forgotten: false,
+            reason: "already-forgotten",
+            item: outcome.item,
+          });
+        }
+        return jsonResult({
+          text: translate(normalizeLanguageId(principal?.language), "forgetSuccess", {
+            itemId,
+          }),
+          forgotten: true,
+          item: outcome.item,
+        });
+      },
+    },
+  ];
+}
+
 function buildAdminTools(params: {
   api: MaumauPluginApi;
   store: MultiUserMemoryStore;
@@ -1350,6 +1516,36 @@ function buildAdminTools(params: {
         return jsonResult({
           item,
           path: path.posix.join("corpus", resolveCorpusRelativePathForItem(item)),
+        });
+      },
+    },
+    {
+      name: "multi_user_memory_admin_forget",
+      label: "Multi-User Memory: Forget Item (admin)",
+      description:
+        "Force-forget any scoped memory item by id. Marks the item as forgotten and rebuilds the corpus.",
+      parameters: ADMIN_FORGET_SCHEMA,
+      async execute(_toolCallId, rawParams) {
+        requireAdmin();
+        const itemId = readStringParam(rawParams, "itemId", { required: true });
+        const reasonRaw = readStringParam(rawParams, "reason");
+        const reason: ForgetReason =
+          reasonRaw === "ttl" ||
+          reasonRaw === "user-request" ||
+          reasonRaw === "tool" ||
+          reasonRaw === "purge"
+            ? reasonRaw
+            : "admin";
+        const outcome = await performForget({
+          api: params.api,
+          store: params.store,
+          itemId,
+          reason,
+        });
+        return jsonResult({
+          itemId,
+          status: outcome.status,
+          item: outcome.item,
         });
       },
     },
@@ -1572,6 +1768,13 @@ export default definePluginEntry({
     void syncScopedCorpusSafe(api, store).catch((err: unknown) => {
       api.logger.warn?.(`multi-user-memory: failed initial scoped corpus sync: ${String(err)}`);
     });
+    void pruneIfDue({
+      api,
+      store,
+      pluginConfig: resolveCurrentMultiUserMemoryConfig(api),
+    }).catch((err: unknown) => {
+      api.logger.warn?.(`multi-user-memory: failed startup retention prune: ${String(err)}`);
+    });
 
     api.registerMemoryOverlay({
       id: "multi-user-memory",
@@ -1646,6 +1849,13 @@ export default definePluginEntry({
     });
 
     api.on("before_prompt_build", async (event, ctx) => {
+      void pruneIfDue({
+        api,
+        store,
+        pluginConfig: resolveCurrentMultiUserMemoryConfig(api),
+      }).catch((err: unknown) => {
+        api.logger.warn?.(`multi-user-memory: failed retention prune: ${String(err)}`);
+      });
       const principal = await handlePrincipalTurn({
         api,
         store,
@@ -1684,5 +1894,6 @@ export default definePluginEntry({
 
     api.registerTool((toolCtx) => buildAdminTools({ api, store, toolCtx }));
     api.registerTool((toolCtx) => buildApprovalTools({ api, store, toolCtx }));
+    api.registerTool((toolCtx) => buildForgetTools({ api, store, toolCtx }));
   },
 });

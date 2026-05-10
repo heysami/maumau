@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { installDiscordRegistryHooks } from "../../../src/auto-reply/test-helpers/command-auth-registry-fixture.js";
 import type { MaumauPluginApi } from "../api.js";
-import type { MultiUserMemoryConfig } from "./config.js";
+import {
+  DEFAULT_DAILY_TTL_DAYS,
+  DEFAULT_DURABLE_TTL_DAYS,
+  DEFAULT_PRUNE_INTERVAL_MS,
+  type MultiUserMemoryConfig,
+} from "./config.js";
 import { maybeBootstrapFirstObservedUser } from "./first-user.js";
 
 installDiscordRegistryHooks();
@@ -17,6 +22,11 @@ function createPluginConfig(): MultiUserMemoryConfig {
     adminUserIds: [],
     users: {},
     groups: {},
+    retention: {
+      dailyTtlDays: DEFAULT_DAILY_TTL_DAYS,
+      durableTtlDays: DEFAULT_DURABLE_TTL_DAYS,
+      pruneIntervalMs: DEFAULT_PRUNE_INTERVAL_MS,
+    },
   };
 }
 

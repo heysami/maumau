@@ -88,7 +88,11 @@ type TranslationKey =
   | "proposalNotFound"
   | "proposalAlreadyDecided"
   | "proposalQueued"
-  | "provisionalEmpty";
+  | "provisionalEmpty"
+  | "forgetSuccess"
+  | "forgetAlreadyForgotten"
+  | "forgetNotFound"
+  | "forgetDenied";
 
 const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, string>>> = {
   principalHeading: {
@@ -214,6 +218,22 @@ const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, s
   provisionalEmpty: {
     en: "No provisional users are currently tracked.",
     id: "Belum ada pengguna provisional yang dilacak.",
+  },
+  forgetSuccess: {
+    en: "Memory item {itemId} has been forgotten.",
+    id: "Item memori {itemId} telah dilupakan.",
+  },
+  forgetAlreadyForgotten: {
+    en: "Memory item {itemId} was already forgotten.",
+    id: "Item memori {itemId} sudah dilupakan sebelumnya.",
+  },
+  forgetNotFound: {
+    en: "Memory item {itemId} was not found.",
+    id: "Item memori {itemId} tidak ditemukan.",
+  },
+  forgetDenied: {
+    en: "You are not allowed to forget this memory item.",
+    id: "Anda tidak diizinkan melupakan item memori ini.",
   },
 };
 

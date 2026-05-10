@@ -184,4 +184,142 @@ describe("MultiUserMemoryStore", () => {
       }),
     ]);
   });
+
+  it("forgets a memory item, hiding it from search and listings", () => {
+    const store = createStore();
+
+    const privateItem = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad prefers Bahasa Indonesia for direct replies.",
+      summary: "Dad language preference",
+      sourceUserId: "dad",
+    });
+    const otherItem = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad's coffee is two sugars.",
+      sourceUserId: "dad",
+    });
+
+    expect(
+      store
+        .search({ query: "bahasa", scopeKeys: ["private:dad"], minScore: 0.2 })
+        .map((entry) => entry.path),
+    ).toContain(`private/dad/${privateItem.itemId}.md`);
+
+    const result = store.forgetMemoryItem({
+      itemId: privateItem.itemId,
+      reason: "user-request",
+    });
+    expect(result?.wasActive).toBe(true);
+    expect(result?.item.status).toBe("forgotten");
+    expect(result?.item.forgetReason).toBe("user-request");
+
+    expect(
+      store
+        .search({ query: "bahasa", scopeKeys: ["private:dad"], minScore: 0.2 })
+        .map((entry) => entry.path),
+    ).not.toContain(`private/dad/${privateItem.itemId}.md`);
+    expect(
+      store.readScopedPath({
+        relPath: `private/dad/${privateItem.itemId}.md`,
+        scopeKeys: ["private:dad"],
+      }),
+    ).toMatchObject({ disabled: true });
+
+    const stillActive = store.listActiveMemoryItems();
+    expect(stillActive.map((item) => item.itemId)).toEqual([otherItem.itemId]);
+
+    const second = store.forgetMemoryItem({
+      itemId: privateItem.itemId,
+      reason: "user-request",
+    });
+    expect(second?.wasActive).toBe(false);
+  });
+
+  it("returns null when forgetting an unknown item", () => {
+    const store = createStore();
+    expect(store.forgetMemoryItem({ itemId: "missing-id", reason: "user-request" })).toBeNull();
+  });
+
+  it("prunes daily items past the retention window and leaves recent ones alone", () => {
+    const store = createStore();
+    const dayMs = 86_400_000;
+
+    const dailyItem = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Daily note",
+      durability: "daily",
+    });
+    const durableItem = store.createMemoryItem({
+      scopeType: "global",
+      scopeId: "global",
+      body: "Durable note",
+      durability: "durable",
+    });
+
+    const created = dailyItem.createdAt;
+
+    // Five days after creation: nothing should expire under a 30-day daily TTL.
+    const earlyResult = store.pruneExpiredItems({
+      policy: { dailyTtlMs: 30 * dayMs, durableTtlMs: 0 },
+      now: created + 5 * dayMs,
+    });
+    expect(earlyResult.expired).toBe(0);
+    expect(store.getMemoryItemById(dailyItem.itemId)?.status).toBe("active");
+
+    // 60 days after creation: the daily item is past TTL and gets expired.
+    const lateResult = store.pruneExpiredItems({
+      policy: { dailyTtlMs: 30 * dayMs, durableTtlMs: 0 },
+      now: created + 60 * dayMs,
+    });
+    expect(lateResult.expired).toBe(1);
+    expect(lateResult.sample[0]?.itemId).toBe(dailyItem.itemId);
+
+    const expired = store.getMemoryItemById(dailyItem.itemId);
+    expect(expired?.status).toBe("expired");
+    expect(expired?.forgetReason).toBe("ttl");
+    expect(typeof expired?.forgottenAt).toBe("number");
+
+    // Durable item must still be active because durableTtlMs is 0 (disabled).
+    expect(store.getMemoryItemById(durableItem.itemId)?.status).toBe("active");
+    expect(store.listActiveMemoryItems().map((item) => item.itemId)).toEqual([durableItem.itemId]);
+  });
+
+  it("expires durable items only when durableTtlMs > 0", () => {
+    const store = createStore();
+    const dayMs = 86_400_000;
+
+    const durable = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Long-lived durable note",
+      durability: "durable",
+    });
+
+    const noDurableTtl = store.pruneExpiredItems({
+      policy: { dailyTtlMs: 30 * dayMs, durableTtlMs: 0 },
+      now: durable.createdAt + 365 * dayMs,
+    });
+    expect(noDurableTtl.expired).toBe(0);
+
+    const withDurableTtl = store.pruneExpiredItems({
+      policy: { dailyTtlMs: 30 * dayMs, durableTtlMs: 90 * dayMs },
+      now: durable.createdAt + 365 * dayMs,
+    });
+    expect(withDurableTtl.expired).toBe(1);
+  });
+
+  it("tracks last-prune timestamps via retention_state", () => {
+    const store = createStore();
+    expect(store.getRetentionState("last_prune_at")).toBeNull();
+
+    store.setRetentionState("last_prune_at", 12345);
+    expect(store.getRetentionState("last_prune_at")).toBe(12345);
+
+    store.setRetentionState("last_prune_at", 67890);
+    expect(store.getRetentionState("last_prune_at")).toBe(67890);
+  });
 });

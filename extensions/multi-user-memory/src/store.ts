@@ -7,6 +7,14 @@ import type { SupportedLanguageId } from "./language.js";
 
 type ScopeType = "global" | "group" | "private" | "provisional";
 type ProposalStatus = "pending" | "approved" | "rejected";
+type MemoryItemStatus = "active" | "forgotten" | "expired";
+
+export type ForgetReason = "user-request" | "admin" | "ttl" | "tool" | "purge";
+
+export type RetentionPolicy = {
+  dailyTtlMs: number;
+  durableTtlMs: number;
+};
 
 export type IdentityObservationInput = {
   channelId: string;
@@ -54,6 +62,9 @@ export type ScopedMemoryItem = {
   entryDate?: string;
   createdAt: number;
   updatedAt: number;
+  status: MemoryItemStatus;
+  forgottenAt?: number;
+  forgetReason?: string;
 };
 
 export type ProposalRecord = {
@@ -102,6 +113,9 @@ type StoredMemoryRow = {
   entry_date: string | null;
   created_at: number;
   updated_at: number;
+  status?: string;
+  forgotten_at?: number | null;
+  forget_reason?: string | null;
 };
 
 function normalizeOptionalString(value?: string | null): string | undefined {
@@ -230,6 +244,8 @@ function rowToProposal(row: StoredProposalRow): ProposalRecord {
 }
 
 function rowToMemoryItem(row: StoredMemoryRow): ScopedMemoryItem {
+  const status: MemoryItemStatus =
+    row.status === "forgotten" ? "forgotten" : row.status === "expired" ? "expired" : "active";
   return {
     itemId: row.item_id,
     scopeType: row.scope_type,
@@ -244,6 +260,9 @@ function rowToMemoryItem(row: StoredMemoryRow): ScopedMemoryItem {
     entryDate: row.entry_date ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    status,
+    forgottenAt: row.forgotten_at ?? undefined,
+    forgetReason: row.forget_reason ?? undefined,
   };
 }
 
@@ -358,10 +377,17 @@ export class MultiUserMemoryStore {
         note TEXT,
         created_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS retention_state (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL
+      );
     `);
     this.ensureMemoryItemColumn("provenance", "TEXT");
     this.ensureMemoryItemColumn("durability", "TEXT NOT NULL DEFAULT 'durable'");
     this.ensureMemoryItemColumn("entry_date", "TEXT");
+    this.ensureMemoryItemColumn("forgotten_at", "INTEGER");
+    this.ensureMemoryItemColumn("forget_reason", "TEXT");
   }
 
   private ensureMemoryItemColumn(column: string, definition: string): void {
@@ -664,7 +690,7 @@ export class MultiUserMemoryStore {
             created_at,
             updated_at,
             status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
         `,
       )
       .run(
@@ -696,6 +722,7 @@ export class MultiUserMemoryStore {
       entryDate: normalizeOptionalString(params.entryDate),
       createdAt: now,
       updatedAt: now,
+      status: "active",
     };
   }
 
@@ -915,13 +942,144 @@ export class MultiUserMemoryStore {
             durability,
             entry_date,
             created_at,
-            updated_at
+            updated_at,
+            status,
+            forgotten_at,
+            forget_reason
           FROM memory_items
           WHERE item_id = ?
         `,
       )
       .get(itemId) as StoredMemoryRow | undefined;
     return row ? rowToMemoryItem(row) : null;
+  }
+
+  forgetMemoryItem(params: {
+    itemId: string;
+    reason: ForgetReason;
+    now?: number;
+  }): { item: ScopedMemoryItem; wasActive: boolean } | null {
+    const item = this.getMemoryItemById(params.itemId);
+    if (!item) {
+      return null;
+    }
+    if (item.status !== "active") {
+      return { item, wasActive: false };
+    }
+    const now = params.now ?? Date.now();
+    const reason = params.reason;
+    this.db
+      .prepare(
+        `
+          UPDATE memory_items
+          SET status = 'forgotten',
+              forgotten_at = ?,
+              forget_reason = ?,
+              updated_at = ?
+          WHERE item_id = ?
+            AND status = 'active'
+        `,
+      )
+      .run(now, reason, now, params.itemId);
+    const refreshed = this.getMemoryItemById(params.itemId);
+    return refreshed ? { item: refreshed, wasActive: true } : null;
+  }
+
+  pruneExpiredItems(params: { policy: RetentionPolicy; now?: number }): {
+    expired: number;
+    sample: ScopedMemoryItem[];
+  } {
+    const now = params.now ?? Date.now();
+    const policy = params.policy;
+    if (policy.dailyTtlMs <= 0 && policy.durableTtlMs <= 0) {
+      return { expired: 0, sample: [] };
+    }
+    const dailyCutoff = policy.dailyTtlMs > 0 ? now - policy.dailyTtlMs : null;
+    const durableCutoff = policy.durableTtlMs > 0 ? now - policy.durableTtlMs : null;
+    const conditions: string[] = [];
+    const values: number[] = [];
+    if (dailyCutoff !== null) {
+      conditions.push("(durability = 'daily' AND created_at < ?)");
+      values.push(dailyCutoff);
+    }
+    if (durableCutoff !== null) {
+      conditions.push("(durability = 'durable' AND created_at < ?)");
+      values.push(durableCutoff);
+    }
+    if (conditions.length === 0) {
+      return { expired: 0, sample: [] };
+    }
+    const candidates = this.db
+      .prepare(
+        `
+          SELECT
+            item_id,
+            scope_type,
+            scope_id,
+            body,
+            summary,
+            item_kind,
+            source_user_id,
+            provenance,
+            provenance_item_id,
+            durability,
+            entry_date,
+            created_at,
+            updated_at,
+            status,
+            forgotten_at,
+            forget_reason
+          FROM memory_items
+          WHERE status = 'active'
+            AND (${conditions.join(" OR ")})
+          LIMIT 500
+        `,
+      )
+      .all(...values) as StoredMemoryRow[];
+    if (candidates.length === 0) {
+      return { expired: 0, sample: [] };
+    }
+    const update = this.db.prepare(
+      `
+        UPDATE memory_items
+        SET status = 'expired',
+            forgotten_at = ?,
+            forget_reason = 'ttl',
+            updated_at = ?
+        WHERE item_id = ?
+          AND status = 'active'
+      `,
+    );
+    const expired: ScopedMemoryItem[] = [];
+    for (const row of candidates) {
+      const result = update.run(now, now, row.item_id);
+      if (result.changes && Number(result.changes) > 0) {
+        expired.push(rowToMemoryItem({ ...row, status: "expired", forgotten_at: now }));
+      }
+    }
+    return {
+      expired: expired.length,
+      sample: expired.slice(0, 10),
+    };
+  }
+
+  getRetentionState(key: string): number | null {
+    const row = this.db.prepare("SELECT value FROM retention_state WHERE key = ?").get(key) as
+      | { value: number }
+      | undefined;
+    return row ? row.value : null;
+  }
+
+  setRetentionState(key: string, value: number): void {
+    this.db
+      .prepare(
+        `
+          INSERT INTO retention_state (key, value)
+          VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `,
+      )
+      .run(key, value);
   }
 
   listActiveMemoryItems(): ScopedMemoryItem[] {
