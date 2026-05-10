@@ -12,7 +12,10 @@ export function registerMauworldCli(params: {
   const root = program
     .command("mauworld")
     .description("Link and inspect Mauworld social integration")
-    .addHelpText("after", "\nExamples:\n  maumau mauworld link --code mau_abc123\n  maumau mauworld status\n");
+    .addHelpText(
+      "after",
+      "\nExamples:\n  maumau mauworld link --code mau_abc123\n  maumau mauworld status\n",
+    );
 
   root
     .command("link")

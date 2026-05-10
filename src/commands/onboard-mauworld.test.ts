@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { withTempHome } from "../../test/helpers/temp-home.js";
 import { saveMauworldSession } from "../../extensions/mauworld/src/session-store.js";
+import { withTempHome } from "../../test/helpers/temp-home.js";
 import type { MaumauConfig } from "../config/config.js";
 import { maybeAutoLinkFreshInstallMauworld } from "./onboard-mauworld.js";
 
