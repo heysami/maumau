@@ -7,9 +7,9 @@ import type { SupportedLanguageId } from "./language.js";
 
 type ScopeType = "global" | "group" | "private" | "provisional";
 type ProposalStatus = "pending" | "approved" | "rejected";
-type MemoryItemStatus = "active" | "forgotten" | "expired";
+type MemoryItemStatus = "active" | "forgotten" | "expired" | "superseded";
 
-export type ForgetReason = "user-request" | "admin" | "ttl" | "tool" | "purge";
+export type ForgetReason = "user-request" | "admin" | "ttl" | "tool" | "purge" | "superseded";
 
 export type RetentionPolicy = {
   dailyTtlMs: number;
@@ -65,6 +65,7 @@ export type ScopedMemoryItem = {
   status: MemoryItemStatus;
   forgottenAt?: number;
   forgetReason?: string;
+  supersededBy?: string;
 };
 
 export type ProposalRecord = {
@@ -116,6 +117,7 @@ type StoredMemoryRow = {
   status?: string;
   forgotten_at?: number | null;
   forget_reason?: string | null;
+  superseded_by?: string | null;
 };
 
 function normalizeOptionalString(value?: string | null): string | undefined {
@@ -245,7 +247,13 @@ function rowToProposal(row: StoredProposalRow): ProposalRecord {
 
 function rowToMemoryItem(row: StoredMemoryRow): ScopedMemoryItem {
   const status: MemoryItemStatus =
-    row.status === "forgotten" ? "forgotten" : row.status === "expired" ? "expired" : "active";
+    row.status === "forgotten"
+      ? "forgotten"
+      : row.status === "expired"
+        ? "expired"
+        : row.status === "superseded"
+          ? "superseded"
+          : "active";
   return {
     itemId: row.item_id,
     scopeType: row.scope_type,
@@ -263,7 +271,36 @@ function rowToMemoryItem(row: StoredMemoryRow): ScopedMemoryItem {
     status,
     forgottenAt: row.forgotten_at ?? undefined,
     forgetReason: row.forget_reason ?? undefined,
+    supersededBy: row.superseded_by ?? undefined,
   };
+}
+
+function tokenizeForSimilarity(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/i)
+      .filter((token) => token.length >= 3),
+  );
+}
+
+export function jaccardSimilarity(a: string, b: string): number {
+  const left = tokenizeForSimilarity(a);
+  const right = tokenizeForSimilarity(b);
+  if (left.size === 0 && right.size === 0) {
+    return 1;
+  }
+  if (left.size === 0 || right.size === 0) {
+    return 0;
+  }
+  let intersect = 0;
+  for (const token of left) {
+    if (right.has(token)) {
+      intersect += 1;
+    }
+  }
+  const union = left.size + right.size - intersect;
+  return union === 0 ? 0 : intersect / union;
 }
 
 export class MultiUserMemoryStore {
@@ -388,6 +425,7 @@ export class MultiUserMemoryStore {
     this.ensureMemoryItemColumn("entry_date", "TEXT");
     this.ensureMemoryItemColumn("forgotten_at", "INTEGER");
     this.ensureMemoryItemColumn("forget_reason", "TEXT");
+    this.ensureMemoryItemColumn("superseded_by", "TEXT");
   }
 
   private ensureMemoryItemColumn(column: string, definition: string): void {
@@ -748,6 +786,54 @@ export class MultiUserMemoryStore {
     return Boolean(row?.item_id);
   }
 
+  findNearDuplicateItem(params: {
+    scopeType: ScopeType;
+    scopeId: string;
+    body: string;
+    sinceMs: number;
+    threshold: number;
+  }): { item: ScopedMemoryItem; similarity: number } | null {
+    const rows = this.db
+      .prepare(
+        `
+          SELECT
+            item_id,
+            scope_type,
+            scope_id,
+            body,
+            summary,
+            item_kind,
+            source_user_id,
+            provenance,
+            provenance_item_id,
+            durability,
+            entry_date,
+            created_at,
+            updated_at,
+            status,
+            forgotten_at,
+            forget_reason,
+            superseded_by
+          FROM memory_items
+          WHERE scope_type = ?
+            AND scope_id = ?
+            AND status = 'active'
+            AND updated_at >= ?
+          ORDER BY updated_at DESC
+          LIMIT 50
+        `,
+      )
+      .all(params.scopeType, params.scopeId, params.sinceMs) as StoredMemoryRow[];
+    let best: { item: ScopedMemoryItem; similarity: number } | null = null;
+    for (const row of rows) {
+      const similarity = jaccardSimilarity(row.body, params.body);
+      if (similarity >= params.threshold && (!best || similarity > best.similarity)) {
+        best = { item: rowToMemoryItem(row), similarity };
+      }
+    }
+    return best;
+  }
+
   listRecentPrivateItems(limit: number): ScopedMemoryItem[] {
     const rows = this.db
       .prepare(
@@ -945,7 +1031,8 @@ export class MultiUserMemoryStore {
             updated_at,
             status,
             forgotten_at,
-            forget_reason
+            forget_reason,
+            superseded_by
           FROM memory_items
           WHERE item_id = ?
         `,
@@ -982,6 +1069,37 @@ export class MultiUserMemoryStore {
       )
       .run(now, reason, now, params.itemId);
     const refreshed = this.getMemoryItemById(params.itemId);
+    return refreshed ? { item: refreshed, wasActive: true } : null;
+  }
+
+  supersedeMemoryItem(params: {
+    oldItemId: string;
+    newItemId: string;
+    now?: number;
+  }): { item: ScopedMemoryItem; wasActive: boolean } | null {
+    const item = this.getMemoryItemById(params.oldItemId);
+    if (!item) {
+      return null;
+    }
+    if (item.status !== "active") {
+      return { item, wasActive: false };
+    }
+    const now = params.now ?? Date.now();
+    this.db
+      .prepare(
+        `
+          UPDATE memory_items
+          SET status = 'superseded',
+              forgotten_at = ?,
+              forget_reason = 'superseded',
+              superseded_by = ?,
+              updated_at = ?
+          WHERE item_id = ?
+            AND status = 'active'
+        `,
+      )
+      .run(now, params.newItemId, now, params.oldItemId);
+    const refreshed = this.getMemoryItemById(params.oldItemId);
     return refreshed ? { item: refreshed, wasActive: true } : null;
   }
 
@@ -1028,7 +1146,8 @@ export class MultiUserMemoryStore {
             updated_at,
             status,
             forgotten_at,
-            forget_reason
+            forget_reason,
+            superseded_by
           FROM memory_items
           WHERE status = 'active'
             AND (${conditions.join(" OR ")})

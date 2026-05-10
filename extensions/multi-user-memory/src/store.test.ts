@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { MultiUserMemoryStore } from "./store.js";
+import { jaccardSimilarity, MultiUserMemoryStore } from "./store.js";
 
 describe("MultiUserMemoryStore", () => {
   const stores: MultiUserMemoryStore[] = [];
@@ -321,5 +321,106 @@ describe("MultiUserMemoryStore", () => {
 
     store.setRetentionState("last_prune_at", 67890);
     expect(store.getRetentionState("last_prune_at")).toBe(67890);
+  });
+
+  it("finds near-duplicate items by Jaccard token similarity", () => {
+    const store = createStore();
+    const original = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad prefers Bahasa Indonesia for direct replies and meetings.",
+      sourceUserId: "dad",
+    });
+    store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "mom",
+      body: "Mom prefers Bahasa Indonesia for direct replies and meetings.",
+      sourceUserId: "mom",
+    });
+
+    const similar = store.findNearDuplicateItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad prefers Bahasa Indonesia for direct replies in meetings.",
+      sinceMs: 0,
+      threshold: 0.7,
+    });
+    expect(similar?.item.itemId).toBe(original.itemId);
+    expect(similar?.similarity).toBeGreaterThanOrEqual(0.7);
+
+    // Different scope: should not match even with identical text.
+    expect(
+      store.findNearDuplicateItem({
+        scopeType: "private",
+        scopeId: "dad",
+        body: "Mom likes coffee in the morning.",
+        sinceMs: 0,
+        threshold: 0.7,
+      }),
+    ).toBeNull();
+  });
+
+  it("supersedes an active item, marks it superseded_by the new id, and hides it from search", () => {
+    const store = createStore();
+
+    const oldItem = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad arrives at 5pm on Friday.",
+      sourceUserId: "dad",
+    });
+    const newItem = store.createMemoryItem({
+      scopeType: "private",
+      scopeId: "dad",
+      body: "Dad arrives at 6pm on Friday instead.",
+      sourceUserId: "dad",
+    });
+
+    const result = store.supersedeMemoryItem({
+      oldItemId: oldItem.itemId,
+      newItemId: newItem.itemId,
+    });
+    expect(result?.wasActive).toBe(true);
+    expect(result?.item.status).toBe("superseded");
+    expect(result?.item.supersededBy).toBe(newItem.itemId);
+    expect(result?.item.forgetReason).toBe("superseded");
+
+    expect(
+      store
+        .search({ query: "Friday arrives", scopeKeys: ["private:dad"], minScore: 0.2 })
+        .map((entry) => entry.path),
+    ).toEqual([`private/dad/${newItem.itemId}.md`]);
+
+    expect(
+      store.supersedeMemoryItem({
+        oldItemId: oldItem.itemId,
+        newItemId: newItem.itemId,
+      })?.wasActive,
+    ).toBe(false);
+  });
+
+  it("returns null when superseding an unknown item", () => {
+    const store = createStore();
+    expect(
+      store.supersedeMemoryItem({ oldItemId: "missing", newItemId: "also-missing" }),
+    ).toBeNull();
+  });
+});
+
+describe("jaccardSimilarity", () => {
+  it("scores identical bodies as 1 and disjoint bodies as 0", () => {
+    expect(jaccardSimilarity("the quick brown fox", "the quick brown fox")).toBe(1);
+    expect(jaccardSimilarity("apples and oranges", "trains and planes")).toBeCloseTo(0.2, 1);
+    expect(jaccardSimilarity("alpha beta gamma", "delta epsilon zeta")).toBe(0);
+  });
+
+  it("ignores tokens shorter than 3 chars and normalizes case", () => {
+    // "is" and "a" are below the 3-char threshold; both sides reduce to {pizza,today}.
+    expect(jaccardSimilarity("Is It PIZZA Today", "is pizza today a")).toBeCloseTo(1, 5);
+  });
+
+  it("treats two empty strings as fully similar but a string vs empty as zero", () => {
+    expect(jaccardSimilarity("", "")).toBe(1);
+    expect(jaccardSimilarity("hello world", "")).toBe(0);
   });
 });

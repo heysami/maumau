@@ -92,7 +92,12 @@ type TranslationKey =
   | "forgetSuccess"
   | "forgetAlreadyForgotten"
   | "forgetNotFound"
-  | "forgetDenied";
+  | "forgetDenied"
+  | "supersedeSuccess"
+  | "supersedeAlreadyInactive"
+  | "supersedeNotFound"
+  | "supersedeDenied"
+  | "principalRecallGuidance";
 
 const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, string>>> = {
   principalHeading: {
@@ -234,6 +239,26 @@ const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, s
   forgetDenied: {
     en: "You are not allowed to forget this memory item.",
     id: "Anda tidak diizinkan melupakan item memori ini.",
+  },
+  supersedeSuccess: {
+    en: "Memory item {oldItemId} was replaced by {newItemId}.",
+    id: "Item memori {oldItemId} digantikan oleh {newItemId}.",
+  },
+  supersedeAlreadyInactive: {
+    en: "Memory item {itemId} is no longer active and cannot be superseded.",
+    id: "Item memori {itemId} sudah tidak aktif dan tidak dapat digantikan.",
+  },
+  supersedeNotFound: {
+    en: "Memory item {itemId} was not found.",
+    id: "Item memori {itemId} tidak ditemukan.",
+  },
+  supersedeDenied: {
+    en: "You are not allowed to supersede this memory item.",
+    id: "Anda tidak diizinkan menggantikan item memori ini.",
+  },
+  principalRecallGuidance: {
+    en: "When recalling memory: prefer high-score search hits (>=0.4) and the most recent matching item. If the best memory_search score is below 0.4, say you do not have a clear record rather than guessing. Cite path#line for any fact you state from memory.",
+    id: "Saat menyusun ingatan: utamakan hasil pencarian dengan skor tinggi (>=0.4) dan item paling baru yang cocok. Jika skor terbaik memory_search di bawah 0.4, katakan bahwa Anda tidak memiliki catatan yang jelas daripada menebak. Sertakan path#line untuk setiap fakta yang Anda nyatakan dari memori.",
   },
 };
 

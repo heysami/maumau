@@ -58,6 +58,16 @@ const ADMIN_FORGET_SCHEMA = Type.Object(
   { additionalProperties: false },
 );
 
+const SUPERSEDE_SCHEMA = Type.Object(
+  {
+    oldItemId: Type.String(),
+    body: Type.String(),
+    summary: Type.Optional(Type.String()),
+    kind: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 const LIST_PROVISIONAL_SCHEMA = Type.Object({}, { additionalProperties: false });
 
 const EXPLAIN_IDENTITY_SCHEMA = Type.Object(
@@ -128,22 +138,46 @@ type ImpactCandidate = {
   affectedUserIds: string[];
 };
 
+// Order matters: more specific patterns first. Availability is checked before
+// event so "I will be late on Friday" classifies as availability rather than
+// being captured by the broader day-of-week event match.
 const PRIVATE_CAPTURE_PATTERNS: Array<{ kind: string; pattern: RegExp }> = [
-  { kind: "preference", pattern: /\b(i prefer|i like|i love|i hate|prefer|favorite|allergic)\b/i },
   {
-    kind: "relationship",
-    pattern: /\b(my father|my mother|my dad|my mom|my wife|my husband|my son|my daughter)\b/i,
+    kind: "preference",
+    pattern:
+      /\b(i (?:prefer|like|love|hate|always|usually|never)|my favorite|i am allergic|i'm allergic)\b/i,
   },
   {
-    kind: "event",
-    pattern: /\b(attend|attending|join|joining|coming|travel|schedule|tomorrow|tonight|weekend)\b/i,
+    kind: "relationship",
+    pattern: /\b(my (?:father|mother|dad|mom|wife|husband|son|daughter|partner|sister|brother))\b/i,
   },
   {
     kind: "availability",
-    pattern: /\b(late|available|not available|busy|pickup|drop off|meeting)\b/i,
+    pattern:
+      /\b(i (?:will be|am|won't be) (?:late|available|busy|free)|i need to (?:pickup|pick up|drop off))\b/i,
   },
-  { kind: "remember", pattern: /\bremember|please remember|keep in mind\b/i },
+  {
+    kind: "event",
+    pattern:
+      /\b(i (?:will|am going to|won't|can't) (?:attend|join|come|travel)|i'm (?:attending|joining|coming|traveling)|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|tonight))\b/i,
+  },
+  {
+    kind: "remember",
+    pattern: /\b(please remember|keep in mind|don't forget|remember that|make a note)\b/i,
+  },
 ];
+
+// Skip capture when the message is clearly a question, command, or too short to
+// be a meaningful fact. Reduces conversational noise in stored memory.
+const CAPTURE_SKIP_PATTERNS: RegExp[] = [
+  /^(what|when|where|who|whose|whom|how|why|which|did|do|does|can|could|will|would|should|is|are|was|were|am|may|might)\b/i,
+  /\?\s*$/,
+  /^(thanks|thank you|ok|okay|got it|sure|yes|no|nope|yep|hello|hi|hey|bye|goodbye)\b\s*[.!]?\s*$/i,
+];
+
+const MIN_CAPTURE_BODY_LENGTH = 20;
+const NEAR_DUPLICATE_JACCARD_THRESHOLD = 0.7;
+const NEAR_DUPLICATE_LOOKBACK_MS = 14 * 86_400_000;
 
 const PROPOSAL_IMPACT_PATTERNS: Array<{ reason: string; pattern: RegExp; sensitivity?: string }> = [
   {
@@ -495,21 +529,32 @@ function resolveToolPrincipal(params: {
 
 function buildPrincipalPrompt(principal: ActivePrincipal, pendingApprovalPrompt?: string): string {
   const visibleScopes = principal.scopeKeys.join(", ");
-  const heading = translate(normalizeLanguageId(principal.language), "principalHeading");
-  const body = translate(normalizeLanguageId(principal.language), "principalBody", {
+  const language = normalizeLanguageId(principal.language);
+  const heading = translate(language, "principalHeading");
+  const body = translate(language, "principalBody", {
     user: principal.displayName,
     language: principal.language,
     scopes: visibleScopes,
   });
-  return pendingApprovalPrompt
-    ? `${heading}\n${body}\n${pendingApprovalPrompt}`
-    : `${heading}\n${body}`;
+  const recallGuidance = translate(language, "principalRecallGuidance");
+  const sections = [heading, body, recallGuidance];
+  if (pendingApprovalPrompt) {
+    sections.push(pendingApprovalPrompt);
+  }
+  return sections.join("\n");
 }
 
-function normalizeCaptureCandidate(prompt: string): { kind: string; summary: string } | null {
+export function normalizeCaptureCandidate(
+  prompt: string,
+): { kind: string; summary: string } | null {
   const text = prompt.trim();
-  if (!text || text.startsWith("/")) {
+  if (!text || text.startsWith("/") || text.length < MIN_CAPTURE_BODY_LENGTH) {
     return null;
+  }
+  for (const skip of CAPTURE_SKIP_PATTERNS) {
+    if (skip.test(text)) {
+      return null;
+    }
   }
   for (const entry of PRIVATE_CAPTURE_PATTERNS) {
     if (entry.pattern.test(text)) {
@@ -764,20 +809,37 @@ async function handlePrincipalTurn(params: {
 
     const capture = normalizeCaptureCandidate(params.event.prompt);
     if (capture) {
-      if (principal?.configuredUserId) {
-        const duplicate = params.store.hasDuplicateRecentPrivateItem({
-          scopeId: principal.configuredUserId,
-          body: params.event.prompt,
-          sinceMs: Date.now() - 24 * 60 * 60 * 1000,
-        });
-        if (!duplicate) {
+      const scopeType: "private" | "provisional" | null = principal?.configuredUserId
+        ? "private"
+        : principal?.provisionalUserId
+          ? "provisional"
+          : null;
+      const scopeId = principal?.configuredUserId ?? principal?.provisionalUserId;
+      if (scopeType && scopeId) {
+        const exactDuplicate =
+          scopeType === "private" &&
+          params.store.hasDuplicateRecentPrivateItem({
+            scopeId,
+            body: params.event.prompt,
+            sinceMs: Date.now() - 24 * 60 * 60 * 1000,
+          });
+        const nearDuplicate = exactDuplicate
+          ? null
+          : params.store.findNearDuplicateItem({
+              scopeType,
+              scopeId,
+              body: params.event.prompt,
+              sinceMs: Date.now() - NEAR_DUPLICATE_LOOKBACK_MS,
+              threshold: NEAR_DUPLICATE_JACCARD_THRESHOLD,
+            });
+        if (!exactDuplicate && !nearDuplicate) {
           params.store.createMemoryItem({
-            scopeType: "private",
-            scopeId: principal.configuredUserId,
+            scopeType,
+            scopeId,
             body: params.event.prompt,
             summary: capture.summary,
             itemKind: capture.kind,
-            sourceUserId: principal.configuredUserId,
+            sourceUserId: scopeType === "private" ? scopeId : undefined,
             provenance: "turn-capture",
             durability: "daily",
             entryDate: new Date().toISOString().slice(0, 10),
@@ -787,23 +849,11 @@ async function handlePrincipalTurn(params: {
               `multi-user-memory: failed syncing scoped corpus: ${String(err)}`,
             );
           });
-        }
-      } else if (principal?.provisionalUserId) {
-        params.store.createMemoryItem({
-          scopeType: "provisional",
-          scopeId: principal.provisionalUserId,
-          body: params.event.prompt,
-          summary: capture.summary,
-          itemKind: capture.kind,
-          provenance: "turn-capture",
-          durability: "daily",
-          entryDate: new Date().toISOString().slice(0, 10),
-        });
-        await syncScopedCorpusSafe(params.api, params.store).catch((err: unknown) => {
-          params.api.logger.warn?.(
-            `multi-user-memory: failed syncing scoped corpus: ${String(err)}`,
+        } else if (nearDuplicate) {
+          params.api.logger.info?.(
+            `multi-user-memory: skipped near-duplicate capture (similarity=${nearDuplicate.similarity.toFixed(2)} of ${nearDuplicate.item.itemId})`,
           );
-        });
+        }
       }
     }
   }
@@ -1325,6 +1375,81 @@ function buildForgetTools(params: {
           }),
           forgotten: true,
           item: outcome.item,
+        });
+      },
+    },
+    {
+      name: "multi_user_memory_supersede",
+      label: "Multi-User Memory: Supersede",
+      description:
+        "Replace an existing memory item with new content when a fact has been updated or corrected. Stores the new item in the same scope as the old one and marks the old item as superseded so search no longer returns it. Use this instead of memory_store + memory_forget when you know the new fact replaces an old one.",
+      parameters: SUPERSEDE_SCHEMA,
+      async execute(_toolCallId, rawParams) {
+        const oldItemId = readStringParam(rawParams, "oldItemId", { required: true });
+        const body = readStringParam(rawParams, "body", { required: true });
+        const summary = readStringParam(rawParams, "summary");
+        const kind = readStringParam(rawParams, "kind");
+        const oldItem = params.store.getMemoryItemById(oldItemId);
+        if (!oldItem) {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "supersedeNotFound", {
+              itemId: oldItemId,
+            }),
+            superseded: false,
+            reason: "not-found",
+          });
+        }
+        if (
+          !canPrincipalForgetItem({
+            item: oldItem,
+            pluginConfig,
+            principal,
+            senderIsOwner,
+            agentId: params.toolCtx.agentId,
+          })
+        ) {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "supersedeDenied"),
+            superseded: false,
+            reason: "denied",
+          });
+        }
+        if (oldItem.status !== "active") {
+          return jsonResult({
+            text: translate(normalizeLanguageId(principal?.language), "supersedeAlreadyInactive", {
+              itemId: oldItemId,
+            }),
+            superseded: false,
+            reason: "inactive",
+            oldItem,
+          });
+        }
+        const newItem = params.store.createMemoryItem({
+          scopeType: oldItem.scopeType,
+          scopeId: oldItem.scopeId,
+          body,
+          summary: summary ?? undefined,
+          itemKind: kind ?? oldItem.itemKind ?? undefined,
+          sourceUserId: oldItem.sourceUserId,
+          provenance: `supersedes:${oldItemId}`,
+          provenanceItemId: oldItemId,
+          durability: oldItem.durability,
+          entryDate: oldItem.entryDate,
+        });
+        params.store.supersedeMemoryItem({ oldItemId, newItemId: newItem.itemId });
+        await syncScopedCorpusSafe(params.api, params.store).catch((err: unknown) => {
+          params.api.logger.warn?.(
+            `multi-user-memory: failed corpus sync after supersede: ${String(err)}`,
+          );
+        });
+        return jsonResult({
+          text: translate(normalizeLanguageId(principal?.language), "supersedeSuccess", {
+            oldItemId,
+            newItemId: newItem.itemId,
+          }),
+          superseded: true,
+          oldItem: params.store.getMemoryItemById(oldItemId),
+          newItem,
         });
       },
     },
