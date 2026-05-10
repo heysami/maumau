@@ -23,6 +23,9 @@
     "unicorn/require-post-message-target-origin": "off"
   },
   "ignorePatterns": [
+    "apps/macos/.build/",
+    "apps/macos/.build-local/",
+    "apps/macos/.build-package/",
     "assets/",
     "dist/",
     "docs/_layouts/",
