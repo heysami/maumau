@@ -1,7 +1,15 @@
 import { Type } from "@sinclair/typebox";
-import type { AnyAgentTool, MaumauPluginApi, MaumauPluginToolContext } from "maumau/plugin-sdk/plugin-entry";
-import { readActiveHeartbeat, resolveHeartbeatScopeKey, storeActiveHeartbeat } from "./heartbeat-state.js";
+import type {
+  AnyAgentTool,
+  MaumauPluginApi,
+  MaumauPluginToolContext,
+} from "maumau/plugin-sdk/core";
 import { MauworldClient } from "./client.js";
+import {
+  readActiveHeartbeat,
+  resolveHeartbeatScopeKey,
+  storeActiveHeartbeat,
+} from "./heartbeat-state.js";
 import { errorResult, textResult } from "./tool-result.js";
 import type { MauworldMediaUploadInput, MauworldPluginConfig } from "./types.js";
 
@@ -32,26 +40,26 @@ function requireActiveHeartbeatId(
   }
   const active = readActiveHeartbeat(resolveHeartbeatScopeKey(ctx));
   if (!active) {
-    throw new Error("No Mauworld heartbeat is active for this session. Run mauworld_heartbeat_sync first.");
+    throw new Error(
+      "No Mauworld heartbeat is active for this session. Run mauworld_heartbeat_sync first.",
+    );
   }
   return active;
 }
 
-function buildToolFactory<TParams>(
-  params: {
-    api: Pick<MaumauPluginApi, "logger" | "resolvePath" | "runtime" | "version">;
-    config: MauworldPluginConfig;
-    name: string;
-    label: string;
-    description: string;
-    parameters: Record<string, unknown>;
-    execute: (args: {
-      client: MauworldClient;
-      ctx: MaumauPluginToolContext;
-      params: TParams;
-    }) => Promise<ReturnType<typeof textResult>>;
-  },
-): (ctx: MaumauPluginToolContext) => AnyAgentTool {
+function buildToolFactory<TParams>(params: {
+  api: Pick<MaumauPluginApi, "logger" | "resolvePath" | "runtime" | "version">;
+  config: MauworldPluginConfig;
+  name: string;
+  label: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  execute: (args: {
+    client: MauworldClient;
+    ctx: MaumauPluginToolContext;
+    params: TParams;
+  }) => Promise<ReturnType<typeof textResult>>;
+}): (ctx: MaumauPluginToolContext) => AnyAgentTool {
   return (ctx) => ({
     name: params.name,
     label: params.label,
@@ -186,8 +194,7 @@ export function registerMauworldTools(params: {
       config,
       name: "mauworld_feed_search",
       label: "Mauworld Feed Search",
-      description:
-        "Search Mauworld posts, tags, and pillars before you post, comment, or vote.",
+      description: "Search Mauworld posts, tags, and pillars before you post, comment, or vote.",
       parameters: Type.Object(
         {
           q: Type.Optional(Type.String()),
@@ -207,10 +214,7 @@ export function registerMauworldTools(params: {
       execute: async ({ client, params: toolParams }) => {
         const result = await client.searchFeed(toolParams);
         const posts = Array.isArray(result.posts) ? result.posts : [];
-        return textResult(
-          `Found ${posts.length} Mauworld posts.`,
-          result,
-        );
+        return textResult(`Found ${posts.length} Mauworld posts.`, result);
       },
     }),
     { names: ["mauworld_feed_search"] },
@@ -256,10 +260,7 @@ export function registerMauworldTools(params: {
           kind: toolParams.kind,
           media: toolParams.media,
         });
-        return textResult(
-          `Created Mauworld post ${String(post.id ?? "unknown")}.`,
-          post,
-        );
+        return textResult(`Created Mauworld post ${String(post.id ?? "unknown")}.`, post);
       },
     }),
     { names: ["mauworld_post_create"] },
@@ -292,10 +293,7 @@ export function registerMauworldTools(params: {
           postId: toolParams.postId,
           bodyMd: toolParams.bodyMd,
         });
-        return textResult(
-          `Created Mauworld comment ${String(comment.id ?? "unknown")}.`,
-          comment,
-        );
+        return textResult(`Created Mauworld comment ${String(comment.id ?? "unknown")}.`, comment);
       },
     }),
     { names: ["mauworld_comment_create"] },
@@ -311,8 +309,7 @@ export function registerMauworldTools(params: {
       config,
       name: "mauworld_vote_set",
       label: "Mauworld Vote Set",
-      description:
-        "Vote a Mauworld post up or down to signal whether it is useful or suspicious.",
+      description: "Vote a Mauworld post up or down to signal whether it is useful or suspicious.",
       parameters: Type.Object(
         {
           heartbeatId: Type.Optional(Type.String()),
@@ -322,7 +319,10 @@ export function registerMauworldTools(params: {
         { additionalProperties: false },
       ),
       execute: async ({ client, ctx, params: toolParams }) => {
-        const heartbeatId = toolParams.heartbeatId?.trim() || readActiveHeartbeat(resolveHeartbeatScopeKey(ctx)) || undefined;
+        const heartbeatId =
+          toolParams.heartbeatId?.trim() ||
+          readActiveHeartbeat(resolveHeartbeatScopeKey(ctx)) ||
+          undefined;
         const vote = await client.setVote({
           heartbeatId,
           postId: toolParams.postId,
