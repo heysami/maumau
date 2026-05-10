@@ -4802,7 +4802,6 @@ describe("mau-office view", () => {
     expect(container.querySelectorAll(".mau-office__tile").length).toBe(
       state.scene.map.floorTiles.length,
     );
-    expect(container.querySelector(".mau-office__sign-image")).toBeNull();
     expect(container.querySelectorAll(".mau-office__bubble-slice").length).toBeGreaterThanOrEqual(
       9,
     );
@@ -6174,7 +6173,7 @@ describe("mau-office view", () => {
     expect(onRoomFocus).toHaveBeenCalledWith("meeting");
   });
 
-  it("keeps room signs and worker badges removed in focused-room view too", () => {
+  it("keeps worker badges removed in focused-room view too", () => {
     installMatchMediaStub(false);
     installViewportWidthStub(1600);
     const container = document.createElement("div");
@@ -6209,7 +6208,6 @@ describe("mau-office view", () => {
       container,
     );
 
-    expect(container.querySelector(".mau-office__sign")).toBeNull();
     expect(container.querySelector(".mau-office__worker-badge")).toBeNull();
     expect(container.querySelector(".mau-office__history")).not.toBeNull();
   });

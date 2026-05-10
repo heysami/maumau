@@ -96,8 +96,7 @@ type TranslationKey =
   | "supersedeSuccess"
   | "supersedeAlreadyInactive"
   | "supersedeNotFound"
-  | "supersedeDenied"
-  | "principalRecallGuidance";
+  | "supersedeDenied";
 
 const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, string>>> = {
   principalHeading: {
@@ -255,10 +254,6 @@ const TRANSLATIONS: Record<TranslationKey, Partial<Record<SupportedLanguageId, s
   supersedeDenied: {
     en: "You are not allowed to supersede this memory item.",
     id: "Anda tidak diizinkan menggantikan item memori ini.",
-  },
-  principalRecallGuidance: {
-    en: "When recalling memory: prefer high-score search hits (>=0.4) and the most recent matching item. If the best memory_search score is below 0.4, say you do not have a clear record rather than guessing. Cite path#line for any fact you state from memory.",
-    id: "Saat menyusun ingatan: utamakan hasil pencarian dengan skor tinggi (>=0.4) dan item paling baru yang cocok. Jika skor terbaik memory_search di bawah 0.4, katakan bahwa Anda tidak memiliki catatan yang jelas daripada menebak. Sertakan path#line untuk setiap fakta yang Anda nyatakan dari memori.",
   },
 };
 

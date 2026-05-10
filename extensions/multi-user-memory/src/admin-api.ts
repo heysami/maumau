@@ -32,6 +32,10 @@ function readEntryConfigured(api: MaumauPluginApi): boolean {
   return Boolean(loadCurrentMaumauConfig(api).plugins?.entries?.["multi-user-memory"]);
 }
 
+function readSlotSelected(api: MaumauPluginApi): boolean {
+  return loadCurrentMaumauConfig(api).plugins?.slots?.memory === "multi-user-memory";
+}
+
 function filterPendingProvisionalUsers(api: MaumauPluginApi, store: MultiUserMemoryStore) {
   const pluginConfig = resolveCurrentMultiUserMemoryConfig(api);
   return store.listProvisionalUsers().filter(
@@ -62,6 +66,7 @@ export function createAdminApiHttpHandler(params: {
       ok: true,
       plugin: {
         overlayEnabled: readOverlayEnabled(params.api),
+        slotSelected: readSlotSelected(params.api),
         entryConfigured: readEntryConfigured(params.api),
         enabled: pluginConfig.enabled,
         autoDiscover: pluginConfig.autoDiscover,
