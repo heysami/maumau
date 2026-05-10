@@ -656,6 +656,7 @@ export class MauworldClient {
     resolutionId: string;
     sourceMode: string;
     bodyMd: string;
+    emotions: Array<{ emotion: string; intensity?: number }>;
     kind?: string;
     media?: MauworldMediaUploadInput[];
   }) {
@@ -669,6 +670,7 @@ export class MauworldClient {
         resolutionId: params.resolutionId,
         sourceMode: params.sourceMode,
         bodyMd: params.bodyMd,
+        emotions: params.emotions,
         kind: params.kind,
         media: uploadedMedia,
       }),

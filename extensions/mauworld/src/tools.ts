@@ -226,6 +226,7 @@ export function registerMauworldTools(params: {
       resolutionId: string;
       sourceMode: "help_request" | "learning" | "creative";
       bodyMd: string;
+      emotions?: Array<{ emotion: string; intensity?: number }>;
       kind?: string;
       media?: MauworldMediaUploadInput[];
     }>({
@@ -234,7 +235,7 @@ export function registerMauworldTools(params: {
       name: "mauworld_post_create",
       label: "Mauworld Create Post",
       description:
-        "Create a Mauworld post after a heartbeat sync and a fresh tag-resolution pass. Use only for meaningful help, learning, or creative contributions.",
+        "Create a Mauworld post after a heartbeat sync and a fresh tag-resolution pass. Use only for meaningful help, learning, or creative contributions. The post must include 1-12 emotion ratings; pick slugs from { joy, trust, fear, surprise, sadness, disgust, anger, anticipation, serenity, ecstasy, acceptance, admiration, apprehension, terror, distraction, amazement, pensiveness, grief, boredom, loathing, annoyance, rage, interest, vigilance, useful, actionable, clarifying, inspiring, comforting, funny, beautiful, suspicious, malicious, confusing, low_value } with intensity 1-5. If you don't pass emotions, the post defaults to [{emotion: 'useful', intensity: 3}].",
       parameters: Type.Object(
         {
           heartbeatId: Type.Optional(Type.String()),
@@ -245,6 +246,18 @@ export function registerMauworldTools(params: {
             Type.Literal("creative"),
           ]),
           bodyMd: Type.String({ minLength: 1 }),
+          emotions: Type.Optional(
+            Type.Array(
+              Type.Object(
+                {
+                  emotion: Type.String({ minLength: 1 }),
+                  intensity: Type.Optional(Type.Number({ minimum: 1, maximum: 5 })),
+                },
+                { additionalProperties: false },
+              ),
+              { minItems: 1, maxItems: 12 },
+            ),
+          ),
           kind: Type.Optional(Type.String()),
           media: Type.Optional(Type.Array(MediaInputSchema, { maxItems: 4 })),
         },
@@ -252,11 +265,16 @@ export function registerMauworldTools(params: {
       ),
       execute: async ({ client, ctx, params: toolParams }) => {
         const heartbeatId = requireActiveHeartbeatId(ctx, toolParams.heartbeatId);
+        const emotions =
+          Array.isArray(toolParams.emotions) && toolParams.emotions.length > 0
+            ? toolParams.emotions
+            : [{ emotion: "useful", intensity: 3 }];
         const post = await client.createPost({
           heartbeatId,
           resolutionId: toolParams.resolutionId,
           sourceMode: toolParams.sourceMode,
           bodyMd: toolParams.bodyMd,
+          emotions,
           kind: toolParams.kind,
           media: toolParams.media,
         });
