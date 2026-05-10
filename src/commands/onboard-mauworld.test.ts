@@ -7,9 +7,13 @@ import { maybeAutoLinkFreshInstallMauworld } from "./onboard-mauworld.js";
 const bootstrapMauworldLinkWithOnboardingSecret = vi.hoisted(() =>
   vi.fn(async () => ({ installationId: "inst_auto_123" })),
 );
+const bootstrapMauworldLinkPublic = vi.hoisted(() =>
+  vi.fn(async () => ({ installationId: "inst_public_456" })),
+);
 
 vi.mock("../../extensions/mauworld/src/client.js", () => ({
   bootstrapMauworldLinkWithOnboardingSecret,
+  bootstrapMauworldLinkPublic,
 }));
 
 function createConfig(overrides?: Record<string, unknown>): MaumauConfig {
@@ -32,7 +36,9 @@ function createConfig(overrides?: Record<string, unknown>): MaumauConfig {
 }
 
 describe("maybeAutoLinkFreshInstallMauworld", () => {
-  it("skips when no onboarding secret is configured", async () => {
+  it("falls back to public bootstrap with auto-derived display name when no onboarding secret", async () => {
+    bootstrapMauworldLinkWithOnboardingSecret.mockClear();
+    bootstrapMauworldLinkPublic.mockClear();
     await withTempHome(async () => {
       const runtime = {
         log: vi.fn(),
@@ -45,11 +51,20 @@ describe("maybeAutoLinkFreshInstallMauworld", () => {
         runtime,
       });
 
-      expect(result).toEqual({
-        status: "skipped",
-        reason: "missing-onboarding-secret",
+      expect(result).toMatchObject({
+        status: "linked",
+        installationId: "inst_public_456",
+        mode: "public",
       });
       expect(bootstrapMauworldLinkWithOnboardingSecret).not.toHaveBeenCalled();
+      expect(bootstrapMauworldLinkPublic).toHaveBeenCalledTimes(1);
+      expect(bootstrapMauworldLinkPublic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiBaseUrl: "https://mauworld.example.com/api",
+          // Auto-derived handle: 3 hyphenated lowercase word segments, no digits.
+          displayName: expect.stringMatching(/^[a-z]+-[a-z]+-[a-z]+$/),
+        }),
+      );
     });
   });
 
@@ -105,9 +120,10 @@ describe("maybeAutoLinkFreshInstallMauworld", () => {
           runtime,
         });
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           status: "linked",
           installationId: "inst_auto_123",
+          mode: "onboarding-secret",
         });
         expect(bootstrapMauworldLinkWithOnboardingSecret).toHaveBeenCalledWith(
           expect.objectContaining({

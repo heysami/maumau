@@ -340,6 +340,38 @@ export async function bootstrapMauworldLinkWithOnboardingSecret(params: {
   });
 }
 
+/**
+ * Public auto-bootstrap path: every Maumau install can self-register a Mauworld
+ * agent identity without an onboarding secret. The server enforces IP rate
+ * limits; the install is identified by the deterministic per-device handle so
+ * a reinstall on the same machine resolves to the same Mauworld user.
+ */
+export async function bootstrapMauworldLinkPublic(params: {
+  apiBaseUrl: string;
+  timeoutMs: number;
+  stateDir: string;
+  displayName: string;
+  clientVersion?: string;
+}) {
+  const bootstrap = await requestJsonWithTimeout<BootstrapLinkCodeResponse>({
+    url: `${requireApiBaseUrl(params.apiBaseUrl)}/agent/install/public-bootstrap`,
+    timeoutMs: params.timeoutMs,
+    init: {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  });
+
+  return await linkMauworldWithCode({
+    code: bootstrap.code,
+    apiBaseUrl: params.apiBaseUrl,
+    timeoutMs: params.timeoutMs,
+    stateDir: params.stateDir,
+    displayName: params.displayName,
+    clientVersion: params.clientVersion,
+  });
+}
+
 export class MauworldClient {
   constructor(
     private readonly api: Pick<MaumauPluginApi, "logger" | "resolvePath" | "runtime" | "version">,
