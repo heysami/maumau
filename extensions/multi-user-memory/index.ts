@@ -1473,60 +1473,6 @@ function buildSupersedeTool(params: {
   ];
 }
 
-const buildScopedMemoryPromptSection = ({
-  availableTools,
-  citationsMode,
-}: {
-  availableTools: ReadonlySet<string>;
-  citationsMode?: "off" | "on" | string;
-}): string[] => {
-  const hasMemorySearch = availableTools.has("memory_search");
-  const hasMemoryGet = availableTools.has("memory_get");
-  const hasForget = availableTools.has("multi_user_memory_forget");
-  const hasSupersede = availableTools.has("multi_user_memory_supersede");
-  if (!hasMemorySearch && !hasMemoryGet && !hasForget && !hasSupersede) {
-    return [];
-  }
-  const lines: string[] = ["## Memory Recall"];
-  if (hasMemorySearch && hasMemoryGet) {
-    lines.push(
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines.",
-    );
-  } else if (hasMemorySearch) {
-    lines.push(
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search and answer from the matching results.",
-    );
-  } else if (hasMemoryGet) {
-    lines.push(
-      "When the user references a known memory file or note, run memory_get to pull only the needed lines.",
-    );
-  }
-  lines.push(
-    "If the best memory_search score is below 0.4, say you do not have a clear record rather than guessing. Prefer the most recent matching item when several have similar scores.",
-  );
-  if (hasForget) {
-    lines.push(
-      "If the user asks you to forget, delete, or remove something, call multi_user_memory_forget with the itemId returned from memory_search.",
-    );
-  }
-  if (hasSupersede) {
-    lines.push(
-      "When a previously stored fact is updated or corrected, call multi_user_memory_supersede with the old itemId and the new body so the old item stops surfacing in search.",
-    );
-  }
-  if (citationsMode === "off") {
-    lines.push(
-      "Citations are disabled: do not mention file paths or line numbers in replies unless the user explicitly asks.",
-    );
-  } else {
-    lines.push(
-      "Citations: include Source: <path#line> when it helps the user verify memory snippets.",
-    );
-  }
-  lines.push("");
-  return lines;
-};
-
 function buildAdminTools(params: {
   api: MaumauPluginApi;
   store: MultiUserMemoryStore;
@@ -2088,7 +2034,6 @@ export default definePluginEntry({
       };
     });
 
-    api.registerMemoryPromptSection(buildScopedMemoryPromptSection);
     api.registerTool((toolCtx) => buildAdminTools({ api, store, toolCtx }));
     api.registerTool((toolCtx) => buildApprovalTools({ api, store, toolCtx }));
     api.registerTool((toolCtx) => buildForgetTool({ api, store, toolCtx }));

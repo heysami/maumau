@@ -29,7 +29,7 @@ describe("multi-user-memory plugin register", () => {
       }),
     );
 
-    expect(registerMemoryPromptSection).toHaveBeenCalledTimes(1);
+    expect(registerMemoryPromptSection).not.toHaveBeenCalled();
     expect(registerHttpRoute).toHaveBeenCalledTimes(2);
     expect(registerHttpRoute).toHaveBeenCalledWith(
       expect.objectContaining({
